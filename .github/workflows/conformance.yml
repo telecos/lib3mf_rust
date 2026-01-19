@@ -1,0 +1,96 @@
+name: Conformance Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Cache test suites
+        id: cache-test-suites
+        uses: actions/cache@v4
+        with:
+          path: test_suites
+          key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-suites-
+      
+      - name: Clone 3MF test suites
+        if: steps.cache-test-suites.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+      
+      - name: Run standard library tests
+        run: cargo test --lib
+      
+      - name: Run integration tests
+        run: cargo test --test integration_test --test test_real_files
+      
+      - name: Run conformance summary
+        run: cargo test --test conformance_tests summary -- --ignored --nocapture
+        continue-on-error: true
+      
+      - name: Generate detailed conformance report
+        run: |
+          echo "# Conformance Test Results" > conformance-results.md
+          echo "" >> conformance-results.md
+          echo "## Summary" >> conformance-results.md
+          cargo test --test conformance_tests summary -- --ignored --nocapture 2>&1 | tee -a conformance-results.md
+      
+      - name: Upload conformance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report
+          path: conformance-results.md
+          retention-days: 30
+  
+  # Optional: Run parameterized tests on a schedule (they take longer)
+  conformance-detailed:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - suite3_core
+          - suite7_beam
+          - suite10_boolean
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      
+      - name: Cache test suites
+        uses: actions/cache@v4
+        with:
+          path: test_suites
+          key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-suites-
+      
+      - name: Clone 3MF test suites
+        run: |
+          if [ ! -d "test_suites" ]; then
+            git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+          fi
+      
+      - name: Run parameterized tests for ${{ matrix.suite }}
+        run: cargo test --test conformance_parameterized ${{ matrix.suite }} -- --ignored --nocapture

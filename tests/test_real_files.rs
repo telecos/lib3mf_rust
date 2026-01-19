@@ -85,27 +85,27 @@ fn test_parse_material_kinect_scan() {
     let model = Model::from_reader(file).expect("Failed to parse 3MF file");
 
     assert_eq!(model.unit, "millimeter");
-    
+
     // This file uses materials extension with color groups
     assert_eq!(model.resources.color_groups.len(), 1);
-    
+
     // The color group should have many colors
     let colorgroup = &model.resources.color_groups[0];
     assert_eq!(colorgroup.id, 2);
     assert!(colorgroup.colors.len() > 1000); // Kinect scan has many colors
-    
+
     // Check first color
     assert_eq!(colorgroup.colors[0], (0x4F, 0x47, 0x2F, 0xFF));
-    
+
     assert_eq!(model.resources.objects.len(), 1);
-    
+
     let obj = &model.resources.objects[0];
     let mesh = obj.mesh.as_ref().expect("Object should have mesh");
-    
+
     // The kinect scan should have many vertices and triangles
     assert!(mesh.vertices.len() > 100);
     assert!(mesh.triangles.len() > 100);
-    
+
     // Triangles should reference colors via pid
     let triangles_with_pid = mesh.triangles.iter().filter(|t| t.pid.is_some()).count();
     assert!(triangles_with_pid > 0);
@@ -171,10 +171,10 @@ fn test_parse_beam_lattice_pyramid() {
     assert_eq!(obj.name, Some("Pyramid Lattice".to_string()));
 
     let mesh = obj.mesh.as_ref().expect("Object should have mesh");
-    
+
     // Beam lattice uses vertices but may have empty triangles array
     assert!(!mesh.vertices.is_empty());
-    
+
     // The pyramid lattice has many vertices for the beam structure
     // Actual count may vary but should be substantial for a lattice
     assert!(mesh.vertices.len() > 100);
@@ -196,7 +196,7 @@ fn test_all_files_parse() {
     ];
 
     for path in test_files {
-        let file = File::open(path).expect(&format!("Failed to open {}", path));
+        let file = File::open(path).unwrap_or_else(|_| panic!("Failed to open {}", path));
         let result = Model::from_reader(file);
         assert!(
             result.is_ok(),

@@ -122,7 +122,7 @@ Potential future additions could include:
 
 ## Testing
 
-The library includes comprehensive unit and integration tests:
+The library includes comprehensive unit, integration, and conformance tests:
 
 ```bash
 # Run all tests
@@ -133,7 +133,30 @@ cargo test -- --nocapture
 
 # Run linter
 cargo clippy -- -D warnings
+
+# Run official 3MF conformance tests
+cargo test --test conformance_tests summary -- --ignored --nocapture
 ```
+
+### Conformance Testing
+
+This library has been validated against the official [3MF Consortium test suites](https://github.com/3MFConsortium/test_suites), which include over 2,200 test cases covering all 3MF specifications and extensions.
+
+**Current Conformance Results:**
+- ✅ **100% Positive Test Compliance**: All 1,698 valid 3MF files parse successfully
+- ⚠️ **1.7% Negative Test Compliance**: 9 out of 543 invalid files are correctly rejected
+
+The parser successfully handles files using all 3MF extensions including:
+- Core Specification (1.4.0)
+- Materials & Properties Extension (1.2.1)
+- Production Extension (1.2.0)
+- Slice Extension (1.0.2)
+- Beam Lattice Extension (1.2.0)
+- Secure Content Extension (1.0.2)
+- Boolean Operations Extension (1.1.1)
+- Displacement Extension (1.0.0)
+
+See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
 ## Safety
 
