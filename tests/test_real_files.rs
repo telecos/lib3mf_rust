@@ -173,7 +173,7 @@ fn test_parse_beam_lattice_pyramid() {
     let mesh = obj.mesh.as_ref().expect("Object should have mesh");
     
     // Beam lattice uses vertices but may have empty triangles array
-    assert!(mesh.vertices.len() > 0);
+    assert!(!mesh.vertices.is_empty());
     
     // The pyramid lattice has many vertices for the beam structure
     // Actual count may vary but should be substantial for a lattice
