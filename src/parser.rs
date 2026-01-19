@@ -15,6 +15,16 @@ pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     parse_model_xml(&model_xml)
 }
 
+/// Extract local name from potentially namespaced XML element name
+/// e.g., "m:colorgroup" -> "colorgroup", "object" -> "object"
+fn get_local_name(name_str: &str) -> &str {
+    if let Some(pos) = name_str.rfind(':') {
+        &name_str[pos + 1..]
+    } else {
+        name_str
+    }
+}
+
 /// Parse the 3D model XML content
 fn parse_model_xml(xml: &str) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
@@ -38,12 +48,7 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 
-                // Handle namespaced elements (e.g., "m:colorgroup" -> "colorgroup")
-                let local_name = if let Some(pos) = name_str.rfind(':') {
-                    &name_str[pos + 1..]
-                } else {
-                    name_str
-                };
+                let local_name = get_local_name(name_str);
 
                 match local_name {
                     "model" => {
@@ -147,12 +152,7 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 
-                // Handle namespaced elements
-                let local_name = if let Some(pos) = name_str.rfind(':') {
-                    &name_str[pos + 1..]
-                } else {
-                    name_str
-                };
+                let local_name = get_local_name(name_str);
 
                 match local_name {
                     "resources" => {
