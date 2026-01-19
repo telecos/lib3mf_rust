@@ -27,7 +27,6 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
     let mut current_object: Option<Object> = None;
     let mut current_mesh: Option<Mesh> = None;
     let mut in_basematerials = false;
-    let mut basematerials_id: Option<usize> = None;
     let mut material_index: usize = 0;
 
     loop {
@@ -103,10 +102,8 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                     "basematerials" if in_resources => {
                         in_basematerials = true;
                         material_index = 0;
-                        let attrs = parse_attributes(&reader, e)?;
-                        if let Some(id_str) = attrs.get("id") {
-                            basematerials_id = Some(id_str.parse::<usize>()?);
-                        }
+                        // basematerials can have an ID attribute, but we use sequential indices
+                        // for individual materials within the group
                     }
                     "base" if in_basematerials => {
                         // Materials within basematerials use sequential indices
@@ -142,7 +139,6 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                     }
                     "basematerials" => {
                         in_basematerials = false;
-                        basematerials_id = None;
                     }
                     _ => {}
                 }
