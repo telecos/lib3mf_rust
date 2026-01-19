@@ -187,6 +187,8 @@ fn test_all_files_parse() {
         "test_files/core/box.3mf",
         "test_files/core/sphere.3mf",
         "test_files/core/cube_gears.3mf",
+        "test_files/core/cylinder.3mf",
+        "test_files/core/torus.3mf",
         "test_files/material/kinect_scan.3mf",
         "test_files/production/box_prod.3mf",
         "test_files/slices/box_sliced.3mf",
@@ -203,4 +205,38 @@ fn test_all_files_parse() {
             result.err()
         );
     }
+}
+
+/// Test parsing of cylinder (additional core test)
+#[test]
+fn test_parse_core_cylinder() {
+    let file = File::open("test_files/core/cylinder.3mf").expect("Failed to open test file");
+    let model = Model::from_reader(file).expect("Failed to parse 3MF file");
+
+    assert_eq!(model.unit, "millimeter");
+    assert_eq!(model.resources.objects.len(), 1);
+
+    let obj = &model.resources.objects[0];
+    let mesh = obj.mesh.as_ref().expect("Object should have mesh");
+
+    // A cylinder has many triangles
+    assert!(mesh.vertices.len() > 20);
+    assert!(mesh.triangles.len() > 20);
+}
+
+/// Test parsing of torus (additional core test)
+#[test]
+fn test_parse_core_torus() {
+    let file = File::open("test_files/core/torus.3mf").expect("Failed to open test file");
+    let model = Model::from_reader(file).expect("Failed to parse 3MF file");
+
+    assert_eq!(model.unit, "millimeter");
+    assert_eq!(model.resources.objects.len(), 1);
+
+    let obj = &model.resources.objects[0];
+    let mesh = obj.mesh.as_ref().expect("Object should have mesh");
+
+    // A torus has many vertices and triangles
+    assert!(mesh.vertices.len() > 100);
+    assert!(mesh.triangles.len() > 100);
 }
