@@ -10,9 +10,18 @@ use std::io::Read;
 
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
+    // Use default config that supports all extensions for backward compatibility
+    parse_3mf_with_config(reader, ParserConfig::with_all_extensions())
+}
+
+/// Parse a 3MF file from a reader with custom configuration
+pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
+    reader: R,
+    config: ParserConfig,
+) -> Result<Model> {
     let mut package = Package::open(reader)?;
     let model_xml = package.get_model()?;
-    parse_model_xml(&model_xml)
+    parse_model_xml_with_config(&model_xml, config)
 }
 
 /// Extract local name from potentially namespaced XML element name
@@ -34,7 +43,13 @@ fn get_local_name(name_str: &str) -> &str {
 }
 
 /// Parse the 3D model XML content
+#[allow(dead_code)] // Used in tests
 fn parse_model_xml(xml: &str) -> Result<Model> {
+    parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
+}
+
+/// Parse the 3D model XML content with configuration
+fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -60,6 +75,12 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
 
                 match local_name {
                     "model" => {
+                        // Parse model element using two-pass approach:
+                        // 1. First collect all namespace declarations (xmlns:prefix attributes)
+                        // 2. Then resolve requiredextensions which may use those prefixes
+                        let mut namespaces = HashMap::new();
+                        let mut required_ext_value = None;
+
                         // Parse model attributes
                         for attr in e.attributes() {
                             let attr = attr?;
@@ -71,8 +92,24 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                             match key {
                                 "unit" => model.unit = value.to_string(),
                                 "xmlns" => model.xmlns = value.to_string(),
-                                _ => {}
+                                "requiredextensions" => {
+                                    required_ext_value = Some(value.to_string());
+                                }
+                                _ => {
+                                    // Check if it's a namespace declaration (xmlns:prefix)
+                                    if let Some(prefix) = key.strip_prefix("xmlns:") {
+                                        namespaces.insert(prefix.to_string(), value.to_string());
+                                    }
+                                }
                             }
+                        }
+
+                        // Now parse required extensions with namespace context
+                        if let Some(ext_value) = required_ext_value {
+                            model.required_extensions =
+                                parse_required_extensions_with_namespaces(&ext_value, &namespaces)?;
+                            // Validate that all required extensions are supported
+                            validate_extensions(&model.required_extensions, &config)?;
                         }
                     }
                     "metadata" => {
@@ -364,6 +401,51 @@ fn parse_color(color_str: &str) -> Option<(u8, u8, u8, u8)> {
     } else {
         None
     }
+}
+
+/// Parse required extensions from a space-separated list of namespace URIs
+#[allow(dead_code)] // Kept for backward compatibility
+fn parse_required_extensions(extensions_str: &str) -> Result<Vec<Extension>> {
+    parse_required_extensions_with_namespaces(extensions_str, &HashMap::new())
+}
+
+/// Parse required extensions from a space-separated list that may contain prefixes or URIs
+fn parse_required_extensions_with_namespaces(
+    extensions_str: &str,
+    namespaces: &HashMap<String, String>,
+) -> Result<Vec<Extension>> {
+    let mut extensions = Vec::new();
+
+    for item in extensions_str.split_whitespace() {
+        // Try to resolve it as a full URI first
+        if let Some(ext) = Extension::from_namespace(item) {
+            extensions.push(ext);
+        } else if let Some(namespace_uri) = namespaces.get(item) {
+            // It's a namespace prefix - resolve it to a URI
+            if let Some(ext) = Extension::from_namespace(namespace_uri) {
+                extensions.push(ext);
+            }
+            // If the resolved URI is unknown, skip it (allows custom extensions)
+        }
+        // Unknown item (not a known URI or resolvable prefix) - skip it
+        // This allows for custom extensions that we don't recognize
+    }
+
+    Ok(extensions)
+}
+
+/// Validate that all required extensions are supported by the parser configuration
+fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<()> {
+    for ext in required {
+        if !config.supports(ext) {
+            return Err(Error::UnsupportedExtension(format!(
+                "Extension '{}' (namespace: {}) is required but not supported",
+                ext.name(),
+                ext.namespace()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Parse attributes from an XML element

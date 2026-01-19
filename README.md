@@ -19,6 +19,7 @@ The 3MF format is the modern standard for 3D printing, supporting rich model inf
 
 - ✅ **Pure Rust implementation** - No C/C++ dependencies
 - ✅ **No unsafe code** - Enforced with `#![forbid(unsafe_code)]`
+- ✅ **Extension support** - Configurable support for 3MF extensions with validation
 - ✅ Parse 3MF file structure (ZIP/OPC container)
 - ✅ Read 3D model data including meshes, vertices, and triangles
 - ✅ Support for materials and colors
@@ -64,6 +65,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Extension Support
+
+3MF files can require specific extensions beyond the core specification. You can control which extensions your application supports:
+
+```rust
+use lib3mf::{Model, ParserConfig, Extension};
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("model.3mf")?;
+    
+    // Configure which extensions you support
+    let config = ParserConfig::new()
+        .with_extension(Extension::Material)
+        .with_extension(Extension::Production);
+    
+    // Parse with validation - will reject files requiring unsupported extensions
+    let model = Model::from_reader_with_config(file, config)?;
+    
+    // Check what extensions are required by the file
+    for ext in &model.required_extensions {
+        println!("File requires extension: {}", ext.name());
+    }
+    
+    Ok(())
+}
+```
+
+The parser supports the following extensions:
+- `Extension::Core` - Core 3MF specification (always supported)
+- `Extension::Material` - Materials & Properties
+- `Extension::Production` - Production information (UUIDs, paths)
+- `Extension::Slice` - Slice data for layer-by-layer manufacturing
+- `Extension::BeamLattice` - Beam and lattice structures
+- `Extension::SecureContent` - Digital signatures and encryption
+- `Extension::BooleanOperations` - Volumetric design
+- `Extension::Displacement` - Surface displacement maps
+
 ### Running Examples
 
 The repository includes a complete example demonstrating parsing:
@@ -97,18 +136,37 @@ This implementation currently supports:
   - Per-triangle material references (pid attributes)
   - Base materials with display colors
 
-### Extension Support Status
+### Extension Support and Validation
 
-The parser can successfully read and parse files using the following 3MF extensions:
+The parser supports **conditional extension validation**, allowing consumers to specify which 3MF extensions they support. When a 3MF file declares required extensions via the `requiredextensions` attribute, the parser validates that all required extensions are supported before processing the file.
 
-- ✅ **Core Specification** - Fully supported
-- ✅ **Materials Extension** - Color groups and base materials supported
-- ⚠️  **Production Extension** - Files parse successfully, UUID attributes not yet extracted
-- ⚠️  **Slice Extension** - Files parse successfully, slice data not yet extracted
-- ⚠️  **Beam Lattice Extension** - Files parse successfully, beam data not yet extracted
+**Supported Extensions:**
 
-Note: Files using extensions parse correctly and basic mesh data is extracted. 
-Extension-specific data structures (beams, slices, UUIDs) are not yet fully modeled.
+- ✅ **Core Specification** - Fully supported (always enabled)
+- ✅ **Materials Extension** - Color groups and base materials
+- ✅ **Production Extension** - Files parse successfully
+- ✅ **Slice Extension** - Files parse successfully  
+- ✅ **Beam Lattice Extension** - Files parse successfully
+- ✅ **Secure Content Extension** - Recognized and validated
+- ✅ **Boolean Operations Extension** - Recognized and validated
+- ✅ **Displacement Extension** - Recognized and validated
+
+**Validation Behavior:**
+
+By default, `Model::from_reader()` accepts files with any known extension for backward compatibility. Use `Model::from_reader_with_config()` to enforce specific extension requirements:
+
+```rust
+// Only accept core files (no extensions)
+let config = ParserConfig::new();
+
+// Accept core + materials
+let config = ParserConfig::new().with_extension(Extension::Material);
+
+// Accept all known extensions
+let config = ParserConfig::with_all_extensions();
+```
+
+**Note:** While all extensions are recognized for validation purposes, extension-specific data structures (beams, slices, production UUIDs) are not yet fully extracted. Basic mesh geometry and materials are fully supported.
 
 ### Future Enhancements
 
