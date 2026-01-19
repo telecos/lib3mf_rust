@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# ZIP stream compression and decompression
+zip = "2.2.2"
+
+# XML parsing with serde support
+quick-xml = { version = "0.37.2", features = ["serialize"] }
+
+# JSON parsing
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.135"
+
+# JPEG and PNG image support
+image = { version = "0.25.8", features = ["jpeg", "png"] }
