@@ -36,7 +36,9 @@ impl Extension {
                 "http://schemas.microsoft.com/3dmanufacturing/production/2015/06"
             }
             Extension::Slice => "http://schemas.microsoft.com/3dmanufacturing/slice/2015/07",
-            Extension::BeamLattice => "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02",
+            Extension::BeamLattice => {
+                "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02"
+            }
             Extension::SecureContent => {
                 "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07"
             }
@@ -59,9 +61,7 @@ impl Extension {
             "http://schemas.microsoft.com/3dmanufacturing/production/2015/06" => {
                 Some(Extension::Production)
             }
-            "http://schemas.microsoft.com/3dmanufacturing/slice/2015/07" => {
-                Some(Extension::Slice)
-            }
+            "http://schemas.microsoft.com/3dmanufacturing/slice/2015/07" => Some(Extension::Slice),
             "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02" => {
                 Some(Extension::BeamLattice)
             }
@@ -114,7 +114,7 @@ impl ParserConfig {
     }
 
     /// Create a parser configuration that supports all known extensions
-    /// 
+    ///
     /// Note: When new extensions are added to the Extension enum, they must
     /// be manually added here as well.
     pub fn with_all_extensions() -> Self {

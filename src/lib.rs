@@ -90,11 +90,11 @@ impl Model {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let file = File::open("model.3mf")?;
-    /// 
+    ///
     /// // Only support core and material extensions
     /// let config = ParserConfig::new()
     ///     .with_extension(Extension::Material);
-    /// 
+    ///
     /// let model = Model::from_reader_with_config(file, config)?;
     /// # Ok(())
     /// # }

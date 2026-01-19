@@ -80,7 +80,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         // 2. Then resolve requiredextensions which may use those prefixes
                         let mut namespaces = HashMap::new();
                         let mut required_ext_value = None;
-                        
+
                         // Parse model attributes
                         for attr in e.attributes() {
                             let attr = attr?;
@@ -103,7 +103,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 }
                             }
                         }
-                        
+
                         // Now parse required extensions with namespace context
                         if let Some(ext_value) = required_ext_value {
                             model.required_extensions =
