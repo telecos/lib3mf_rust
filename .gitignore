@@ -27,3 +27,6 @@ target
 
 # Test files from external repository
 /test_files/3mf-samples
+
+# Official 3MF test suites (clone separately)
+test_suites/

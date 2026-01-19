@@ -135,9 +135,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("    Item {}: object ID {}", i, item.objectid);
         if let Some(transform) = item.transform {
             println!("      Has transformation matrix");
-            println!("        [{:.2}, {:.2}, {:.2}, {:.2}]", transform[0], transform[1], transform[2], transform[3]);
-            println!("        [{:.2}, {:.2}, {:.2}, {:.2}]", transform[4], transform[5], transform[6], transform[7]);
-            println!("        [{:.2}, {:.2}, {:.2}, {:.2}]", transform[8], transform[9], transform[10], transform[11]);
+            println!(
+                "        [{:.2}, {:.2}, {:.2}, {:.2}]",
+                transform[0], transform[1], transform[2], transform[3]
+            );
+            println!(
+                "        [{:.2}, {:.2}, {:.2}, {:.2}]",
+                transform[4], transform[5], transform[6], transform[7]
+            );
+            println!(
+                "        [{:.2}, {:.2}, {:.2}, {:.2}]",
+                transform[8], transform[9], transform[10], transform[11]
+            );
         }
     }
     println!();

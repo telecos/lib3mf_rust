@@ -1,0 +1,218 @@
+# GitHub Actions CI/CD Workflows
+
+This directory contains GitHub Actions workflows for automated testing and conformance validation.
+
+## Workflows
+
+### 1. CI Workflow (`.github/workflows/ci.yml`)
+
+**Triggers**: Every push and pull request to `main`/`develop`
+
+**Purpose**: Fast, essential checks
+
+**What it does**:
+- ✅ Runs unit tests
+- ✅ Runs integration tests  
+- ✅ Runs clippy (linter)
+- ✅ Checks code formatting
+- ✅ Tests on multiple platforms (Linux, Windows, macOS)
+
+**Runtime**: ~2-5 minutes
+
+### 2. Conformance Workflow (`.github/workflows/conformance.yml`)
+
+**Triggers**: 
+- Push/PR to `main`/`develop`
+- Manual trigger via Actions tab
+- Scheduled runs (optional)
+
+**Purpose**: Validate parser against official 3MF test suites
+
+**What it does**:
+- ✅ Clones 3MF Consortium test suites (~1.6GB)
+- ✅ Caches test suites for faster subsequent runs
+- ✅ Runs conformance summary (2,241 test cases)
+- ✅ Generates conformance report
+- ✅ Uploads report as artifact
+
+**Runtime**: ~10-15 minutes (first run), ~5 minutes (cached)
+
+## Test Suite Caching
+
+The conformance workflow caches the test_suites directory to avoid re-downloading 1.6GB on every run:
+
+```yaml
+- name: Cache test suites
+  uses: actions/cache@v4
+  with:
+    path: test_suites
+    key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
+```
+
+**Cache invalidation**: Cache is recreated when:
+- The workflow file changes
+- Manual cache clear via GitHub UI
+- 7 days of inactivity (GitHub's default)
+
+## Running Workflows Manually
+
+### From GitHub UI:
+1. Go to your repository
+2. Click "Actions" tab
+3. Select "Conformance Tests" workflow
+4. Click "Run workflow" button
+5. Choose branch and click "Run workflow"
+
+### Using GitHub CLI:
+```bash
+gh workflow run conformance.yml
+```
+
+## Workflow Artifacts
+
+The conformance workflow uploads a detailed report:
+
+**Artifact name**: `conformance-report`  
+**Location**: Actions run → Artifacts section  
+**Retention**: 30 days  
+**Contents**: Detailed conformance test results
+
+To download:
+```bash
+gh run download <run-id> -n conformance-report
+```
+
+## Customizing Workflows
+
+### Add More Platforms
+
+Edit `.github/workflows/ci.yml`:
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest, macos-14]  # Add more
+```
+
+### Change Test Suites Cloned
+
+Edit `.github/workflows/conformance.yml`:
+
+```yaml
+- name: Clone 3MF test suites
+  run: |
+    # Use --depth 1 for faster clone (no history)
+    git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+    
+    # Or clone specific branch
+    git clone --depth 1 -b main https://github.com/3MFConsortium/test_suites.git
+```
+
+### Run Detailed Parameterized Tests
+
+The conformance workflow includes an optional job for detailed testing:
+
+```yaml
+conformance-detailed:
+  # Runs on manual trigger only by default
+  if: github.event_name == 'workflow_dispatch'
+  
+  strategy:
+    matrix:
+      suite: [suite3_core, suite7_beam, suite10_boolean]
+```
+
+To enable on every run, remove the `if` condition.
+
+## Troubleshooting
+
+### Workflow fails with "test_suites not found"
+
+Check cache restore step. If cache miss, ensure clone step runs:
+
+```yaml
+- name: Clone 3MF test suites
+  if: steps.cache-test-suites.outputs.cache-hit != 'true'  # Only if not cached
+  run: git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+```
+
+### Out of disk space
+
+The test suites are large (1.6GB). If running on self-hosted runners, ensure adequate space:
+
+```bash
+df -h  # Check available space
+```
+
+Consider:
+- Using shallow clone (`--depth 1`)
+- Cleaning old caches
+- Increasing runner disk size
+
+### Tests timeout
+
+Increase timeout in workflow:
+
+```yaml
+jobs:
+  conformance:
+    timeout-minutes: 30  # Default is usually 360
+```
+
+### Cache not being used
+
+Check cache key. It should be stable across runs:
+
+```yaml
+key: ${{ runner.os }}-test-suites-v1  # Simpler key
+```
+
+## Best Practices
+
+### For Development
+- CI workflow runs on every commit (fast checks)
+- Conformance runs periodically or manually (slower, comprehensive)
+
+### For Release
+- Ensure all conformance tests pass before release
+- Run detailed parameterized tests for critical suites
+- Check conformance report artifact
+
+### For Contributors
+- PR checks focus on CI workflow (fast feedback)
+- Maintainers can manually trigger conformance for PRs
+- Keep test suite cache updated
+
+## Secrets and Variables
+
+No secrets required for current setup. All dependencies are public.
+
+If adding private test suites:
+1. Create GitHub secret with access token
+2. Reference in workflow: `${{ secrets.TEST_SUITE_TOKEN }}`
+
+## Monitoring
+
+View workflow status:
+- **Dashboard**: Repository → Actions tab
+- **Badges**: Add to README.md
+  ```markdown
+  ![CI](https://github.com/username/repo/workflows/CI/badge.svg)
+  ![Conformance](https://github.com/username/repo/workflows/Conformance%20Tests/badge.svg)
+  ```
+
+## Future Enhancements
+
+Potential additions:
+- Schedule nightly conformance runs
+- Matrix testing across Rust versions
+- Performance benchmarking
+- Code coverage reporting
+- Automatic issue creation on conformance regression
+
+## See Also
+
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [actions/cache Documentation](https://github.com/actions/cache)
+- [CONFORMANCE_TESTING.md](../docs/CONFORMANCE_TESTING.md)
+- [PARAMETERIZED_TESTING.md](../docs/PARAMETERIZED_TESTING.md)

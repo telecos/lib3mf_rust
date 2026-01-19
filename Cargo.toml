@@ -17,6 +17,13 @@ thiserror = "2.0"
 [dev-dependencies]
 tempfile = "3.14"
 zip = "2.3"
+walkdir = "2.5"
+libtest-mimic = "0.8"
+
+[[test]]
+name = "conformance_individual"
+path = "tests/conformance_individual.rs"
+harness = false
 
 [lints.rust]
 unsafe_code = "forbid"

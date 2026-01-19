@@ -16,12 +16,12 @@ pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
 }
 
 /// Extract local name from potentially namespaced XML element name
-/// 
+///
 /// 3MF files use XML namespaces for extensions. This function extracts
 /// the local element name without the namespace prefix.
-/// 
+///
 /// # Examples
-/// 
+///
 /// - `"m:colorgroup"` returns `"colorgroup"`
 /// - `"p:UUID"` returns `"UUID"`
 /// - `"object"` returns `"object"`
@@ -55,7 +55,7 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                
+
                 let local_name = get_local_name(name_str);
 
                 match local_name {
@@ -80,9 +80,8 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                         if let Some(name) = attrs.get("name") {
                             // Read the text content
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                                let value = t
-                                    .unescape()
-                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                let value =
+                                    t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
                                 model.metadata.insert(name.clone(), value.to_string());
                             }
                         }
@@ -138,7 +137,9 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
-                            .ok_or_else(|| Error::InvalidXml("ColorGroup missing id attribute".to_string()))?
+                            .ok_or_else(|| {
+                                Error::InvalidXml("ColorGroup missing id attribute".to_string())
+                            })?
                             .parse::<usize>()?;
                         current_colorgroup = Some(ColorGroup::new(id));
                     }
@@ -159,7 +160,7 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                
+
                 let local_name = get_local_name(name_str);
 
                 match local_name {
@@ -374,10 +375,10 @@ fn parse_attributes<R: std::io::BufRead>(
 
     for attr in e.attributes() {
         let attr = attr?;
-        let key = std::str::from_utf8(attr.key.as_ref())
-            .map_err(|e| Error::InvalidXml(e.to_string()))?;
-        let value = std::str::from_utf8(&attr.value)
-            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let key =
+            std::str::from_utf8(attr.key.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let value =
+            std::str::from_utf8(&attr.value).map_err(|e| Error::InvalidXml(e.to_string()))?;
 
         attrs.insert(key.to_string(), value.to_string());
     }
