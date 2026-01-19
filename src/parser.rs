@@ -16,7 +16,15 @@ pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
 }
 
 /// Extract local name from potentially namespaced XML element name
-/// e.g., "m:colorgroup" -> "colorgroup", "object" -> "object"
+/// 
+/// 3MF files use XML namespaces for extensions. This function extracts
+/// the local element name without the namespace prefix.
+/// 
+/// # Examples
+/// 
+/// - `"m:colorgroup"` returns `"colorgroup"`
+/// - `"p:UUID"` returns `"UUID"`
+/// - `"object"` returns `"object"`
 fn get_local_name(name_str: &str) -> &str {
     if let Some(pos) = name_str.rfind(':') {
         &name_str[pos + 1..]

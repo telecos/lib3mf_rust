@@ -196,7 +196,7 @@ fn test_all_files_parse() {
     ];
 
     for path in test_files {
-        let file = File::open(path).unwrap_or_else(|_| panic!("Failed to open {}", path));
+        let file = File::open(path).expect(&format!("Failed to open {}", path));
         let result = Model::from_reader(file);
         assert!(
             result.is_ok(),
