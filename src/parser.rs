@@ -10,9 +10,18 @@ use std::io::Read;
 
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
+    // Use default config that supports all extensions for backward compatibility
+    parse_3mf_with_config(reader, ParserConfig::with_all_extensions())
+}
+
+/// Parse a 3MF file from a reader with custom configuration
+pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
+    reader: R,
+    config: ParserConfig,
+) -> Result<Model> {
     let mut package = Package::open(reader)?;
     let model_xml = package.get_model()?;
-    parse_model_xml(&model_xml)
+    parse_model_xml_with_config(&model_xml, config)
 }
 
 /// Extract local name from potentially namespaced XML element name
@@ -35,6 +44,11 @@ fn get_local_name(name_str: &str) -> &str {
 
 /// Parse the 3D model XML content
 fn parse_model_xml(xml: &str) -> Result<Model> {
+    parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
+}
+
+/// Parse the 3D model XML content with configuration
+fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -71,6 +85,13 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                             match key {
                                 "unit" => model.unit = value.to_string(),
                                 "xmlns" => model.xmlns = value.to_string(),
+                                "requiredextensions" => {
+                                    // Parse space-separated list of required extension URIs
+                                    model.required_extensions =
+                                        parse_required_extensions(value)?;
+                                    // Validate that all required extensions are supported
+                                    validate_extensions(&model.required_extensions, &config)?;
+                                }
                                 _ => {}
                             }
                         }
@@ -364,6 +385,36 @@ fn parse_color(color_str: &str) -> Option<(u8, u8, u8, u8)> {
     } else {
         None
     }
+}
+
+/// Parse required extensions from a space-separated list of namespace URIs
+fn parse_required_extensions(extensions_str: &str) -> Result<Vec<Extension>> {
+    let mut extensions = Vec::new();
+    
+    for namespace in extensions_str.split_whitespace() {
+        if let Some(ext) = Extension::from_namespace(namespace) {
+            extensions.push(ext);
+        } else {
+            // Unknown extension - we don't fail here, just skip it
+            // This allows for future extensions or custom extensions
+        }
+    }
+    
+    Ok(extensions)
+}
+
+/// Validate that all required extensions are supported by the parser configuration
+fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<()> {
+    for ext in required {
+        if !config.supports(ext) {
+            return Err(Error::UnsupportedExtension(format!(
+                "Extension '{}' (namespace: {}) is required but not supported",
+                ext.name(),
+                ext.namespace()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Parse attributes from an XML element

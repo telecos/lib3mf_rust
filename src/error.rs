@@ -44,6 +44,10 @@ pub enum Error {
     /// Unsupported feature or extension
     #[error("Unsupported feature: {0}")]
     Unsupported(String),
+
+    /// Required extension not supported
+    #[error("Required extension not supported: {0}")]
+    UnsupportedExtension(String),
 }
 
 impl From<std::num::ParseFloatError> for Error {

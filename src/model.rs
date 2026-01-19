@@ -1,6 +1,156 @@
 //! Data structures representing 3MF models
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+/// 3MF extension specification
+///
+/// Represents the various official 3MF extensions that can be used in 3MF files.
+/// Extensions add additional capabilities beyond the core specification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Extension {
+    /// Core 3MF specification (always required)
+    Core,
+    /// Materials & Properties Extension
+    Material,
+    /// Production Extension
+    Production,
+    /// Slice Extension
+    Slice,
+    /// Beam Lattice Extension
+    BeamLattice,
+    /// Secure Content Extension
+    SecureContent,
+    /// Boolean Operations Extension
+    BooleanOperations,
+    /// Displacement Extension
+    Displacement,
+}
+
+impl Extension {
+    /// Get the namespace URI for this extension
+    pub fn namespace(&self) -> &'static str {
+        match self {
+            Extension::Core => "http://schemas.microsoft.com/3dmanufacturing/core/2015/02",
+            Extension::Material => "http://schemas.microsoft.com/3dmanufacturing/material/2015/02",
+            Extension::Production => {
+                "http://schemas.microsoft.com/3dmanufacturing/production/2015/06"
+            }
+            Extension::Slice => "http://schemas.microsoft.com/3dmanufacturing/slice/2015/07",
+            Extension::BeamLattice => "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02",
+            Extension::SecureContent => {
+                "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07"
+            }
+            Extension::BooleanOperations => {
+                "http://schemas.microsoft.com/3dmanufacturing/volumetric/2021/08"
+            }
+            Extension::Displacement => {
+                "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07"
+            }
+        }
+    }
+
+    /// Get extension from namespace URI
+    pub fn from_namespace(namespace: &str) -> Option<Self> {
+        match namespace {
+            "http://schemas.microsoft.com/3dmanufacturing/core/2015/02" => Some(Extension::Core),
+            "http://schemas.microsoft.com/3dmanufacturing/material/2015/02" => {
+                Some(Extension::Material)
+            }
+            "http://schemas.microsoft.com/3dmanufacturing/production/2015/06" => {
+                Some(Extension::Production)
+            }
+            "http://schemas.microsoft.com/3dmanufacturing/slice/2015/07" => {
+                Some(Extension::Slice)
+            }
+            "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02" => {
+                Some(Extension::BeamLattice)
+            }
+            "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" => {
+                Some(Extension::SecureContent)
+            }
+            "http://schemas.microsoft.com/3dmanufacturing/volumetric/2021/08" => {
+                Some(Extension::BooleanOperations)
+            }
+            "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" => {
+                Some(Extension::Displacement)
+            }
+            _ => None,
+        }
+    }
+
+    /// Get a human-readable name for this extension
+    pub fn name(&self) -> &'static str {
+        match self {
+            Extension::Core => "Core",
+            Extension::Material => "Material",
+            Extension::Production => "Production",
+            Extension::Slice => "Slice",
+            Extension::BeamLattice => "BeamLattice",
+            Extension::SecureContent => "SecureContent",
+            Extension::BooleanOperations => "BooleanOperations",
+            Extension::Displacement => "Displacement",
+        }
+    }
+}
+
+/// Configuration for parsing 3MF files
+///
+/// Allows consumers to specify which extensions they support.
+#[derive(Debug, Clone)]
+pub struct ParserConfig {
+    /// Set of extensions supported by the consumer
+    /// Core is always implicitly supported
+    supported_extensions: HashSet<Extension>,
+}
+
+impl ParserConfig {
+    /// Create a new parser configuration with only core support
+    pub fn new() -> Self {
+        let mut supported = HashSet::new();
+        supported.insert(Extension::Core);
+        Self {
+            supported_extensions: supported,
+        }
+    }
+
+    /// Create a parser configuration that supports all known extensions
+    pub fn with_all_extensions() -> Self {
+        let mut supported = HashSet::new();
+        supported.insert(Extension::Core);
+        supported.insert(Extension::Material);
+        supported.insert(Extension::Production);
+        supported.insert(Extension::Slice);
+        supported.insert(Extension::BeamLattice);
+        supported.insert(Extension::SecureContent);
+        supported.insert(Extension::BooleanOperations);
+        supported.insert(Extension::Displacement);
+        Self {
+            supported_extensions: supported,
+        }
+    }
+
+    /// Add support for a specific extension
+    pub fn with_extension(mut self, extension: Extension) -> Self {
+        self.supported_extensions.insert(extension);
+        self
+    }
+
+    /// Check if an extension is supported
+    pub fn supports(&self, extension: &Extension) -> bool {
+        self.supported_extensions.contains(extension)
+    }
+
+    /// Get the set of supported extensions
+    pub fn supported_extensions(&self) -> &HashSet<Extension> {
+        &self.supported_extensions
+    }
+}
+
+impl Default for ParserConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// A 3D vertex with x, y, z coordinates
 #[derive(Debug, Clone, PartialEq)]
@@ -244,6 +394,9 @@ pub struct Model {
     pub unit: String,
     /// XML namespace
     pub xmlns: String,
+    /// Required extensions for this model
+    /// Extensions that the consumer must support to properly process this file
+    pub required_extensions: Vec<Extension>,
     /// Metadata key-value pairs
     pub metadata: HashMap<String, String>,
     /// Resources (objects, materials)
@@ -258,6 +411,7 @@ impl Model {
         Self {
             unit: "millimeter".to_string(),
             xmlns: "http://schemas.microsoft.com/3dmanufacturing/core/2015/02".to_string(),
+            required_extensions: Vec::new(),
             metadata: HashMap::new(),
             resources: Resources::new(),
             build: Build::new(),

@@ -39,13 +39,17 @@ pub mod parser;
 
 pub use error::{Error, Result};
 pub use model::{
-    Build, BuildItem, ColorGroup, Material, Mesh, Model, Object, Resources, Triangle, Vertex,
+    Build, BuildItem, ColorGroup, Extension, Material, Mesh, Model, Object, ParserConfig,
+    Resources, Triangle, Vertex,
 };
 
 use std::io::Read;
 
 impl Model {
     /// Parse a 3MF file from a reader
+    ///
+    /// This method uses the default parser configuration which supports all known extensions.
+    /// For backward compatibility, this will accept files with any required extensions.
     ///
     /// # Arguments
     ///
@@ -64,6 +68,41 @@ impl Model {
     /// # }
     /// ```
     pub fn from_reader<R: Read + std::io::Seek>(reader: R) -> Result<Self> {
-        parser::parse_3mf(reader)
+        // Use default config which supports all extensions for backward compatibility
+        Self::from_reader_with_config(reader, ParserConfig::with_all_extensions())
+    }
+
+    /// Parse a 3MF file from a reader with custom configuration
+    ///
+    /// This method allows you to specify which extensions you support.
+    /// If the file requires an extension you don't support, an error will be returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - A reader containing the 3MF file data
+    /// * `config` - Parser configuration specifying supported extensions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::{Model, ParserConfig, Extension};
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let file = File::open("model.3mf")?;
+    /// 
+    /// // Only support core and material extensions
+    /// let config = ParserConfig::new()
+    ///     .with_extension(Extension::Material);
+    /// 
+    /// let model = Model::from_reader_with_config(file, config)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_reader_with_config<R: Read + std::io::Seek>(
+        reader: R,
+        config: ParserConfig,
+    ) -> Result<Self> {
+        parser::parse_3mf_with_config(reader, config)
     }
 }
