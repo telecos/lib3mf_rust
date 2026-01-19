@@ -1,0 +1,22 @@
+[package]
+name = "lib3mf"
+version = "0.1.0"
+edition = "2021"
+authors = ["lib3mf_rust contributors"]
+description = "Pure Rust implementation for 3MF (3D Manufacturing Format) parsing"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/telecos/lib3mf_rust"
+keywords = ["3mf", "3d", "parsing", "manufacturing"]
+categories = ["parser-implementations", "encoding"]
+
+[dependencies]
+zip = "2.3"
+quick-xml = "0.37"
+thiserror = "2.0"
+
+[dev-dependencies]
+tempfile = "3.14"
+zip = "2.3"
+
+[lints.rust]
+unsafe_code = "forbid"
