@@ -43,6 +43,7 @@ fn get_local_name(name_str: &str) -> &str {
 }
 
 /// Parse the 3D model XML content
+#[allow(dead_code)] // Used in tests
 fn parse_model_xml(xml: &str) -> Result<Model> {
     parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
 }
@@ -74,6 +75,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
                 match local_name {
                     "model" => {
+                        // First, collect all namespace declarations
+                        let mut namespaces = HashMap::new();
+                        let mut required_ext_value = None;
+                        
                         // Parse model attributes
                         for attr in e.attributes() {
                             let attr = attr?;
@@ -86,14 +91,23 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 "unit" => model.unit = value.to_string(),
                                 "xmlns" => model.xmlns = value.to_string(),
                                 "requiredextensions" => {
-                                    // Parse space-separated list of required extension URIs
-                                    model.required_extensions =
-                                        parse_required_extensions(value)?;
-                                    // Validate that all required extensions are supported
-                                    validate_extensions(&model.required_extensions, &config)?;
+                                    required_ext_value = Some(value.to_string());
                                 }
-                                _ => {}
+                                _ => {
+                                    // Check if it's a namespace declaration (xmlns:prefix)
+                                    if let Some(prefix) = key.strip_prefix("xmlns:") {
+                                        namespaces.insert(prefix.to_string(), value.to_string());
+                                    }
+                                }
                             }
+                        }
+                        
+                        // Now parse required extensions with namespace context
+                        if let Some(ext_value) = required_ext_value {
+                            model.required_extensions =
+                                parse_required_extensions_with_namespaces(&ext_value, &namespaces)?;
+                            // Validate that all required extensions are supported
+                            validate_extensions(&model.required_extensions, &config)?;
                         }
                     }
                     "metadata" => {
@@ -388,18 +402,33 @@ fn parse_color(color_str: &str) -> Option<(u8, u8, u8, u8)> {
 }
 
 /// Parse required extensions from a space-separated list of namespace URIs
+#[allow(dead_code)] // Kept for backward compatibility
 fn parse_required_extensions(extensions_str: &str) -> Result<Vec<Extension>> {
+    parse_required_extensions_with_namespaces(extensions_str, &HashMap::new())
+}
+
+/// Parse required extensions from a space-separated list that may contain prefixes or URIs
+fn parse_required_extensions_with_namespaces(
+    extensions_str: &str,
+    namespaces: &HashMap<String, String>,
+) -> Result<Vec<Extension>> {
     let mut extensions = Vec::new();
-    
-    for namespace in extensions_str.split_whitespace() {
-        if let Some(ext) = Extension::from_namespace(namespace) {
+
+    for item in extensions_str.split_whitespace() {
+        // Try to resolve it as a full URI first
+        if let Some(ext) = Extension::from_namespace(item) {
             extensions.push(ext);
-        } else {
-            // Unknown extension - we don't fail here, just skip it
-            // This allows for future extensions or custom extensions
+        } else if let Some(namespace_uri) = namespaces.get(item) {
+            // It might be a namespace prefix - resolve it
+            if let Some(ext) = Extension::from_namespace(namespace_uri) {
+                extensions.push(ext);
+            }
+            // If we can't resolve the URI to a known extension, skip it
         }
+        // Unknown extension or prefix - we don't fail here, just skip it
+        // This allows for future extensions or custom extensions
     }
-    
+
     Ok(extensions)
 }
 
