@@ -38,7 +38,7 @@ pub mod opc;
 pub mod parser;
 
 pub use error::{Error, Result};
-pub use model::{Build, BuildItem, Material, Mesh, Model, Object, Resources, Triangle, Vertex};
+pub use model::{Build, BuildItem, ColorGroup, Material, Mesh, Model, Object, Resources, Triangle, Vertex};
 
 use std::io::Read;
 

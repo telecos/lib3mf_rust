@@ -92,14 +92,32 @@ This implementation currently supports:
   - Build items with transformations
   - Basic materials and colors
 
+- **Materials Extension**
+  - Color groups (m:colorgroup)
+  - Per-triangle material references (pid attributes)
+  - Base materials with display colors
+
+### Extension Support Status
+
+The parser can successfully read and parse files using the following 3MF extensions:
+
+- ✅ **Core Specification** - Fully supported
+- ✅ **Materials Extension** - Color groups and base materials supported
+- ⚠️  **Production Extension** - Files parse successfully, UUID attributes not yet extracted
+- ⚠️  **Slice Extension** - Files parse successfully, slice data not yet extracted
+- ⚠️  **Beam Lattice Extension** - Files parse successfully, beam data not yet extracted
+
+Note: Files using extensions parse correctly and basic mesh data is extracted. 
+Extension-specific data structures (beams, slices, UUIDs) are not yet fully modeled.
+
 ### Future Enhancements
 
 Potential future additions could include:
-- Advanced material properties
-- Texture support
+- Full production extension support (UUID extraction, path references)
+- Slice extension support (slice stacks and slice data)
+- Beam lattice extension support (beam definitions and properties)
+- Advanced material properties (textures, composite materials)
 - Components and assemblies
-- Production extensions
-- Slice data
 - Custom extensions
 
 ## Testing
