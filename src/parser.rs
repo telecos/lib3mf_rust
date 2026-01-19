@@ -28,6 +28,8 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
     let mut current_mesh: Option<Mesh> = None;
     let mut in_basematerials = false;
     let mut material_index: usize = 0;
+    let mut current_colorgroup: Option<ColorGroup> = None;
+    let mut in_colorgroup = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -35,8 +37,15 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                
+                // Handle namespaced elements (e.g., "m:colorgroup" -> "colorgroup")
+                let local_name = if let Some(pos) = name_str.rfind(':') {
+                    &name_str[pos + 1..]
+                } else {
+                    name_str
+                };
 
-                match name_str {
+                match local_name {
                     "model" => {
                         // Parse model attributes
                         for attr in e.attributes() {
@@ -111,6 +120,25 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                         model.resources.materials.push(material);
                         material_index += 1;
                     }
+                    "colorgroup" if in_resources => {
+                        in_colorgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| Error::InvalidXml("ColorGroup missing id attribute".to_string()))?
+                            .parse::<usize>()?;
+                        current_colorgroup = Some(ColorGroup::new(id));
+                    }
+                    "color" if in_colorgroup => {
+                        if let Some(ref mut colorgroup) = current_colorgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            if let Some(color_str) = attrs.get("color") {
+                                if let Some(color) = parse_color(color_str) {
+                                    colorgroup.colors.push(color);
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -118,8 +146,15 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                
+                // Handle namespaced elements
+                let local_name = if let Some(pos) = name_str.rfind(':') {
+                    &name_str[pos + 1..]
+                } else {
+                    name_str
+                };
 
-                match name_str {
+                match local_name {
                     "resources" => {
                         in_resources = false;
                     }
@@ -139,6 +174,12 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                     }
                     "basematerials" => {
                         in_basematerials = false;
+                    }
+                    "colorgroup" => {
+                        if let Some(colorgroup) = current_colorgroup.take() {
+                            model.resources.color_groups.push(colorgroup);
+                        }
+                        in_colorgroup = false;
                     }
                     _ => {}
                 }

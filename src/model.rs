@@ -111,6 +111,25 @@ impl Material {
     }
 }
 
+/// Color group from materials extension
+#[derive(Debug, Clone)]
+pub struct ColorGroup {
+    /// Color group ID
+    pub id: usize,
+    /// List of colors in this group
+    pub colors: Vec<(u8, u8, u8, u8)>,
+}
+
+impl ColorGroup {
+    /// Create a new color group
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            colors: Vec::new(),
+        }
+    }
+}
+
 /// A 3D object that can be a mesh or reference other objects
 #[derive(Debug, Clone)]
 pub struct Object {
@@ -157,6 +176,8 @@ pub struct Resources {
     pub objects: Vec<Object>,
     /// List of materials
     pub materials: Vec<Material>,
+    /// List of color groups (materials extension)
+    pub color_groups: Vec<ColorGroup>,
 }
 
 impl Resources {
@@ -165,6 +186,7 @@ impl Resources {
         Self {
             objects: Vec::new(),
             materials: Vec::new(),
+            color_groups: Vec::new(),
         }
     }
 }

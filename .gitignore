@@ -24,3 +24,6 @@ target
 # Added by cargo
 
 /target
+
+# Test files from external repository
+/test_files/3mf-samples
