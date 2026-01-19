@@ -75,7 +75,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
                 match local_name {
                     "model" => {
-                        // First, collect all namespace declarations
+                        // Parse model element using two-pass approach:
+                        // 1. First collect all namespace declarations (xmlns:prefix attributes)
+                        // 2. Then resolve requiredextensions which may use those prefixes
                         let mut namespaces = HashMap::new();
                         let mut required_ext_value = None;
                         
@@ -419,14 +421,14 @@ fn parse_required_extensions_with_namespaces(
         if let Some(ext) = Extension::from_namespace(item) {
             extensions.push(ext);
         } else if let Some(namespace_uri) = namespaces.get(item) {
-            // It might be a namespace prefix - resolve it
+            // It's a namespace prefix - resolve it to a URI
             if let Some(ext) = Extension::from_namespace(namespace_uri) {
                 extensions.push(ext);
             }
-            // If we can't resolve the URI to a known extension, skip it
+            // If the resolved URI is unknown, skip it (allows custom extensions)
         }
-        // Unknown extension or prefix - we don't fail here, just skip it
-        // This allows for future extensions or custom extensions
+        // Unknown item (not a known URI or resolvable prefix) - skip it
+        // This allows for custom extensions that we don't recognize
     }
 
     Ok(extensions)

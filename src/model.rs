@@ -114,6 +114,9 @@ impl ParserConfig {
     }
 
     /// Create a parser configuration that supports all known extensions
+    /// 
+    /// Note: When new extensions are added to the Extension enum, they must
+    /// be manually added here as well.
     pub fn with_all_extensions() -> Self {
         let mut supported = HashSet::new();
         supported.insert(Extension::Core);

@@ -128,7 +128,8 @@ fn test_parse_with_material_extension() {
 fn test_parse_with_multiple_extensions() {
     // File requiring multiple extensions
     let data = create_test_3mf(
-        "http://schemas.microsoft.com/3dmanufacturing/material/2015/02 http://schemas.microsoft.com/3dmanufacturing/production/2015/06",
+        "http://schemas.microsoft.com/3dmanufacturing/material/2015/02 \
+         http://schemas.microsoft.com/3dmanufacturing/production/2015/06",
     );
     let cursor = Cursor::new(data);
 
@@ -179,7 +180,8 @@ fn test_accept_supported_extension() {
 fn test_reject_multiple_unsupported_extensions() {
     // File requiring production and slice extensions
     let data = create_test_3mf(
-        "http://schemas.microsoft.com/3dmanufacturing/production/2015/06 http://schemas.microsoft.com/3dmanufacturing/slice/2015/07",
+        "http://schemas.microsoft.com/3dmanufacturing/production/2015/06 \
+         http://schemas.microsoft.com/3dmanufacturing/slice/2015/07",
     );
     let cursor = Cursor::new(data);
 
@@ -257,8 +259,10 @@ fn test_extension_namespace_roundtrip() {
 #[test]
 fn test_unknown_extension_ignored() {
     // File with an unknown extension namespace
-    let data =
-        create_test_3mf("http://example.com/unknown/extension http://schemas.microsoft.com/3dmanufacturing/material/2015/02");
+    let data = create_test_3mf(
+        "http://example.com/unknown/extension \
+         http://schemas.microsoft.com/3dmanufacturing/material/2015/02",
+    );
     let cursor = Cursor::new(data);
 
     let model = Model::from_reader(cursor).unwrap();
@@ -271,7 +275,8 @@ fn test_unknown_extension_ignored() {
 fn test_backward_compatibility() {
     // The default from_reader should accept any extension for backward compatibility
     let data = create_test_3mf(
-        "http://schemas.microsoft.com/3dmanufacturing/material/2015/02 http://schemas.microsoft.com/3dmanufacturing/production/2015/06",
+        "http://schemas.microsoft.com/3dmanufacturing/material/2015/02 \
+         http://schemas.microsoft.com/3dmanufacturing/production/2015/06",
     );
     let cursor = Cursor::new(data);
 
