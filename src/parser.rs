@@ -26,6 +26,9 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
     let mut in_build = false;
     let mut current_object: Option<Object> = None;
     let mut current_mesh: Option<Mesh> = None;
+    let mut in_basematerials = false;
+    let mut basematerials_id: Option<usize> = None;
+    let mut material_index: usize = 0;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -98,11 +101,18 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                         model.build.items.push(item);
                     }
                     "basematerials" if in_resources => {
-                        // Base materials group
+                        in_basematerials = true;
+                        material_index = 0;
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(id_str) = attrs.get("id") {
+                            basematerials_id = Some(id_str.parse::<usize>()?);
+                        }
                     }
-                    "base" if in_resources => {
-                        let material = parse_material(&reader, e)?;
+                    "base" if in_basematerials => {
+                        // Materials within basematerials use sequential indices
+                        let material = parse_base_material(&reader, e, material_index)?;
                         model.resources.materials.push(material);
+                        material_index += 1;
                     }
                     _ => {}
                 }
@@ -129,6 +139,10 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
                     }
                     "mesh" => {
                         // Mesh parsing complete
+                    }
+                    "basematerials" => {
+                        in_basematerials = false;
+                        basematerials_id = None;
                     }
                     _ => {}
                 }
@@ -262,23 +276,16 @@ fn parse_build_item<R: std::io::BufRead>(
 }
 
 /// Parse material (base) element attributes
-fn parse_material<R: std::io::BufRead>(
+/// Base materials within a basematerials group use sequential indices (0, 1, 2, ...)
+fn parse_base_material<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
+    index: usize,
 ) -> Result<Material> {
     let attrs = parse_attributes(reader, e)?;
 
-    // Generate a sequential ID - using a thread-safe counter
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static MATERIAL_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    
-    let id = if let Some(id_str) = attrs.get("id") {
-        id_str.parse::<usize>()?
-    } else {
-        MATERIAL_COUNTER.fetch_add(1, Ordering::SeqCst)
-    };
-
-    let mut material = Material::new(id);
+    // Use the provided index as the material ID
+    let mut material = Material::new(index);
     material.name = attrs.get("name").cloned();
 
     // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
