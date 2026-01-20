@@ -69,6 +69,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut resources_count = 0;
     let mut build_count = 0;
 
+    // Track namespace declarations from model element
+    let mut declared_namespaces: HashMap<String, String> = HashMap::new();
+
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
@@ -125,6 +128,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
 
+                        // Store namespace declarations for later use (e.g., for metadata validation)
+                        declared_namespaces = namespaces.clone();
+
                         // Validate model attributes - only allow specific attributes
                         // Per 3MF Core spec: unit, xml:lang, requiredextensions, and xmlns declarations
                         validate_attributes(
@@ -144,16 +150,16 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "metadata" => {
                         let attrs = parse_attributes(&reader, e)?;
                         if let Some(name) = attrs.get("name") {
-                            // Validate metadata name - must not use undeclared namespace prefix
+                            // Validate metadata name - allow namespaced metadata if namespace is declared
                             // Per 3MF spec, metadata names with ':' indicate namespaced metadata
-                            // which requires proper xmlns declaration
                             if name.contains(':') {
                                 // Extract the namespace prefix (part before the colon)
                                 if let Some(namespace_prefix) = name.split(':').next() {
-                                    // Check if this is a known XML prefix (xml, xmlns)
-                                    if namespace_prefix != "xml" && namespace_prefix != "xmlns" {
-                                        // Custom namespace prefix - reject as we don't track namespace declarations
-                                        // This ensures metadata like "x:anyname" is rejected when namespace 'x' is not declared
+                                    // Check if this is a known XML prefix (xml, xmlns) or a declared namespace
+                                    if namespace_prefix != "xml" 
+                                        && namespace_prefix != "xmlns" 
+                                        && !declared_namespaces.contains_key(namespace_prefix) {
+                                        // Undeclared custom namespace prefix - reject
                                         return Err(Error::InvalidXml(format!(
                                             "Metadata name '{}' uses undeclared namespace prefix '{}'",
                                             name, namespace_prefix
