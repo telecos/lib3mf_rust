@@ -140,15 +140,15 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             // Per 3MF spec, metadata names with ':' indicate namespaced metadata
                             // which requires proper xmlns declaration
                             if name.contains(':') {
-                                // Extract the prefix
-                                if let Some(prefix) = name.split(':').next() {
+                                // Extract the namespace prefix (part before the colon)
+                                if let Some(namespace_prefix) = name.split(':').next() {
                                     // Check if this is a known XML prefix (xml, xmlns)
-                                    if prefix != "xml" && prefix != "xmlns" {
-                                        // This is a custom namespace prefix - it must be declared
-                                        // For now, reject any namespace-prefixed metadata as we don't track declarations
+                                    if namespace_prefix != "xml" && namespace_prefix != "xmlns" {
+                                        // Custom namespace prefix - reject as we don't track namespace declarations
+                                        // This ensures metadata like "x:anyname" is rejected when namespace 'x' is not declared
                                         return Err(Error::InvalidXml(format!(
                                             "Metadata name '{}' uses undeclared namespace prefix '{}'",
-                                            name, prefix
+                                            name, namespace_prefix
                                         )));
                                     }
                                 }
