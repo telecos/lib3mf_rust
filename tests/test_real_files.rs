@@ -127,8 +127,41 @@ fn test_parse_production_box() {
     assert_eq!(mesh.vertices.len(), 8);
     assert_eq!(mesh.triangles.len(), 12);
 
-    // Production extension adds UUID attributes which we may not parse yet
-    // But the file should still parse successfully
+    // Verify production extension UUID is extracted from object
+    assert!(
+        obj.production.is_some(),
+        "Object should have production info"
+    );
+    let production = obj.production.as_ref().unwrap();
+    assert_eq!(
+        production.uuid,
+        Some("01cbb956-1d24-062d-fbe6-7362e5727594".to_string()),
+        "Object UUID should be extracted"
+    );
+
+    // Verify build has production UUID
+    assert!(
+        model.build.production_uuid.is_some(),
+        "Build should have production UUID"
+    );
+    assert_eq!(
+        model.build.production_uuid,
+        Some("96681a5d-5b0f-e592-8c51-da7ed587cb5f".to_string()),
+        "Build UUID should be extracted"
+    );
+
+    // Verify build item has production UUID
+    assert_eq!(model.build.items.len(), 1);
+    let item = &model.build.items[0];
+    assert!(
+        item.production_uuid.is_some(),
+        "Build item should have production UUID"
+    );
+    assert_eq!(
+        item.production_uuid,
+        Some("b3de5826-ccb6-3dbc-d6c4-29a2d730766c".to_string()),
+        "Build item UUID should be extracted"
+    );
 }
 
 /// Test parsing of slice extension file

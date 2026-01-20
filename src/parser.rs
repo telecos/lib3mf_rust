@@ -194,6 +194,12 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             ));
                         }
                         in_build = true;
+
+                        // Extract Production extension UUID (p:UUID) from build element
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(p_uuid) = attrs.get("p:UUID") {
+                            model.build.production_uuid = Some(p_uuid.clone());
+                        }
                     }
                     "object" if in_resources => {
                         current_object = Some(parse_object(&reader, e)?);
@@ -380,6 +386,17 @@ fn parse_object<R: std::io::BufRead>(
         object.pindex = Some(pindex.parse::<usize>()?);
     }
 
+    // Extract Production extension attributes (p:UUID, p:path)
+    let p_uuid = attrs.get("p:UUID");
+    let p_path = attrs.get("p:path");
+
+    if p_uuid.is_some() || p_path.is_some() {
+        let mut prod_info = ProductionInfo::new();
+        prod_info.uuid = p_uuid.cloned();
+        prod_info.path = p_path.cloned();
+        object.production = Some(prod_info);
+    }
+
     Ok(object)
 }
 
@@ -536,6 +553,11 @@ fn parse_build_item<R: std::io::BufRead>(
         let mut transform = [0.0; 12];
         transform.copy_from_slice(&values);
         item.transform = Some(transform);
+    }
+
+    // Extract Production extension UUID (p:UUID)
+    if let Some(p_uuid) = attrs.get("p:UUID") {
+        item.production_uuid = Some(p_uuid.clone());
     }
 
     Ok(item)
