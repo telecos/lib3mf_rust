@@ -144,12 +144,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
             if !valid_colorgroup_ids.is_empty() && !valid_colorgroup_ids.contains(&pid) {
                 // Only validate if there are color groups defined
                 // Empty color groups means we might be using basematerials instead
-                if !model.resources.color_groups.is_empty() {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {} references non-existent color group ID: {}",
-                        object.id, pid
-                    )));
-                }
+                return Err(Error::InvalidModel(format!(
+                    "Object {} references non-existent color group ID: {}",
+                    object.id, pid
+                )));
             }
         }
 
@@ -183,15 +181,6 @@ fn validate_material_references(model: &Model) -> Result<()> {
 
     Ok(())
 }
-
-/// Validate build item transforms
-///
-/// Transform matrices must have positive determinants (no reflections/mirroring allowed).
-/// The transform is stored as a 4x3 affine matrix in row-major order:
-/// [ m11 m12 m13 m14 ]
-/// [ m21 m22 m23 m24 ]
-/// [ m31 m32 m33 m34 ]
-/// Stored as: [m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34]
 
 #[cfg(test)]
 mod tests {
