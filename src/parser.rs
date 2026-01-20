@@ -123,7 +123,11 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
                         // Validate model attributes - only allow specific attributes
                         // Per 3MF Core spec: unit, xml:lang, requiredextensions, and xmlns declarations
-                        validate_attributes(&all_attrs, &["unit", "xml:lang", "requiredextensions", "xmlns"], "model")?;
+                        validate_attributes(
+                            &all_attrs,
+                            &["unit", "xml:lang", "requiredextensions", "xmlns"],
+                            "model",
+                        )?;
 
                         // Now parse required extensions with namespace context
                         if let Some(ext_value) = required_ext_value {
@@ -153,7 +157,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                     }
                                 }
                             }
-                            
+
                             // Read the text content
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
@@ -288,11 +292,15 @@ fn parse_object<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Object> {
     let attrs = parse_attributes(reader, e)?;
-    
+
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber
     // Note: thumbnail attribute is NOT part of the core spec and should be rejected
-    validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber"], "object")?;
+    validate_attributes(
+        &attrs,
+        &["id", "name", "type", "pid", "partnumber"],
+        "object",
+    )?;
 
     let id = attrs
         .get("id")
@@ -329,7 +337,7 @@ fn parse_vertex<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
     let attrs = parse_attributes(reader, e)?;
-    
+
     // Validate only allowed attributes are present
     // Per 3MF Core spec: x, y, z
     validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
@@ -358,10 +366,14 @@ fn parse_triangle<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
     let attrs = parse_attributes(reader, e)?;
-    
+
     // Validate only allowed attributes are present
     // Per 3MF Core spec: v1, v2, v3, pid, p1, p2, p3 (for material properties)
-    validate_attributes(&attrs, &["v1", "v2", "v3", "pid", "p1", "p2", "p3"], "triangle")?;
+    validate_attributes(
+        &attrs,
+        &["v1", "v2", "v3", "pid", "p1", "p2", "p3"],
+        "triangle",
+    )?;
 
     let v1 = attrs
         .get("v1")
@@ -393,7 +405,7 @@ fn parse_build_item<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<BuildItem> {
     let attrs = parse_attributes(reader, e)?;
-    
+
     // Validate only allowed attributes are present
     // Per 3MF Core spec: objectid, transform, partnumber
     validate_attributes(&attrs, &["objectid", "transform", "partnumber"], "item")?;
@@ -431,7 +443,7 @@ fn parse_base_material<R: std::io::BufRead>(
     index: usize,
 ) -> Result<Material> {
     let attrs = parse_attributes(reader, e)?;
-    
+
     // Validate only allowed attributes are present
     // Per 3MF Core spec: name, displaycolor
     validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
@@ -538,7 +550,7 @@ fn parse_attributes<R: std::io::BufRead>(
 }
 
 /// Check if an attribute key should be skipped during validation
-/// 
+///
 /// Returns true for:
 /// - XML namespace declarations (xmlns, xmlns:prefix)
 /// - XML standard attribute xml:lang (xml:space is NOT allowed on 3MF elements)
@@ -587,13 +599,13 @@ fn validate_attributes(
 ) -> Result<()> {
     use std::collections::HashSet;
     let allowed_set: HashSet<&str> = allowed.iter().copied().collect();
-    
+
     for key in attrs.keys() {
         // Skip namespace and extension attributes
         if should_skip_attribute(key) {
             continue;
         }
-        
+
         if !allowed_set.contains(key.as_str()) {
             return Err(Error::InvalidXml(format!(
                 "Unknown attribute '{}' on <{}>",
