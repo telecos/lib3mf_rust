@@ -492,25 +492,52 @@ fn parse_attributes<R: std::io::BufRead>(
     Ok(attrs)
 }
 
+/// Check if an attribute key should be skipped during validation
+/// 
+/// Returns true for:
+/// - XML namespace declarations (xmlns, xmlns:prefix)
+/// - XML standard attributes (xml:lang, xml:space)
+/// - Extension-namespaced attributes (p:UUID, m:colorid, s:slicestackid, etc.)
+fn should_skip_attribute(key: &str) -> bool {
+    key.starts_with("xmlns") || key.starts_with("xml:") || key.contains(':')
+}
+
 /// Validate that all attributes in the map are in the allowed list
+///
+/// This function validates that only known/allowed attributes are present on an element,
+/// while allowing extension-specific attributes to pass through.
+///
+/// # Skipped Attributes
+/// - XML namespace attributes: `xmlns`, `xmlns:p`, `xmlns:m`, etc.
+/// - XML standard attributes: `xml:lang`, `xml:space`
+/// - Extension attributes: `p:UUID`, `m:colorid`, `s:slicestackid`, etc.
+///
+/// # Examples
+/// ```ignore
+/// // These would be rejected:
+/// validate_attributes(&attrs, &["id", "name"], "object")?;
+/// // - attrs contains "thumbnail" -> Error
+/// // - attrs contains "foo" -> Error
+///
+/// // These would pass:
+/// // - attrs contains "id", "name", "p:UUID" -> OK (p:UUID skipped as extension attr)
+/// // - attrs contains "id", "xmlns:p" -> OK (xmlns:p skipped as namespace)
+/// ```
 fn validate_attributes(
     attrs: &HashMap<String, String>,
     allowed: &[&str],
     element_name: &str,
 ) -> Result<()> {
+    use std::collections::HashSet;
+    let allowed_set: HashSet<&str> = allowed.iter().copied().collect();
+    
     for key in attrs.keys() {
-        // Skip XML namespace attributes
-        if key.starts_with("xmlns") || key.starts_with("xml:") {
+        // Skip namespace and extension attributes
+        if should_skip_attribute(key) {
             continue;
         }
         
-        // Skip extension-namespaced attributes (e.g., p:UUID, m:colorid, etc.)
-        // These are handled by extension-specific parsing
-        if key.contains(':') {
-            continue;
-        }
-        
-        if !allowed.contains(&key.as_str()) {
+        if !allowed_set.contains(key.as_str()) {
             return Err(Error::InvalidXml(format!(
                 "Unknown attribute '{}' on <{}>",
                 key, element_name
