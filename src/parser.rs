@@ -566,7 +566,7 @@ fn should_skip_attribute(key: &str) -> bool {
 ///
 /// # Skipped Attributes
 /// - XML namespace attributes: `xmlns`, `xmlns:p`, `xmlns:m`, etc.
-/// - XML standard attributes: `xml:lang`, `xml:space`
+/// - XML standard attribute: `xml:lang` (note: `xml:space` is NOT allowed per 3MF spec)
 /// - Extension attributes: `p:UUID`, `m:colorid`, `s:slicestackid`, etc.
 ///
 /// # Examples
