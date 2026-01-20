@@ -112,8 +112,15 @@ impl<R: Read + std::io::Seek> Package<R> {
                             {
                                 found_rels = true;
                             }
-                            // Accept any extension with the 3dmodel content type
+                            // Validate 3dmodel content type mapping
                             if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
+                                // Per 3MF spec, the extension for 3D model files must be "model"
+                                if !ext.eq_ignore_ascii_case("model") {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Content type '{}' must use Extension='model', not Extension='{}'",
+                                        ct, ext
+                                    )));
+                                }
                                 found_model = true;
                             }
                         }
