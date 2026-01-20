@@ -81,19 +81,12 @@ fn validate_object_ids(model: &Model) -> Result<()> {
 fn validate_mesh_geometry(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(ref mesh) = object.mesh {
-            // Mesh must have at least one vertex
-            if mesh.vertices.is_empty() {
+            // If mesh has triangles, it must have vertices
+            // Note: Meshes with vertices but no triangles can be valid for extensions
+            // like beam lattice, so we don't require triangles to be present
+            if !mesh.triangles.is_empty() && mesh.vertices.is_empty() {
                 return Err(Error::InvalidModel(format!(
-                    "Object {}: Mesh must contain at least one vertex",
-                    object.id
-                )));
-            }
-            
-            // If mesh has vertices, it must also have triangles
-            // (An empty mesh with no vertices and no triangles is not valid either)
-            if mesh.triangles.is_empty() {
-                return Err(Error::InvalidModel(format!(
-                    "Object {}: Mesh must contain at least one triangle",
+                    "Object {}: Mesh has triangles but no vertices",
                     object.id
                 )));
             }
@@ -332,7 +325,10 @@ mod tests {
     fn test_validate_empty_mesh() {
         let mut model = Model::new();
         let mut object = Object::new(1);
-        let mesh = Mesh::new(); // Empty mesh (no vertices)
+        let mut mesh = Mesh::new();
+        
+        // Add triangles but no vertices - this should fail
+        mesh.triangles.push(Triangle::new(0, 1, 2));
 
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
@@ -342,6 +338,6 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("at least one vertex"));
+            .contains("has triangles but no vertices"));
     }
 }
