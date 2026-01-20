@@ -81,6 +81,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         // 2. Then resolve requiredextensions which may use those prefixes
                         let mut namespaces = HashMap::new();
                         let mut required_ext_value = None;
+                        let mut all_attrs = HashMap::new();
 
                         // Parse model attributes
                         for attr in e.attributes() {
@@ -89,6 +90,8 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             let value = std::str::from_utf8(&attr.value)
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            all_attrs.insert(key.to_string(), value.to_string());
 
                             match key {
                                 "unit" => {
@@ -117,6 +120,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 }
                             }
                         }
+
+                        // Validate model attributes - only allow specific attributes
+                        // Per 3MF Core spec: unit, xml:lang, requiredextensions, and xmlns declarations
+                        validate_attributes(&all_attrs, &["unit", "xml:lang", "requiredextensions", "xmlns"], "model")?;
 
                         // Now parse required extensions with namespace context
                         if let Some(ext_value) = required_ext_value {
@@ -265,9 +272,9 @@ fn parse_object<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
     
     // Validate only allowed attributes are present
-    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
-    // Note: thumbnail is deprecated but still used in some files
-    validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber", "thumbnail"], "object")?;
+    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber
+    // Note: thumbnail attribute is NOT part of the core spec and should be rejected
+    validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber"], "object")?;
 
     let id = attrs
         .get("id")
@@ -516,10 +523,22 @@ fn parse_attributes<R: std::io::BufRead>(
 /// 
 /// Returns true for:
 /// - XML namespace declarations (xmlns, xmlns:prefix)
-/// - XML standard attributes (xml:lang, xml:space)
+/// - XML standard attribute xml:lang (xml:space is NOT allowed on 3MF elements)
 /// - Extension-namespaced attributes (p:UUID, m:colorid, s:slicestackid, etc.)
 fn should_skip_attribute(key: &str) -> bool {
-    key.starts_with("xmlns") || key.starts_with("xml:") || key.contains(':')
+    // Allow xmlns and extension attributes (with colons)
+    // Allow xml:lang but NOT xml:space (xml:space is not allowed per 3MF spec)
+    if key.starts_with("xmlns") {
+        return true;
+    }
+    if key == "xml:lang" {
+        return true;
+    }
+    // Allow extension attributes (contain colon but not xml:)
+    if key.contains(':') && !key.starts_with("xml:") {
+        return true;
+    }
+    false
 }
 
 /// Validate that all attributes in the map are in the allowed list
