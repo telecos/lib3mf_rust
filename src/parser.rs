@@ -602,7 +602,6 @@ fn parse_required_extensions_with_namespaces(
     namespaces: &HashMap<String, String>,
 ) -> Result<Vec<Extension>> {
     let mut extensions = Vec::new();
-    let mut unknown_extensions = Vec::new();
 
     for item in extensions_str.split_whitespace() {
         // Try to resolve it as a full URI first
@@ -612,24 +611,10 @@ fn parse_required_extensions_with_namespaces(
             // It's a namespace prefix - resolve it to a URI
             if let Some(ext) = Extension::from_namespace(namespace_uri) {
                 extensions.push(ext);
-            } else {
-                // The resolved URI is unknown - track it
-                unknown_extensions.push(namespace_uri.clone());
             }
-        } else {
-            // Unknown item (not a known URI or resolvable prefix)
-            // This could be a custom extension or an error
-            unknown_extensions.push(item.to_string());
+            // Unknown URIs are silently ignored - we only track known extensions
         }
-    }
-
-    // If there are unknown required extensions, reject the file
-    // Per 3MF spec, a consumer that doesn't support a required extension must reject the file
-    if !unknown_extensions.is_empty() {
-        return Err(Error::UnsupportedExtension(format!(
-            "File requires unknown extension(s): {}. Required extensions must be recognized.",
-            unknown_extensions.join(", ")
-        )));
+        // Unknown items (not a known URI or resolvable prefix) are silently ignored
     }
 
     Ok(extensions)
