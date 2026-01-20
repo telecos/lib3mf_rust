@@ -294,11 +294,11 @@ fn parse_object<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber
-    // Note: thumbnail attribute is NOT part of the core spec and should be rejected
+    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
+    // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["id", "name", "type", "pid", "partnumber"],
+        &["id", "name", "type", "pid", "partnumber", "thumbnail"],
         "object",
     )?;
 
