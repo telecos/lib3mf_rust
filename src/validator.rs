@@ -231,7 +231,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                     if pindex >= colorgroup.colors.len() {
                         return Err(Error::InvalidModel(format!(
                             "Object {}: pindex {} is out of bounds (color group {} has {} colors)",
-                            object.id, pindex, obj_pid, colorgroup.colors.len()
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            colorgroup.colors.len()
                         )));
                     }
                 }
@@ -243,13 +246,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
                 // Determine which color group to use for validation
                 let pid_to_check = triangle.pid.or(object.pid);
-                
+
                 if let Some(pid) = pid_to_check {
-                    if let Some(colorgroup) = model
-                        .resources
-                        .color_groups
-                        .iter()
-                        .find(|cg| cg.id == pid)
+                    if let Some(colorgroup) =
+                        model.resources.color_groups.iter().find(|cg| cg.id == pid)
                     {
                         let num_colors = colorgroup.colors.len();
 

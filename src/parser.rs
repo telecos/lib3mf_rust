@@ -156,9 +156,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 // Extract the namespace prefix (part before the colon)
                                 if let Some(namespace_prefix) = name.split(':').next() {
                                     // Check if this is a known XML prefix (xml, xmlns) or a declared namespace
-                                    if namespace_prefix != "xml" 
-                                        && namespace_prefix != "xmlns" 
-                                        && !declared_namespaces.contains_key(namespace_prefix) {
+                                    if namespace_prefix != "xml"
+                                        && namespace_prefix != "xmlns"
+                                        && !declared_namespaces.contains_key(namespace_prefix)
+                                    {
                                         // Undeclared custom namespace prefix - reject
                                         return Err(Error::InvalidXml(format!(
                                             "Metadata name '{}' uses undeclared namespace prefix '{}'",
@@ -333,7 +334,15 @@ fn parse_object<R: std::io::BufRead>(
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["id", "name", "type", "pid", "pindex", "partnumber", "thumbnail"],
+        &[
+            "id",
+            "name",
+            "type",
+            "pid",
+            "pindex",
+            "partnumber",
+            "thumbnail",
+        ],
         "object",
     )?;
 
