@@ -36,6 +36,7 @@ pub mod error;
 pub mod model;
 pub mod opc;
 pub mod parser;
+mod validator;
 
 pub use error::{Error, Result};
 pub use model::{

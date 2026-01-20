@@ -37,6 +37,10 @@ pub enum Error {
     #[error("Invalid XML structure: {0}")]
     InvalidXml(String),
 
+    /// Invalid model structure or validation failure
+    #[error("Invalid model: {0}")]
+    InvalidModel(String),
+
     /// Parse error for numeric values
     #[error("Parse error: {0}")]
     ParseError(String),
