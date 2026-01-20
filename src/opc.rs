@@ -33,35 +33,218 @@ impl<R: Read + std::io::Seek> Package<R> {
     /// Open a 3MF package from a reader
     pub fn open(reader: R) -> Result<Self> {
         let archive = ZipArchive::new(reader)?;
-        Ok(Self { archive })
+        let mut package = Self { archive };
+        
+        // Validate required OPC structure
+        package.validate_opc_structure()?;
+        
+        Ok(package)
+    }
+
+    /// Validate OPC package structure according to 3MF spec
+    fn validate_opc_structure(&mut self) -> Result<()> {
+        // Validate required files exist
+        if !self.has_file(CONTENT_TYPES_PATH) {
+            return Err(Error::InvalidFormat(format!(
+                "Missing required file: {}",
+                CONTENT_TYPES_PATH
+            )));
+        }
+        
+        if !self.has_file(RELS_PATH) {
+            return Err(Error::InvalidFormat(format!(
+                "Missing required file: {}",
+                RELS_PATH
+            )));
+        }
+        
+        // Validate Content Types
+        self.validate_content_types()?;
+        
+        // Validate that model relationship exists and points to valid file
+        self.validate_model_relationship()?;
+        
+        // Validate all relationships point to existing files
+        self.validate_all_relationships()?;
+        
+        Ok(())
+    }
+    
+    /// Validate [Content_Types].xml structure
+    fn validate_content_types(&mut self) -> Result<()> {
+        let content = self.get_file(CONTENT_TYPES_PATH)?;
+        let mut reader = Reader::from_str(&content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        
+        let mut found_rels = false;
+        let mut found_model = false;
+        
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    
+                    if name_str.ends_with("Default") {
+                        let mut extension = None;
+                        let mut content_type = None;
+                        
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            
+                            match key {
+                                "Extension" => extension = Some(value.to_string()),
+                                "ContentType" => content_type = Some(value.to_string()),
+                                _ => {}
+                            }
+                        }
+                        
+                        if let (Some(ext), Some(ct)) = (extension, content_type) {
+                            // Check for required content types
+                            if ext.eq_ignore_ascii_case("rels") 
+                                && ct == "application/vnd.openxmlformats-package.relationships+xml" {
+                                found_rels = true;
+                            }
+                            if ext.eq_ignore_ascii_case("model") 
+                                && ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
+                                found_model = true;
+                            }
+                        }
+                    } else if name_str.ends_with("Override") {
+                        // Override elements can also define model content type
+                        let mut content_type = None;
+                        
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            
+                            if key == "ContentType" {
+                                content_type = Some(value.to_string());
+                            }
+                        }
+                        
+                        if let Some(ct) = content_type {
+                            if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
+                                found_model = true;
+                            }
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+        
+        if !found_rels {
+            return Err(Error::InvalidFormat(
+                "Content Types missing required 'rels' extension definition".to_string()
+            ));
+        }
+        
+        if !found_model {
+            return Err(Error::InvalidFormat(
+                "Content Types missing required model content type (Default or Override)".to_string()
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate model relationship exists and points to a valid file
+    fn validate_model_relationship(&mut self) -> Result<()> {
+        let model_path = self.discover_model_path()?;
+        
+        // Verify the model file actually exists
+        if !self.has_file(&model_path) {
+            return Err(Error::InvalidFormat(format!(
+                "Model relationship points to non-existent file: {}",
+                model_path
+            )));
+        }
+        
+        Ok(())
+    }
+    
+    /// Validate all relationships point to existing files
+    fn validate_all_relationships(&mut self) -> Result<()> {
+        let rels_content = self.get_file(RELS_PATH)?;
+        let mut reader = Reader::from_str(&rels_content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    
+                    if name_str.ends_with("Relationship") {
+                        let mut target = None;
+                        
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            
+                            if key == "Target" {
+                                target = Some(value.to_string());
+                            }
+                        }
+                        
+                        if let Some(t) = target {
+                            // Remove leading slash if present
+                            let path = if let Some(stripped) = t.strip_prefix('/') {
+                                stripped.to_string()
+                            } else {
+                                t
+                            };
+                            
+                            // Verify the target file exists
+                            if !self.has_file(&path) {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Relationship points to non-existent file: {}",
+                                    path
+                                )));
+                            }
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+        
+        Ok(())
     }
 
     /// Get the main 3D model file content
     pub fn get_model(&mut self) -> Result<String> {
-        // First, try to discover the model path from relationships
-        if let Ok(model_path) = self.discover_model_path() {
-            if let Ok(mut file) = self.archive.by_name(&model_path) {
-                let mut content = String::new();
-                file.read_to_string(&mut content)?;
-                return Ok(content);
-            }
-        }
-
-        // Fallback: Try primary path
-        if let Ok(mut file) = self.archive.by_name(MODEL_PATH) {
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            return Ok(content);
-        }
-
-        // Try alternative path
-        if let Ok(mut file) = self.archive.by_name(MODEL_PATH_ALT) {
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            return Ok(content);
-        }
-
-        Err(Error::MissingFile(MODEL_PATH.to_string()))
+        // Discover model path from relationships (validation already done in open())
+        let model_path = self.discover_model_path()?;
+        
+        // Read the model file
+        let mut file = self.archive.by_name(&model_path)
+            .map_err(|_| Error::MissingFile(model_path.clone()))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        
+        Ok(content)
     }
 
     /// Discover the model file path from the relationships file
@@ -178,8 +361,8 @@ mod tests {
         let zip = zip::ZipWriter::new(cursor);
         let cursor = zip.finish().unwrap();
 
-        let package = Package::open(cursor).unwrap();
-        assert_eq!(package.len(), 0);
-        assert!(package.is_empty());
+        // Should fail validation because it's missing required files
+        let result = Package::open(cursor);
+        assert!(result.is_err(), "Expected package validation to fail for empty ZIP");
     }
 }

@@ -118,14 +118,24 @@ fn test_parse_3mf_with_materials() {
 
     let options = SimpleFileOptions::default();
 
-    // Add [Content_Types].xml
+    // Add [Content_Types].xml with required rels extension
     let content_types = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
 <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n\
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n\
   <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\n\
 </Types>";
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels with model relationship
+    let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n\
+  <Relationship Id=\"rel0\" Target=\"/3D/3dmodel.model\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\n\
+</Relationships>";
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
 
     // Add model with materials
     let model = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
