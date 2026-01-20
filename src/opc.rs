@@ -272,6 +272,7 @@ impl<R: Read + std::io::Seek> Package<R> {
         }
 
         // Remove leading slash for path segment validation
+        // OPC part names may start with "/" but path segments should not include it
         let path = part_name.strip_prefix('/').unwrap_or(part_name);
 
         // Check path segments
@@ -292,8 +293,8 @@ impl<R: Read + std::io::Seek> Package<R> {
                 )));
             }
 
-            // Segments cannot end with a dot (e.g. "3D.")
-            if segment.ends_with('.') && segment != "." {
+            // Segments cannot end with a dot (e.g. "3D.") but "." is already checked above
+            if segment.ends_with('.') {
                 return Err(Error::InvalidFormat(format!(
                     "Part name segments cannot end with '.': {} (segment: '{}')",
                     part_name, segment
