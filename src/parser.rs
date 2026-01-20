@@ -250,6 +250,12 @@ fn parse_object<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Object> {
     let attrs = parse_attributes(reader, e)?;
+    
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec, valid object attributes are: id, name, type, pid, partnumber, thumbnail (deprecated)
+    // However, thumbnail should NOT be used - it's deprecated and only exists for backward compatibility
+    // We'll be strict and reject it
+    validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber"], "object")?;
 
     let id = attrs
         .get("id")
@@ -280,6 +286,10 @@ fn parse_vertex<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
     let attrs = parse_attributes(reader, e)?;
+    
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec: x, y, z
+    validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
 
     let x = attrs
         .get("x")
@@ -305,6 +315,10 @@ fn parse_triangle<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
     let attrs = parse_attributes(reader, e)?;
+    
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec: v1, v2, v3, pid, p1, p2, p3 (for material properties)
+    validate_attributes(&attrs, &["v1", "v2", "v3", "pid", "p1", "p2", "p3"], "triangle")?;
 
     let v1 = attrs
         .get("v1")
@@ -336,6 +350,10 @@ fn parse_build_item<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<BuildItem> {
     let attrs = parse_attributes(reader, e)?;
+    
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec: objectid, transform, partnumber
+    validate_attributes(&attrs, &["objectid", "transform", "partnumber"], "item")?;
 
     let objectid = attrs
         .get("objectid")
@@ -370,6 +388,10 @@ fn parse_base_material<R: std::io::BufRead>(
     index: usize,
 ) -> Result<Material> {
     let attrs = parse_attributes(reader, e)?;
+    
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec: name, displaycolor
+    validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
 
     // Use the provided index as the material ID
     let mut material = Material::new(index);
@@ -470,6 +492,28 @@ fn parse_attributes<R: std::io::BufRead>(
     }
 
     Ok(attrs)
+}
+
+/// Validate that all attributes in the map are in the allowed list
+fn validate_attributes(
+    attrs: &HashMap<String, String>,
+    allowed: &[&str],
+    element_name: &str,
+) -> Result<()> {
+    for key in attrs.keys() {
+        // Skip XML namespace attributes
+        if key.starts_with("xmlns") || key.starts_with("xml:") {
+            continue;
+        }
+        
+        if !allowed.contains(&key.as_str()) {
+            return Err(Error::InvalidXml(format!(
+                "Unknown attribute '{}' on <{}>",
+                key, element_name
+            )));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
