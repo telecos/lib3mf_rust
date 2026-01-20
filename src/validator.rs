@@ -15,16 +15,41 @@ use std::collections::HashSet;
 /// Validate a parsed 3MF model
 ///
 /// Performs comprehensive validation of the model structure, including:
+/// - Required model structure (objects and build items)
 /// - Object ID uniqueness
 /// - Triangle vertex bounds and degeneracy checks
 /// - Build item object references
 /// - Material and color group references
 /// - Mesh requirements (must have vertices)
 pub fn validate_model(model: &Model) -> Result<()> {
+    validate_required_structure(model)?;
     validate_object_ids(model)?;
     validate_mesh_geometry(model)?;
     validate_build_references(model)?;
     validate_material_references(model)?;
+    Ok(())
+}
+
+/// Validate that the model has required structure
+///
+/// Per 3MF Core spec, a valid model must have:
+/// - At least one object in resources
+/// - At least one build item
+fn validate_required_structure(model: &Model) -> Result<()> {
+    // Model must contain at least one object
+    if model.resources.objects.is_empty() {
+        return Err(Error::InvalidModel(
+            "Model must contain at least one object in resources".to_string(),
+        ));
+    }
+
+    // Build section must contain at least one item
+    if model.build.items.is_empty() {
+        return Err(Error::InvalidModel(
+            "Build section must contain at least one item".to_string(),
+        ));
+    }
+
     Ok(())
 }
 
@@ -56,7 +81,15 @@ fn validate_object_ids(model: &Model) -> Result<()> {
 fn validate_mesh_geometry(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(ref mesh) = object.mesh {
-            // Mesh must have at least one vertex
+            // If mesh has triangles, it must have vertices
+            if !mesh.triangles.is_empty() && mesh.vertices.is_empty() {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Mesh has triangles but no vertices",
+                    object.id
+                )));
+            }
+
+            // Mesh should have at least one vertex (with or without triangles)
             if mesh.vertices.is_empty() {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Mesh must contain at least one vertex",

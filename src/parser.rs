@@ -91,7 +91,20 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             match key {
-                                "unit" => model.unit = value.to_string(),
+                                "unit" => {
+                                    // Validate unit value - must be one of the allowed units
+                                    match value {
+                                        "micron" | "millimeter" | "centimeter" | "inch" | "foot" | "meter" => {
+                                            model.unit = value.to_string()
+                                        }
+                                        _ => {
+                                            return Err(Error::InvalidXml(format!(
+                                                "Invalid unit '{}'. Must be one of: micron, millimeter, centimeter, inch, foot, meter",
+                                                value
+                                            )))
+                                        }
+                                    }
+                                }
                                 "xmlns" => model.xmlns = value.to_string(),
                                 "requiredextensions" => {
                                     required_ext_value = Some(value.to_string());
@@ -253,6 +266,7 @@ fn parse_object<R: std::io::BufRead>(
     
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
+    // Note: thumbnail is deprecated but still used in some files
     validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber", "thumbnail"], "object")?;
 
     let id = attrs
@@ -263,11 +277,17 @@ fn parse_object<R: std::io::BufRead>(
     let mut object = Object::new(id);
     object.name = attrs.get("name").cloned();
 
+    // Validate object type if present - only "model" and "support" are valid
     if let Some(type_str) = attrs.get("type") {
         object.object_type = match type_str.as_str() {
             "model" => ObjectType::Model,
             "support" => ObjectType::Support,
-            _ => ObjectType::Other,
+            _ => {
+                return Err(Error::InvalidXml(format!(
+                    "Invalid object type '{}'. Must be 'model' or 'support'",
+                    type_str
+                )))
+            }
         };
     }
 
@@ -572,8 +592,18 @@ mod tests {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+        </vertices>
+        <triangles>
+        </triangles>
+      </mesh>
+    </object>
   </resources>
   <build>
+    <item objectid="1"/>
   </build>
 </model>"#;
 
@@ -583,5 +613,7 @@ mod tests {
             model.xmlns,
             "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
         );
+        assert_eq!(model.resources.objects.len(), 1);
+        assert_eq!(model.build.items.len(), 1);
     }
 }
