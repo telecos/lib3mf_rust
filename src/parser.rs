@@ -345,14 +345,18 @@ fn parse_object<R: std::io::BufRead>(
     let mut object = Object::new(id);
     object.name = attrs.get("name").cloned();
 
-    // Validate object type if present - only "model" and "support" are valid
+    // Validate object type if present
+    // Per 3MF Core spec 1.4.0, valid types: model, support, solidsupport, surface, other
     if let Some(type_str) = attrs.get("type") {
         object.object_type = match type_str.as_str() {
             "model" => ObjectType::Model,
             "support" => ObjectType::Support,
+            "solidsupport" => ObjectType::SolidSupport,
+            "surface" => ObjectType::Surface,
+            "other" => ObjectType::Other,
             _ => {
                 return Err(Error::InvalidXml(format!(
-                    "Invalid object type '{}'. Must be 'model' or 'support'",
+                    "Invalid object type '{}'. Must be one of: model, support, solidsupport, surface, other",
                     type_str
                 )))
             }

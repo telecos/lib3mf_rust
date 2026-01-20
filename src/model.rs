@@ -323,6 +323,10 @@ pub enum ObjectType {
     Model,
     /// A support structure
     Support,
+    /// A solid support structure
+    SolidSupport,
+    /// A surface object  
+    Surface,
     /// Other types
     Other,
 }
