@@ -29,7 +29,7 @@ If you have `gh` CLI installed, you can create issues programmatically:
 # Example for Issue 7
 gh issue create \
   --title "Improve Negative Test Conformance (1.7% → 100%)" \
-  --body "$(cat issue_template_7.md)" \
+  --body-file github_issue_templates/issue_7_negative_test_conformance.md \
   --label "enhancement,validation,high-priority" \
   --repo telecos/lib3mf_rust
 ```

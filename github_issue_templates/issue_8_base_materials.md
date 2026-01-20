@@ -15,12 +15,12 @@ The validator currently only checks color group references but doesn't validate 
 - ✅ Color group references are validated
 - ❌ Base materials references are not validated  
 - ❌ `basematerialid` attributes not checked
-- ❌ `pid` attributes assumed to reference color groups only
+- ❌ `pid` attributes can reference either color groups or base materials per spec, but only color groups are currently validated
 
 ## Expected Outcome
 
 - Add data structure for base materials
-- Parse base materials from XML (`<basematerials>` elements)
+- Parse base materials from XML (`<base materials>` elements)
 - Validate that `basematerialid` attributes reference valid base materials
 - Ensure `pid` can reference either color groups or base materials
 - Update validator to check both types of material references
