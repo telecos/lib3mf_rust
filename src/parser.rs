@@ -323,10 +323,11 @@ fn parse_object<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
+    // Per Materials Extension: pindex can be used with pid
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["id", "name", "type", "pid", "partnumber", "thumbnail"],
+        &["id", "name", "type", "pid", "pindex", "partnumber", "thumbnail"],
         "object",
     )?;
 
@@ -354,6 +355,10 @@ fn parse_object<R: std::io::BufRead>(
 
     if let Some(pid) = attrs.get("pid") {
         object.pid = Some(pid.parse::<usize>()?);
+    }
+
+    if let Some(pindex) = attrs.get("pindex") {
+        object.pindex = Some(pindex.parse::<usize>()?);
     }
 
     Ok(object)
@@ -416,10 +421,11 @@ fn parse_triangle<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec: v1, v2, v3, pid, p1, p2, p3 (for material properties)
+    // Per 3MF Core spec: v1, v2, v3, pid
+    // Per Materials Extension: pindex (for entire triangle), p1, p2, p3 (for per-vertex properties)
     validate_attributes(
         &attrs,
-        &["v1", "v2", "v3", "pid", "p1", "p2", "p3"],
+        &["v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3"],
         "triangle",
     )?;
 
@@ -442,6 +448,22 @@ fn parse_triangle<R: std::io::BufRead>(
 
     if let Some(pid) = attrs.get("pid") {
         triangle.pid = Some(pid.parse::<usize>()?);
+    }
+
+    if let Some(pindex) = attrs.get("pindex") {
+        triangle.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    if let Some(p1) = attrs.get("p1") {
+        triangle.p1 = Some(p1.parse::<usize>()?);
+    }
+
+    if let Some(p2) = attrs.get("p2") {
+        triangle.p2 = Some(p2.parse::<usize>()?);
+    }
+
+    if let Some(p3) = attrs.get("p3") {
+        triangle.p3 = Some(p3.parse::<usize>()?);
     }
 
     Ok(triangle)
