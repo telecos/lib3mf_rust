@@ -64,7 +64,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut material_index: usize = 0;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
-    
+
     // Track required elements for validation
     let mut resources_count = 0;
     let mut build_count = 0;
@@ -174,7 +174,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         resources_count += 1;
                         if resources_count > 1 {
                             return Err(Error::InvalidXml(
-                                "Model must contain exactly one <resources> element".to_string()
+                                "Model must contain exactly one <resources> element".to_string(),
                             ));
                         }
                         in_resources = true;
@@ -183,7 +183,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         build_count += 1;
                         if build_count > 1 {
                             return Err(Error::InvalidXml(
-                                "Model must contain exactly one <build> element".to_string()
+                                "Model must contain exactly one <build> element".to_string(),
                             ));
                         }
                         in_build = true;
@@ -299,12 +299,12 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     // Validate required elements exist
     if resources_count == 0 {
         return Err(Error::InvalidXml(
-            "Model must contain a <resources> element".to_string()
+            "Model must contain a <resources> element".to_string(),
         ));
     }
     if build_count == 0 {
         return Err(Error::InvalidXml(
-            "Model must contain a <build> element".to_string()
+            "Model must contain a <build> element".to_string(),
         ));
     }
 
@@ -473,7 +473,7 @@ fn parse_build_item<R: std::io::BufRead>(
             .collect();
 
         let values = values?;
-        
+
         // Transform must have exactly 12 values
         if values.len() != 12 {
             return Err(Error::InvalidXml(format!(
@@ -481,7 +481,7 @@ fn parse_build_item<R: std::io::BufRead>(
                 values.len()
             )));
         }
-        
+
         // Validate all values are finite (no NaN or Infinity)
         for (idx, &val) in values.iter().enumerate() {
             if !val.is_finite() {
@@ -491,7 +491,7 @@ fn parse_build_item<R: std::io::BufRead>(
                 )));
             }
         }
-        
+
         let mut transform = [0.0; 12];
         transform.copy_from_slice(&values);
         item.transform = Some(transform);
@@ -581,7 +581,7 @@ fn parse_required_extensions_with_namespaces(
             unknown_extensions.push(item.to_string());
         }
     }
-    
+
     // If there are unknown required extensions, reject the file
     // Per 3MF spec, a consumer that doesn't support a required extension must reject the file
     if !unknown_extensions.is_empty() {

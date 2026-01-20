@@ -12,25 +12,25 @@ fn main() {
         ("suite5_core_prod", "negative_test_cases"),
         ("suite6_core_matl", "negative_test_cases"),
     ];
-    
+
     let mut failures_by_code: HashMap<String, Vec<String>> = HashMap::new();
-    
+
     for (suite, neg_dir) in suites {
         let path = format!("test_suites/{}/{}", suite, neg_dir);
         if !std::path::Path::new(&path).exists() {
             continue;
         }
-        
+
         let files: Vec<_> = WalkDir::new(&path)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("3mf"))
             .map(|e| e.path().to_path_buf())
             .collect();
-        
+
         for file_path in files {
             let file_name = file_path.file_name().unwrap().to_str().unwrap();
-            
+
             // Extract test code (e.g., "0205" from "N_XXX_0205_01.3mf")
             let code = if let Some(parts) = file_name.strip_prefix("N_XXX_") {
                 let code_part = parts.split('_').next().unwrap_or("XXXX");
@@ -38,7 +38,7 @@ fn main() {
             } else {
                 "XXXX".to_string()
             };
-            
+
             match File::open(&file_path) {
                 Ok(file) => match Model::from_reader(file) {
                     Ok(_) => {
@@ -58,11 +58,11 @@ fn main() {
             }
         }
     }
-    
+
     // Sort and display by code
     let mut codes: Vec<_> = failures_by_code.keys().collect();
     codes.sort();
-    
+
     println!("\n=== Failing Tests by Code (Category) ===\n");
     for code in codes {
         let failures = &failures_by_code[code];
@@ -75,17 +75,17 @@ fn main() {
         }
         println!();
     }
-    
+
     println!("\n=== Summary by Code Range ===");
     let mut code_ranges: HashMap<String, usize> = HashMap::new();
     for (code, failures) in &failures_by_code {
         let range = format!("{}XX", &code[..2]);
         *code_ranges.entry(range).or_default() += failures.len();
     }
-    
+
     let mut ranges: Vec<_> = code_ranges.iter().collect();
     ranges.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
-    
+
     for (range, count) in ranges {
         println!("{}: {} failures", range, count);
     }
