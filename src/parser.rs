@@ -271,17 +271,6 @@ fn parse_object<R: std::io::BufRead>(
         object.pid = Some(pid.parse::<usize>()?);
     }
 
-    // Validate thumbnail attribute if present
-    if let Some(thumbnail) = attrs.get("thumbnail") {
-        // Thumbnail paths must not start with "/" (they should be relative to package root)
-        if thumbnail.starts_with('/') {
-            return Err(Error::InvalidXml(format!(
-                "Object thumbnail attribute must not start with '/': {}",
-                thumbnail
-            )));
-        }
-    }
-
     Ok(object)
 }
 
