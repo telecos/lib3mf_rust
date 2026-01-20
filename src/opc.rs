@@ -112,9 +112,8 @@ impl<R: Read + std::io::Seek> Package<R> {
                             {
                                 found_rels = true;
                             }
-                            if ext.eq_ignore_ascii_case("model")
-                                && ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml"
-                            {
+                            // Accept any extension with the 3dmodel content type
+                            if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
                                 found_model = true;
                             }
                         }
