@@ -64,6 +64,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut material_index: usize = 0;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
+    
+    // Track required elements for validation
+    let mut resources_count = 0;
+    let mut build_count = 0;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -167,9 +171,21 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         }
                     }
                     "resources" => {
+                        resources_count += 1;
+                        if resources_count > 1 {
+                            return Err(Error::InvalidXml(
+                                "Model must contain exactly one <resources> element".to_string()
+                            ));
+                        }
                         in_resources = true;
                     }
                     "build" => {
+                        build_count += 1;
+                        if build_count > 1 {
+                            return Err(Error::InvalidXml(
+                                "Model must contain exactly one <build> element".to_string()
+                            ));
+                        }
                         in_build = true;
                     }
                     "object" if in_resources => {
@@ -280,6 +296,18 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
         buf.clear();
     }
 
+    // Validate required elements exist
+    if resources_count == 0 {
+        return Err(Error::InvalidXml(
+            "Model must contain a <resources> element".to_string()
+        ));
+    }
+    if build_count == 0 {
+        return Err(Error::InvalidXml(
+            "Model must contain a <build> element".to_string()
+        ));
+    }
+
     // Validate the model before returning
     validator::validate_model(&model)?;
 
@@ -357,6 +385,26 @@ fn parse_vertex<R: std::io::BufRead>(
         .ok_or_else(|| Error::InvalidXml("Vertex missing z attribute".to_string()))?
         .parse::<f64>()?;
 
+    // Validate numeric values - reject NaN and Infinity
+    if !x.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex x coordinate must be finite (got {})",
+            x
+        )));
+    }
+    if !y.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex y coordinate must be finite (got {})",
+            y
+        )));
+    }
+    if !z.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex z coordinate must be finite (got {})",
+            z
+        )));
+    }
+
     Ok(Vertex::new(x, y, z))
 }
 
@@ -425,11 +473,28 @@ fn parse_build_item<R: std::io::BufRead>(
             .collect();
 
         let values = values?;
-        if values.len() == 12 {
-            let mut transform = [0.0; 12];
-            transform.copy_from_slice(&values);
-            item.transform = Some(transform);
+        
+        // Transform must have exactly 12 values
+        if values.len() != 12 {
+            return Err(Error::InvalidXml(format!(
+                "Transform matrix must have exactly 12 values (got {})",
+                values.len()
+            )));
         }
+        
+        // Validate all values are finite (no NaN or Infinity)
+        for (idx, &val) in values.iter().enumerate() {
+            if !val.is_finite() {
+                return Err(Error::InvalidXml(format!(
+                    "Transform matrix value at index {} must be finite (got {})",
+                    idx, val
+                )));
+            }
+        }
+        
+        let mut transform = [0.0; 12];
+        transform.copy_from_slice(&values);
+        item.transform = Some(transform);
     }
 
     Ok(item)

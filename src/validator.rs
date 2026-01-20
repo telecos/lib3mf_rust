@@ -81,18 +81,19 @@ fn validate_object_ids(model: &Model) -> Result<()> {
 fn validate_mesh_geometry(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(ref mesh) = object.mesh {
-            // If mesh has triangles, it must have vertices
-            if !mesh.triangles.is_empty() && mesh.vertices.is_empty() {
-                return Err(Error::InvalidModel(format!(
-                    "Object {}: Mesh has triangles but no vertices",
-                    object.id
-                )));
-            }
-
-            // Mesh should have at least one vertex (with or without triangles)
+            // Mesh must have at least one vertex
             if mesh.vertices.is_empty() {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Mesh must contain at least one vertex",
+                    object.id
+                )));
+            }
+            
+            // If mesh has vertices, it must also have triangles
+            // (An empty mesh with no vertices and no triangles is not valid either)
+            if mesh.triangles.is_empty() {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Mesh must contain at least one triangle",
                     object.id
                 )));
             }
