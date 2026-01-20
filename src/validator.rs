@@ -31,23 +31,24 @@ pub fn validate_model(model: &Model) -> Result<()> {
 /// Validate that all object IDs are unique and positive
 fn validate_object_ids(model: &Model) -> Result<()> {
     let mut seen_ids = HashSet::new();
-    
+
     for object in &model.resources.objects {
         // Object IDs must be positive (non-zero)
         if object.id == 0 {
             return Err(Error::InvalidModel(
-                "Object ID must be a positive integer".to_string()
+                "Object ID must be a positive integer".to_string(),
             ));
         }
-        
+
         // Check for duplicate IDs
         if !seen_ids.insert(object.id) {
-            return Err(Error::InvalidModel(
-                format!("Duplicate object ID found: {}", object.id)
-            ));
+            return Err(Error::InvalidModel(format!(
+                "Duplicate object ID found: {}",
+                object.id
+            )));
         }
     }
-    
+
     Ok(())
 }
 
@@ -57,76 +58,68 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
         if let Some(ref mesh) = object.mesh {
             // Mesh must have at least one vertex
             if mesh.vertices.is_empty() {
-                return Err(Error::InvalidModel(
-                    format!("Object {}: Mesh must contain at least one vertex", object.id)
-                ));
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Mesh must contain at least one vertex",
+                    object.id
+                )));
             }
-            
+
             let num_vertices = mesh.vertices.len();
-            
+
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
                 // Validate vertex indices are within bounds
                 if triangle.v1 >= num_vertices {
-                    return Err(Error::InvalidModel(
-                        format!(
-                            "Object {}: Triangle {} vertex v1={} is out of bounds (have {} vertices)",
-                            object.id, tri_idx, triangle.v1, num_vertices
-                        )
-                    ));
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Triangle {} vertex v1={} is out of bounds (have {} vertices)",
+                        object.id, tri_idx, triangle.v1, num_vertices
+                    )));
                 }
                 if triangle.v2 >= num_vertices {
-                    return Err(Error::InvalidModel(
-                        format!(
-                            "Object {}: Triangle {} vertex v2={} is out of bounds (have {} vertices)",
-                            object.id, tri_idx, triangle.v2, num_vertices
-                        )
-                    ));
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Triangle {} vertex v2={} is out of bounds (have {} vertices)",
+                        object.id, tri_idx, triangle.v2, num_vertices
+                    )));
                 }
                 if triangle.v3 >= num_vertices {
-                    return Err(Error::InvalidModel(
-                        format!(
-                            "Object {}: Triangle {} vertex v3={} is out of bounds (have {} vertices)",
-                            object.id, tri_idx, triangle.v3, num_vertices
-                        )
-                    ));
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Triangle {} vertex v3={} is out of bounds (have {} vertices)",
+                        object.id, tri_idx, triangle.v3, num_vertices
+                    )));
                 }
-                
+
                 // Check for degenerate triangles (two or more vertices are the same)
-                if triangle.v1 == triangle.v2 || triangle.v2 == triangle.v3 || triangle.v1 == triangle.v3 {
-                    return Err(Error::InvalidModel(
-                        format!(
-                            "Object {}: Triangle {} is degenerate (v1={}, v2={}, v3={})",
-                            object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3
-                        )
-                    ));
+                if triangle.v1 == triangle.v2
+                    || triangle.v2 == triangle.v3
+                    || triangle.v1 == triangle.v3
+                {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Triangle {} is degenerate (v1={}, v2={}, v3={})",
+                        object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3
+                    )));
                 }
             }
         }
     }
-    
+
     Ok(())
 }
 
 /// Validate that all build items reference existing objects
 fn validate_build_references(model: &Model) -> Result<()> {
     // Collect all valid object IDs
-    let valid_object_ids: HashSet<usize> = model.resources.objects
-        .iter()
-        .map(|obj| obj.id)
-        .collect();
-    
+    let valid_object_ids: HashSet<usize> =
+        model.resources.objects.iter().map(|obj| obj.id).collect();
+
     // Check each build item references a valid object
     for (item_idx, item) in model.build.items.iter().enumerate() {
         if !valid_object_ids.contains(&item.objectid) {
-            return Err(Error::InvalidModel(
-                format!(
-                    "Build item {} references non-existent object ID: {}",
-                    item_idx, item.objectid
-                )
-            ));
+            return Err(Error::InvalidModel(format!(
+                "Build item {} references non-existent object ID: {}",
+                item_idx, item.objectid
+            )));
         }
     }
-    
+
     Ok(())
 }
 
@@ -134,13 +127,15 @@ fn validate_build_references(model: &Model) -> Result<()> {
 fn validate_material_references(model: &Model) -> Result<()> {
     // For now, just validate that pid references point to existing color groups or materials
     // Full validation would require checking basematerialid attributes on objects
-    
+
     // Collect valid color group IDs
-    let valid_colorgroup_ids: HashSet<usize> = model.resources.color_groups
+    let valid_colorgroup_ids: HashSet<usize> = model
+        .resources
+        .color_groups
         .iter()
         .map(|cg| cg.id)
         .collect();
-    
+
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
             // If object has a pid, it should reference a valid color group or material
@@ -150,16 +145,14 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 // Only validate if there are color groups defined
                 // Empty color groups means we might be using basematerials instead
                 if !model.resources.color_groups.is_empty() {
-                    return Err(Error::InvalidModel(
-                        format!(
-                            "Object {} references non-existent color group ID: {}",
-                            object.id, pid
-                        )
-                    ));
+                    return Err(Error::InvalidModel(format!(
+                        "Object {} references non-existent color group ID: {}",
+                        object.id, pid
+                    )));
                 }
             }
         }
-        
+
         // Validate triangle pindex references for color groups
         if let Some(ref mesh) = object.mesh {
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
@@ -167,7 +160,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
                     // Triangle pid references a color group
                     if let Some(obj_pid) = object.pid {
                         // If object has a pid, triangle pindex should be within color group bounds
-                        if let Some(colorgroup) = model.resources.color_groups.iter().find(|cg| cg.id == obj_pid) {
+                        if let Some(colorgroup) = model
+                            .resources
+                            .color_groups
+                            .iter()
+                            .find(|cg| cg.id == obj_pid)
+                        {
                             if pid >= colorgroup.colors.len() {
                                 return Err(Error::InvalidModel(
                                     format!(
@@ -182,7 +180,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -194,215 +192,133 @@ fn validate_material_references(model: &Model) -> Result<()> {
 /// [ m21 m22 m23 m24 ]
 /// [ m31 m32 m33 m34 ]
 /// Stored as: [m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34]
-fn validate_build_transforms(model: &Model) -> Result<()> {
-    for (item_idx, item) in model.build.items.iter().enumerate() {
-        if let Some(transform) = item.transform {
-            // Extract the 3x3 rotation/scale part of the matrix
-            // Stored as row-major: [m11, m12, m13, tx, m21, m22, m23, ty, m31, m32, m33, tz]
-            let m11 = transform[0];
-            let m12 = transform[1];
-            let m13 = transform[2];
-            let m21 = transform[4];
-            let m22 = transform[5];
-            let m23 = transform[6];
-            let m31 = transform[8];
-            let m32 = transform[9];
-            let m33 = transform[10];
-            
-            // Calculate determinant of the 3x3 matrix
-            let det = m11 * (m22 * m33 - m23 * m32)
-                    - m12 * (m21 * m33 - m23 * m31)
-                    + m13 * (m21 * m32 - m22 * m31);
-            
-            // Determinant must be positive (no reflections/mirroring)
-            if det < 0.0 {
-                return Err(Error::InvalidModel(
-                    format!(
-                        "Build item {}: Transform matrix has negative determinant ({:.6}), which would cause mirroring/reflection",
-                        item_idx, det
-                    )
-                ));
-            }
-        }
-    }
-    
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Object, Mesh, Triangle, Vertex, BuildItem};
-    
+    use crate::model::{BuildItem, Mesh, Object, Triangle, Vertex};
+
     #[test]
     fn test_validate_duplicate_object_ids() {
         let mut model = Model::new();
         model.resources.objects.push(Object::new(1));
         model.resources.objects.push(Object::new(1)); // Duplicate!
-        
+
         let result = validate_object_ids(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Duplicate object ID"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate object ID"));
     }
-    
+
     #[test]
     fn test_validate_zero_object_id() {
         let mut model = Model::new();
         model.resources.objects.push(Object::new(0)); // Invalid!
-        
+
         let result = validate_object_ids(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("positive integer"));
     }
-    
+
     #[test]
     fn test_validate_degenerate_triangle() {
         let mut model = Model::new();
         let mut object = Object::new(1);
         let mut mesh = Mesh::new();
-        
+
         // Add vertices
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
-        
+
         // Add degenerate triangle (v1 == v2)
         mesh.triangles.push(Triangle::new(0, 0, 2));
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
-        
+
         let result = validate_mesh_geometry(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("degenerate"));
     }
-    
+
     #[test]
     fn test_validate_vertex_out_of_bounds() {
         let mut model = Model::new();
         let mut object = Object::new(1);
         let mut mesh = Mesh::new();
-        
+
         // Add only 2 vertices
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
-        
+
         // Add triangle with out-of-bounds vertex (v3 = 5, but only have 2 vertices)
         mesh.triangles.push(Triangle::new(0, 1, 5));
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
-        
+
         let result = validate_mesh_geometry(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("out of bounds"));
     }
-    
+
     #[test]
     fn test_validate_build_item_invalid_reference() {
         let mut model = Model::new();
         model.resources.objects.push(Object::new(1));
-        
+
         // Build item references non-existent object 99
         model.build.items.push(BuildItem::new(99));
-        
+
         let result = validate_build_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent object"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("non-existent object"));
     }
-    
+
     #[test]
     fn test_validate_valid_model() {
         let mut model = Model::new();
         let mut object = Object::new(1);
         let mut mesh = Mesh::new();
-        
+
         // Add valid vertices
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
-        
+
         // Add valid triangle
         mesh.triangles.push(Triangle::new(0, 1, 2));
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
-        
+
         // Add valid build item
         model.build.items.push(BuildItem::new(1));
-        
+
         let result = validate_model(&model);
         assert!(result.is_ok());
     }
-    
+
     #[test]
     fn test_validate_empty_mesh() {
         let mut model = Model::new();
         let mut object = Object::new(1);
         let mesh = Mesh::new(); // Empty mesh (no vertices)
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
-        
+
         let result = validate_mesh_geometry(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("at least one vertex"));
-    }
-    
-    #[test]
-    fn test_validate_negative_determinant_transform() {
-        let mut model = Model::new();
-        let mut object = Object::new(1);
-        let mut mesh = Mesh::new();
-        
-        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
-        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
-        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
-        mesh.triangles.push(Triangle::new(0, 1, 2));
-        
-        object.mesh = Some(mesh);
-        model.resources.objects.push(object);
-        
-        // Create transform with negative determinant (reflection)
-        // Matrix: [-1, 0, 0, tx, 0, 1, 0, ty, 0, 0, 1, tz]
-        let mut item = BuildItem::new(1);
-        item.transform = Some([
-            -1.0, 0.0, 0.0, 0.0,  // Negative scale in X
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0
-        ]);
-        model.build.items.push(item);
-        
-        let result = validate_build_transforms(&model);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("negative determinant"));
-    }
-    
-    #[test]
-    fn test_validate_positive_determinant_transform() {
-        let mut model = Model::new();
-        let mut object = Object::new(1);
-        let mut mesh = Mesh::new();
-        
-        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
-        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
-        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
-        mesh.triangles.push(Triangle::new(0, 1, 2));
-        
-        object.mesh = Some(mesh);
-        model.resources.objects.push(object);
-        
-        // Create transform with positive determinant (valid)
-        // Identity matrix with translation
-        let mut item = BuildItem::new(1);
-        item.transform = Some([
-            1.0, 0.0, 0.0, 10.0,
-            0.0, 1.0, 0.0, 20.0,
-            0.0, 0.0, 1.0, 30.0
-        ]);
-        model.build.items.push(item);
-        
-        let result = validate_build_transforms(&model);
-        assert!(result.is_ok());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("at least one vertex"));
     }
 }
