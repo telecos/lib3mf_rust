@@ -201,6 +201,7 @@ impl<R: Read + std::io::Seek> Package<R> {
 
                     if name_str.ends_with("Relationship") {
                         let mut target = None;
+                        let mut rel_type = None;
 
                         for attr in e.attributes() {
                             let attr = attr?;
@@ -211,6 +212,24 @@ impl<R: Read + std::io::Seek> Package<R> {
 
                             if key == "Target" {
                                 target = Some(value.to_string());
+                            } else if key == "Type" {
+                                rel_type = Some(value.to_string());
+                            }
+                        }
+                        
+                        // Validate relationship Type - must not contain query strings or fragments
+                        if let Some(t) = &rel_type {
+                            if t.contains('?') {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Relationship Type cannot contain query string: {}",
+                                    t
+                                )));
+                            }
+                            if t.contains('#') {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Relationship Type cannot contain fragment identifier: {}",
+                                    t
+                                )));
                             }
                         }
 
@@ -270,41 +289,35 @@ impl<R: Read + std::io::Seek> Package<R> {
             )));
         }
 
-        // Check for backslashes (must use forward slashes)
-        if part_name.contains('\\') {
-            return Err(Error::InvalidFormat(format!(
-                "Part name must use forward slashes, not backslashes: {}",
-                part_name
-            )));
-        }
+        // Split into path segments and validate each
+        let segments: Vec<&str> = part_name.split('/').collect();
 
-        // Remove leading slash for path segment validation
-        // OPC part names may start with "/" but path segments should not include it
-        let path = part_name.strip_prefix('/').unwrap_or(part_name);
-
-        // Check path segments
-        for segment in path.split('/') {
-            // Empty segments (consecutive slashes or trailing slash)
+        for (idx, segment) in segments.iter().enumerate() {
+            // Check for empty segments (consecutive slashes)
             if segment.is_empty() {
+                // Allow leading slash (which creates empty first segment)
+                if idx == 0 && part_name.starts_with('/') {
+                    continue;
+                }
                 return Err(Error::InvalidFormat(format!(
-                    "Part name cannot have empty path segments: {}",
+                    "Part name cannot contain empty path segments (consecutive slashes): {}",
                     part_name
                 )));
             }
 
-            // Dot or double-dot segments
-            if segment == "." || segment == ".." {
+            // Check for "." or ".." segments
+            if *segment == "." || *segment == ".." {
                 return Err(Error::InvalidFormat(format!(
-                    "Part name cannot contain '.' or '..' path segments: {}",
+                    "Part name cannot contain '.' or '..' segments: {}",
                     part_name
                 )));
             }
 
-            // Segments cannot end with a dot (e.g. "3D.") but "." is already checked above
+            // Check for segments ending with "."
             if segment.ends_with('.') {
                 return Err(Error::InvalidFormat(format!(
-                    "Part name segments cannot end with '.': {} (segment: '{}')",
-                    part_name, segment
+                    "Part name segments cannot end with '.': {}",
+                    part_name
                 )));
             }
         }
