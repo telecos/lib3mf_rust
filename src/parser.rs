@@ -252,10 +252,8 @@ fn parse_object<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
     
     // Validate only allowed attributes are present
-    // Per 3MF Core spec, valid object attributes are: id, name, type, pid, partnumber, thumbnail (deprecated)
-    // However, thumbnail should NOT be used - it's deprecated and only exists for backward compatibility
-    // We'll be strict and reject it
-    validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber"], "object")?;
+    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
+    validate_attributes(&attrs, &["id", "name", "type", "pid", "partnumber", "thumbnail"], "object")?;
 
     let id = attrs
         .get("id")
@@ -503,6 +501,12 @@ fn validate_attributes(
     for key in attrs.keys() {
         // Skip XML namespace attributes
         if key.starts_with("xmlns") || key.starts_with("xml:") {
+            continue;
+        }
+        
+        // Skip extension-namespaced attributes (e.g., p:UUID, m:colorid, etc.)
+        // These are handled by extension-specific parsing
+        if key.contains(':') {
             continue;
         }
         
