@@ -136,6 +136,24 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "metadata" => {
                         let attrs = parse_attributes(&reader, e)?;
                         if let Some(name) = attrs.get("name") {
+                            // Validate metadata name - must not use undeclared namespace prefix
+                            // Per 3MF spec, metadata names with ':' indicate namespaced metadata
+                            // which requires proper xmlns declaration
+                            if name.contains(':') {
+                                // Extract the prefix
+                                if let Some(prefix) = name.split(':').next() {
+                                    // Check if this is a known XML prefix (xml, xmlns)
+                                    if prefix != "xml" && prefix != "xmlns" {
+                                        // This is a custom namespace prefix - it must be declared
+                                        // For now, reject any namespace-prefixed metadata as we don't track declarations
+                                        return Err(Error::InvalidXml(format!(
+                                            "Metadata name '{}' uses undeclared namespace prefix '{}'",
+                                            name, prefix
+                                        )));
+                                    }
+                                }
+                            }
+                            
                             // Read the text content
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
