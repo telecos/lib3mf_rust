@@ -218,26 +218,76 @@ fn validate_material_references(model: &Model) -> Result<()> {
             }
         }
 
-        // Validate triangle pindex references for color groups
+        // Validate object pindex references for color groups
+        if let Some(obj_pid) = object.pid {
+            if let Some(colorgroup) = model
+                .resources
+                .color_groups
+                .iter()
+                .find(|cg| cg.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= colorgroup.colors.len() {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds (color group {} has {} colors)",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            colorgroup.colors.len()
+                        )));
+                    }
+                }
+            }
+        }
+
+        // Validate triangle property index references for color groups
         if let Some(ref mesh) = object.mesh {
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
-                if let Some(pid) = triangle.pid {
-                    // Triangle pid references a color group
-                    if let Some(obj_pid) = object.pid {
-                        // If object has a pid, triangle pindex should be within color group bounds
-                        if let Some(colorgroup) = model
-                            .resources
-                            .color_groups
-                            .iter()
-                            .find(|cg| cg.id == obj_pid)
-                        {
-                            if pid >= colorgroup.colors.len() {
-                                return Err(Error::InvalidModel(
-                                    format!(
-                                        "Object {}: Triangle {} pindex {} is out of bounds (color group {} has {} colors)",
-                                        object.id, tri_idx, pid, obj_pid, colorgroup.colors.len()
-                                    )
-                                ));
+                // Determine which color group to use for validation
+                let pid_to_check = triangle.pid.or(object.pid);
+
+                if let Some(pid) = pid_to_check {
+                    if let Some(colorgroup) =
+                        model.resources.color_groups.iter().find(|cg| cg.id == pid)
+                    {
+                        let num_colors = colorgroup.colors.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_colors {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds (color group {} has {} colors)",
+                                    object.id, tri_idx, pindex, pid, num_colors
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_colors {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds (color group {} has {} colors)",
+                                    object.id, tri_idx, p1, pid, num_colors
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_colors {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds (color group {} has {} colors)",
+                                    object.id, tri_idx, p2, pid, num_colors
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_colors {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds (color group {} has {} colors)",
+                                    object.id, tri_idx, p3, pid, num_colors
+                                )));
                             }
                         }
                     }

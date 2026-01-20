@@ -182,8 +182,16 @@ pub struct Triangle {
     pub v2: usize,
     /// Index of third vertex
     pub v3: usize,
-    /// Optional material ID
+    /// Optional material ID (property ID)
     pub pid: Option<usize>,
+    /// Optional material index for entire triangle (property index)
+    pub pindex: Option<usize>,
+    /// Optional material index for vertex 1 (property index)
+    pub p1: Option<usize>,
+    /// Optional material index for vertex 2 (property index)
+    pub p2: Option<usize>,
+    /// Optional material index for vertex 3 (property index)
+    pub p3: Option<usize>,
 }
 
 impl Triangle {
@@ -194,6 +202,10 @@ impl Triangle {
             v2,
             v3,
             pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
         }
     }
 
@@ -204,6 +216,10 @@ impl Triangle {
             v2,
             v3,
             pid: Some(pid),
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
         }
     }
 }
@@ -294,8 +310,10 @@ pub struct Object {
     pub object_type: ObjectType,
     /// Optional mesh data
     pub mesh: Option<Mesh>,
-    /// Optional material ID
+    /// Optional material ID (property ID)
     pub pid: Option<usize>,
+    /// Optional material index (property index) - used with pid to select from color groups
+    pub pindex: Option<usize>,
 }
 
 /// Type of 3D object
@@ -305,6 +323,10 @@ pub enum ObjectType {
     Model,
     /// A support structure
     Support,
+    /// A solid support structure
+    SolidSupport,
+    /// A surface object  
+    Surface,
     /// Other types
     Other,
 }
@@ -318,6 +340,7 @@ impl Object {
             object_type: ObjectType::Model,
             mesh: None,
             pid: None,
+            pindex: None,
         }
     }
 }

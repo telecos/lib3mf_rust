@@ -69,6 +69,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut resources_count = 0;
     let mut build_count = 0;
 
+    // Track namespace declarations from model element
+    let mut declared_namespaces: HashMap<String, String> = HashMap::new();
+
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
@@ -125,6 +128,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
 
+                        // Store namespace declarations for later use (e.g., for metadata validation)
+                        declared_namespaces = namespaces.clone();
+
                         // Validate model attributes - only allow specific attributes
                         // Per 3MF Core spec: unit, xml:lang, requiredextensions, and xmlns declarations
                         validate_attributes(
@@ -144,16 +150,17 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "metadata" => {
                         let attrs = parse_attributes(&reader, e)?;
                         if let Some(name) = attrs.get("name") {
-                            // Validate metadata name - must not use undeclared namespace prefix
+                            // Validate metadata name - allow namespaced metadata if namespace is declared
                             // Per 3MF spec, metadata names with ':' indicate namespaced metadata
-                            // which requires proper xmlns declaration
                             if name.contains(':') {
                                 // Extract the namespace prefix (part before the colon)
                                 if let Some(namespace_prefix) = name.split(':').next() {
-                                    // Check if this is a known XML prefix (xml, xmlns)
-                                    if namespace_prefix != "xml" && namespace_prefix != "xmlns" {
-                                        // Custom namespace prefix - reject as we don't track namespace declarations
-                                        // This ensures metadata like "x:anyname" is rejected when namespace 'x' is not declared
+                                    // Check if this is a known XML prefix (xml, xmlns) or a declared namespace
+                                    if namespace_prefix != "xml"
+                                        && namespace_prefix != "xmlns"
+                                        && !declared_namespaces.contains_key(namespace_prefix)
+                                    {
+                                        // Undeclared custom namespace prefix - reject
                                         return Err(Error::InvalidXml(format!(
                                             "Metadata name '{}' uses undeclared namespace prefix '{}'",
                                             name, namespace_prefix
@@ -323,10 +330,19 @@ fn parse_object<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
+    // Per Materials Extension: pindex can be used with pid
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["id", "name", "type", "pid", "partnumber", "thumbnail"],
+        &[
+            "id",
+            "name",
+            "type",
+            "pid",
+            "pindex",
+            "partnumber",
+            "thumbnail",
+        ],
         "object",
     )?;
 
@@ -338,14 +354,18 @@ fn parse_object<R: std::io::BufRead>(
     let mut object = Object::new(id);
     object.name = attrs.get("name").cloned();
 
-    // Validate object type if present - only "model" and "support" are valid
+    // Validate object type if present
+    // Per 3MF Core spec 1.4.0, valid types: model, support, solidsupport, surface, other
     if let Some(type_str) = attrs.get("type") {
         object.object_type = match type_str.as_str() {
             "model" => ObjectType::Model,
             "support" => ObjectType::Support,
+            "solidsupport" => ObjectType::SolidSupport,
+            "surface" => ObjectType::Surface,
+            "other" => ObjectType::Other,
             _ => {
                 return Err(Error::InvalidXml(format!(
-                    "Invalid object type '{}'. Must be 'model' or 'support'",
+                    "Invalid object type '{}'. Must be one of: model, support, solidsupport, surface, other",
                     type_str
                 )))
             }
@@ -354,6 +374,10 @@ fn parse_object<R: std::io::BufRead>(
 
     if let Some(pid) = attrs.get("pid") {
         object.pid = Some(pid.parse::<usize>()?);
+    }
+
+    if let Some(pindex) = attrs.get("pindex") {
+        object.pindex = Some(pindex.parse::<usize>()?);
     }
 
     Ok(object)
@@ -416,10 +440,11 @@ fn parse_triangle<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec: v1, v2, v3, pid, p1, p2, p3 (for material properties)
+    // Per 3MF Core spec: v1, v2, v3, pid
+    // Per Materials Extension: pindex (for entire triangle), p1, p2, p3 (for per-vertex properties)
     validate_attributes(
         &attrs,
-        &["v1", "v2", "v3", "pid", "p1", "p2", "p3"],
+        &["v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3"],
         "triangle",
     )?;
 
@@ -442,6 +467,22 @@ fn parse_triangle<R: std::io::BufRead>(
 
     if let Some(pid) = attrs.get("pid") {
         triangle.pid = Some(pid.parse::<usize>()?);
+    }
+
+    if let Some(pindex) = attrs.get("pindex") {
+        triangle.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    if let Some(p1) = attrs.get("p1") {
+        triangle.p1 = Some(p1.parse::<usize>()?);
+    }
+
+    if let Some(p2) = attrs.get("p2") {
+        triangle.p2 = Some(p2.parse::<usize>()?);
+    }
+
+    if let Some(p3) = attrs.get("p3") {
+        triangle.p3 = Some(p3.parse::<usize>()?);
     }
 
     Ok(triangle)
