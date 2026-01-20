@@ -112,9 +112,8 @@ impl<R: Read + std::io::Seek> Package<R> {
                             {
                                 found_rels = true;
                             }
-                            if ext.eq_ignore_ascii_case("model")
-                                && ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml"
-                            {
+                            // Accept any extension with the 3dmodel content type
+                            if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
                                 found_model = true;
                             }
                         }
@@ -209,6 +208,9 @@ impl<R: Read + std::io::Seek> Package<R> {
                         }
 
                         if let Some(t) = target {
+                            // Validate the target is a valid OPC part name
+                            Self::validate_opc_part_name(&t)?;
+
                             // Remove leading slash if present
                             let path = if let Some(stripped) = t.strip_prefix('/') {
                                 stripped.to_string()
@@ -231,6 +233,73 @@ impl<R: Read + std::io::Seek> Package<R> {
                 _ => {}
             }
             buf.clear();
+        }
+
+        Ok(())
+    }
+
+    /// Validate OPC part name according to OPC specification
+    ///
+    /// Part names must not contain:
+    /// - Fragment identifiers (#)
+    /// - Query strings (?)
+    /// - Path segments that are "." or ".."
+    /// - Empty path segments (consecutive slashes)
+    /// - Segments ending with "." (like "3D.")
+    fn validate_opc_part_name(part_name: &str) -> Result<()> {
+        // Check for fragment identifiers
+        if part_name.contains('#') {
+            return Err(Error::InvalidFormat(format!(
+                "Part name cannot contain fragment identifier: {}",
+                part_name
+            )));
+        }
+
+        // Check for query strings
+        if part_name.contains('?') {
+            return Err(Error::InvalidFormat(format!(
+                "Part name cannot contain query string: {}",
+                part_name
+            )));
+        }
+
+        // Check for backslashes (must use forward slashes)
+        if part_name.contains('\\') {
+            return Err(Error::InvalidFormat(format!(
+                "Part name must use forward slashes, not backslashes: {}",
+                part_name
+            )));
+        }
+
+        // Remove leading slash for path segment validation
+        // OPC part names may start with "/" but path segments should not include it
+        let path = part_name.strip_prefix('/').unwrap_or(part_name);
+
+        // Check path segments
+        for segment in path.split('/') {
+            // Empty segments (consecutive slashes or trailing slash)
+            if segment.is_empty() {
+                return Err(Error::InvalidFormat(format!(
+                    "Part name cannot have empty path segments: {}",
+                    part_name
+                )));
+            }
+
+            // Dot or double-dot segments
+            if segment == "." || segment == ".." {
+                return Err(Error::InvalidFormat(format!(
+                    "Part name cannot contain '.' or '..' path segments: {}",
+                    part_name
+                )));
+            }
+
+            // Segments cannot end with a dot (e.g. "3D.") but "." is already checked above
+            if segment.ends_with('.') {
+                return Err(Error::InvalidFormat(format!(
+                    "Part name segments cannot end with '.': {} (segment: '{}')",
+                    part_name, segment
+                )));
+            }
         }
 
         Ok(())
