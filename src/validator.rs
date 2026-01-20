@@ -125,6 +125,46 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
                     )));
                 }
             }
+
+            // Validate mesh manifold topology - each edge should be shared by at most 2 triangles
+            // An edge shared by more than 2 triangles is non-manifold
+            if mesh.triangles.len() >= 2 {
+                validate_mesh_manifold(object.id, mesh)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that the mesh forms a valid manifold (no edges shared by more than 2 triangles)
+fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result<()> {
+    use std::collections::HashMap;
+
+    // Count how many times each edge appears
+    // Edge is represented as (min_vertex, max_vertex) to be direction-independent
+    let mut edge_count: HashMap<(usize, usize), usize> = HashMap::new();
+
+    for triangle in &mesh.triangles {
+        // Add the three edges of this triangle
+        let edges = [
+            (triangle.v1.min(triangle.v2), triangle.v1.max(triangle.v2)),
+            (triangle.v2.min(triangle.v3), triangle.v2.max(triangle.v3)),
+            (triangle.v3.min(triangle.v1), triangle.v3.max(triangle.v1)),
+        ];
+
+        for edge in &edges {
+            *edge_count.entry(*edge).or_insert(0) += 1;
+        }
+    }
+
+    // Check if any edge is shared by more than 2 triangles (non-manifold)
+    for (edge, count) in edge_count {
+        if count > 2 {
+            return Err(Error::InvalidModel(format!(
+                "Object {}: Non-manifold edge ({}, {}) is shared by {} triangles (max 2 allowed)",
+                object_id, edge.0, edge.1, count
+            )));
         }
     }
 
@@ -326,7 +366,7 @@ mod tests {
         let mut model = Model::new();
         let mut object = Object::new(1);
         let mut mesh = Mesh::new();
-        
+
         // Add triangles but no vertices - this should fail
         mesh.triangles.push(Triangle::new(0, 1, 2));
 

@@ -216,7 +216,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                                 rel_type = Some(value.to_string());
                             }
                         }
-                        
+
                         // Validate relationship Type - must not contain query strings or fragments
                         if let Some(t) = &rel_type {
                             if t.contains('?') {
