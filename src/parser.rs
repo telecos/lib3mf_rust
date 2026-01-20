@@ -3,6 +3,7 @@
 use crate::error::{Error, Result};
 use crate::model::*;
 use crate::opc::Package;
+use crate::validator;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashMap;
@@ -236,6 +237,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
         }
         buf.clear();
     }
+
+    // Validate the model before returning
+    validator::validate_model(&model)?;
 
     Ok(model)
 }
