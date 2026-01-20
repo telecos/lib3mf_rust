@@ -19,6 +19,7 @@ use std::collections::HashSet;
 /// - Triangle vertex bounds and degeneracy checks
 /// - Build item object references
 /// - Material and color group references
+/// - Mesh requirements (must have vertices)
 pub fn validate_model(model: &Model) -> Result<()> {
     validate_object_ids(model)?;
     validate_mesh_geometry(model)?;
@@ -54,6 +55,13 @@ fn validate_object_ids(model: &Model) -> Result<()> {
 fn validate_mesh_geometry(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(ref mesh) = object.mesh {
+            // Mesh must have at least one vertex
+            if mesh.vertices.is_empty() {
+                return Err(Error::InvalidModel(
+                    format!("Object {}: Mesh must contain at least one vertex", object.id)
+                ));
+            }
+            
             let num_vertices = mesh.vertices.len();
             
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
@@ -178,6 +186,49 @@ fn validate_material_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Validate build item transforms
+///
+/// Transform matrices must have positive determinants (no reflections/mirroring allowed).
+/// The transform is stored as a 4x3 affine matrix in row-major order:
+/// [ m11 m12 m13 m14 ]
+/// [ m21 m22 m23 m24 ]
+/// [ m31 m32 m33 m34 ]
+/// Stored as: [m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34]
+fn validate_build_transforms(model: &Model) -> Result<()> {
+    for (item_idx, item) in model.build.items.iter().enumerate() {
+        if let Some(transform) = item.transform {
+            // Extract the 3x3 rotation/scale part of the matrix
+            // Stored as row-major: [m11, m12, m13, tx, m21, m22, m23, ty, m31, m32, m33, tz]
+            let m11 = transform[0];
+            let m12 = transform[1];
+            let m13 = transform[2];
+            let m21 = transform[4];
+            let m22 = transform[5];
+            let m23 = transform[6];
+            let m31 = transform[8];
+            let m32 = transform[9];
+            let m33 = transform[10];
+            
+            // Calculate determinant of the 3x3 matrix
+            let det = m11 * (m22 * m33 - m23 * m32)
+                    - m12 * (m21 * m33 - m23 * m31)
+                    + m13 * (m21 * m32 - m22 * m31);
+            
+            // Determinant must be positive (no reflections/mirroring)
+            if det < 0.0 {
+                return Err(Error::InvalidModel(
+                    format!(
+                        "Build item {}: Transform matrix has negative determinant ({:.6}), which would cause mirroring/reflection",
+                        item_idx, det
+                    )
+                ));
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,6 +332,77 @@ mod tests {
         model.build.items.push(BuildItem::new(1));
         
         let result = validate_model(&model);
+        assert!(result.is_ok());
+    }
+    
+    #[test]
+    fn test_validate_empty_mesh() {
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mesh = Mesh::new(); // Empty mesh (no vertices)
+        
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        
+        let result = validate_mesh_geometry(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("at least one vertex"));
+    }
+    
+    #[test]
+    fn test_validate_negative_determinant_transform() {
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        
+        // Create transform with negative determinant (reflection)
+        // Matrix: [-1, 0, 0, tx, 0, 1, 0, ty, 0, 0, 1, tz]
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            -1.0, 0.0, 0.0, 0.0,  // Negative scale in X
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0
+        ]);
+        model.build.items.push(item);
+        
+        let result = validate_build_transforms(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("negative determinant"));
+    }
+    
+    #[test]
+    fn test_validate_positive_determinant_transform() {
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        
+        // Create transform with positive determinant (valid)
+        // Identity matrix with translation
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 10.0,
+            0.0, 1.0, 0.0, 20.0,
+            0.0, 0.0, 1.0, 30.0
+        ]);
+        model.build.items.push(item);
+        
+        let result = validate_build_transforms(&model);
         assert!(result.is_ok());
     }
 }
