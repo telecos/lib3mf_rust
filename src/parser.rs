@@ -85,7 +85,7 @@ pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u
 /// - `"m:colorgroup"` returns `"colorgroup"`
 /// - `"p:UUID"` returns `"UUID"`
 /// - `"object"` returns `"object"`
-fn get_local_name(name_str: &str) -> &str {
+pub(crate) fn get_local_name(name_str: &str) -> &str {
     if let Some(pos) = name_str.rfind(':') {
         &name_str[pos + 1..]
     } else {
@@ -105,7 +105,6 @@ pub fn parse_model_xml(xml: &str) -> Result<Model> {
     parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
 }
 
-/// Parse the 3D model XML content with configuration
 ///
 /// This is primarily used for testing. For production use, use `Model::from_reader_with_config()`.
 ///
@@ -118,7 +117,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     reader.config_mut().trim_text(true);
 
     let mut model = Model::new();
-    let mut buf = Vec::new();
+    // Pre-allocate buffer with reasonable capacity to reduce allocations
+    let mut buf = Vec::with_capacity(4096);
     let mut in_resources = false;
     let mut in_build = false;
     let mut current_object: Option<Object> = None;
@@ -778,8 +778,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.beams.push(beam);
                         }
                     }
-                    "slicestack" if in_resources => {
-                        in_slicestack = true;
+                    "normvectorgroup" if in_resources => {
+                        in_normvectorgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
@@ -1178,7 +1178,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 }
 
 /// Parse object element attributes
-fn parse_object<R: std::io::BufRead>(
+pub(crate) fn parse_object<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Object> {
@@ -1261,7 +1261,7 @@ fn parse_object<R: std::io::BufRead>(
 }
 
 /// Parse vertex element attributes
-fn parse_vertex<R: std::io::BufRead>(
+pub(crate) fn parse_vertex<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
@@ -1310,7 +1310,7 @@ fn parse_vertex<R: std::io::BufRead>(
 }
 
 /// Parse triangle element attributes
-fn parse_triangle<R: std::io::BufRead>(
+pub(crate) fn parse_triangle<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
@@ -1366,7 +1366,7 @@ fn parse_triangle<R: std::io::BufRead>(
 }
 
 /// Parse build item element attributes
-fn parse_build_item<R: std::io::BufRead>(
+pub(crate) fn parse_build_item<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<BuildItem> {
@@ -1567,11 +1567,12 @@ fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<
 }
 
 /// Parse attributes from an XML element
-fn parse_attributes<R: std::io::BufRead>(
+pub(crate) fn parse_attributes<R: std::io::BufRead>(
     _reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<HashMap<String, String>> {
-    let mut attrs = HashMap::new();
+    // Pre-allocate reasonable capacity to reduce allocations
+    let mut attrs = HashMap::with_capacity(8);
 
     for attr in e.attributes() {
         let attr = attr?;
@@ -1629,7 +1630,7 @@ fn should_skip_attribute(key: &str) -> bool {
 /// // - attrs contains "id", "name", "p:UUID" -> OK (p:UUID skipped as extension attr)
 /// // - attrs contains "id", "xmlns:p" -> OK (xmlns:p skipped as namespace)
 /// ```
-fn validate_attributes(
+pub(crate) fn validate_attributes(
     attrs: &HashMap<String, String>,
     allowed: &[&str],
     element_name: &str,

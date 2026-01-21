@@ -65,6 +65,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Streaming Parser for Large Files
+
+For very large files, use the streaming parser to process objects one at a time without loading everything into memory:
+
+```rust
+use lib3mf::streaming::StreamingParser;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("large_model.3mf")?;
+    let mut parser = StreamingParser::new(file)?;
+
+    // Process objects one at a time
+    for object in parser.objects() {
+        let object = object?;
+        if let Some(ref mesh) = object.mesh {
+            println!("Object {}: {} vertices",
+                object.id, mesh.vertices.len());
+        }
+        // Object is dropped here, freeing memory
 ### Accessing Displacement Data
 
 The library parses displacement extension data into accessible structures:
@@ -368,6 +388,29 @@ The parser successfully handles files using all 3MF extensions including:
 **Important Security Note**: The Secure Content extension is recognized for validation purposes only. This library does NOT implement cryptographic operations (encryption, decryption, or signature verification). See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed security considerations and integration guidance.
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
+
+## Performance
+
+The library is optimized for parsing large 3MF files efficiently:
+
+- **Linear scaling**: Performance scales linearly with file size
+- **Memory efficient**: Streaming XML parsing with pre-allocated buffers
+- **Benchmarked**: Comprehensive benchmark suite using criterion.rs
+
+```bash
+# Run performance benchmarks
+cargo bench
+
+# Run specific benchmark group
+cargo bench -- parse_large
+```
+
+**Typical Performance:**
+- Small files (1,000 vertices): ~1 ms
+- Medium files (10,000 vertices): ~7 ms
+- Large files (100,000 vertices): ~70 ms
+
+See [PERFORMANCE.md](PERFORMANCE.md) for detailed performance characteristics, optimization strategies, and profiling guidance.
 
 ## Safety
 

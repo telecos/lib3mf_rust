@@ -244,6 +244,18 @@ impl Mesh {
             beamset: None,
         }
     }
+
+    /// Create a new mesh with pre-allocated capacity
+    /// 
+    /// This is useful for performance when the number of vertices and triangles
+    /// is known in advance, as it avoids multiple reallocations.
+    pub fn with_capacity(vertices: usize, triangles: usize) -> Self {
+        Self {
+            vertices: Vec::with_capacity(vertices),
+            triangles: Vec::with_capacity(triangles),
+            beamset: None,
+        }
+    }
 }
 
 impl Default for Mesh {
