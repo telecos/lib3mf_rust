@@ -64,6 +64,13 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut material_index: usize = 0;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
+    let mut current_slicestack: Option<SliceStack> = None;
+    let mut in_slicestack = false;
+    let mut current_slice: Option<Slice> = None;
+    let mut in_slice = false;
+    let mut current_slice_polygon: Option<SlicePolygon> = None;
+    let mut in_slice_polygon = false;
+    let mut in_slice_vertices = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -256,6 +263,96 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                     }
+                    "slicestack" if in_resources => {
+                        in_slicestack = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("SliceStack missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let zbottom = attrs
+                            .get("zbottom")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("SliceStack missing zbottom attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        current_slicestack = Some(SliceStack::new(id, zbottom));
+                    }
+                    "slice" if in_slicestack => {
+                        in_slice = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let ztop = attrs
+                            .get("ztop")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice missing ztop attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        current_slice = Some(Slice::new(ztop));
+                    }
+                    "sliceref" if in_slicestack => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let slicestackid = attrs
+                            .get("slicestackid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("SliceRef missing slicestackid attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let slicepath = attrs
+                            .get("slicepath")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("SliceRef missing slicepath attribute".to_string())
+                            })?
+                            .to_string();
+                        if let Some(ref mut slicestack) = current_slicestack {
+                            slicestack.slice_refs.push(SliceRef::new(slicestackid, slicepath));
+                        }
+                    }
+                    "vertices" if in_slice => {
+                        in_slice_vertices = true;
+                    }
+                    "vertex" if in_slice_vertices => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let x = attrs
+                            .get("x")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing x attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        let y = attrs
+                            .get("y")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing y attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        if let Some(ref mut slice) = current_slice {
+                            slice.vertices.push(Vertex2D::new(x, y));
+                        }
+                    }
+                    "polygon" if in_slice => {
+                        in_slice_polygon = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let startv = attrs
+                            .get("startv")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice polygon missing startv attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        current_slice_polygon = Some(SlicePolygon::new(startv));
+                    }
+                    "segment" if in_slice_polygon => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let v2 = attrs
+                            .get("v2")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice segment missing v2 attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        if let Some(ref mut polygon) = current_slice_polygon {
+                            polygon.segments.push(SliceSegment::new(v2));
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -292,6 +389,31 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             model.resources.color_groups.push(colorgroup);
                         }
                         in_colorgroup = false;
+                    }
+                    "slicestack" => {
+                        if let Some(slicestack) = current_slicestack.take() {
+                            model.resources.slice_stacks.push(slicestack);
+                        }
+                        in_slicestack = false;
+                    }
+                    "slice" => {
+                        if let Some(slice) = current_slice.take() {
+                            if let Some(ref mut slicestack) = current_slicestack {
+                                slicestack.slices.push(slice);
+                            }
+                        }
+                        in_slice = false;
+                    }
+                    "vertices" => {
+                        in_slice_vertices = false;
+                    }
+                    "polygon" => {
+                        if let Some(polygon) = current_slice_polygon.take() {
+                            if let Some(ref mut slice) = current_slice {
+                                slice.polygons.push(polygon);
+                            }
+                        }
+                        in_slice_polygon = false;
                     }
                     _ => {}
                 }
@@ -331,6 +453,7 @@ fn parse_object<R: std::io::BufRead>(
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
     // Per Materials Extension: pindex can be used with pid
+    // Per Slice Extension: slicestackid
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
@@ -342,6 +465,7 @@ fn parse_object<R: std::io::BufRead>(
             "pindex",
             "partnumber",
             "thumbnail",
+            "slicestackid",
         ],
         "object",
     )?;
@@ -378,6 +502,12 @@ fn parse_object<R: std::io::BufRead>(
 
     if let Some(pindex) = attrs.get("pindex") {
         object.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    // Check for both namespaced and non-namespaced slicestackid
+    // The attribute may appear as "s:slicestackid" in the XML
+    if let Some(slicestackid) = attrs.get("slicestackid").or_else(|| attrs.get("s:slicestackid")) {
+        object.slicestackid = Some(slicestackid.parse::<usize>()?);
     }
 
     Ok(object)
