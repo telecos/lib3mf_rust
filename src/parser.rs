@@ -395,7 +395,6 @@ fn parse_vertex<R: std::io::BufRead>(
     // Per 3MF Core spec: x, y, z
     validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
 
-    // Parse coordinates
     let x = attrs
         .get("x")
         .ok_or_else(|| Error::InvalidXml("Vertex missing x attribute".to_string()))?
