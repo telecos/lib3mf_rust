@@ -41,7 +41,7 @@ mod validator;
 pub use error::{Error, Result};
 pub use model::{
     Beam, BeamCapMode, BeamSet, BaseMaterial, BaseMaterialGroup, Build, BuildItem, ColorGroup, Extension, Material, Mesh,
-    Model, Object, ParserConfig, Resources, Triangle, Vertex,
+    Model, Object, ParserConfig, Resources, SecureContentInfo, Triangle, Vertex,
 };
 
 use std::io::Read;

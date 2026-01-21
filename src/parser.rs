@@ -44,13 +44,26 @@ fn get_local_name(name_str: &str) -> &str {
 }
 
 /// Parse the 3D model XML content
-#[allow(dead_code)] // Used in tests
-fn parse_model_xml(xml: &str) -> Result<Model> {
+///
+/// This is primarily used for testing. For production use, use `Model::from_reader()`.
+///
+/// Note: This function is public to enable integration testing, but marked #[doc(hidden)]
+/// to discourage use in production code. We can't use #[cfg(test)] because integration
+/// tests in the tests/ directory are compiled separately and wouldn't have access.
+#[doc(hidden)]
+pub fn parse_model_xml(xml: &str) -> Result<Model> {
     parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
 }
 
 /// Parse the 3D model XML content with configuration
-fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
+///
+/// This is primarily used for testing. For production use, use `Model::from_reader_with_config()`.
+///
+/// Note: This function is public to enable integration testing, but marked #[doc(hidden)]
+/// to discourage use in production code. We can't use #[cfg(test)] because integration
+/// tests in the tests/ directory are compiled separately and wouldn't have access.
+#[doc(hidden)]
+pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -368,6 +381,8 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         if let Some(ref mut beamset) = current_beamset {
                             let beam = parse_beam(&reader, e)?;
                             beamset.beams.push(beam);
+                        }
+                    }
                     "slicestack" if in_resources => {
                         in_slicestack = true;
                         let attrs = parse_attributes(&reader, e)?;
@@ -515,6 +530,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                         in_beamset = false;
+                    }
                     "slicestack" => {
                         if let Some(slicestack) = current_slicestack.take() {
                             model.resources.slice_stacks.push(slicestack);

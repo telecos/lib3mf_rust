@@ -253,18 +253,13 @@ impl Default for Mesh {
 }
 
 /// Cap mode for beam lattice ends
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BeamCapMode {
     /// Sphere cap (rounded ends)
+    #[default]
     Sphere,
     /// Butt cap (flat ends)
     Butt,
-}
-
-impl Default for BeamCapMode {
-    fn default() -> Self {
-        BeamCapMode::Sphere
-    }
 }
 
 /// A single beam in a beam lattice structure
@@ -416,6 +411,27 @@ impl ColorGroup {
             colors: Vec::new(),
         }
     }
+}
+
+/// Secure content metadata (read-only awareness)
+///
+/// This structure provides minimal awareness of secure content elements
+/// without implementing actual cryptographic operations. It tracks which
+/// files are encrypted and keystore metadata.
+///
+/// **Note**: These fields are currently unused placeholders reserved for
+/// future implementation. Parsing logic to populate these fields has not
+/// been implemented yet. The extension is recognized for validation purposes
+/// only.
+///
+/// **Security Warning**: This does NOT decrypt content or verify signatures.
+/// See SECURE_CONTENT_SUPPORT.md for security considerations.
+#[derive(Debug, Clone, Default)]
+pub struct SecureContentInfo {
+    /// UUID of the keystore (if present)
+    pub keystore_uuid: Option<String>,
+    /// Paths to encrypted files in the package
+    pub encrypted_files: Vec<String>,
 }
 
 /// A 2D vertex with x, y coordinates (used in slice extension)
@@ -742,6 +758,8 @@ pub struct Model {
     pub resources: Resources,
     /// Build specification
     pub build: Build,
+    /// Secure content information (if secure content extension is used)
+    pub secure_content: Option<SecureContentInfo>,
 }
 
 impl Model {
@@ -754,6 +772,7 @@ impl Model {
             metadata: HashMap::new(),
             resources: Resources::new(),
             build: Build::new(),
+            secure_content: None,
         }
     }
 }

@@ -217,9 +217,11 @@ The parser successfully handles files using all 3MF extensions including:
 - Production Extension (1.2.0)
 - Slice Extension (1.0.2)
 - Beam Lattice Extension (1.2.0)
-- Secure Content Extension (1.0.2)
+- Secure Content Extension (1.0.2) - ⚠️ **Read-only validation** (no cryptographic operations)
 - Boolean Operations Extension (1.1.1)
 - Displacement Extension (1.0.0)
+
+**Important Security Note**: The Secure Content extension is recognized for validation purposes only. This library does NOT implement cryptographic operations (encryption, decryption, or signature verification). See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed security considerations and integration guidance.
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
