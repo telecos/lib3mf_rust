@@ -127,8 +127,41 @@ fn test_parse_production_box() {
     assert_eq!(mesh.vertices.len(), 8);
     assert_eq!(mesh.triangles.len(), 12);
 
-    // Production extension adds UUID attributes which we may not parse yet
-    // But the file should still parse successfully
+    // Verify production extension UUID is extracted from object
+    assert!(
+        obj.production.is_some(),
+        "Object should have production info"
+    );
+    let production = obj.production.as_ref().unwrap();
+    assert_eq!(
+        production.uuid,
+        Some("01cbb956-1d24-062d-fbe6-7362e5727594".to_string()),
+        "Object UUID should be extracted"
+    );
+
+    // Verify build has production UUID
+    assert!(
+        model.build.production_uuid.is_some(),
+        "Build should have production UUID"
+    );
+    assert_eq!(
+        model.build.production_uuid,
+        Some("96681a5d-5b0f-e592-8c51-da7ed587cb5f".to_string()),
+        "Build UUID should be extracted"
+    );
+
+    // Verify build item has production UUID
+    assert_eq!(model.build.items.len(), 1);
+    let item = &model.build.items[0];
+    assert!(
+        item.production_uuid.is_some(),
+        "Build item should have production UUID"
+    );
+    assert_eq!(
+        item.production_uuid,
+        Some("b3de5826-ccb6-3dbc-d6c4-29a2d730766c".to_string()),
+        "Build item UUID should be extracted"
+    );
 }
 
 /// Test parsing of slice extension file
@@ -178,6 +211,74 @@ fn test_parse_beam_lattice_pyramid() {
     // The pyramid lattice has many vertices for the beam structure
     // Actual count may vary but should be substantial for a lattice
     assert!(mesh.vertices.len() > 100);
+
+    // Verify beam lattice data is extracted
+    let beamset = mesh.beamset.as_ref().expect("Mesh should have beamset");
+
+    // Verify beamset properties
+    assert_eq!(beamset.radius, 1.0);
+    assert_eq!(beamset.min_length, 0.0001);
+    assert_eq!(beamset.cap_mode, lib3mf::BeamCapMode::Sphere);
+
+    // The pyramid lattice has many beams (based on XML file inspection)
+    assert!(
+        beamset.beams.len() > 200,
+        "Expected many beams in pyramid lattice"
+    );
+
+    // Verify beam structure - check a few beams
+    let first_beam = &beamset.beams[0];
+    assert_eq!(first_beam.v1, 0);
+    assert_eq!(first_beam.v2, 15);
+    assert!(first_beam.r1.is_some());
+    assert_eq!(first_beam.r1.unwrap(), 2.29999);
+
+    // Check a beam with both r1 and r2
+    let beam_with_r2 = beamset.beams.iter().find(|b| b.r2.is_some());
+    assert!(
+        beam_with_r2.is_some(),
+        "Should have beams with r2 specified"
+    );
+
+    // Verify required extensions include beam lattice
+    assert!(model
+        .required_extensions
+        .contains(&lib3mf::Extension::BeamLattice));
+}
+
+/// Test beam lattice parsing with different cap modes and properties
+#[test]
+fn test_beam_data_structures() {
+    use lib3mf::{Beam, BeamCapMode, BeamSet};
+
+    // Test BeamCapMode
+    assert_eq!(BeamCapMode::default(), BeamCapMode::Sphere);
+
+    // Test Beam creation
+    let beam1 = Beam::new(0, 1);
+    assert_eq!(beam1.v1, 0);
+    assert_eq!(beam1.v2, 1);
+    assert!(beam1.r1.is_none());
+    assert!(beam1.r2.is_none());
+
+    let beam2 = Beam::with_radius(0, 1, 2.5);
+    assert_eq!(beam2.r1, Some(2.5));
+    assert!(beam2.r2.is_none());
+
+    let beam3 = Beam::with_radii(0, 1, 2.5, 3.0);
+    assert_eq!(beam3.r1, Some(2.5));
+    assert_eq!(beam3.r2, Some(3.0));
+
+    // Test BeamSet creation
+    let beamset1 = BeamSet::new();
+    assert_eq!(beamset1.radius, 1.0);
+    assert_eq!(beamset1.min_length, 0.0001);
+    assert_eq!(beamset1.cap_mode, BeamCapMode::Sphere);
+    assert_eq!(beamset1.beams.len(), 0);
+
+    let beamset2 = BeamSet::with_radius(2.5);
+    assert_eq!(beamset2.radius, 2.5);
+    assert_eq!(beamset2.cap_mode, BeamCapMode::Sphere);
 }
 
 /// Test that all copied test files can be opened and parsed

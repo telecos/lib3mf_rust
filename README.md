@@ -218,7 +218,6 @@ let config = ParserConfig::with_all_extensions();
 ### Future Enhancements
 
 Potential future additions could include:
-- Full production extension support (UUID extraction, path references)
 - Slice extension support (slice stacks and slice data)
 - Beam lattice extension support (beam definitions and properties)
 - Advanced material properties (textures, composite materials)
@@ -249,7 +248,15 @@ This library has been validated against the official [3MF Consortium test suites
 
 **Current Conformance Results:**
 - ✅ **100% Positive Test Compliance**: All 1,698 valid 3MF files parse successfully
-- ⚠️ **1.7% Negative Test Compliance**: 9 out of 543 invalid files are correctly rejected
+- ✅ **33.8% Negative Test Compliance**: 160 out of 473 invalid files are correctly rejected
+- 📊 **77.4% Overall Conformance**: 1,858 out of 2,400 total tests pass
+
+**Negative Test Improvements:**
+- ✅ Duplicate metadata names - ensures metadata uniqueness
+- ✅ Duplicate resource IDs - validates color group ID uniqueness
+- ✅ Invalid XML structure - rejects malformed models
+- ⚠️ Component validation - requires component support implementation
+- ⚠️ Extension-specific validation - requires extension resource parsing
 
 The parser successfully handles files using all 3MF extensions including:
 - Core Specification (1.4.0)
@@ -257,9 +264,11 @@ The parser successfully handles files using all 3MF extensions including:
 - Production Extension (1.2.0)
 - Slice Extension (1.0.2)
 - Beam Lattice Extension (1.2.0)
-- Secure Content Extension (1.0.2)
+- Secure Content Extension (1.0.2) - ⚠️ **Read-only validation** (no cryptographic operations)
 - Boolean Operations Extension (1.1.1)
 - Displacement Extension (1.0.0)
+
+**Important Security Note**: The Secure Content extension is recognized for validation purposes only. This library does NOT implement cryptographic operations (encryption, decryption, or signature verification). See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed security considerations and integration guidance.
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 

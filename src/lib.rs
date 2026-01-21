@@ -40,9 +40,10 @@ mod validator;
 
 pub use error::{Error, Result};
 pub use model::{
-    Build, BuildItem, Channel, ColorGroup, Disp2DCoords, Disp2DGroup, Displacement2D, Extension,
+    BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BooleanOpType, BooleanRef,
+    BooleanShape, Build, BuildItem, Channel, ColorGroup, Disp2DCoords, Disp2DGroup, Displacement2D, Extension,
     FilterMode, Material, Mesh, Model, NormVector, NormVectorGroup, Object, ParserConfig,
-    Resources, TileStyle, Triangle, Vertex,
+    Resources, SecureContentInfo, TileStyle, Triangle, Vertex,
 };
 
 use std::io::Read;
