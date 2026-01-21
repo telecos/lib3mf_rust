@@ -43,7 +43,13 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
         "suite6_core_matl" => ParserConfig::new().with_extension(Extension::Material),
 
         // Suite 7: Beam Lattice
-        "suite7_beam" => ParserConfig::new().with_extension(Extension::BeamLattice),
+        // Also register the balls sub-extension namespace
+        "suite7_beam" => ParserConfig::new()
+            .with_extension(Extension::BeamLattice)
+            .with_custom_extension(
+                "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07",
+                "BeamLattice Balls",
+            ),
 
         // Suite 8: Secure Content
         // Some test files also use Production extension
