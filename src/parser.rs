@@ -65,6 +65,12 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
 
+    // Displacement extension state
+    let mut current_normvectorgroup: Option<NormVectorGroup> = None;
+    let mut in_normvectorgroup = false;
+    let mut current_disp2dgroup: Option<Disp2DGroup> = None;
+    let mut in_disp2dgroup = false;
+
     // Track required elements for validation
     let mut resources_count = 0;
     let mut build_count = 0;
@@ -256,6 +262,173 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                     }
+                    "displacement2d" if in_resources => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("displacement2d missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let path = attrs
+                            .get("path")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "displacement2d missing path attribute".to_string(),
+                                )
+                            })?
+                            .to_string();
+
+                        let mut disp = Displacement2D::new(id, path);
+
+                        // Parse optional attributes
+                        if let Some(channel_str) = attrs.get("channel") {
+                            disp.channel = match channel_str.to_uppercase().as_str() {
+                                "R" => Channel::R,
+                                "G" => Channel::G,
+                                "B" => Channel::B,
+                                "A" => Channel::A,
+                                _ => Channel::G, // Default to G
+                            };
+                        }
+
+                        if let Some(tileu_str) = attrs.get("tilestyleu") {
+                            disp.tilestyleu = match tileu_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap, // Default to wrap
+                            };
+                        }
+
+                        if let Some(tilev_str) = attrs.get("tilestylev") {
+                            disp.tilestylev = match tilev_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap, // Default to wrap
+                            };
+                        }
+
+                        if let Some(filter_str) = attrs.get("filter") {
+                            disp.filter = match filter_str.to_lowercase().as_str() {
+                                "auto" => FilterMode::Auto,
+                                "linear" => FilterMode::Linear,
+                                "nearest" => FilterMode::Nearest,
+                                _ => FilterMode::Auto, // Default to auto
+                            };
+                        }
+
+                        model.resources.displacement_maps.push(disp);
+                    }
+                    "normvectorgroup" if in_resources => {
+                        in_normvectorgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "normvectorgroup missing id attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_normvectorgroup = Some(NormVectorGroup::new(id));
+                    }
+                    "normvector" if in_normvectorgroup => {
+                        if let Some(ref mut nvgroup) = current_normvectorgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let x = attrs
+                                .get("x")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing x attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let y = attrs
+                                .get("y")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing y attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let z = attrs
+                                .get("z")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing z attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            nvgroup.vectors.push(NormVector::new(x, y, z));
+                        }
+                    }
+                    "disp2dgroup" if in_resources => {
+                        in_disp2dgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("disp2dgroup missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let dispid = attrs
+                            .get("dispid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("disp2dgroup missing dispid attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let nid = attrs
+                            .get("nid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("disp2dgroup missing nid attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let height = attrs
+                            .get("height")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("disp2dgroup missing height attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+
+                        let mut disp2dgroup = Disp2DGroup::new(id, dispid, nid, height);
+
+                        // Parse optional offset
+                        if let Some(offset_str) = attrs.get("offset") {
+                            disp2dgroup.offset = offset_str.parse::<f64>()?;
+                        }
+
+                        current_disp2dgroup = Some(disp2dgroup);
+                    }
+                    "disp2dcoords" if in_disp2dgroup => {
+                        if let Some(ref mut d2dgroup) = current_disp2dgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let u = attrs
+                                .get("u")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("disp2dcoords missing u attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let v = attrs
+                                .get("v")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("disp2dcoords missing v attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let n = attrs
+                                .get("n")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("disp2dcoords missing n attribute".to_string())
+                                })?
+                                .parse::<usize>()?;
+
+                            let mut coords = Disp2DCoords::new(u, v, n);
+
+                            // Parse optional f attribute
+                            if let Some(f_str) = attrs.get("f") {
+                                coords.f = f_str.parse::<f64>()?;
+                            }
+
+                            d2dgroup.coords.push(coords);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -292,6 +465,18 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             model.resources.color_groups.push(colorgroup);
                         }
                         in_colorgroup = false;
+                    }
+                    "normvectorgroup" => {
+                        if let Some(nvgroup) = current_normvectorgroup.take() {
+                            model.resources.norm_vector_groups.push(nvgroup);
+                        }
+                        in_normvectorgroup = false;
+                    }
+                    "disp2dgroup" => {
+                        if let Some(d2dgroup) = current_disp2dgroup.take() {
+                            model.resources.disp2d_groups.push(d2dgroup);
+                        }
+                        in_disp2dgroup = false;
                     }
                     _ => {}
                 }
