@@ -513,13 +513,21 @@ fn parse_object<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber
+    // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
     // Per Materials Extension: pindex can be used with pid
     // Per Slice Extension: s:slicestackid (handled via extension attribute skipping)
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["id", "name", "type", "pid", "pindex", "partnumber"],
+        &[
+            "id",
+            "name",
+            "type",
+            "pid",
+            "pindex",
+            "partnumber",
+            "thumbnail",
+        ],
         "object",
     )?;
 
