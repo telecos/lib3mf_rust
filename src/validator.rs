@@ -284,7 +284,9 @@ fn validate_material_references(model: &Model) -> Result<()> {
         }
     }
 
-    // Validate that pid and basematerialid references point to existing color groups or base material groups
+    // Validate that pid and basematerialid references point to existing property groups
+    // Valid property groups include: color groups, base material groups, multiproperties,
+    // texture2d groups, and composite materials
 
     // Collect valid color group IDs
     let valid_colorgroup_ids: HashSet<usize> = model
@@ -302,19 +304,49 @@ fn validate_material_references(model: &Model) -> Result<()> {
         .map(|bg| bg.id)
         .collect();
 
+    // Collect valid multiproperties IDs
+    let valid_multiproperties_ids: HashSet<usize> = model
+        .resources
+        .multi_properties
+        .iter()
+        .map(|mp| mp.id)
+        .collect();
+
+    // Collect valid texture2d group IDs
+    let valid_texture2d_group_ids: HashSet<usize> = model
+        .resources
+        .texture2d_groups
+        .iter()
+        .map(|tg| tg.id)
+        .collect();
+
+    // Collect valid composite materials IDs
+    let valid_composite_materials_ids: HashSet<usize> = model
+        .resources
+        .composite_materials
+        .iter()
+        .map(|cm| cm.id)
+        .collect();
+
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
-            // If object has a pid, it should reference a valid color group or base material group
-            let is_valid =
-                valid_colorgroup_ids.contains(&pid) || valid_basematerial_ids.contains(&pid);
+            // If object has a pid, it should reference a valid property group
+            let is_valid = valid_colorgroup_ids.contains(&pid)
+                || valid_basematerial_ids.contains(&pid)
+                || valid_multiproperties_ids.contains(&pid)
+                || valid_texture2d_group_ids.contains(&pid)
+                || valid_composite_materials_ids.contains(&pid);
 
-            // Only validate if there are material groups defined, otherwise pid might be unused
-            let has_materials =
-                !valid_colorgroup_ids.is_empty() || !valid_basematerial_ids.is_empty();
+            // Only validate if there are property groups defined, otherwise pid might be unused
+            let has_property_groups = !valid_colorgroup_ids.is_empty()
+                || !valid_basematerial_ids.is_empty()
+                || !valid_multiproperties_ids.is_empty()
+                || !valid_texture2d_group_ids.is_empty()
+                || !valid_composite_materials_ids.is_empty();
 
-            if has_materials && !is_valid {
+            if has_property_groups && !is_valid {
                 return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent color group or base material ID: {}",
+                    "Object {} references non-existent property group ID: {}",
                     object.id, pid
                 )));
             }
