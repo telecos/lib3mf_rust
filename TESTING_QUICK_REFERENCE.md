@@ -25,6 +25,26 @@ git clone https://github.com/3MFConsortium/test_suites.git
 ./run_conformance_tests.sh
 ```
 
+## Generating Conformance Report
+
+Generate CONFORMANCE_REPORT.md with detailed test results:
+
+```bash
+# Using bash script (recommended)
+./generate_conformance_report.sh
+
+# Or using Python script (alternative)
+python3 generate_conformance_report.py
+```
+
+**Note:** Report generation takes 10+ minutes as it runs all conformance tests across all suites.
+
+The generated report includes:
+- Overall conformance percentage
+- Pass/fail statistics by suite
+- Positive vs negative test breakdowns
+- Detailed results for each test suite
+
 ## GitHub Actions
 
 ### View Status

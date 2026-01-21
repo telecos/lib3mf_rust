@@ -24,8 +24,58 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     config: ParserConfig,
 ) -> Result<Model> {
     let mut package = Package::open(reader)?;
+    
+    // Extract thumbnail metadata
+    let thumbnail = package.get_thumbnail_metadata()?;
+    
     let model_xml = package.get_model()?;
-    parse_model_xml_with_config(&model_xml, config)
+    let mut model = parse_model_xml_with_config(&model_xml, config)?;
+    
+    // Add thumbnail metadata to model
+    model.thumbnail = thumbnail;
+    
+    Ok(model)
+}
+
+/// Read thumbnail binary data from a 3MF file
+///
+/// Returns the thumbnail image data as a byte vector if a thumbnail is present.
+/// Returns None if no thumbnail is found.
+///
+/// # Arguments
+///
+/// * `reader` - A reader containing the 3MF file data
+///
+/// # Example
+///
+/// ```no_run
+/// use lib3mf::parser::read_thumbnail;
+/// use std::fs::File;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let file = File::open("model.3mf")?;
+/// if let Some(thumbnail_data) = read_thumbnail(file)? {
+///     println!("Thumbnail size: {} bytes", thumbnail_data.len());
+///     // Save to file or process the image
+///     std::fs::write("thumbnail.png", thumbnail_data)?;
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u8>>> {
+    let mut package = Package::open(reader)?;
+    
+    // Get thumbnail metadata
+    let thumbnail = package.get_thumbnail_metadata()?;
+    
+    match thumbnail {
+        Some(thumb) => {
+            // Read the binary data
+            let data = package.get_file_binary(&thumb.path)?;
+            Ok(Some(data))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Extract local name from potentially namespaced XML element name
