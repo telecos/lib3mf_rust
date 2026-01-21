@@ -213,3 +213,170 @@ fn test_empty_model() {
     assert_eq!(model.resources.objects.len(), 0);
     assert_eq!(model.build.items.len(), 0);
 }
+
+#[test]
+fn test_round_trip_minimal_model() {
+    use lib3mf::{BuildItem, Mesh, Triangle};
+
+    // Create a model
+    let mut model = Model::new();
+    model.metadata.insert("Title".to_string(), "Round Trip Test".to_string());
+    
+    let mut obj = Object::new(1);
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0));
+    mesh.triangles.push(Triangle::new(0, 1, 2));
+    mesh.triangles.push(Triangle::new(0, 1, 3));
+    mesh.triangles.push(Triangle::new(1, 2, 3));
+    mesh.triangles.push(Triangle::new(2, 0, 3));
+    obj.mesh = Some(mesh);
+    model.resources.objects.push(obj);
+    
+    model.build.items.push(BuildItem::new(1));
+    
+    // Write to buffer
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    model.to_writer(cursor).unwrap();
+    
+    // Read back
+    let cursor = Cursor::new(buffer);
+    let model2 = Model::from_reader(cursor).unwrap();
+    
+    // Verify
+    assert_eq!(model2.unit, "millimeter");
+    assert_eq!(model2.metadata.get("Title"), Some(&"Round Trip Test".to_string()));
+    assert_eq!(model2.resources.objects.len(), 1);
+    
+    let obj2 = &model2.resources.objects[0];
+    assert_eq!(obj2.id, 1);
+    
+    let mesh2 = obj2.mesh.as_ref().unwrap();
+    assert_eq!(mesh2.vertices.len(), 4);
+    assert_eq!(mesh2.triangles.len(), 4);
+    
+    // Check vertices
+    assert_eq!(mesh2.vertices[0].x, 0.0);
+    assert_eq!(mesh2.vertices[0].y, 0.0);
+    assert_eq!(mesh2.vertices[0].z, 0.0);
+    
+    assert_eq!(mesh2.vertices[1].x, 10.0);
+    assert_eq!(mesh2.vertices[1].y, 0.0);
+    assert_eq!(mesh2.vertices[1].z, 0.0);
+    
+    // Check triangles
+    assert_eq!(mesh2.triangles[0].v1, 0);
+    assert_eq!(mesh2.triangles[0].v2, 1);
+    assert_eq!(mesh2.triangles[0].v3, 2);
+    
+    // Check build items
+    assert_eq!(model2.build.items.len(), 1);
+    assert_eq!(model2.build.items[0].objectid, 1);
+}
+
+#[test]
+fn test_round_trip_with_materials() {
+    use lib3mf::{BuildItem, ColorGroup, Extension, Material, Mesh, Triangle};
+
+    // Create a model with materials
+    let mut model = Model::new();
+    model.required_extensions.push(Extension::Material);
+    
+    // Add base materials
+    model.resources.materials.push(Material::with_color(1, 255, 0, 0, 255));
+    model.resources.materials.push(Material::with_color(2, 0, 255, 0, 255));
+    model.resources.materials.push(Material::with_color(3, 0, 0, 255, 255));
+    
+    // Add color group
+    let mut colorgroup = ColorGroup::new(4);
+    colorgroup.colors.push((255, 128, 0, 255));
+    colorgroup.colors.push((128, 0, 255, 255));
+    model.resources.color_groups.push(colorgroup);
+    
+    let mut obj = Object::new(5);
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+    
+    let mut tri = Triangle::new(0, 1, 2);
+    tri.pid = Some(4);
+    tri.p1 = Some(0);
+    tri.p2 = Some(1);
+    tri.p3 = Some(0);
+    mesh.triangles.push(tri);
+    
+    obj.mesh = Some(mesh);
+    model.resources.objects.push(obj);
+    
+    model.build.items.push(BuildItem::new(5));
+    
+    // Write to buffer
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    model.to_writer(cursor).unwrap();
+    
+    // Read back
+    let cursor = Cursor::new(buffer);
+    let model2 = Model::from_reader(cursor).unwrap();
+    
+    // Verify materials
+    assert_eq!(model2.resources.materials.len(), 3);
+    assert_eq!(model2.resources.materials[0].color, Some((255, 0, 0, 255)));
+    assert_eq!(model2.resources.materials[1].color, Some((0, 255, 0, 255)));
+    assert_eq!(model2.resources.materials[2].color, Some((0, 0, 255, 255)));
+    
+    // Verify color groups
+    assert_eq!(model2.resources.color_groups.len(), 1);
+    assert_eq!(model2.resources.color_groups[0].id, 4);
+    assert_eq!(model2.resources.color_groups[0].colors.len(), 2);
+    assert_eq!(model2.resources.color_groups[0].colors[0], (255, 128, 0, 255));
+    assert_eq!(model2.resources.color_groups[0].colors[1], (128, 0, 255, 255));
+    
+    // Verify triangle material properties
+    let tri2 = &model2.resources.objects[0].mesh.as_ref().unwrap().triangles[0];
+    assert_eq!(tri2.pid, Some(4));
+    assert_eq!(tri2.p1, Some(0));
+    assert_eq!(tri2.p2, Some(1));
+    assert_eq!(tri2.p3, Some(0));
+}
+
+#[test]
+fn test_round_trip_with_transform() {
+    use lib3mf::{BuildItem, Mesh, Triangle};
+
+    // Create a model with transform
+    let mut model = Model::new();
+    
+    let mut obj = Object::new(1);
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+    mesh.triangles.push(Triangle::new(0, 1, 2));
+    obj.mesh = Some(mesh);
+    model.resources.objects.push(obj);
+    
+    let mut item = BuildItem::new(1);
+    item.transform = Some([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0]);
+    model.build.items.push(item);
+    
+    // Write to buffer
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    model.to_writer(cursor).unwrap();
+    
+    // Read back
+    let cursor = Cursor::new(buffer);
+    let model2 = Model::from_reader(cursor).unwrap();
+    
+    // Verify transform
+    assert_eq!(model2.build.items.len(), 1);
+    let transform = model2.build.items[0].transform.unwrap();
+    assert_eq!(transform[9], 10.0);
+    assert_eq!(transform[10], 20.0);
+    assert_eq!(transform[11], 30.0);
+}

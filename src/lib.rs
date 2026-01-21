@@ -1,8 +1,8 @@
 //! # lib3mf
 //!
-//! A pure Rust implementation for parsing 3MF (3D Manufacturing Format) files.
+//! A pure Rust implementation for parsing and writing 3MF (3D Manufacturing Format) files.
 //!
-//! This library provides functionality to read and parse 3MF files, which are ZIP-based
+//! This library provides functionality to read and write 3MF files, which are ZIP-based
 //! containers following the Open Packaging Conventions (OPC) standard and containing
 //! XML-based 3D model data.
 //!
@@ -10,11 +10,12 @@
 //!
 //! - Pure Rust implementation with no unsafe code
 //! - Parse 3MF file structure (ZIP/OPC container)
-//! - Read 3D model data including meshes, vertices, and triangles
+//! - Read and write 3D model data including meshes, vertices, and triangles
 //! - Support for materials and colors
-//! - Metadata extraction
+//! - Metadata extraction and creation
+//! - Extension-aware reading and writing
 //!
-//! ## Example
+//! ## Example: Reading a 3MF file
 //!
 //! ```no_run
 //! use lib3mf::Model;
@@ -28,6 +29,39 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! ## Example: Creating and writing a 3MF file
+//!
+//! ```no_run
+//! use lib3mf::{Model, Object, Mesh, Vertex, Triangle, BuildItem};
+//! use std::fs::File;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a new model
+//! let mut model = Model::new();
+//! model.metadata.insert("Title".to_string(), "My Model".to_string());
+//!
+//! // Create a simple triangle mesh
+//! let mut mesh = Mesh::new();
+//! mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+//! mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+//! mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+//! mesh.triangles.push(Triangle::new(0, 1, 2));
+//!
+//! // Add object with mesh
+//! let mut obj = Object::new(1);
+//! obj.mesh = Some(mesh);
+//! model.resources.objects.push(obj);
+//!
+//! // Add to build
+//! model.build.items.push(BuildItem::new(1));
+//!
+//! // Write to file
+//! let file = File::create("output.3mf")?;
+//! model.to_writer(file)?;
+//! # Ok(())
+//! # }
+//! ```
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -36,6 +70,7 @@ pub mod error;
 pub mod model;
 pub mod opc;
 pub mod parser;
+pub mod writer;
 mod validator;
 
 pub use error::{Error, Result};
@@ -105,5 +140,48 @@ impl Model {
         config: ParserConfig,
     ) -> Result<Self> {
         parser::parse_3mf_with_config(reader, config)
+    }
+
+    /// Write a 3MF file to a writer
+    ///
+    /// This method serializes the model to a 3MF file format (ZIP archive containing XML).
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - A writer to write the 3MF file data to
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::{Model, Object, Mesh, Vertex, Triangle, BuildItem};
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// // Create a new model
+    /// let mut model = Model::new();
+    ///
+    /// // Create a simple triangle mesh
+    /// let mut mesh = Mesh::new();
+    /// mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    /// mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    /// mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+    /// mesh.triangles.push(Triangle::new(0, 1, 2));
+    ///
+    /// // Add object with mesh
+    /// let mut obj = Object::new(1);
+    /// obj.mesh = Some(mesh);
+    /// model.resources.objects.push(obj);
+    ///
+    /// // Add to build
+    /// model.build.items.push(BuildItem::new(1));
+    ///
+    /// // Write to file
+    /// let file = File::create("output.3mf")?;
+    /// model.to_writer(file)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn to_writer<W: std::io::Write + std::io::Seek>(&self, writer: W) -> Result<()> {
+        writer::write_3mf(self, writer)
     }
 }
