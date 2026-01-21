@@ -40,8 +40,7 @@ fn get_test_files(suite: &str, test_dir: &str) -> Vec<PathBuf> {
 fn test_positive_file(path: PathBuf, config: ParserConfig) -> Result<(), Failed> {
     let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
 
-    Model::from_reader_with_config(file, config)
-        .map_err(|e| format!("Failed to parse: {}", e))?;
+    Model::from_reader_with_config(file, config).map_err(|e| format!("Failed to parse: {}", e))?;
 
     Ok(())
 }
