@@ -721,9 +721,6 @@ fn validate_production_extension(model: &Model) -> Result<()> {
     // Check if production extension is required
     let has_production = model.required_extensions.contains(&Extension::Production);
 
-    // Track whether any production attributes are used (for validation later)
-    let mut has_production_attrs = false;
-
     // Helper function to validate p:path format
     let validate_path = |path: &str, context: &str| -> Result<()> {
         // Per 3MF Production Extension spec:
@@ -783,10 +780,8 @@ fn validate_production_extension(model: &Model) -> Result<()> {
             )));
         }
 
-        // Validate production extension usage and track attributes
+        // Validate production extension usage
         if let Some(ref prod_info) = object.production {
-            has_production_attrs = true;
-
             // If object has production path, validate it
             if let Some(ref path) = prod_info.path {
                 validate_path(path, &format!("Object {}", object.id))?;
@@ -796,21 +791,12 @@ fn validate_production_extension(model: &Model) -> Result<()> {
         // Check components
         for (idx, component) in object.components.iter().enumerate() {
             if let Some(ref prod_info) = component.production {
-                has_production_attrs = true;
-
-                // Per Production Extension spec and test suite validation:
-                // A component with p:UUID MUST also have p:path attribute
-                // (This validates external component references have both UUID and path)
-                if prod_info.uuid.is_some() && prod_info.path.is_none() && component.path.is_none()
-                {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}, Component {}: Production UUID (p:UUID) requires production path (p:path) attribute",
-                        object.id, idx
-                    )));
-                }
-
                 // Validate production path format if present
                 // Note: component.path is set from prod_info.path during parsing
+                // Per 3MF Production Extension spec:
+                // - p:UUID can be used on components to uniquely identify them
+                // - p:path is only required when referencing external objects (not in current file)
+                // - A component with p:UUID but no p:path references a local object
                 if let Some(ref path) = prod_info.path {
                     validate_path(path, &format!("Object {}, Component {}", object.id, idx))?;
                 }
@@ -820,27 +806,16 @@ fn validate_production_extension(model: &Model) -> Result<()> {
 
     // Check build items for production path validation
     for (idx, item) in model.build.items.iter().enumerate() {
-        if item.production_uuid.is_some() || item.production_path.is_some() {
-            has_production_attrs = true;
-        }
-
         if let Some(ref path) = item.production_path {
             validate_path(path, &format!("Build Item {}", idx))?;
         }
     }
 
-    // Check build production UUID
-    if model.build.production_uuid.is_some() {
-        has_production_attrs = true;
-    }
-
-    // Validate that production attributes are only used when production extension is declared
-    if has_production_attrs && !has_production {
-        return Err(Error::InvalidModel(
-            "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
-                .to_string(),
-        ));
-    }
+    // Note: We don't validate that production attributes require the production extension
+    // to be in requiredextensions, because per the 3MF spec, extensions can be declared
+    // in namespaces (xmlns:p) without being in requiredextensions - they are then optional
+    // extensions. The parser already validates that the production namespace is declared
+    // when production attributes are used.
 
     Ok(())
 }
