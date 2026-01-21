@@ -36,6 +36,7 @@ pub mod error;
 pub mod model;
 pub mod opc;
 pub mod parser;
+pub mod streaming;
 mod validator;
 
 pub use error::{Error, Result};

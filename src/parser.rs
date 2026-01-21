@@ -50,7 +50,7 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
 }
 
 /// Parse the 3D model XML content with configuration
-fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
+pub(crate) fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -323,7 +323,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 }
 
 /// Parse object element attributes
-fn parse_object<R: std::io::BufRead>(
+pub(crate) fn parse_object<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Object> {
@@ -385,7 +385,7 @@ fn parse_object<R: std::io::BufRead>(
 }
 
 /// Parse vertex element attributes
-fn parse_vertex<R: std::io::BufRead>(
+pub(crate) fn parse_vertex<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
@@ -434,7 +434,7 @@ fn parse_vertex<R: std::io::BufRead>(
 }
 
 /// Parse triangle element attributes
-fn parse_triangle<R: std::io::BufRead>(
+pub(crate) fn parse_triangle<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
@@ -490,7 +490,7 @@ fn parse_triangle<R: std::io::BufRead>(
 }
 
 /// Parse build item element attributes
-fn parse_build_item<R: std::io::BufRead>(
+pub(crate) fn parse_build_item<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<BuildItem> {
@@ -636,7 +636,7 @@ fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<
 }
 
 /// Parse attributes from an XML element
-fn parse_attributes<R: std::io::BufRead>(
+pub(crate) fn parse_attributes<R: std::io::BufRead>(
     _reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<HashMap<String, String>> {
@@ -699,7 +699,7 @@ fn should_skip_attribute(key: &str) -> bool {
 /// // - attrs contains "id", "name", "p:UUID" -> OK (p:UUID skipped as extension attr)
 /// // - attrs contains "id", "xmlns:p" -> OK (xmlns:p skipped as namespace)
 /// ```
-fn validate_attributes(
+pub(crate) fn validate_attributes(
     attrs: &HashMap<String, String>,
     allowed: &[&str],
     element_name: &str,

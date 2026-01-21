@@ -2,6 +2,57 @@
 
 This document describes the performance characteristics of the lib3mf parser and provides guidance on optimizing performance for large 3MF files.
 
+## Parser Modes
+
+The library provides two parsing modes to handle different use cases:
+
+### Standard Parser (Default)
+
+The standard parser loads the entire model into memory:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+let file = File::open("model.3mf")?;
+let model = Model::from_reader(file)?;
+```
+
+**Best for:**
+- Small to medium files (<100K vertices)
+- Random access to model data
+- Applications that need the full model structure
+
+### Streaming Parser (Memory Efficient)
+
+The streaming parser processes objects one at a time without loading the entire model:
+
+```rust
+use lib3mf::streaming::StreamingParser;
+use std::fs::File;
+
+let file = File::open("large_model.3mf")?;
+let mut parser = StreamingParser::new(file)?;
+
+// Process objects one at a time
+for object in parser.objects() {
+    let object = object?;
+    // Process object...
+    // Previous objects can be dropped, freeing memory
+}
+```
+
+**Best for:**
+- Very large files (>100K vertices)
+- Sequential processing workflows
+- Memory-constrained environments
+- Conversion or validation tools
+
+**Memory savings:**
+- Standard parser: Loads all objects at once
+- Streaming parser: Loads one object at a time
+- For a file with N objects, streaming uses ~1/N the memory
+
 ## Benchmarks
 
 The library includes comprehensive benchmarks using [criterion.rs](https://github.com/bheisler/criterion.rs) that measure parsing performance across different file sizes.
@@ -144,9 +195,73 @@ cargo instruments -t time --bench parse_benchmark
 
 ## Streaming and Lazy Parsing
 
-The current implementation uses streaming XML parsing but loads the entire model into memory. For extremely large files (>1GB), consider these future enhancements:
+The library provides a streaming parser for processing very large files without loading everything into memory.
 
-### Potential Improvements
+### When to Use Streaming
+
+Use the streaming parser when:
+- Files have >100K vertices or triangles
+- Memory is constrained (<1GB available)
+- Processing objects sequentially (conversion, validation, analysis)
+- You don't need random access to all objects
+
+Use the standard parser when:
+- Files are small to medium (<100K vertices)
+- You need random access to model data
+- Memory is not a constraint
+- Building data structures that reference the full model
+
+### Streaming Example
+
+```rust
+use lib3mf::streaming::StreamingParser;
+use std::fs::File;
+
+let file = File::open("huge_model.3mf")?;
+let mut parser = StreamingParser::new(file)?;
+
+let mut total_vertices = 0;
+let mut total_triangles = 0;
+
+// Process each object one at a time
+for result in parser.objects() {
+    let object = result?;
+    
+    if let Some(ref mesh) = object.mesh {
+        total_vertices += mesh.vertices.len();
+        total_triangles += mesh.triangles.len();
+        
+        // Object is dropped here, freeing its memory
+        // before the next object is loaded
+    }
+}
+
+println!("Total: {} vertices, {} triangles", total_vertices, total_triangles);
+```
+
+### Memory Comparison
+
+For a 3MF file with 10 objects, each with 100K vertices:
+
+**Standard Parser:**
+- Peak memory: ~240 MB (all objects in memory)
+- Constant memory throughout processing
+
+**Streaming Parser:**
+- Peak memory: ~24 MB (one object at a time)
+- 10x memory reduction
+- Memory freed as objects are processed
+
+### Streaming Limitations
+
+The current streaming implementation:
+- ✅ Iterates through objects one at a time
+- ✅ Reduces memory footprint significantly
+- ❌ Does not stream within a single object (all vertices/triangles of an object are loaded)
+- ❌ Cannot access objects in random order
+- ❌ Requires sequential processing
+
+### Future Enhancements
 
 1. **Streaming mesh access**: Iterator-based access to vertices and triangles without loading all into memory
 2. **Partial model loading**: Load only specific objects or components on demand

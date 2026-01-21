@@ -65,6 +65,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Streaming Parser for Large Files
+
+For very large files, use the streaming parser to process objects one at a time without loading everything into memory:
+
+```rust
+use lib3mf::streaming::StreamingParser;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("large_model.3mf")?;
+    let mut parser = StreamingParser::new(file)?;
+
+    // Process objects one at a time
+    for object in parser.objects() {
+        let object = object?;
+        if let Some(ref mesh) = object.mesh {
+            println!("Object {}: {} vertices",
+                object.id, mesh.vertices.len());
+        }
+        // Object is dropped here, freeing memory
+    }
+
+    Ok(())
+}
+```
+
 ### Extension Support
 
 3MF files can require specific extensions beyond the core specification. You can control which extensions your application supports:
