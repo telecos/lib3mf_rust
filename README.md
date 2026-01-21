@@ -147,6 +147,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 object.id, mesh.vertices.len());
         }
         // Object is dropped here, freeing memory
+    }
+
+    Ok(())
+}
+```
+
+### Accessing Production Extension Data
+
+The Production Extension provides UUIDs and routing paths for manufacturing workflows:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("production_model.3mf")?;
+    let model = Model::from_reader(file)?;
+
+    // Access production UUIDs from objects
+    for obj in &model.resources.objects {
+        if let Some(ref production) = obj.production {
+            println!("Object {} has production UUID: {}", 
+                obj.id, production.uuid.as_deref().unwrap_or("<none>"));
+            
+            if let Some(ref path) = production.path {
+                println!("  Production path: {}", path);
+            }
+        }
+    }
+
+    // Access production UUID from build element
+    if let Some(ref build_uuid) = model.build.production_uuid {
+        println!("Build has production UUID: {}", build_uuid);
+    }
+
+    // Access production UUIDs from build items
+    for item in &model.build.items {
+        if let Some(ref item_uuid) = item.production_uuid {
+            println!("Build item {} has production UUID: {}", 
+                item.objectid, item_uuid);
+        }
+    }
+
+    Ok(())
+}
+```
+
 ### Accessing Displacement Data
 
 The library parses displacement extension data into accessible structures:
@@ -438,7 +485,7 @@ The parser supports **conditional extension validation**, allowing consumers to 
 
 - ✅ **Core Specification** - Fully supported (always enabled)
 - ✅ **Materials Extension** - Color groups and base materials
-- ✅ **Production Extension** - Files parse successfully
+- ✅ **Production Extension** - UUID and path extraction from objects, build, and build items
 - ✅ **Slice Extension** - Files parse successfully  
 - ✅ **Beam Lattice Extension** - Files parse successfully
 - ✅ **Secure Content Extension** - Recognized and validated
@@ -460,7 +507,12 @@ let config = ParserConfig::new().with_extension(Extension::Material);
 let config = ParserConfig::with_all_extensions();
 ```
 
-**Note:** While all extensions are recognized for validation purposes, extension-specific data structures (beams, slices, production UUIDs) are not yet fully extracted. Basic mesh geometry and materials are fully supported.
+**Note:** While all extensions are recognized for validation purposes, some extension-specific data structures are not yet fully extracted:
+- ✅ **Production Extension** - Fully supported (UUIDs and paths extracted)
+- ❌ **Beam Lattice** - Files parse, beam data not extracted
+- ❌ **Slice Extension** - Files parse, slice data not extracted
+
+Basic mesh geometry and materials are fully supported.
 
 ### Future Enhancements
 
