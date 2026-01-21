@@ -28,26 +28,28 @@ pub fn write_model_xml<W: IoWrite>(model: &Model, writer: W) -> Result<()> {
     model_elem.push_attribute(("xmlns", model.xmlns.as_str()));
 
     // Add extension namespaces
+    let mut ns_attrs = Vec::new();
     for ext in &model.required_extensions {
         if *ext == Extension::Core {
             continue; // Core is already added as default xmlns
         }
         
-        let prefix = match ext {
-            Extension::Material => "m",
-            Extension::Production => "p",
-            Extension::Slice => "s",
-            Extension::BeamLattice => "b",
-            Extension::SecureContent => "sc",
-            Extension::BooleanOperations => "bool",
-            Extension::Displacement => "d",
+        let (prefix, namespace) = match ext {
+            Extension::Material => ("m", ext.namespace()),
+            Extension::Production => ("p", ext.namespace()),
+            Extension::Slice => ("s", ext.namespace()),
+            Extension::BeamLattice => ("b", ext.namespace()),
+            Extension::SecureContent => ("sc", ext.namespace()),
+            Extension::BooleanOperations => ("bool", ext.namespace()),
+            Extension::Displacement => ("d", ext.namespace()),
             Extension::Core => continue,
         };
         
-        model_elem.push_attribute((
-            format!("xmlns:{}", prefix).as_str(),
-            ext.namespace(),
-        ));
+        ns_attrs.push((format!("xmlns:{}", prefix), namespace));
+    }
+    
+    for (name, value) in &ns_attrs {
+        model_elem.push_attribute((name.as_str(), *value));
     }
 
     // Add requiredextensions attribute if needed
@@ -501,11 +503,11 @@ fn write_object<W: IoWrite>(writer: &mut Writer<W>, object: &Object) -> Result<(
     elem.push_attribute(("id", object.id.to_string().as_str()));
     
     let obj_type = match object.object_type {
-        crate::model::ObjectType::Model => "model",
-        crate::model::ObjectType::Support => "support",
-        crate::model::ObjectType::SolidSupport => "solidsupport",
-        crate::model::ObjectType::Surface => "surface",
-        crate::model::ObjectType::Other => "other",
+        ObjectType::Model => "model",
+        ObjectType::Support => "support",
+        ObjectType::SolidSupport => "solidsupport",
+        ObjectType::Surface => "surface",
+        ObjectType::Other => "other",
     };
     elem.push_attribute(("type", obj_type));
     

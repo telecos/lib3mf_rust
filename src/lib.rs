@@ -214,6 +214,7 @@ impl Model {
     /// Write a 3MF file to a file path
     ///
     /// This is a convenience method that creates a file and writes the 3MF data to it.
+    /// The file is automatically flushed and closed when the method completes.
     ///
     /// # Arguments
     ///
@@ -234,6 +235,7 @@ impl Model {
     /// ```
     pub fn write_to_file<P: AsRef<std::path::Path>>(self, path: P) -> Result<()> {
         let file = std::fs::File::create(path)?;
+        // File is automatically flushed and closed when dropped
         self.to_writer(file)?;
         Ok(())
     }
