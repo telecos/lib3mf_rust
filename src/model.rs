@@ -1312,6 +1312,8 @@ pub struct Component {
     /// - ty (index 10): translation along Y axis  
     /// - tz (index 11): translation along Z axis
     pub transform: Option<[f64; 12]>,
+    /// Production extension information (UUID, path)
+    pub production: Option<ProductionInfo>,
 }
 
 impl Component {
@@ -1320,6 +1322,7 @@ impl Component {
         Self {
             objectid,
             transform: None,
+            production: None,
         }
     }
 
@@ -1328,6 +1331,7 @@ impl Component {
         Self {
             objectid,
             transform: Some(transform),
+            production: None,
         }
     }
 }
@@ -1455,6 +1459,8 @@ pub struct BuildItem {
     pub transform: Option<[f64; 12]>,
     /// Production extension UUID (p:UUID attribute)
     pub production_uuid: Option<String>,
+    /// Production extension path (p:path attribute) - references external file
+    pub production_path: Option<String>,
 }
 
 impl BuildItem {
@@ -1464,6 +1470,7 @@ impl BuildItem {
             objectid,
             transform: None,
             production_uuid: None,
+            production_path: None,
         }
     }
 }
