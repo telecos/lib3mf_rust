@@ -1,5 +1,7 @@
 # Migration Guide: From lib3mf (C++) to lib3mf_rust
 
+> **📝 Note:** This is a legacy migration guide. For the most comprehensive and up-to-date migration information, please see [MIGRATION_FROM_CPP.md](MIGRATION_FROM_CPP.md), which includes detailed API mappings, more examples, write support documentation, and updated feature parity information.
+
 This guide helps you migrate from the official C++ lib3mf library to this pure Rust implementation.
 
 ## Table of Contents

@@ -234,9 +234,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         // Validate model attributes - only allow specific attributes
                         // Per 3MF Core spec: unit, xml:lang, requiredextensions, and xmlns declarations
+                        // Note: thumbnail is deprecated in v1.4+ but still allowed for backward compatibility
                         validate_attributes(
                             &all_attrs,
-                            &["unit", "xml:lang", "requiredextensions", "xmlns"],
+                            &[
+                                "unit",
+                                "xml:lang",
+                                "requiredextensions",
+                                "xmlns",
+                                "thumbnail",
+                            ],
                             "model",
                         )?;
 
@@ -790,16 +797,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         // Parse cap mode attribute (default sphere)
                         if let Some(cap_str) = attrs.get("cap") {
-                            beamset.cap_mode = match cap_str.as_str() {
-                                "sphere" => BeamCapMode::Sphere,
-                                "butt" => BeamCapMode::Butt,
-                                _ => {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Invalid cap mode '{}'. Must be 'sphere' or 'butt'",
-                                        cap_str
-                                    )));
-                                }
-                            };
+                            beamset.cap_mode = cap_str.parse()?;
                         }
 
                         current_beamset = Some(beamset);
@@ -1421,7 +1419,7 @@ pub(crate) fn parse_object<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
-    // Per Materials Extension: pindex can be used with pid
+    // Per Materials Extension: pindex can be used with pid, basematerialid for base material references
     // Per Slice Extension: s:slicestackid (handled via extension attribute skipping)
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
@@ -1432,6 +1430,7 @@ pub(crate) fn parse_object<R: std::io::BufRead>(
             "type",
             "pid",
             "pindex",
+            "basematerialid",
             "partnumber",
             "thumbnail",
         ],
@@ -1470,6 +1469,10 @@ pub(crate) fn parse_object<R: std::io::BufRead>(
 
     if let Some(pindex) = attrs.get("pindex") {
         object.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    if let Some(basematerialid) = attrs.get("basematerialid") {
+        object.basematerialid = Some(basematerialid.parse::<usize>()?);
     }
 
     // Check for both namespaced and non-namespaced slicestackid
@@ -1753,8 +1756,10 @@ fn parse_beam<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per Beam Lattice Extension spec: v1, v2, r1, r2
-    validate_attributes(&attrs, &["v1", "v2", "r1", "r2"], "beam")?;
+    // Per Beam Lattice Extension spec v1.2.0: v1, v2, r1, r2, cap1, cap2, p1, p2, pid
+    // Currently implemented: v1, v2, r1, r2, cap1, cap2
+    // TODO: Implement p1, p2, pid attributes for per-beam property overrides
+    validate_attributes(&attrs, &["v1", "v2", "r1", "r2", "cap1", "cap2", "p1", "p2", "pid"], "beam")?;
 
     let v1 = attrs
         .get("v1")
@@ -1790,6 +1795,16 @@ fn parse_beam<R: std::io::BufRead>(
             )));
         }
         beam.r2 = Some(r2_val);
+    }
+
+    // Parse cap1 attribute (optional, defaults to beamset cap mode)
+    if let Some(cap1_str) = attrs.get("cap1") {
+        beam.cap1 = Some(cap1_str.parse()?);
+    }
+
+    // Parse cap2 attribute (optional, defaults to beamset cap mode)
+    if let Some(cap2_str) = attrs.get("cap2") {
+        beam.cap2 = Some(cap2_str.parse()?);
     }
 
     Ok(beam)

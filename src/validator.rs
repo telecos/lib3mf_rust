@@ -258,8 +258,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
         }
     }
 
-    // For now, just validate that pid references point to existing color groups or materials
-    // Full validation would require checking basematerialid attributes on objects
+    // Validate that pid and basematerialid references point to existing color groups or base material groups
 
     // Collect valid color group IDs
     let valid_colorgroup_ids: HashSet<usize> = model
@@ -291,6 +290,18 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 return Err(Error::InvalidModel(format!(
                     "Object {} references non-existent color group or base material ID: {}",
                     object.id, pid
+                )));
+            }
+        }
+
+        // Validate basematerialid references
+        if let Some(basematerialid) = object.basematerialid {
+            // basematerialid should reference a valid base material group
+            if !valid_basematerial_ids.contains(&basematerialid) {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} references non-existent base material group ID: {}. \
+                     Check that a basematerials group with this ID exists in the resources section.",
+                    object.id, basematerialid
                 )));
             }
         }
@@ -805,6 +816,76 @@ mod tests {
         let result = validate_material_references(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_validate_basematerialid_valid() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup};
+
+        let mut model = Model::new();
+
+        // Add a base material group with ID 5
+        let mut base_group = BaseMaterialGroup::new(5);
+        base_group.materials.push(BaseMaterial::new(
+            "Red Plastic".to_string(),
+            (255, 0, 0, 255),
+        ));
+        model.resources.base_material_groups.push(base_group);
+
+        // Create an object that references the base material group via basematerialid
+        let mut object = Object::new(1);
+        object.basematerialid = Some(5); // Valid reference
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation
+        let result = validate_material_references(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_basematerialid_invalid() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup};
+
+        let mut model = Model::new();
+
+        // Add a base material group with ID 5
+        let mut base_group = BaseMaterialGroup::new(5);
+        base_group.materials.push(BaseMaterial::new(
+            "Red Plastic".to_string(),
+            (255, 0, 0, 255),
+        ));
+        model.resources.base_material_groups.push(base_group);
+
+        // Create an object that references a non-existent base material group
+        let mut object = Object::new(1);
+        object.basematerialid = Some(99); // Invalid reference!
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("non-existent base material group"));
     }
 
     #[test]
