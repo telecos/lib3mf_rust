@@ -874,9 +874,10 @@ mod tests {
 
         // Create a base material group
         let mut base_group = BaseMaterialGroup::new(5);
-        base_group
-            .materials
-            .push(BaseMaterial::new("Red Plastic".to_string(), (255, 0, 0, 255)));
+        base_group.materials.push(BaseMaterial::new(
+            "Red Plastic".to_string(),
+            (255, 0, 0, 255),
+        ));
         model.resources.base_material_groups.push(base_group);
 
         // Create object with basematerialid

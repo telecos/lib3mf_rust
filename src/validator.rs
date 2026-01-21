@@ -815,9 +815,10 @@ mod tests {
 
         // Add a base material group with ID 5
         let mut base_group = BaseMaterialGroup::new(5);
-        base_group
-            .materials
-            .push(BaseMaterial::new("Red Plastic".to_string(), (255, 0, 0, 255)));
+        base_group.materials.push(BaseMaterial::new(
+            "Red Plastic".to_string(),
+            (255, 0, 0, 255),
+        ));
         model.resources.base_material_groups.push(base_group);
 
         // Create an object that references the base material group via basematerialid
@@ -847,9 +848,10 @@ mod tests {
 
         // Add a base material group with ID 5
         let mut base_group = BaseMaterialGroup::new(5);
-        base_group
-            .materials
-            .push(BaseMaterial::new("Red Plastic".to_string(), (255, 0, 0, 255)));
+        base_group.materials.push(BaseMaterial::new(
+            "Red Plastic".to_string(),
+            (255, 0, 0, 255),
+        ));
         model.resources.base_material_groups.push(base_group);
 
         // Create an object that references a non-existent base material group
