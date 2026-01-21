@@ -1,8 +1,8 @@
 //! # lib3mf
 //!
-//! A pure Rust implementation for parsing 3MF (3D Manufacturing Format) files.
+//! A pure Rust implementation for reading and writing 3MF (3D Manufacturing Format) files.
 //!
-//! This library provides functionality to read and parse 3MF files, which are ZIP-based
+//! This library provides functionality to read, parse, create, and write 3MF files, which are ZIP-based
 //! containers following the Open Packaging Conventions (OPC) standard and containing
 //! XML-based 3D model data.
 //!
@@ -11,10 +11,12 @@
 //! - Pure Rust implementation with no unsafe code
 //! - Parse 3MF file structure (ZIP/OPC container)
 //! - Read 3D model data including meshes, vertices, and triangles
+//! - **Write and serialize 3MF files**
 //! - Support for materials and colors
-//! - Metadata extraction
+//! - Metadata extraction and writing
+//! - Round-trip support (read-write-read)
 //!
-//! ## Example
+//! ## Reading Example
 //!
 //! ```no_run
 //! use lib3mf::Model;
@@ -25,6 +27,36 @@
 //! let model = Model::from_reader(file)?;
 //!
 //! println!("Model contains {} objects", model.resources.objects.len());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Writing Example
+//!
+//! ```no_run
+//! use lib3mf::{Model, Object, Mesh, Vertex, Triangle, BuildItem};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a new model
+//! let mut model = Model::new();
+//!
+//! // Create a mesh with a simple triangle
+//! let mut mesh = Mesh::new();
+//! mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+//! mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+//! mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+//! mesh.triangles.push(Triangle::new(0, 1, 2));
+//!
+//! // Create an object with the mesh
+//! let mut object = Object::new(1);
+//! object.mesh = Some(mesh);
+//!
+//! // Add to resources and build
+//! model.resources.objects.push(object);
+//! model.build.items.push(BuildItem::new(1));
+//!
+//! // Write to file
+//! model.write_to_file("output.3mf")?;
 //! # Ok(())
 //! # }
 //! ```
