@@ -279,8 +279,12 @@ fn analyze_transformation(transform: &[f64; 12]) {
     }
 }
 
+/// Bounding box represented as (min_point, max_point) where each point is (x, y, z)
+type BoundingBox = ((f64, f64, f64), (f64, f64, f64));
+
 /// Calculate the overall build volume encompassing all build items
-fn calculate_build_volume(model: &Model) -> Option<((f64, f64, f64), (f64, f64, f64))> {
+/// Returns a tuple of (min_point, max_point) where each point is (x, y, z)
+fn calculate_build_volume(model: &Model) -> Option<BoundingBox> {
     let mut all_points = Vec::new();
 
     for item in &model.build.items {

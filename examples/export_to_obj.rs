@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    obj_content.push_str("\n");
+    obj_content.push('\n');
 
     // Create materials
     let mut material_map: HashMap<usize, String> = HashMap::new();
@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             mtl_content.push_str("Kd 0.8 0.8 0.8\n");
         }
-        mtl_content.push_str("\n");
+        mtl_content.push('\n');
     }
 
     // Export color groups
@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if af < 1.0 {
                 mtl_content.push_str(&format!("d {:.4}\n", af));
             }
-            mtl_content.push_str("\n");
+            mtl_content.push('\n');
         }
     }
 
