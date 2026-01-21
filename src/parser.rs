@@ -237,7 +237,13 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Note: thumbnail is deprecated in v1.4+ but still allowed for backward compatibility
                         validate_attributes(
                             &all_attrs,
-                            &["unit", "xml:lang", "requiredextensions", "xmlns", "thumbnail"],
+                            &[
+                                "unit",
+                                "xml:lang",
+                                "requiredextensions",
+                                "xmlns",
+                                "thumbnail",
+                            ],
                             "model",
                         )?;
 

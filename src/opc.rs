@@ -130,7 +130,9 @@ impl<R: Read + std::io::Seek> Package<R> {
                             if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
                                 // Per 3MF spec, the extension for 3D model files is typically "model"
                                 // However, "part" is also valid for backward compatibility
-                                if !ext.eq_ignore_ascii_case("model") && !ext.eq_ignore_ascii_case("part") {
+                                if !ext.eq_ignore_ascii_case("model")
+                                    && !ext.eq_ignore_ascii_case("part")
+                                {
                                     return Err(Error::InvalidFormat(format!(
                                         "Content type '{}' must use Extension='model' or 'part', not Extension='{}'",
                                         ct, ext
