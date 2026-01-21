@@ -62,6 +62,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut current_mesh: Option<Mesh> = None;
     let mut in_basematerials = false;
     let mut material_index: usize = 0;
+    let mut current_basematerialgroup: Option<BaseMaterialGroup> = None;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
 
@@ -237,11 +238,38 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "basematerials" if in_resources => {
                         in_basematerials = true;
                         material_index = 0;
-                        // basematerials can have an ID attribute, but we use sequential indices
-                        // for individual materials within the group
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("BaseMaterials missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        current_basematerialgroup = Some(BaseMaterialGroup::new(id));
                     }
                     "base" if in_basematerials => {
-                        // Materials within basematerials use sequential indices
+                        // Materials within basematerials group
+                        if let Some(ref mut group) = current_basematerialgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            
+                            // Validate only allowed attributes are present
+                            // Per 3MF Materials & Properties Extension spec: name, displaycolor
+                            validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
+                            
+                            let name = attrs.get("name").cloned().unwrap_or_default();
+                            
+                            // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
+                            // If displaycolor is missing or invalid, use white as default
+                            let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
+                                parse_color(color_str).unwrap_or((255, 255, 255, 255))
+                            } else {
+                                (255, 255, 255, 255)
+                            };
+                            
+                            group.materials.push(BaseMaterial::new(name, displaycolor));
+                        }
+                        
+                        // Still parse to materials list for backward compatibility
                         let material = parse_base_material(&reader, e, material_index)?;
                         model.resources.materials.push(material);
                         material_index += 1;
@@ -296,6 +324,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         // Mesh parsing complete
                     }
                     "basematerials" => {
+                        if let Some(group) = current_basematerialgroup.take() {
+                            model.resources.base_material_groups.push(group);
+                        }
                         in_basematerials = false;
                     }
                     "colorgroup" => {

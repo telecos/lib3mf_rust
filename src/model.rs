@@ -308,6 +308,44 @@ impl ColorGroup {
     }
 }
 
+/// Base material group from materials extension
+#[derive(Debug, Clone)]
+pub struct BaseMaterialGroup {
+    /// Base material group ID
+    pub id: usize,
+    /// List of base materials in this group
+    pub materials: Vec<BaseMaterial>,
+}
+
+impl BaseMaterialGroup {
+    /// Create a new base material group
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            materials: Vec::new(),
+        }
+    }
+}
+
+/// Individual base material within a base material group
+#[derive(Debug, Clone)]
+pub struct BaseMaterial {
+    /// Material name
+    pub name: String,
+    /// Display color in RGBA format (red, green, blue, alpha)
+    pub displaycolor: (u8, u8, u8, u8),
+}
+
+impl BaseMaterial {
+    /// Create a new base material
+    pub fn new(name: String, displaycolor: (u8, u8, u8, u8)) -> Self {
+        Self {
+            name,
+            displaycolor,
+        }
+    }
+}
+
 impl ProductionInfo {
     /// Create a new empty ProductionInfo
     pub fn new() -> Self {
@@ -390,6 +428,8 @@ pub struct Resources {
     pub materials: Vec<Material>,
     /// List of color groups (materials extension)
     pub color_groups: Vec<ColorGroup>,
+    /// List of base material groups (materials extension)
+    pub base_material_groups: Vec<BaseMaterialGroup>,
 }
 
 impl Resources {
@@ -399,6 +439,7 @@ impl Resources {
             objects: Vec::new(),
             materials: Vec::new(),
             color_groups: Vec::new(),
+            base_material_groups: Vec::new(),
         }
     }
 }
