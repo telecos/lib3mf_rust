@@ -1309,6 +1309,8 @@ pub struct Object {
     pub pid: Option<usize>,
     /// Optional material index (property index) - used with pid to select from color groups
     pub pindex: Option<usize>,
+    /// Optional base material ID reference (materials extension)
+    pub basematerialid: Option<usize>,
     /// Optional slice stack ID (slice extension)
     pub slicestackid: Option<usize>,
     /// Production extension information (UUID, path)
@@ -1344,6 +1346,7 @@ impl Object {
             mesh: None,
             pid: None,
             pindex: None,
+            basematerialid: None,
             slicestackid: None,
             production: None,
             boolean_shape: None,
