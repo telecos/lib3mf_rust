@@ -34,14 +34,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("  Metadata entries: {}", model.metadata.len());
 
                     if !model.metadata.is_empty() {
-                        for (key, value) in &model.metadata {
+                        for entry in &model.metadata {
                             println!(
                                 "    - {}: {}",
-                                key,
-                                if value.len() > 50 {
-                                    format!("{}...", &value[..50])
+                                entry.name,
+                                if entry.value.len() > 50 {
+                                    format!("{}...", &entry.value[..50])
                                 } else {
-                                    value.clone()
+                                    entry.value.clone()
                                 }
                             );
                         }

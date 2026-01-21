@@ -14,8 +14,7 @@ fn test_parse_core_box() {
     // Verify basic model properties
     assert_eq!(model.unit, "millimeter");
     assert!(model
-        .metadata
-        .get("Copyright")
+        .get_metadata("Copyright")
         .unwrap()
         .contains("3MF Consortium"));
 

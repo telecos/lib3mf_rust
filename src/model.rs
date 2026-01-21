@@ -1,6 +1,6 @@
 //! Data structures representing 3MF models
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// 3MF extension specification
 ///
@@ -241,6 +241,18 @@ impl Mesh {
         Self {
             vertices: Vec::new(),
             triangles: Vec::new(),
+            beamset: None,
+        }
+    }
+
+    /// Create a new mesh with pre-allocated capacity
+    ///
+    /// This is useful for performance when the number of vertices and triangles
+    /// is known in advance, as it avoids multiple reallocations.
+    pub fn with_capacity(vertices: usize, triangles: usize) -> Self {
+        Self {
+            vertices: Vec::with_capacity(vertices),
+            triangles: Vec::with_capacity(triangles),
             beamset: None,
         }
     }
@@ -1001,6 +1013,50 @@ impl Default for ProductionInfo {
     }
 }
 
+/// A component that references another object with optional transformation
+///
+/// Components allow objects to reference other objects to create assemblies.
+/// The referenced object can be transformed using a 4x3 affine transformation matrix.
+#[derive(Debug, Clone)]
+pub struct Component {
+    /// ID of the referenced object
+    pub objectid: usize,
+    /// Optional 4x3 transformation matrix (12 floats in row-major order)
+    ///
+    /// Format: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
+    ///
+    /// The first 9 values form a 3x3 rotation/scale matrix:
+    /// ```text
+    /// | m00 m01 m02 |
+    /// | m10 m11 m12 |
+    /// | m20 m21 m22 |
+    /// ```
+    ///
+    /// The last 3 values are translation components:
+    /// - tx (index 9): translation along X axis
+    /// - ty (index 10): translation along Y axis  
+    /// - tz (index 11): translation along Z axis
+    pub transform: Option<[f64; 12]>,
+}
+
+impl Component {
+    /// Create a new component with the given object reference
+    pub fn new(objectid: usize) -> Self {
+        Self {
+            objectid,
+            transform: None,
+        }
+    }
+
+    /// Create a new component with a transformation matrix
+    pub fn with_transform(objectid: usize, transform: [f64; 12]) -> Self {
+        Self {
+            objectid,
+            transform: Some(transform),
+        }
+    }
+}
+
 /// A 3D object that can be a mesh or reference other objects
 #[derive(Debug, Clone)]
 pub struct Object {
@@ -1022,6 +1078,8 @@ pub struct Object {
     pub production: Option<ProductionInfo>,
     /// Boolean shape definition (Boolean Operations extension)
     pub boolean_shape: Option<BooleanShape>,
+    /// Components that reference other objects (assemblies)
+    pub components: Vec<Component>,
 }
 
 /// Type of 3D object
@@ -1052,6 +1110,7 @@ impl Object {
             slicestackid: None,
             production: None,
             boolean_shape: None,
+            components: Vec::new(),
         }
     }
 }
@@ -1159,6 +1218,42 @@ impl Default for Build {
     }
 }
 
+/// Metadata entry for 3MF package
+///
+/// Represents a metadata key-value pair with optional preservation flag.
+/// According to the 3MF Core Specification Chapter 4, metadata elements
+/// contain a required `name` attribute and text content value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataEntry {
+    /// Name of the metadata entry (required by 3MF spec)
+    pub name: String,
+    /// Value of the metadata entry
+    pub value: String,
+    /// Preservation flag (optional attribute)
+    /// When true, indicates this metadata should be preserved during editing
+    pub preserve: Option<bool>,
+}
+
+impl MetadataEntry {
+    /// Create a new metadata entry
+    pub fn new(name: String, value: String) -> Self {
+        Self {
+            name,
+            value,
+            preserve: None,
+        }
+    }
+
+    /// Create a new metadata entry with preservation flag
+    pub fn new_with_preserve(name: String, value: String, preserve: bool) -> Self {
+        Self {
+            name,
+            value,
+            preserve: Some(preserve),
+        }
+    }
+}
+
 /// Thumbnail metadata for 3MF package
 ///
 /// Represents a thumbnail image referenced in the package relationships.
@@ -1188,8 +1283,8 @@ pub struct Model {
     /// Required extensions for this model
     /// Extensions that the consumer must support to properly process this file
     pub required_extensions: Vec<Extension>,
-    /// Metadata key-value pairs
-    pub metadata: HashMap<String, String>,
+    /// Metadata entries with name, value, and optional preservation flag
+    pub metadata: Vec<MetadataEntry>,
     /// Thumbnail metadata (if present in the package)
     pub thumbnail: Option<Thumbnail>,
     /// Resources (objects, materials)
@@ -1207,12 +1302,25 @@ impl Model {
             unit: "millimeter".to_string(),
             xmlns: "http://schemas.microsoft.com/3dmanufacturing/core/2015/02".to_string(),
             required_extensions: Vec::new(),
-            metadata: HashMap::new(),
+            metadata: Vec::new(),
             thumbnail: None,
             resources: Resources::new(),
             build: Build::new(),
             secure_content: None,
         }
+    }
+
+    /// Get metadata value by name (helper for backward compatibility)
+    pub fn get_metadata(&self, name: &str) -> Option<&str> {
+        self.metadata
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.value.as_str())
+    }
+
+    /// Check if metadata entry exists with the given name
+    pub fn has_metadata(&self, name: &str) -> bool {
+        self.metadata.iter().any(|entry| entry.name == name)
     }
 }
 
