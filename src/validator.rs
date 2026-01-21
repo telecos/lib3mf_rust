@@ -9,7 +9,7 @@
 //! - Material and color group references are valid
 
 use crate::error::{Error, Result};
-use crate::model::Model;
+use crate::model::{Model, Object};
 use std::collections::HashSet;
 
 /// Validate a parsed 3MF model
@@ -308,6 +308,10 @@ fn validate_component_references(model: &Model) -> Result<()> {
     let valid_object_ids: HashSet<usize> =
         model.resources.objects.iter().map(|obj| obj.id).collect();
 
+    // Build a HashMap for O(1) object lookups
+    let object_map: std::collections::HashMap<usize, &Object> =
+        model.resources.objects.iter().map(|obj| (obj.id, obj)).collect();
+
     // Validate that all component objectid references exist
     for object in &model.resources.objects {
         for component in &object.components {
@@ -328,15 +332,18 @@ fn validate_component_references(model: &Model) -> Result<()> {
         }
     }
 
-    // Check for circular references using depth-first search
-    // Reuse HashSets across iterations for better performance
+    // Check for circular references using a single DFS pass
+    // Track visited nodes globally to avoid redundant traversals
     let mut visited = HashSet::new();
     let mut rec_stack = HashSet::new();
     
     for object in &model.resources.objects {
-        visited.clear();
-        rec_stack.clear();
-        if has_circular_reference(object.id, model, &mut visited, &mut rec_stack)? {
+        // Skip if already visited during a previous DFS
+        if visited.contains(&object.id) {
+            continue;
+        }
+        
+        if has_circular_reference(object.id, &object_map, &mut visited, &mut rec_stack)? {
             return Err(Error::InvalidModel(format!(
                 "Object {}: Circular component reference detected",
                 object.id
@@ -350,7 +357,7 @@ fn validate_component_references(model: &Model) -> Result<()> {
 /// Check for circular references using depth-first search
 fn has_circular_reference(
     object_id: usize,
-    model: &Model,
+    object_map: &std::collections::HashMap<usize, &Object>,
     visited: &mut HashSet<usize>,
     rec_stack: &mut HashSet<usize>,
 ) -> Result<bool> {
@@ -358,15 +365,15 @@ fn has_circular_reference(
     visited.insert(object_id);
     rec_stack.insert(object_id);
 
-    // Find the object
-    if let Some(object) = model.resources.objects.iter().find(|obj| obj.id == object_id) {
+    // Find the object using O(1) HashMap lookup
+    if let Some(&object) = object_map.get(&object_id) {
         // Check all components of this object
         for component in &object.components {
             let component_id = component.objectid;
 
             // If this node is not visited, recursively check it
             if !visited.contains(&component_id) {
-                if has_circular_reference(component_id, model, visited, rec_stack)? {
+                if has_circular_reference(component_id, object_map, visited, rec_stack)? {
                     return Ok(true);
                 }
             }
