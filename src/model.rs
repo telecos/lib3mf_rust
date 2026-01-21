@@ -648,6 +648,8 @@ impl Disp2DGroup {
             coords: Vec::new(),
         }
     }
+}
+
 /// Secure content metadata (read-only awareness)
 ///
 /// This structure provides minimal awareness of secure content elements

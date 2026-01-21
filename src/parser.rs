@@ -399,6 +399,41 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "normvectorgroup missing id attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_normvectorgroup = Some(NormVectorGroup::new(id));
+                    }
+                    "normvector" if in_normvectorgroup => {
+                        if let Some(ref mut nvgroup) = current_normvectorgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let x = attrs
+                                .get("x")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing x attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let y = attrs
+                                .get("y")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing y attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let z = attrs
+                                .get("z")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing z attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            nvgroup.vectors.push(NormVector::new(x, y, z));
+                        }
+                    }
                     "beamlattice" if current_mesh.is_some() => {
                         in_beamset = true;
                         let attrs = parse_attributes(&reader, e)?;
@@ -569,6 +604,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
 
                             d2dgroup.coords.push(coords);
+                        }
+                    }
+                    "slicestack" if in_resources => {
+                        in_slicestack = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
                                 Error::InvalidXml("SliceStack missing id attribute".to_string())
                             })?
                             .parse::<usize>()?;
@@ -758,6 +801,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             model.resources.disp2d_groups.push(d2dgroup);
                         }
                         in_disp2dgroup = false;
+                    }
                     "beamlattice" => {
                         if let Some(beamset) = current_beamset.take() {
                             if let Some(ref mut mesh) = current_mesh {
