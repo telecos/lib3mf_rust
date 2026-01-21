@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for obj in &model.resources.objects {
         if let Some(ref production) = obj.production {
             println!("Object {} has production UUID: {}", 
-                obj.id, production.uuid.as_ref().unwrap_or(&"<none>".to_string()));
+                obj.id, production.uuid.as_deref().unwrap_or("<none>"));
             
             if let Some(ref path) = production.path {
                 println!("  Production path: {}", path);
