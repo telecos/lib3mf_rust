@@ -1010,16 +1010,16 @@ pub struct Component {
     /// ID of the referenced object
     pub objectid: usize,
     /// Optional 4x3 transformation matrix (12 floats in row-major order)
-    /// 
+    ///
     /// Format: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
-    /// 
+    ///
     /// The first 9 values form a 3x3 rotation/scale matrix:
     /// ```text
     /// | m00 m01 m02 |
     /// | m10 m11 m12 |
     /// | m20 m21 m22 |
     /// ```
-    /// 
+    ///
     /// The last 3 values are translation components:
     /// - tx (index 9): translation along X axis
     /// - ty (index 10): translation along Y axis  

@@ -24,10 +24,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for obj in &model.resources.objects {
         println!("\nObject ID: {}", obj.id);
         println!("  Type: {:?}", obj.object_type);
-        
+
         if let Some(ref mesh) = obj.mesh {
-            println!("  Mesh: {} vertices, {} triangles", 
-                mesh.vertices.len(), 
+            println!(
+                "  Mesh: {} vertices, {} triangles",
+                mesh.vertices.len(),
                 mesh.triangles.len()
             );
         }
@@ -35,8 +36,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !obj.components.is_empty() {
             println!("  Components: {}", obj.components.len());
             for (i, comp) in obj.components.iter().enumerate() {
-                println!("    Component {}: references object {}", i + 1, comp.objectid);
-                
+                println!(
+                    "    Component {}: references object {}",
+                    i + 1,
+                    comp.objectid
+                );
+
                 if let Some(transform) = comp.transform {
                     // Extract translation from transform matrix
                     let tx = transform[9];
