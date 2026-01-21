@@ -1,5 +1,7 @@
 name: Conformance Tests
 
+# This workflow runs conformance tests in parallel to reduce CI time
+
 on:
   push:
     branches: [ main, develop ]
