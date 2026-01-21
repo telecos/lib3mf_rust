@@ -943,10 +943,9 @@ impl Disp2DGroup {
 /// without implementing actual cryptographic operations. It tracks which
 /// files are encrypted and keystore metadata.
 ///
-/// **Note**: These fields are currently unused placeholders reserved for
-/// future implementation. Parsing logic to populate these fields has not
-/// been implemented yet. The extension is recognized for validation purposes
-/// only.
+/// **Implementation Status**: The keystore is parsed to extract encrypted file
+/// paths and keystore UUID. This allows the parser to handle components that
+/// reference encrypted files without attempting to load or decrypt them.
 ///
 /// **Security Warning**: This does NOT decrypt content or verify signatures.
 /// See SECURE_CONTENT_SUPPORT.md for security considerations.
