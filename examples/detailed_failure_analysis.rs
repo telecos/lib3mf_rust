@@ -4,24 +4,33 @@ use std::fs::File;
 use walkdir::WalkDir;
 
 fn main() {
-    let suites = vec![
-        ("suite3_core", "negative_test_cases"),
-        ("suite1_core_slice_prod", "negative_test_cases"),
-        ("suite2_core_prod_matl", "negative_test_cases"),
-        ("suite4_core_slice", "negative_test_cases"),
-        ("suite5_core_prod", "negative_test_cases"),
-        ("suite6_core_matl", "negative_test_cases"),
-    ];
-
+    // Find all test suite directories
+    let test_suites_path = "test_suites";
+    let mut suites = Vec::new();
+    
+    if let Ok(entries) = std::fs::read_dir(test_suites_path) {
+        for entry in entries.flatten() {
+            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                let suite_name = entry.file_name().to_string_lossy().to_string();
+                // Skip non-suite directories
+                if suite_name.starts_with("suite") {
+                    let neg_test_path = format!("{}/{}/negative_test_cases", test_suites_path, suite_name);
+                    if std::path::Path::new(&neg_test_path).exists() {
+                        suites.push(suite_name);
+                    }
+                }
+            }
+        }
+    }
+    
+    suites.sort();
+    
     let mut failures_by_code: HashMap<String, Vec<(String, String)>> = HashMap::new();
     let mut total_passed = 0;
     let mut total_failed = 0;
 
-    for (suite, neg_dir) in suites {
-        let path = format!("test_suites/{}/{}", suite, neg_dir);
-        if !std::path::Path::new(&path).exists() {
-            continue;
-        }
+    for suite in &suites {
+        let path = format!("{}/{}/negative_test_cases", test_suites_path, suite);
 
         let files: Vec<_> = WalkDir::new(&path)
             .into_iter()
@@ -55,23 +64,10 @@ fn main() {
                     Ok(_) => {
                         // File was accepted but should have been rejected
                         total_failed += 1;
-                        
-                        // Try to read the file again to get error details
-                        if let Ok(file2) = File::open(&file_path) {
-                            let err_msg = match Model::from_reader(file2) {
-                                Err(e) => format!("{}", e),
-                                Ok(_) => "Unknown - should have failed".to_string(),
-                            };
-                            failures_by_code
-                                .entry(code.clone())
-                                .or_default()
-                                .push((format!("{}: {}", suite, file_name), err_msg));
-                        } else {
-                            failures_by_code
-                                .entry(code)
-                                .or_default()
-                                .push((format!("{}: {}", suite, file_name), "N/A".to_string()));
-                        }
+                        failures_by_code
+                            .entry(code.clone())
+                            .or_default()
+                            .push((format!("{}: {}", suite, file_name), "N/A".to_string()));
                     }
                     Err(_) => {
                         // File was correctly rejected
@@ -92,6 +88,7 @@ fn main() {
     println!("\n=== Detailed Failing Tests by Code ===\n");
     println!("Total Passed (correctly rejected): {}", total_passed);
     println!("Total Failed (incorrectly accepted): {}", total_failed);
+    println!("Total Tests: {}", total_passed + total_failed);
     println!(
         "Compliance: {:.1}%\n",
         (total_passed as f64 / (total_passed + total_failed) as f64) * 100.0
@@ -107,5 +104,10 @@ fn main() {
             println!("  ... and {} more", failures.len() - 5);
         }
         println!();
+    }
+    
+    println!("\n=== Test Suites Analyzed ===");
+    for suite in &suites {
+        println!("- {}", suite);
     }
 }
