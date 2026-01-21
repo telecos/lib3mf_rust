@@ -179,9 +179,10 @@ fn main() {
                 }
 
                 // Check vertex indices are in range
-                if tri.v1 >= mesh.vertices.len()
-                    || tri.v2 >= mesh.vertices.len()
-                    || tri.v3 >= mesh.vertices.len()
+                let num_vertices = mesh.vertices.len();
+                if tri.v1 >= num_vertices
+                    || tri.v2 >= num_vertices
+                    || tri.v3 >= num_vertices
                 {
                     errors.push(format!(
                         "Object {} triangle {} has out-of-range vertex index",
