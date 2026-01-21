@@ -519,6 +519,10 @@ fn write_object<W: IoWrite>(writer: &mut Writer<W>, object: &Object) -> Result<(
         elem.push_attribute(("pindex", pindex.to_string().as_str()));
     }
 
+    if let Some(basematerialid) = object.basematerialid {
+        elem.push_attribute(("basematerialid", basematerialid.to_string().as_str()));
+    }
+
     // Production extension attributes
     if let Some(ref production) = object.production {
         if let Some(ref uuid) = production.uuid {
@@ -865,5 +869,38 @@ mod tests {
         assert!(xml.contains("<vertices>"));
         assert!(xml.contains("<triangles>"));
         assert!(xml.contains("v1=\"0\" v2=\"1\" v3=\"2\""));
+    }
+
+    #[test]
+    fn test_write_object_with_basematerialid() {
+        let mut model = Model::new();
+
+        // Create a base material group
+        let mut base_group = BaseMaterialGroup::new(5);
+        base_group.materials.push(BaseMaterial::new(
+            "Red Plastic".to_string(),
+            (255, 0, 0, 255),
+        ));
+        model.resources.base_material_groups.push(base_group);
+
+        // Create object with basematerialid
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.basematerialid = Some(5);
+        object.mesh = Some(mesh);
+
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        let mut buffer = Vec::new();
+        write_model_xml(&model, &mut buffer).unwrap();
+
+        let xml = String::from_utf8(buffer).unwrap();
+        assert!(xml.contains("basematerialid=\"5\""));
     }
 }
