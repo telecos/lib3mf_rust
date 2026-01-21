@@ -30,3 +30,6 @@ target
 
 # Official 3MF test suites (clone separately)
 test_suites/
+
+# Generated 3MF files from examples
+*.3mf

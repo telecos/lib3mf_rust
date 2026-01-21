@@ -1,12 +1,12 @@
 # lib3mf_rust
 
-A pure Rust implementation for parsing 3MF (3D Manufacturing Format) files with **no unsafe code**.
+A pure Rust implementation for reading and writing 3MF (3D Manufacturing Format) files with **no unsafe code**.
 
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
 ## Overview
 
-This library provides a pure Rust implementation for reading and parsing 3MF files, which are ZIP-based containers following the Open Packaging Conventions (OPC) standard and containing XML-based 3D model data.
+This library provides a pure Rust implementation for reading and writing 3MF files, which are ZIP-based containers following the Open Packaging Conventions (OPC) standard and containing XML-based 3D model data.
 
 The 3MF format is the modern standard for 3D printing, supporting rich model information including:
 - 3D mesh geometry (vertices and triangles)
@@ -20,10 +20,11 @@ The 3MF format is the modern standard for 3D printing, supporting rich model inf
 - ✅ **Pure Rust implementation** - No C/C++ dependencies
 - ✅ **No unsafe code** - Enforced with `#![forbid(unsafe_code)]`
 - ✅ **Extension support** - Configurable support for 3MF extensions with validation
+- ✅ **Read and write** 3MF files with full round-trip support
 - ✅ Parse 3MF file structure (ZIP/OPC container)
-- ✅ Read 3D model data including meshes, vertices, and triangles
+- ✅ Read and write 3D model data including meshes, vertices, and triangles
 - ✅ Support for materials and colors
-- ✅ Metadata extraction
+- ✅ Metadata extraction and creation
 - ✅ Build item specifications
 - ✅ Comprehensive error handling
 
@@ -38,7 +39,7 @@ lib3mf = "0.1"
 
 ## Usage
 
-### Basic Example
+### Reading 3MF Files
 
 ```rust
 use lib3mf::Model;
@@ -61,6 +62,118 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+```
+
+### Writing 3MF Files
+
+```rust
+use lib3mf::{Model, Object, Mesh, Vertex, Triangle, BuildItem};
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a new model
+    let mut model = Model::new();
+    model.metadata.insert("Title".to_string(), "My 3D Model".to_string());
+    model.metadata.insert("Designer".to_string(), "Rust App".to_string());
+
+    // Create a simple triangle mesh (a pyramid)
+    let mut mesh = Mesh::new();
+    
+    // Add vertices
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));    // Base vertices
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(10.0, 10.0, 0.0));
+    mesh.vertices.push(Vertex::new(0.0, 10.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0));   // Apex
+    
+    // Add triangles (faces)
+    mesh.triangles.push(Triangle::new(0, 1, 4));  // Side faces
+    mesh.triangles.push(Triangle::new(1, 2, 4));
+    mesh.triangles.push(Triangle::new(2, 3, 4));
+    mesh.triangles.push(Triangle::new(3, 0, 4));
+    mesh.triangles.push(Triangle::new(0, 2, 1));  // Base
+    mesh.triangles.push(Triangle::new(0, 3, 2));
+
+    // Create an object with the mesh
+    let mut obj = Object::new(1);
+    obj.name = Some("Pyramid".to_string());
+    obj.mesh = Some(mesh);
+    model.resources.objects.push(obj);
+
+    // Add to build (specify what to manufacture)
+    model.build.items.push(BuildItem::new(1));
+
+    // Write to file
+    let file = File::create("pyramid.3mf")?;
+    model.to_writer(file)?;
+    
+    println!("3MF file created successfully!");
+    Ok(())
+}
+```
+
+### Working with Materials and Colors
+
+```rust
+use lib3mf::{Model, Object, Mesh, Vertex, Triangle, BuildItem, Material, Extension};
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut model = Model::new();
+    
+    // Add material extension support
+    model.required_extensions.push(Extension::Material);
+    
+    // Add colored materials (R, G, B, A)
+    model.resources.materials.push(Material::with_color(1, 255, 0, 0, 255));  // Red
+    model.resources.materials.push(Material::with_color(2, 0, 255, 0, 255));  // Green
+    model.resources.materials.push(Material::with_color(3, 0, 0, 255, 255));  // Blue
+    
+    // Create a mesh with colored triangles
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0));
+    
+    // Create triangles with different colors
+    mesh.triangles.push(Triangle::with_material(0, 1, 2, 1));  // Red triangle
+    mesh.triangles.push(Triangle::with_material(0, 1, 3, 2));  // Green triangle
+    mesh.triangles.push(Triangle::with_material(1, 2, 3, 3));  // Blue triangle
+    
+    let mut obj = Object::new(1);
+    obj.mesh = Some(mesh);
+    model.resources.objects.push(obj);
+    
+    model.build.items.push(BuildItem::new(1));
+    
+    let file = File::create("colored.3mf")?;
+    model.to_writer(file)?;
+    
+    Ok(())
+}
+```
+
+### Round-Trip Processing
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Read existing file
+    let input = File::open("input.3mf")?;
+    let mut model = Model::from_reader(input)?;
+    
+    // Modify the model
+    model.metadata.insert("Modified".to_string(), "true".to_string());
+    
+    // Write modified model
+    let output = File::create("output.3mf")?;
+    model.to_writer(output)?;
+    
     Ok(())
 }
 ```
@@ -105,10 +218,14 @@ The parser supports the following extensions:
 
 ### Running Examples
 
-The repository includes a complete example demonstrating parsing:
+The repository includes complete examples demonstrating both reading and writing:
 
 ```bash
+# Parse an existing 3MF file
 cargo run --example parse_3mf
+
+# Create and write 3MF files
+cargo run --example write_3mf
 ```
 
 ## Architecture
