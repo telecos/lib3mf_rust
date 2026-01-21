@@ -249,6 +249,34 @@ impl Default for Mesh {
     }
 }
 
+/// A component that references another object to create assemblies
+#[derive(Debug, Clone, PartialEq)]
+pub struct Component {
+    /// Reference to object ID
+    pub objectid: usize,
+    /// Optional transformation matrix (4x3 affine transformation stored as 12 values)
+    /// Represents a 3x4 matrix in row-major order for affine transformations
+    pub transform: Option<[f64; 12]>,
+}
+
+impl Component {
+    /// Create a new component
+    pub fn new(objectid: usize) -> Self {
+        Self {
+            objectid,
+            transform: None,
+        }
+    }
+
+    /// Create a new component with transformation
+    pub fn with_transform(objectid: usize, transform: [f64; 12]) -> Self {
+        Self {
+            objectid,
+            transform: Some(transform),
+        }
+    }
+}
+
 /// Material definition with color information
 #[derive(Debug, Clone, PartialEq)]
 pub struct Material {
@@ -314,6 +342,8 @@ pub struct Object {
     pub pid: Option<usize>,
     /// Optional material index (property index) - used with pid to select from color groups
     pub pindex: Option<usize>,
+    /// Components that reference other objects (for assemblies)
+    pub components: Vec<Component>,
 }
 
 /// Type of 3D object
@@ -341,6 +371,7 @@ impl Object {
             mesh: None,
             pid: None,
             pindex: None,
+            components: Vec::new(),
         }
     }
 }

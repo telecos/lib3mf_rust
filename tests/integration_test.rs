@@ -213,3 +213,166 @@ fn test_empty_model() {
     assert_eq!(model.resources.objects.len(), 0);
     assert_eq!(model.build.items.len(), 0);
 }
+
+#[test]
+fn test_parse_3mf_with_components() {
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    let mut zip = ZipWriter::new(cursor);
+
+    let options = SimpleFileOptions::default();
+
+    // Add [Content_Types].xml
+    let content_types = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"##;
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels
+    let rels = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"##;
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
+
+    // Add 3D/3dmodel.model with components
+    let model = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0.0" y="0.0" z="0.0"/>
+          <vertex x="10.0" y="0.0" z="0.0"/>
+          <vertex x="5.0" y="10.0" z="0.0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2" type="model">
+      <components>
+        <component objectid="1"/>
+        <component objectid="1" transform="1 0 0 0 1 0 0 0 1 10 0 0"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"##;
+
+    zip.start_file("3D/3dmodel.model", options).unwrap();
+    zip.write_all(model.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let cursor = Cursor::new(buffer);
+    let parsed_model = Model::from_reader(cursor).unwrap();
+
+    assert_eq!(parsed_model.resources.objects.len(), 2);
+
+    // Check object 1 (base mesh)
+    let obj1 = &parsed_model.resources.objects[0];
+    assert_eq!(obj1.id, 1);
+    assert_eq!(obj1.components.len(), 0);
+    assert!(obj1.mesh.is_some());
+
+    // Check object 2 (assembly with components)
+    let obj2 = &parsed_model.resources.objects[1];
+    assert_eq!(obj2.id, 2);
+    assert_eq!(obj2.components.len(), 2);
+    assert!(obj2.mesh.is_none());
+
+    // Check first component (no transform)
+    let comp1 = &obj2.components[0];
+    assert_eq!(comp1.objectid, 1);
+    assert!(comp1.transform.is_none());
+
+    // Check second component (with transform)
+    let comp2 = &obj2.components[1];
+    assert_eq!(comp2.objectid, 1);
+    assert!(comp2.transform.is_some());
+    let transform = comp2.transform.unwrap();
+    assert_eq!(transform[0], 1.0);
+    assert_eq!(transform[9], 10.0);
+}
+
+#[test]
+fn test_parse_3mf_with_component_hierarchy() {
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    let mut zip = ZipWriter::new(cursor);
+
+    let options = SimpleFileOptions::default();
+
+    // Add [Content_Types].xml
+    let content_types = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"##;
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels
+    let rels = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"##;
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
+
+    // Create a hierarchy: obj1 (mesh) <- obj2 (component) <- obj3 (component)
+    let model = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0.0" y="0.0" z="0.0"/>
+          <vertex x="1.0" y="0.0" z="0.0"/>
+          <vertex x="0.5" y="1.0" z="0.0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2" type="model">
+      <components>
+        <component objectid="1"/>
+      </components>
+    </object>
+    <object id="3" type="model">
+      <components>
+        <component objectid="2"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="3"/>
+  </build>
+</model>"##;
+
+    zip.start_file("3D/3dmodel.model", options).unwrap();
+    zip.write_all(model.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let cursor = Cursor::new(buffer);
+    let parsed_model = Model::from_reader(cursor).unwrap();
+
+    assert_eq!(parsed_model.resources.objects.len(), 3);
+    assert_eq!(parsed_model.resources.objects[1].components.len(), 1);
+    assert_eq!(parsed_model.resources.objects[2].components.len(), 1);
+}

@@ -64,6 +64,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut material_index: usize = 0;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
+    let mut in_components = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -256,6 +257,15 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                     }
+                    "components" if in_resources && current_object.is_some() => {
+                        in_components = true;
+                    }
+                    "component" if in_components => {
+                        if let Some(ref mut obj) = current_object {
+                            let component = parse_component(&reader, e)?;
+                            obj.components.push(component);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -292,6 +302,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             model.resources.color_groups.push(colorgroup);
                         }
                         in_colorgroup = false;
+                    }
+                    "components" => {
+                        in_components = false;
                     }
                     _ => {}
                 }
@@ -507,38 +520,68 @@ fn parse_build_item<R: std::io::BufRead>(
     let mut item = BuildItem::new(objectid);
 
     if let Some(transform_str) = attrs.get("transform") {
-        // Parse transformation matrix (12 values)
-        let values: Result<Vec<f64>> = transform_str
-            .split_whitespace()
-            .map(|s| s.parse::<f64>().map_err(Error::from))
-            .collect();
-
-        let values = values?;
-
-        // Transform must have exactly 12 values
-        if values.len() != 12 {
-            return Err(Error::InvalidXml(format!(
-                "Transform matrix must have exactly 12 values (got {})",
-                values.len()
-            )));
-        }
-
-        // Validate all values are finite (no NaN or Infinity)
-        for (idx, &val) in values.iter().enumerate() {
-            if !val.is_finite() {
-                return Err(Error::InvalidXml(format!(
-                    "Transform matrix value at index {} must be finite (got {})",
-                    idx, val
-                )));
-            }
-        }
-
-        let mut transform = [0.0; 12];
-        transform.copy_from_slice(&values);
-        item.transform = Some(transform);
+        item.transform = Some(parse_transform(transform_str)?);
     }
 
     Ok(item)
+}
+
+/// Parse component element attributes
+fn parse_component<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<Component> {
+    let attrs = parse_attributes(reader, e)?;
+
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec: objectid, transform
+    validate_attributes(&attrs, &["objectid", "transform"], "component")?;
+
+    let objectid = attrs
+        .get("objectid")
+        .ok_or_else(|| Error::InvalidXml("Component missing objectid attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let mut component = Component::new(objectid);
+
+    if let Some(transform_str) = attrs.get("transform") {
+        component.transform = Some(parse_transform(transform_str)?);
+    }
+
+    Ok(component)
+}
+
+/// Parse transformation matrix (12 values representing a 4x3 affine transformation)
+fn parse_transform(transform_str: &str) -> Result<[f64; 12]> {
+    // Parse transformation matrix (12 values)
+    let values: Result<Vec<f64>> = transform_str
+        .split_whitespace()
+        .map(|s| s.parse::<f64>().map_err(Error::from))
+        .collect();
+
+    let values = values?;
+
+    // Transform must have exactly 12 values
+    if values.len() != 12 {
+        return Err(Error::InvalidXml(format!(
+            "Transform matrix must have exactly 12 values (got {})",
+            values.len()
+        )));
+    }
+
+    // Validate all values are finite (no NaN or Infinity)
+    for (idx, &val) in values.iter().enumerate() {
+        if !val.is_finite() {
+            return Err(Error::InvalidXml(format!(
+                "Transform matrix value at index {} must be finite (got {})",
+                idx, val
+            )));
+        }
+    }
+
+    let mut transform = [0.0; 12];
+    transform.copy_from_slice(&values);
+    Ok(transform)
 }
 
 /// Parse material (base) element attributes

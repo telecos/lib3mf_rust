@@ -21,12 +21,15 @@ use std::collections::HashSet;
 /// - Build item object references
 /// - Material and color group references
 /// - Mesh requirements (must have vertices)
+/// - Component object references
+/// - Circular component references
 pub fn validate_model(model: &Model) -> Result<()> {
     validate_required_structure(model)?;
     validate_object_ids(model)?;
     validate_mesh_geometry(model)?;
     validate_build_references(model)?;
     validate_material_references(model)?;
+    validate_component_references(model)?;
     Ok(())
 }
 
@@ -299,6 +302,80 @@ fn validate_material_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Validate component references and detect circular references
+fn validate_component_references(model: &Model) -> Result<()> {
+    // Collect all valid object IDs
+    let valid_object_ids: HashSet<usize> =
+        model.resources.objects.iter().map(|obj| obj.id).collect();
+
+    // Validate that all component objectid references exist
+    for object in &model.resources.objects {
+        for component in &object.components {
+            if !valid_object_ids.contains(&component.objectid) {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Component references non-existent object ID: {}",
+                    object.id, component.objectid
+                )));
+            }
+
+            // Component cannot reference itself
+            if component.objectid == object.id {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Component references itself (self-reference not allowed)",
+                    object.id
+                )));
+            }
+        }
+
+        // Check for circular references using depth-first search
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        if has_circular_reference(object.id, model, &mut visited, &mut rec_stack)? {
+            return Err(Error::InvalidModel(format!(
+                "Object {}: Circular component reference detected",
+                object.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Check for circular references using depth-first search
+fn has_circular_reference(
+    object_id: usize,
+    model: &Model,
+    visited: &mut HashSet<usize>,
+    rec_stack: &mut HashSet<usize>,
+) -> Result<bool> {
+    // Mark the current node as visited and part of recursion stack
+    visited.insert(object_id);
+    rec_stack.insert(object_id);
+
+    // Find the object
+    if let Some(object) = model.resources.objects.iter().find(|obj| obj.id == object_id) {
+        // Check all components of this object
+        for component in &object.components {
+            let component_id = component.objectid;
+
+            // If this node is not visited, recursively check it
+            if !visited.contains(&component_id) {
+                if has_circular_reference(component_id, model, visited, rec_stack)? {
+                    return Ok(true);
+                }
+            }
+            // If the node is in the recursion stack, we found a cycle
+            else if rec_stack.contains(&component_id) {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Remove the node from recursion stack
+    rec_stack.remove(&object_id);
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,5 +506,147 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("has triangles but no vertices"));
+    }
+
+    #[test]
+    fn test_validate_component_reference() {
+        use crate::model::{Component};
+
+        let mut model = Model::new();
+        
+        // Create two objects
+        let mut object1 = Object::new(1);
+        let object2 = Object::new(2);
+        
+        // Object 1 has a component that references object 2
+        object1.components.push(Component::new(2));
+        
+        model.resources.objects.push(object1);
+        model.resources.objects.push(object2);
+        model.build.items.push(BuildItem::new(1));
+
+        let result = validate_model(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_component_invalid_reference() {
+        use crate::model::{Component};
+
+        let mut model = Model::new();
+        
+        let mut object = Object::new(1);
+        // Component references non-existent object 99
+        object.components.push(Component::new(99));
+        
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        let result = validate_model(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("non-existent object ID"));
+    }
+
+    #[test]
+    fn test_validate_component_self_reference() {
+        use crate::model::{Component};
+
+        let mut model = Model::new();
+        
+        let mut object = Object::new(1);
+        // Component references itself
+        object.components.push(Component::new(1));
+        
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        let result = validate_model(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("references itself"));
+    }
+
+    #[test]
+    fn test_validate_component_circular_reference() {
+        use crate::model::{Component};
+
+        let mut model = Model::new();
+        
+        // Create a circular reference: 1 -> 2 -> 3 -> 1
+        let mut object1 = Object::new(1);
+        object1.components.push(Component::new(2));
+        
+        let mut object2 = Object::new(2);
+        object2.components.push(Component::new(3));
+        
+        let mut object3 = Object::new(3);
+        object3.components.push(Component::new(1));
+        
+        model.resources.objects.push(object1);
+        model.resources.objects.push(object2);
+        model.resources.objects.push(object3);
+        model.build.items.push(BuildItem::new(1));
+
+        let result = validate_model(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Circular component reference"));
+    }
+
+    #[test]
+    fn test_validate_component_complex_hierarchy() {
+        use crate::model::{Component};
+
+        let mut model = Model::new();
+        
+        // Create a valid hierarchy: 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4
+        let mut object1 = Object::new(1);
+        object1.components.push(Component::new(2));
+        object1.components.push(Component::new(3));
+        
+        let mut object2 = Object::new(2);
+        object2.components.push(Component::new(4));
+        
+        let mut object3 = Object::new(3);
+        object3.components.push(Component::new(4));
+        
+        let object4 = Object::new(4);
+        
+        model.resources.objects.push(object1);
+        model.resources.objects.push(object2);
+        model.resources.objects.push(object3);
+        model.resources.objects.push(object4);
+        model.build.items.push(BuildItem::new(1));
+
+        let result = validate_model(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_component_with_transform() {
+        use crate::model::{Component};
+
+        let mut model = Model::new();
+        
+        let mut object1 = Object::new(1);
+        let object2 = Object::new(2);
+        
+        // Create component with transformation matrix
+        let transform = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0];
+        object1.components.push(Component::with_transform(2, transform));
+        
+        model.resources.objects.push(object1);
+        model.resources.objects.push(object2);
+        model.build.items.push(BuildItem::new(1));
+
+        let result = validate_model(&model);
+        assert!(result.is_ok());
     }
 }
