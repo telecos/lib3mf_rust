@@ -31,18 +31,22 @@ fn verify_circular_path_in_error_message() {
 
     let result = parse_model_xml(xml);
     assert!(result.is_err(), "Should detect circular reference");
-    
+
     let err = result.unwrap_err();
     let err_msg = err.to_string();
-    
+
     println!("\nActual error message:\n{}\n", err_msg);
-    
+
     // Verify the error message format matches issue requirements
-    assert!(err_msg.contains("Circular component reference"), 
-            "Error should mention circular component reference");
-    assert!(err_msg.contains("→"), 
-            "Error should use arrow notation to show path");
-    
+    assert!(
+        err_msg.contains("Circular component reference"),
+        "Error should mention circular component reference"
+    );
+    assert!(
+        err_msg.contains("→"),
+        "Error should use arrow notation to show path"
+    );
+
     // Verify the path is shown (exact order may vary based on DFS traversal)
     assert!(err_msg.contains("10"), "Should contain object ID 10");
     assert!(err_msg.contains("20"), "Should contain object ID 20");
@@ -69,14 +73,14 @@ fn verify_all_validation_cases() {
   </resources>
   <build><item objectid="2"/></build>
 </model>"#;
-    
+
     let result = parse_model_xml(valid_xml);
     assert!(result.is_ok(), "Valid component reference should succeed");
     let model = result.unwrap();
     assert_eq!(model.resources.objects[1].components.len(), 1);
     assert_eq!(model.resources.objects[1].components[0].objectid, 1);
     assert!(model.resources.objects[1].components[0].transform.is_some());
-    
+
     println!("✅ Valid component reference test passed");
     println!("✅ Component with transformation matrix test passed");
 }
