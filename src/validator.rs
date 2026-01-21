@@ -20,6 +20,7 @@ use std::collections::HashSet;
 /// - Triangle vertex bounds and degeneracy checks
 /// - Build item object references
 /// - Material, color group, and base material references
+/// - Component references and circular dependency detection
 /// - Mesh requirements (must have vertices)
 pub fn validate_model(model: &Model) -> Result<()> {
     validate_required_structure(model)?;
@@ -28,6 +29,7 @@ pub fn validate_model(model: &Model) -> Result<()> {
     validate_build_references(model)?;
     validate_material_references(model)?;
     validate_boolean_operations(model)?;
+    validate_component_references(model)?;
     Ok(())
 }
 
@@ -423,6 +425,83 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Validate component references
+///
+/// Per 3MF Core spec:
+/// - Component objectid must reference an existing object in resources
+/// - Components must not create circular dependencies (no cycles in the component graph)
+fn validate_component_references(model: &Model) -> Result<()> {
+    // Build a set of valid object IDs for quick lookup
+    let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
+
+    // Validate that all component object references exist
+    for object in &model.resources.objects {
+        for component in &object.components {
+            if !valid_object_ids.contains(&component.objectid) {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Component references non-existent object ID {}",
+                    object.id, component.objectid
+                )));
+            }
+        }
+    }
+
+    // Detect circular component references using depth-first search
+    // We need to detect if following component references creates a cycle
+    for object in &model.resources.objects {
+        if !object.components.is_empty() {
+            let mut visited = HashSet::new();
+            let mut recursion_stack = HashSet::new();
+            if has_circular_dependency(object.id, model, &mut visited, &mut recursion_stack)? {
+                return Err(Error::InvalidModel(format!(
+                    "Circular component reference detected starting from object {}",
+                    object.id
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Recursive helper function to detect circular dependencies in component graph
+///
+/// Uses depth-first search with a recursion stack to detect cycles.
+/// Returns true if a cycle is detected.
+fn has_circular_dependency(
+    object_id: usize,
+    model: &Model,
+    visited: &mut HashSet<usize>,
+    recursion_stack: &mut HashSet<usize>,
+) -> Result<bool> {
+    // If this object is already in the recursion stack, we have a cycle
+    if recursion_stack.contains(&object_id) {
+        return Ok(true);
+    }
+
+    // If we've already fully processed this object, no cycle here
+    if visited.contains(&object_id) {
+        return Ok(false);
+    }
+
+    // Mark as being processed
+    visited.insert(object_id);
+    recursion_stack.insert(object_id);
+
+    // Find the object and check its components
+    if let Some(object) = model.resources.objects.iter().find(|o| o.id == object_id) {
+        for component in &object.components {
+            if has_circular_dependency(component.objectid, model, visited, recursion_stack)? {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Done processing this object
+    recursion_stack.remove(&object_id);
+    Ok(false)
 }
 
 #[cfg(test)]
