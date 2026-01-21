@@ -834,13 +834,11 @@ fn validate_production_extension(model: &Model) -> Result<()> {
         has_production_attrs = true;
     }
 
-    // Validate that production attributes are only used when production extension is declared
-    if has_production_attrs && !has_production {
-        return Err(Error::InvalidModel(
-            "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
-                .to_string(),
-        ));
-    }
+    // Note: We don't validate that production attributes require the production extension
+    // to be in requiredextensions, because per the 3MF spec, extensions can be declared
+    // in namespaces (xmlns:p) without being in requiredextensions - they are then optional
+    // extensions. The parser already validates that the production namespace is declared
+    // when production attributes are used.
 
     Ok(())
 }

@@ -72,11 +72,12 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
         ),
 
         // Suite 10: Boolean Operations
-        // Some test files also use Production and BeamLattice extensions
+        // Some test files also use Production, BeamLattice, and Material extensions
         "suite10_boolean" => ParserConfig::new()
             .with_extension(Extension::BooleanOperations)
             .with_extension(Extension::Production)
-            .with_extension(Extension::BeamLattice),
+            .with_extension(Extension::BeamLattice)
+            .with_extension(Extension::Material),
 
         // Suite 11: Displacement
         // Register both the built-in 2022/07 namespace and the newer 2023/10 namespace
