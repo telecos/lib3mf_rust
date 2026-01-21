@@ -129,6 +129,8 @@ This implementation currently supports:
   - Mesh geometry (vertices, triangles)
   - Object definitions
   - Build items with transformations
+  - Components and assemblies
+  - Component reference validation (including circular reference detection)
   - Basic materials and colors
 
 - **Materials Extension**
@@ -175,7 +177,6 @@ Potential future additions could include:
 - Slice extension support (slice stacks and slice data)
 - Beam lattice extension support (beam definitions and properties)
 - Advanced material properties (textures, composite materials)
-- Components and assemblies
 - Custom extensions
 
 ## Testing
