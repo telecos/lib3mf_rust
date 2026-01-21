@@ -42,10 +42,13 @@ fn triangle_strategy(max_vertex_index: usize) -> impl Strategy<Value = Triangle>
         prop::option::of(0usize..100),
         prop::option::of(0usize..100),
     )
-        .prop_filter("Triangle must not be degenerate", |(v1, v2, v3, _, _, _, _, _)| {
-            // Ensure all three vertices are different to avoid degenerate triangles
-            v1 != v2 && v2 != v3 && v1 != v3
-        })
+        .prop_filter(
+            "Triangle must not be degenerate",
+            |(v1, v2, v3, _, _, _, _, _)| {
+                // Ensure all three vertices are different to avoid degenerate triangles
+                v1 != v2 && v2 != v3 && v1 != v3
+            },
+        )
         .prop_map(|(v1, v2, v3, pid, pindex, p1, p2, p3)| {
             let mut tri = Triangle::new(v1, v2, v3);
             tri.pid = pid;
@@ -272,10 +275,7 @@ fn generate_model_xml(model: &Model) -> String {
             // Add vertices
             xml.push_str("<vertices>");
             for v in &mesh.vertices {
-                xml.push_str(&format!(
-                    r#"<vertex x="{}" y="{}" z="{}"/>"#,
-                    v.x, v.y, v.z
-                ));
+                xml.push_str(&format!(r#"<vertex x="{}" y="{}" z="{}"/>"#, v.x, v.y, v.z));
             }
             xml.push_str("</vertices>");
 
@@ -452,7 +452,7 @@ proptest! {
                 // (non-manifold geometry, degenerate triangles, etc.)
                 let error_msg = format!("{:?}", e);
                 assert!(
-                    error_msg.contains("InvalidModel") || 
+                    error_msg.contains("InvalidModel") ||
                     error_msg.contains("degenerate") ||
                     error_msg.contains("Non-manifold"),
                     "Unexpected error parsing generated 3MF: {:?}", e

@@ -738,4 +738,138 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("out of bounds"));
     }
+
+    #[test]
+    fn test_validate_component_reference_invalid() {
+        use crate::model::Component;
+
+        let mut model = Model::new();
+
+        // Create object 1 with a component referencing non-existent object 99
+        let mut object1 = Object::new(1);
+        object1.components.push(Component::new(99));
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object1.mesh = Some(mesh);
+
+        model.resources.objects.push(object1);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation
+        let result = validate_component_references(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("non-existent object"));
+    }
+
+    #[test]
+    fn test_validate_component_circular_dependency() {
+        use crate::model::Component;
+
+        let mut model = Model::new();
+
+        // Create object 1 with component referencing object 2
+        let mut object1 = Object::new(1);
+        object1.components.push(Component::new(2));
+
+        let mut mesh1 = Mesh::new();
+        mesh1.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh1.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh1.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh1.triangles.push(Triangle::new(0, 1, 2));
+        object1.mesh = Some(mesh1);
+
+        // Create object 2 with component referencing object 1 (circular!)
+        let mut object2 = Object::new(2);
+        object2.components.push(Component::new(1));
+
+        let mut mesh2 = Mesh::new();
+        mesh2.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh2.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh2.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh2.triangles.push(Triangle::new(0, 1, 2));
+        object2.mesh = Some(mesh2);
+
+        model.resources.objects.push(object1);
+        model.resources.objects.push(object2);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation
+        let result = validate_component_references(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Circular component reference"));
+    }
+
+    #[test]
+    fn test_validate_component_self_reference() {
+        use crate::model::Component;
+
+        let mut model = Model::new();
+
+        // Create object 1 with component referencing itself
+        let mut object1 = Object::new(1);
+        object1.components.push(Component::new(1));
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object1.mesh = Some(mesh);
+
+        model.resources.objects.push(object1);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (self-reference is a circular dependency)
+        let result = validate_component_references(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Circular component reference"));
+    }
+
+    #[test]
+    fn test_validate_component_valid() {
+        use crate::model::Component;
+
+        let mut model = Model::new();
+
+        // Create base object 2 (no components)
+        let mut object2 = Object::new(2);
+        let mut mesh2 = Mesh::new();
+        mesh2.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh2.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh2.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh2.triangles.push(Triangle::new(0, 1, 2));
+        object2.mesh = Some(mesh2);
+
+        // Create object 1 with component referencing object 2
+        let mut object1 = Object::new(1);
+        object1.components.push(Component::new(2));
+
+        let mut mesh1 = Mesh::new();
+        mesh1.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh1.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh1.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh1.triangles.push(Triangle::new(0, 1, 2));
+        object1.mesh = Some(mesh1);
+
+        model.resources.objects.push(object1);
+        model.resources.objects.push(object2);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation
+        let result = validate_component_references(&model);
+        assert!(result.is_ok());
+    }
 }

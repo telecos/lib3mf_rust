@@ -1,5 +1,5 @@
 //! Demonstrate advanced materials extension features
-//! 
+//!
 //! This example shows how to access advanced materials extension features
 //! including Texture2D, composite materials, and multi-properties.
 
@@ -34,36 +34,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn display_material_info(model: &Model) {
     println!("=== Material Resources Summary ===\n");
-    
+
     // Basic materials (already supported)
     println!("Basic Materials: {}", model.resources.materials.len());
     println!("Color Groups: {}", model.resources.color_groups.len());
-    println!("Base Material Groups: {}", model.resources.base_material_groups.len());
-    
+    println!(
+        "Base Material Groups: {}",
+        model.resources.base_material_groups.len()
+    );
+
     // Advanced materials (newly added)
     println!("\n=== Advanced Materials (New) ===\n");
-    println!("Texture2D Resources: {}", model.resources.texture2d_resources.len());
-    println!("Texture2D Groups: {}", model.resources.texture2d_groups.len());
-    println!("Composite Materials: {}", model.resources.composite_materials.len());
-    println!("Multi-Properties Groups: {}", model.resources.multi_properties.len());
-    
+    println!(
+        "Texture2D Resources: {}",
+        model.resources.texture2d_resources.len()
+    );
+    println!(
+        "Texture2D Groups: {}",
+        model.resources.texture2d_groups.len()
+    );
+    println!(
+        "Composite Materials: {}",
+        model.resources.composite_materials.len()
+    );
+    println!(
+        "Multi-Properties Groups: {}",
+        model.resources.multi_properties.len()
+    );
+
     // Display Texture2D details
     if !model.resources.texture2d_resources.is_empty() {
         println!("\n--- Texture2D Resources ---");
         for tex in &model.resources.texture2d_resources {
-            println!("  Texture ID {}: path={}, contenttype={}", 
-                tex.id, tex.path, tex.contenttype);
-            println!("    Tile styles: u={:?}, v={:?}", tex.tilestyleu, tex.tilestylev);
+            println!(
+                "  Texture ID {}: path={}, contenttype={}",
+                tex.id, tex.path, tex.contenttype
+            );
+            println!(
+                "    Tile styles: u={:?}, v={:?}",
+                tex.tilestyleu, tex.tilestylev
+            );
             println!("    Filter: {:?}", tex.filter);
         }
     }
-    
+
     // Display Texture2DGroup details
     if !model.resources.texture2d_groups.is_empty() {
         println!("\n--- Texture2D Groups ---");
         for group in &model.resources.texture2d_groups {
-            println!("  Group ID {}: references texture={}, {} coordinates", 
-                group.id, group.texid, group.tex2coords.len());
+            println!(
+                "  Group ID {}: references texture={}, {} coordinates",
+                group.id,
+                group.texid,
+                group.tex2coords.len()
+            );
             if !group.tex2coords.is_empty() {
                 println!("    First few coordinates:");
                 for (i, coord) in group.tex2coords.iter().take(3).enumerate() {
@@ -72,13 +96,17 @@ fn display_material_info(model: &Model) {
             }
         }
     }
-    
+
     // Display Composite Materials
     if !model.resources.composite_materials.is_empty() {
         println!("\n--- Composite Materials ---");
         for comp in &model.resources.composite_materials {
-            println!("  Group ID {}: base material group={}, {} material indices", 
-                comp.id, comp.matid, comp.matindices.len());
+            println!(
+                "  Group ID {}: base material group={}, {} material indices",
+                comp.id,
+                comp.matid,
+                comp.matindices.len()
+            );
             println!("    Material indices: {:?}", comp.matindices);
             println!("    {} composite definitions", comp.composites.len());
             for (i, composite) in comp.composites.iter().take(3).enumerate() {
@@ -86,13 +114,16 @@ fn display_material_info(model: &Model) {
             }
         }
     }
-    
+
     // Display Multi-Properties
     if !model.resources.multi_properties.is_empty() {
         println!("\n--- Multi-Properties Groups ---");
         for multi in &model.resources.multi_properties {
-            println!("  Group ID {}: {} property groups layered", 
-                multi.id, multi.pids.len());
+            println!(
+                "  Group ID {}: {} property groups layered",
+                multi.id,
+                multi.pids.len()
+            );
             println!("    Property IDs: {:?}", multi.pids);
             println!("    Blend methods: {:?}", multi.blendmethods);
             println!("    {} multi definitions", multi.multis.len());
@@ -105,7 +136,7 @@ fn display_material_info(model: &Model) {
 
 fn show_api_structure() {
     println!("=== API Structure ===\n");
-    
+
     println!("After parsing a 3MF file, you can access advanced materials via:");
     println!();
     println!("  let model = Model::from_reader(file)?;");

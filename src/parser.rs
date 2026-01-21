@@ -468,18 +468,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 )
                             })?
                             .parse::<usize>()?;
-                        let matindices_str = attrs
-                            .get("matindices")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "compositematerials missing matindices attribute".to_string(),
-                                )
-                            })?;
+                        let matindices_str = attrs.get("matindices").ok_or_else(|| {
+                            Error::InvalidXml(
+                                "compositematerials missing matindices attribute".to_string(),
+                            )
+                        })?;
                         let matindices: Vec<usize> = matindices_str
                             .split_whitespace()
                             .filter_map(|s| s.parse::<usize>().ok())
                             .collect();
-                        
+
                         // Validate we parsed at least one index
                         if matindices.is_empty() {
                             return Err(Error::InvalidXml(
@@ -487,23 +485,21 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     .to_string(),
                             ));
                         }
-                        
+
                         current_compositematerials =
                             Some(CompositeMaterials::new(id, matid, matindices));
                     }
                     "composite" if in_compositematerials => {
                         if let Some(ref mut group) = current_compositematerials {
                             let attrs = parse_attributes(&reader, e)?;
-                            let values_str = attrs
-                                .get("values")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("composite missing values attribute".to_string())
-                                })?;
+                            let values_str = attrs.get("values").ok_or_else(|| {
+                                Error::InvalidXml("composite missing values attribute".to_string())
+                            })?;
                             let values: Vec<f32> = values_str
                                 .split_whitespace()
                                 .filter_map(|s| s.parse::<f32>().ok())
                                 .collect();
-                            
+
                             // Validate we parsed at least one value
                             if values.is_empty() {
                                 return Err(Error::InvalidXml(
@@ -511,7 +507,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                         .to_string(),
                                 ));
                             }
-                            
+
                             group.composites.push(Composite::new(values));
                         }
                     }
@@ -521,21 +517,19 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
-                                Error::InvalidXml("multiproperties missing id attribute".to_string())
+                                Error::InvalidXml(
+                                    "multiproperties missing id attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
-                        let pids_str = attrs
-                            .get("pids")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "multiproperties missing pids attribute".to_string(),
-                                )
-                            })?;
+                        let pids_str = attrs.get("pids").ok_or_else(|| {
+                            Error::InvalidXml("multiproperties missing pids attribute".to_string())
+                        })?;
                         let pids: Vec<usize> = pids_str
                             .split_whitespace()
                             .filter_map(|s| s.parse::<usize>().ok())
                             .collect();
-                        
+
                         // Validate we parsed at least one property ID
                         if pids.is_empty() {
                             return Err(Error::InvalidXml(
@@ -543,9 +537,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     .to_string(),
                             ));
                         }
-                        
+
                         let mut multi = MultiProperties::new(id, pids);
-                        
+
                         // Parse optional blendmethods
                         if let Some(blend_str) = attrs.get("blendmethods") {
                             multi.blendmethods = blend_str
@@ -557,22 +551,20 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 })
                                 .collect();
                         }
-                        
+
                         current_multiproperties = Some(multi);
                     }
                     "multi" if in_multiproperties => {
                         if let Some(ref mut group) = current_multiproperties {
                             let attrs = parse_attributes(&reader, e)?;
-                            let pindices_str = attrs
-                                .get("pindices")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("multi missing pindices attribute".to_string())
-                                })?;
+                            let pindices_str = attrs.get("pindices").ok_or_else(|| {
+                                Error::InvalidXml("multi missing pindices attribute".to_string())
+                            })?;
                             let pindices: Vec<usize> = pindices_str
                                 .split_whitespace()
                                 .filter_map(|s| s.parse::<usize>().ok())
                                 .collect();
-                            
+
                             // Note: Empty pindices is allowed per spec - defaults to 0
                             // But if there's text that all failed to parse, that's an error
                             if !pindices_str.trim().is_empty() && pindices.is_empty() {
@@ -581,7 +573,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                         .to_string(),
                                 ));
                             }
-                            
+
                             group.multis.push(Multi::new(pindices));
                         }
                     }
@@ -1722,5 +1714,145 @@ mod tests {
         );
         assert_eq!(model.resources.objects.len(), 1);
         assert_eq!(model.build.items.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_component_simple() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <components>
+        <component objectid="1"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.objects.len(), 2);
+
+        // Check object 2 has a component
+        let obj2 = &model.resources.objects[1];
+        assert_eq!(obj2.id, 2);
+        assert_eq!(obj2.components.len(), 1);
+        assert_eq!(obj2.components[0].objectid, 1);
+        assert!(obj2.components[0].transform.is_none());
+    }
+
+    #[test]
+    fn test_parse_component_with_transform() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <components>
+        <component objectid="1" transform="1 0 0 0 1 0 0 0 1 10 20 30"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+
+        let model = parse_model_xml(xml).unwrap();
+
+        // Check object 2 has a component with transform
+        let obj2 = &model.resources.objects[1];
+        assert_eq!(obj2.components.len(), 1);
+        assert_eq!(obj2.components[0].objectid, 1);
+
+        let transform = obj2.components[0]
+            .transform
+            .expect("Transform should be present");
+        // Identity rotation/scale with translation (10, 20, 30)
+        assert_eq!(
+            transform,
+            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0]
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_components() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="2" y="0" z="0"/>
+          <vertex x="0" y="2" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="3">
+      <components>
+        <component objectid="1"/>
+        <component objectid="2" transform="1 0 0 0 1 0 0 0 1 5 5 5"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="3"/>
+  </build>
+</model>"#;
+
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.objects.len(), 3);
+
+        // Check object 3 has two components
+        let obj3 = &model.resources.objects[2];
+        assert_eq!(obj3.id, 3);
+        assert_eq!(obj3.components.len(), 2);
+
+        assert_eq!(obj3.components[0].objectid, 1);
+        assert!(obj3.components[0].transform.is_none());
+
+        assert_eq!(obj3.components[1].objectid, 2);
+        assert!(obj3.components[1].transform.is_some());
     }
 }
