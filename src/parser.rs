@@ -177,14 +177,19 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 .unwrap_or(false);
 
                             // Read the text content
-                            if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                                let value =
-                                    t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
-                                model.metadata.insert(
-                                    name.clone(),
-                                    MetadataEntry::with_preserve(value.to_string(), preserve),
-                                );
-                            }
+                            // Handle both empty elements and elements with text content
+                            let value = if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
+                                t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?
+                                    .to_string()
+                            } else {
+                                // Empty metadata element
+                                String::new()
+                            };
+
+                            model.metadata.insert(
+                                name.clone(),
+                                MetadataEntry::with_preserve(value, preserve),
+                            );
                         }
                     }
                     "resources" => {

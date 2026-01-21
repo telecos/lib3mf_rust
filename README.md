@@ -65,6 +65,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Working with Metadata
+
+3MF files can contain metadata elements with standardized names (Title, Designer, Copyright, etc.) or custom metadata. The library supports metadata extraction with validation according to the 3MF specification:
+
+```rust
+use lib3mf::{Model, metadata_names};
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("model.3mf")?;
+    let model = Model::from_reader(file)?;
+    
+    // Access metadata by name
+    if let Some(title) = model.metadata.get(metadata_names::TITLE) {
+        println!("Title: {}", title.value);
+        if title.preserve {
+            println!("  (marked for preservation)");
+        }
+    }
+    
+    // Iterate through all metadata
+    for (name, entry) in &model.metadata {
+        println!("{}: {}", name, entry.value);
+    }
+    
+    Ok(())
+}
+```
+
+The library validates metadata according to the 3MF Core Specification Chapter 4:
+- Empty values for well-known metadata (Title, Designer, Copyright, etc.) are rejected
+- Metadata names must not be empty
+- Namespaced metadata must use declared namespace prefixes
+- The `preserve` attribute is respected and stored for consumer applications
+
 ### Extension Support
 
 3MF files can require specific extensions beyond the core specification. You can control which extensions your application supports:
@@ -130,6 +165,11 @@ This implementation currently supports:
   - Object definitions
   - Build items with transformations
   - Basic materials and colors
+  - **Metadata validation** (per Chapter 4 of the spec)
+    - Metadata entries with preserve attribute support
+    - Well-known metadata names (Title, Designer, Copyright, etc.)
+    - Validation of metadata requirements
+    - Namespace validation for custom metadata
 
 - **Materials Extension**
   - Color groups (m:colorgroup)

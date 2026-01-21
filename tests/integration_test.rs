@@ -316,3 +316,69 @@ fn test_metadata_with_preserve_attribute() {
         .unwrap()
         .preserve);
 }
+
+#[test]
+fn test_invalid_metadata_empty_title() {
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    let mut zip = ZipWriter::new(cursor);
+
+    let options = SimpleFileOptions::default();
+
+    // Add [Content_Types].xml
+    let content_types = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"##;
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels
+    let rels = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"##;
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
+
+    // Add 3D/3dmodel.model with empty Title metadata (should fail validation)
+    let model = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title"></metadata>
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0.0" y="0.0" z="0.0"/>
+          <vertex x="1.0" y="0.0" z="0.0"/>
+          <vertex x="0.5" y="1.0" z="0.0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"##;
+
+    zip.start_file("3D/3dmodel.model", options).unwrap();
+    zip.write_all(model.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let cursor = Cursor::new(buffer);
+    let result = lib3mf::Model::from_reader(cursor);
+    
+    // Should fail validation because Title has empty value
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("should not have an empty value"));
+}
