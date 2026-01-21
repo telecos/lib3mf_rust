@@ -702,6 +702,16 @@ fn write_components<W: IoWrite>(writer: &mut Writer<W>, components: &[Component]
             elem.push_attribute(("transform", transform_str.as_str()));
         }
 
+        // Production extension attributes
+        if let Some(ref prod_info) = component.production {
+            if let Some(ref uuid) = prod_info.uuid {
+                elem.push_attribute(("p:UUID", uuid.as_str()));
+            }
+            if let Some(ref path) = prod_info.path {
+                elem.push_attribute(("p:path", path.as_str()));
+            }
+        }
+
         writer
             .write_event(Event::Empty(elem))
             .map_err(|e| Error::xml_write(format!("Failed to write component: {}", e)))?;
@@ -795,6 +805,10 @@ fn write_build_item<W: IoWrite>(writer: &mut Writer<W>, item: &BuildItem) -> Res
     // Production extension attributes
     if let Some(ref uuid) = item.production_uuid {
         elem.push_attribute(("p:UUID", uuid.as_str()));
+    }
+
+    if let Some(ref path) = item.production_path {
+        elem.push_attribute(("p:path", path.as_str()));
     }
 
     writer
