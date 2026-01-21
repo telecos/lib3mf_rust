@@ -34,6 +34,9 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Add thumbnail metadata to model
     model.thumbnail = thumbnail;
 
+    // Load external slice files if any slice stacks have references
+    load_slice_references(&mut package, &mut model)?;
+
     Ok(model)
 }
 
@@ -1208,6 +1211,219 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
     Ok(model)
 }
+
+/// Load and parse external slice files referenced in slice stacks
+///
+/// Iterates through all slice stacks in the model and loads any external slice files
+/// referenced via sliceref elements. The slices from the external files are merged
+/// into the appropriate slice stacks.
+fn load_slice_references<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    model: &mut Model,
+) -> Result<()> {
+    // We need to iterate over slice stacks and load external files
+    // We can't modify while iterating, so collect the references first
+    let mut slice_data_to_load: Vec<(usize, String)> = Vec::new();
+
+    for slice_stack in &model.resources.slice_stacks {
+        for slice_ref in &slice_stack.slice_refs {
+            // Store the slice stack ID and path for loading
+            slice_data_to_load.push((slice_stack.id, slice_ref.slicepath.clone()));
+        }
+    }
+
+    // Load each referenced slice file and parse it
+    for (stack_id, slice_path) in slice_data_to_load {
+        // Normalize the path (remove leading slash if present)
+        let normalized_path = if slice_path.starts_with('/') {
+            &slice_path[1..]
+        } else {
+            &slice_path
+        };
+
+        // Load the slice file from the package
+        let slice_xml = package
+            .get_file(normalized_path)
+            .map_err(|e| {
+                Error::InvalidXml(format!(
+                    "Failed to load slice reference file '{}': {}",
+                    slice_path, e
+                ))
+            })?;
+
+        // Parse the slice file to extract slices
+        let slices = parse_slice_file(&slice_xml, stack_id)?;
+
+        // Find the slice stack with the matching ID and add the slices
+        if let Some(slice_stack) = model
+            .resources
+            .slice_stacks
+            .iter_mut()
+            .find(|s| s.id == stack_id)
+        {
+            slice_stack.slices.extend(slices);
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse a slice model file and extract slices
+///
+/// This parses a referenced slice file (typically in the 2D/ directory) and
+/// extracts all slice data including vertices, polygons, and segments.
+fn parse_slice_file(xml: &str, expected_stack_id: usize) -> Result<Vec<Slice>> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+
+    let mut slices = Vec::new();
+    let mut buf = Vec::with_capacity(4096);
+    let mut in_resources = false;
+    let mut in_slicestack = false;
+    let mut current_slice: Option<Slice> = None;
+    let mut in_slice = false;
+    let mut current_slice_polygon: Option<SlicePolygon> = None;
+    let mut in_slice_polygon = false;
+    let mut in_slice_vertices = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                let local_name = get_local_name(name_str);
+
+                match local_name {
+                    "resources" => {
+                        in_resources = true;
+                    }
+                    "slicestack" if in_resources => {
+                        in_slicestack = true;
+                        // Validate the slice stack ID matches
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(id_str) = attrs.get("id") {
+                            let id = id_str.parse::<usize>().map_err(|e| {
+                                Error::InvalidXml(format!("Invalid slice stack ID: {}", e))
+                            })?;
+                            if id != expected_stack_id {
+                                return Err(Error::InvalidXml(format!(
+                                    "Slice file contains stack ID {} but expected {}",
+                                    id, expected_stack_id
+                                )));
+                            }
+                        }
+                    }
+                    "slice" if in_slicestack => {
+                        in_slice = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let ztop = attrs
+                            .get("ztop")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice missing ztop attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        current_slice = Some(Slice::new(ztop));
+                    }
+                    "vertices" if in_slice => {
+                        in_slice_vertices = true;
+                    }
+                    "vertex" if in_slice_vertices => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let x = attrs
+                            .get("x")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing x attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        let y = attrs
+                            .get("y")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing y attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        if let Some(ref mut slice) = current_slice {
+                            slice.vertices.push(Vertex2D::new(x, y));
+                        }
+                    }
+                    "polygon" if in_slice => {
+                        in_slice_polygon = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let startv = attrs
+                            .get("startv")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Slice polygon missing startv attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_slice_polygon = Some(SlicePolygon::new(startv));
+                    }
+                    "segment" if in_slice_polygon => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let v2 = attrs
+                            .get("v2")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice segment missing v2 attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        if let Some(ref mut polygon) = current_slice_polygon {
+                            polygon.segments.push(SliceSegment::new(v2));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                let local_name = get_local_name(name_str);
+
+                match local_name {
+                    "resources" => {
+                        in_resources = false;
+                    }
+                    "slicestack" => {
+                        in_slicestack = false;
+                    }
+                    "slice" => {
+                        if let Some(slice) = current_slice.take() {
+                            slices.push(slice);
+                        }
+                        in_slice = false;
+                    }
+                    "vertices" => {
+                        in_slice_vertices = false;
+                    }
+                    "polygon" => {
+                        if let Some(polygon) = current_slice_polygon.take() {
+                            if let Some(ref mut slice) = current_slice {
+                                slice.polygons.push(polygon);
+                            }
+                        }
+                        in_slice_polygon = false;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                return Err(Error::InvalidXml(format!(
+                    "XML parsing error in slice file: {}",
+                    e
+                )))
+            }
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(slices)
+}
+
 
 /// Parse object element attributes
 pub(crate) fn parse_object<R: std::io::BufRead>(
