@@ -284,3 +284,136 @@ fn test_backward_compatibility() {
     let model = Model::from_reader(cursor).unwrap();
     assert_eq!(model.required_extensions.len(), 2);
 }
+
+#[test]
+fn test_displacement_extension_parsing() {
+    // Create a 3MF file with displacement extension resources
+    let buffer = Vec::new();
+    let mut zip = ZipWriter::new(Cursor::new(buffer));
+
+    // Add Content_Types.xml
+    zip.start_file(
+        "[Content_Types].xml",
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    // Add _rels/.rels
+    zip.start_file(
+        "_rels/.rels",
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    // Add 3D/3dmodel.model with displacement resources
+    zip.start_file(
+        "3D/3dmodel.model",
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+
+    let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" 
+       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+       xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07"
+       requiredextensions="d">
+  <resources>
+    <d:displacement2d id="1" path="/3D/Textures/disp.png" channel="R" tilestyleu="wrap" tilestylev="mirror" filter="linear"/>
+    <d:normvectorgroup id="2">
+      <d:normvector x="0.0" y="0.0" z="1.0"/>
+      <d:normvector x="0.577" y="0.577" z="0.577"/>
+      <d:normvector x="1.0" y="0.0" z="0.0"/>
+    </d:normvectorgroup>
+    <d:disp2dgroup id="3" dispid="1" nid="2" height="5.0" offset="0.5">
+      <d:disp2dcoords u="0.0" v="0.0" n="0" f="1.0"/>
+      <d:disp2dcoords u="1.0" v="0.0" n="1" f="0.8"/>
+      <d:disp2dcoords u="0.5" v="1.0" n="2"/>
+    </d:disp2dgroup>
+    <object id="10" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="5" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="10"/>
+  </build>
+</model>"#;
+
+    zip.write_all(model_xml.as_bytes()).unwrap();
+
+    let result = zip.finish().unwrap();
+    let data = result.into_inner();
+
+    // Parse the 3MF file
+    let cursor = Cursor::new(data);
+    let model = Model::from_reader(cursor).unwrap();
+
+    // Verify displacement extension is recognized
+    assert_eq!(model.required_extensions.len(), 1);
+    assert_eq!(model.required_extensions[0], Extension::Displacement);
+
+    // Verify displacement2d resource was parsed
+    assert_eq!(model.resources.displacement_maps.len(), 1);
+    let disp = &model.resources.displacement_maps[0];
+    assert_eq!(disp.id, 1);
+    assert_eq!(disp.path, "/3D/Textures/disp.png");
+    assert_eq!(disp.channel, lib3mf::Channel::R);
+    assert_eq!(disp.tilestyleu, lib3mf::TileStyle::Wrap);
+    assert_eq!(disp.tilestylev, lib3mf::TileStyle::Mirror);
+    assert_eq!(disp.filter, lib3mf::FilterMode::Linear);
+
+    // Verify normvectorgroup was parsed
+    assert_eq!(model.resources.norm_vector_groups.len(), 1);
+    let nvgroup = &model.resources.norm_vector_groups[0];
+    assert_eq!(nvgroup.id, 2);
+    assert_eq!(nvgroup.vectors.len(), 3);
+    assert_eq!(nvgroup.vectors[0].x, 0.0);
+    assert_eq!(nvgroup.vectors[0].y, 0.0);
+    assert_eq!(nvgroup.vectors[0].z, 1.0);
+
+    // Verify disp2dgroup was parsed
+    assert_eq!(model.resources.disp2d_groups.len(), 1);
+    let d2dgroup = &model.resources.disp2d_groups[0];
+    assert_eq!(d2dgroup.id, 3);
+    assert_eq!(d2dgroup.dispid, 1);
+    assert_eq!(d2dgroup.nid, 2);
+    assert_eq!(d2dgroup.height, 5.0);
+    assert_eq!(d2dgroup.offset, 0.5);
+    assert_eq!(d2dgroup.coords.len(), 3);
+    
+    // Verify first coordinate
+    assert_eq!(d2dgroup.coords[0].u, 0.0);
+    assert_eq!(d2dgroup.coords[0].v, 0.0);
+    assert_eq!(d2dgroup.coords[0].n, 0);
+    assert_eq!(d2dgroup.coords[0].f, 1.0);
+    
+    // Verify third coordinate (tests default f value)
+    assert_eq!(d2dgroup.coords[2].u, 0.5);
+    assert_eq!(d2dgroup.coords[2].v, 1.0);
+    assert_eq!(d2dgroup.coords[2].n, 2);
+    assert_eq!(d2dgroup.coords[2].f, 1.0); // Default value
+}
