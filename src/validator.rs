@@ -37,6 +37,7 @@ pub fn validate_model(model: &Model) -> Result<()> {
 ///
 /// This function performs the same validation as `validate_model` and additionally
 /// invokes any custom validation handlers registered in the parser configuration.
+#[allow(dead_code)] // Currently called during parsing; may be exposed publicly in future
 pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
     // Standard validation
     validate_model(model)?;
