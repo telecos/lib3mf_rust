@@ -258,6 +258,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Accessing Beam Lattice Data
+
+The Beam Lattice Extension is fully supported with complete data extraction:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("lattice_model.3mf")?;
+    let model = Model::from_reader(file)?;
+
+    // Access beam lattice structures
+    for obj in &model.resources.objects {
+        if let Some(ref mesh) = obj.mesh {
+            if let Some(ref beamset) = mesh.beamset {
+                println!("BeamSet found!");
+                println!("  Default radius: {} mm", beamset.radius);
+                println!("  Minimum length: {} mm", beamset.min_length);
+                println!("  Cap mode: {:?}", beamset.cap_mode); // Sphere or Butt
+                println!("  Total beams: {}", beamset.beams.len());
+
+                // Access individual beams
+                for beam in &beamset.beams {
+                    print!("  Beam: vertex {} -> vertex {}", beam.v1, beam.v2);
+                    
+                    // Check for per-beam radii
+                    if let Some(r1) = beam.r1 {
+                        print!(", r1={} mm", r1);
+                    }
+                    if let Some(r2) = beam.r2 {
+                        print!(", r2={} mm", r2);
+                    }
+                    println!();
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
 ### Advanced Materials
 
 The Materials Extension now supports advanced features for full-color 3D printing:
@@ -484,10 +527,10 @@ The parser supports **conditional extension validation**, allowing consumers to 
 **Supported Extensions:**
 
 - ✅ **Core Specification** - Fully supported (always enabled)
-- ✅ **Materials Extension** - Color groups and base materials
+- ✅ **Materials Extension** - Color groups and base materials fully extracted
 - ✅ **Production Extension** - UUID and path extraction from objects, build, and build items
 - ✅ **Slice Extension** - Files parse successfully  
-- ✅ **Beam Lattice Extension** - Files parse successfully
+- ✅ **Beam Lattice Extension** - Fully supported with BeamSet, Beam structures, radii, and cap modes
 - ✅ **Secure Content Extension** - Recognized and validated
 - ✅ **Boolean Operations Extension** - Recognized and validated
 - ✅ **Displacement Extension** - Recognized and validated
