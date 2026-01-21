@@ -1,5 +1,4 @@
-use lib3mf::{Model, ParserConfig, Extension};
-use std::fs::File;
+use lib3mf::{Extension, ParserConfig};
 
 fn main() {
     // Test that p:path and p:UUID attributes don't cause validation errors
@@ -19,12 +18,17 @@ fn main() {
     <item objectid="2" p:UUID="item-uuid"/>
   </build>
 </model>"#;
-    
+
     let config = ParserConfig::new().with_extension(Extension::Production);
     match lib3mf::parser::parse_model_xml_with_config(xml, config) {
         Ok(model) => {
             println!("✓ SUCCESS - p:path and p:UUID accepted");
-            if let Some(comp) = model.resources.objects.get(1).and_then(|o| o.components.first()) {
+            if let Some(comp) = model
+                .resources
+                .objects
+                .get(1)
+                .and_then(|o| o.components.first())
+            {
                 println!("  Component path: {:?}", comp.path);
             }
         }

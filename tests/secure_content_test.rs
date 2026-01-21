@@ -178,10 +178,9 @@ fn test_keystore_parsing() {
 
     // Use a positive test case that has keystore but doesn't fail validation
     // This file has encrypted texture but the model itself is valid
-    let file = File::open(
-        "test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf",
-    )
-    .unwrap();
+    let file =
+        File::open("test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf")
+            .unwrap();
 
     // This test file uses the older 2019/04 namespace and requires Production + Material extensions
     let config = ParserConfig::new()
@@ -222,4 +221,3 @@ fn test_keystore_parsing() {
         .encrypted_files
         .contains(&"/3D/Texture/photo_1_encrypted.jpg".to_string()));
 }
-

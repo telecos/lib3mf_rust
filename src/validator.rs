@@ -544,7 +544,7 @@ fn validate_component_references(model: &Model) -> Result<()> {
                 // This component references an encrypted file - skip validation
                 continue;
             }
-          
+
             // Skip validation for components that reference external files (Production extension)
             // When a component has a p:path attribute, the referenced object is in an external
             // file (potentially encrypted in Secure Content scenarios) and doesn't need to exist
