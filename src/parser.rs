@@ -321,12 +321,28 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         
                         // Parse radius attribute (default 1.0)
                         if let Some(radius_str) = attrs.get("radius") {
-                            beamset.radius = radius_str.parse::<f64>()?;
+                            let radius = radius_str.parse::<f64>()?;
+                            // Validate radius is finite and positive
+                            if !radius.is_finite() || radius <= 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice radius must be positive and finite (got {})",
+                                    radius
+                                )));
+                            }
+                            beamset.radius = radius;
                         }
                         
                         // Parse minlength attribute (default 0.0001)
                         if let Some(minlength_str) = attrs.get("minlength") {
-                            beamset.min_length = minlength_str.parse::<f64>()?;
+                            let minlength = minlength_str.parse::<f64>()?;
+                            // Validate minlength is finite and non-negative
+                            if !minlength.is_finite() || minlength < 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice minlength must be non-negative and finite (got {})",
+                                    minlength
+                                )));
+                            }
+                            beamset.min_length = minlength;
                         }
                         
                         // Parse cap mode attribute (default sphere)
@@ -334,7 +350,12 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             beamset.cap_mode = match cap_str.as_str() {
                                 "sphere" => BeamCapMode::Sphere,
                                 "butt" => BeamCapMode::Butt,
-                                _ => BeamCapMode::Sphere, // Default to sphere for unknown values
+                                _ => {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Invalid cap mode '{}'. Must be 'sphere' or 'butt'",
+                                        cap_str
+                                    )));
+                                }
                             };
                         }
                         
