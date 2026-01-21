@@ -1517,8 +1517,8 @@ pub struct Model {
     pub required_extensions: Vec<Extension>,
     /// Required custom extension namespaces (not part of standard 3MF)
     pub required_custom_extensions: Vec<String>,
-    /// Metadata key-value pairs
-    pub metadata: HashMap<String, String>,
+    /// Metadata entries with name, value, and optional preservation flag
+    pub metadata: Vec<MetadataEntry>,
     /// Thumbnail metadata (if present in the package)
     pub thumbnail: Option<Thumbnail>,
     /// Resources (objects, materials)
@@ -1537,7 +1537,7 @@ impl Model {
             xmlns: "http://schemas.microsoft.com/3dmanufacturing/core/2015/02".to_string(),
             required_extensions: Vec::new(),
             required_custom_extensions: Vec::new(),
-            metadata: HashMap::new(),
+            metadata: Vec::new(),
             thumbnail: None,
             resources: Resources::new(),
             build: Build::new(),
