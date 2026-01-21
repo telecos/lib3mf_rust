@@ -419,6 +419,40 @@ impl SliceStack {
             zbottom,
             slices: Vec::new(),
             slice_refs: Vec::new(),
+/// Base material group from materials extension
+#[derive(Debug, Clone)]
+pub struct BaseMaterialGroup {
+    /// Base material group ID
+    pub id: usize,
+    /// List of base materials in this group
+    pub materials: Vec<BaseMaterial>,
+}
+
+impl BaseMaterialGroup {
+    /// Create a new base material group
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            materials: Vec::new(),
+        }
+    }
+}
+
+/// Individual base material within a base material group
+#[derive(Debug, Clone)]
+pub struct BaseMaterial {
+    /// Material name
+    pub name: String,
+    /// Display color in RGBA format (red, green, blue, alpha)
+    pub displaycolor: (u8, u8, u8, u8),
+}
+
+impl BaseMaterial {
+    /// Create a new base material
+    pub fn new(name: String, displaycolor: (u8, u8, u8, u8)) -> Self {
+        Self {
+            name,
+            displaycolor,
         }
     }
 }
@@ -510,6 +544,8 @@ pub struct Resources {
     pub color_groups: Vec<ColorGroup>,
     /// List of slice stacks (slice extension)
     pub slice_stacks: Vec<SliceStack>,
+    /// List of base material groups (materials extension)
+    pub base_material_groups: Vec<BaseMaterialGroup>,
 }
 
 impl Resources {
@@ -520,6 +556,7 @@ impl Resources {
             materials: Vec::new(),
             color_groups: Vec::new(),
             slice_stacks: Vec::new(),
+            base_material_groups: Vec::new(),
         }
     }
 }

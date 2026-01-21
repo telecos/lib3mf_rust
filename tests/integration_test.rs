@@ -188,6 +188,102 @@ fn test_parse_3mf_with_materials() {
     let blue = &model.resources.materials[2];
     assert_eq!(blue.name, Some("Blue".to_string()));
     assert_eq!(blue.color, Some((0, 0, 255, 255)));
+
+    // Check base material groups
+    assert_eq!(model.resources.base_material_groups.len(), 1);
+    let base_mat_group = &model.resources.base_material_groups[0];
+    assert_eq!(base_mat_group.id, 1);
+    assert_eq!(base_mat_group.materials.len(), 3);
+
+    // Check red base material
+    let red_base = &base_mat_group.materials[0];
+    assert_eq!(red_base.name, "Red");
+    assert_eq!(red_base.displaycolor, (255, 0, 0, 255));
+
+    // Check green base material
+    let green_base = &base_mat_group.materials[1];
+    assert_eq!(green_base.name, "Green");
+    assert_eq!(green_base.displaycolor, (0, 255, 0, 255));
+
+    // Check blue base material
+    let blue_base = &base_mat_group.materials[2];
+    assert_eq!(blue_base.name, "Blue");
+    assert_eq!(blue_base.displaycolor, (0, 0, 255, 255));
+}
+
+#[test]
+fn test_parse_3mf_with_basematerial_pid_reference() {
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    let mut zip = ZipWriter::new(cursor);
+
+    let options = SimpleFileOptions::default();
+
+    // Add [Content_Types].xml
+    let content_types = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n\
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n\
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\n\
+</Types>";
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels
+    let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n\
+  <Relationship Id=\"rel0\" Target=\"/3D/3dmodel.model\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\n\
+</Relationships>";
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
+
+    // Add model with base materials and pid reference
+    let model = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<model unit=\"millimeter\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\n\
+  <resources>\n\
+    <basematerials id=\"5\">\n\
+      <base name=\"Red\" displaycolor=\"#FF0000\"/>\n\
+      <base name=\"Green\" displaycolor=\"#00FF00\"/>\n\
+    </basematerials>\n\
+    <object id=\"10\" type=\"model\" pid=\"5\" pindex=\"0\">\n\
+      <mesh>\n\
+        <vertices>\n\
+          <vertex x=\"0.0\" y=\"0.0\" z=\"0.0\"/>\n\
+          <vertex x=\"1.0\" y=\"0.0\" z=\"0.0\"/>\n\
+          <vertex x=\"0.5\" y=\"1.0\" z=\"0.0\"/>\n\
+        </vertices>\n\
+        <triangles>\n\
+          <triangle v1=\"0\" v2=\"1\" v3=\"2\" pindex=\"1\"/>\n\
+        </triangles>\n\
+      </mesh>\n\
+    </object>\n\
+  </resources>\n\
+  <build>\n\
+    <item objectid=\"10\"/>\n\
+  </build>\n\
+</model>";
+
+    zip.start_file("3D/3dmodel.model", options).unwrap();
+    zip.write_all(model.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let cursor = Cursor::new(buffer);
+    let result = Model::from_reader(cursor);
+    
+    // Should succeed because pid=5 references a valid base material group
+    assert!(result.is_ok());
+    let model = result.unwrap();
+    
+    // Verify the base material group was parsed
+    assert_eq!(model.resources.base_material_groups.len(), 1);
+    assert_eq!(model.resources.base_material_groups[0].id, 5);
+    
+    // Verify the object references the correct pid
+    assert_eq!(model.resources.objects.len(), 1);
+    assert_eq!(model.resources.objects[0].pid, Some(5));
+    assert_eq!(model.resources.objects[0].pindex, Some(0));
 }
 
 #[test]
