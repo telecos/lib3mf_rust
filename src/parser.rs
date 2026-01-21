@@ -9,6 +9,9 @@ use quick_xml::Reader;
 use std::collections::HashMap;
 use std::io::Read;
 
+/// Size of 3MF transformation matrix (4x3 affine transform in row-major order)
+const TRANSFORM_MATRIX_SIZE: usize = 12;
+
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     // Use default config that supports all extensions for backward compatibility
@@ -1349,10 +1352,11 @@ fn parse_build_item<R: std::io::BufRead>(
 
         let values = values?;
 
-        // Transform must have exactly 12 values
-        if values.len() != 12 {
+        // Transform must have exactly 12 values (TRANSFORM_MATRIX_SIZE)
+        if values.len() != TRANSFORM_MATRIX_SIZE {
             return Err(Error::InvalidXml(format!(
-                "Transform matrix must have exactly 12 values (got {})",
+                "Transform matrix must have exactly {} values (got {})",
+                TRANSFORM_MATRIX_SIZE,
                 values.len()
             )));
         }
@@ -1407,10 +1411,11 @@ fn parse_component<R: std::io::BufRead>(
 
         let values = values?;
 
-        // Transform must have exactly 12 values
-        if values.len() != 12 {
+        // Transform must have exactly 12 values (TRANSFORM_MATRIX_SIZE)
+        if values.len() != TRANSFORM_MATRIX_SIZE {
             return Err(Error::InvalidXml(format!(
-                "Component transform matrix must have exactly 12 values (got {})",
+                "Component transform matrix must have exactly {} values (got {})",
+                TRANSFORM_MATRIX_SIZE,
                 values.len()
             )));
         }
