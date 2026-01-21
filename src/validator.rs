@@ -27,6 +27,7 @@ pub fn validate_model(model: &Model) -> Result<()> {
     validate_mesh_geometry(model)?;
     validate_build_references(model)?;
     validate_material_references(model)?;
+    validate_boolean_operations(model)?;
     Ok(())
 }
 
@@ -381,6 +382,41 @@ fn validate_material_references(model: &Model) -> Result<()> {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate boolean operation references
+///
+/// Checks that:
+/// - Objects referenced in boolean operations exist (unless they're external via path attribute)
+/// - Objects don't have more than one booleanshape element (checked during parsing)
+/// - Boolean operand objects exist (unless they're external via path attribute)
+fn validate_boolean_operations(model: &Model) -> Result<()> {
+    // Build a set of valid object IDs for quick lookup
+    let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
+
+    for object in &model.resources.objects {
+        if let Some(ref boolean_shape) = object.boolean_shape {
+            // Validate the base object ID exists (skip if it has a path to an external file)
+            if boolean_shape.path.is_none() && !valid_object_ids.contains(&boolean_shape.objectid) {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Boolean shape references non-existent object ID {}",
+                    object.id, boolean_shape.objectid
+                )));
+            }
+
+            // Validate all operand object IDs exist (skip external references)
+            for operand in &boolean_shape.operands {
+                if operand.path.is_none() && !valid_object_ids.contains(&operand.objectid) {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Boolean operand references non-existent object ID {}",
+                        object.id, operand.objectid
+                    )));
                 }
             }
         }

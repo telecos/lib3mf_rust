@@ -73,13 +73,15 @@ fn test_parse_secure_content_declaration() {
     // Parse with secure content support using test-only export
     let config = ParserConfig::with_all_extensions();
     let model = lib3mf::parser::parse_model_xml_with_config(xml, config);
-    
+
     assert!(model.is_ok(), "Failed to parse: {:?}", model.err());
     let model = model.unwrap();
-    
+
     // Verify the extension was recognized
     assert!(
-        model.required_extensions.contains(&Extension::SecureContent),
+        model
+            .required_extensions
+            .contains(&Extension::SecureContent),
         "SecureContent extension not recognized in required_extensions"
     );
 }
@@ -114,13 +116,13 @@ fn test_secure_content_validation_fails_when_unsupported() {
     // Parse without secure content support (core only)
     let config = ParserConfig::new();
     let result = lib3mf::parser::parse_model_xml_with_config(xml, config);
-    
+
     // Should fail because SecureContent is required but not supported
     assert!(
         result.is_err(),
         "Should fail when SecureContent is required but not supported"
     );
-    
+
     let err = result.unwrap_err();
     let err_msg = format!("{:?}", err);
     assert!(
@@ -164,5 +166,7 @@ fn test_parse_without_secure_content() {
 
     let model = lib3mf::parser::parse_model_xml(xml).unwrap();
     assert!(model.secure_content.is_none());
-    assert!(!model.required_extensions.contains(&Extension::SecureContent));
+    assert!(!model
+        .required_extensions
+        .contains(&Extension::SecureContent));
 }
