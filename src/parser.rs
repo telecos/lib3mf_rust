@@ -281,14 +281,15 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
                         let mut disp = Displacement2D::new(id, path);
 
-                        // Parse optional attributes
+                        // Parse optional attributes with spec-defined defaults
+                        // If attribute value is invalid, fall back to spec default (lenient parsing)
                         if let Some(channel_str) = attrs.get("channel") {
                             disp.channel = match channel_str.to_uppercase().as_str() {
                                 "R" => Channel::R,
                                 "G" => Channel::G,
                                 "B" => Channel::B,
                                 "A" => Channel::A,
-                                _ => Channel::G, // Default to G
+                                _ => Channel::G, // Spec default is 'G', fall back on invalid value
                             };
                         }
 
@@ -298,7 +299,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 "mirror" => TileStyle::Mirror,
                                 "clamp" => TileStyle::Clamp,
                                 "none" => TileStyle::None,
-                                _ => TileStyle::Wrap, // Default to wrap
+                                _ => TileStyle::Wrap, // Spec default is 'wrap', fall back on invalid value
                             };
                         }
 
@@ -308,7 +309,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 "mirror" => TileStyle::Mirror,
                                 "clamp" => TileStyle::Clamp,
                                 "none" => TileStyle::None,
-                                _ => TileStyle::Wrap, // Default to wrap
+                                _ => TileStyle::Wrap, // Spec default is 'wrap', fall back on invalid value
                             };
                         }
 
@@ -317,7 +318,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 "auto" => FilterMode::Auto,
                                 "linear" => FilterMode::Linear,
                                 "nearest" => FilterMode::Nearest,
-                                _ => FilterMode::Auto, // Default to auto
+                                _ => FilterMode::Auto, // Spec default is 'auto', fall back on invalid value
                             };
                         }
 

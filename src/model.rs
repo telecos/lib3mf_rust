@@ -355,11 +355,16 @@ pub struct Displacement2D {
 
 impl Displacement2D {
     /// Create a new displacement map
+    ///
+    /// Default values match the 3MF Displacement Extension specification:
+    /// - channel: G (Green channel, as per spec default)
+    /// - tilestyleu/tilestylev: Wrap
+    /// - filter: Auto
     pub fn new(id: usize, path: String) -> Self {
         Self {
             id,
             path,
-            channel: Channel::G,
+            channel: Channel::G, // Spec default is 'G'
             tilestyleu: TileStyle::Wrap,
             tilestylev: TileStyle::Wrap,
             filter: FilterMode::Auto,
