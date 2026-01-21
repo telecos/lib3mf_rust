@@ -39,20 +39,20 @@ pub fn validate_model(model: &Model) -> Result<()> {
 fn validate_required_structure(model: &Model) -> Result<()> {
     // Model must contain at least one object
     if model.resources.objects.is_empty() {
-        return Err(Error::InvalidModel(format!(
+        return Err(Error::InvalidModel(
             "Model must contain at least one object in resources. \
              A valid 3MF file requires at least one <object> element within the <resources> section. \
-             Check that your 3MF file has proper model content."
-        )));
+             Check that your 3MF file has proper model content.".to_string()
+        ));
     }
 
     // Build section must contain at least one item
     if model.build.items.is_empty() {
-        return Err(Error::InvalidModel(format!(
+        return Err(Error::InvalidModel(
             "Build section must contain at least one item. \
              A valid 3MF file requires at least one <item> element within the <build> section. \
-             The build section specifies which objects should be printed."
-        )));
+             The build section specifies which objects should be printed.".to_string()
+        ));
     }
 
     Ok(())
