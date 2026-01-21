@@ -12,6 +12,13 @@ use crate::error::{Error, Result};
 use crate::model::{Model, ParserConfig};
 use std::collections::HashSet;
 
+/// Helper function to convert a HashSet of IDs to a sorted Vec for error messages
+fn sorted_ids_from_set(ids: &HashSet<usize>) -> Vec<usize> {
+    let mut sorted: Vec<usize> = ids.iter().copied().collect();
+    sorted.sort();
+    sorted
+}
+
 /// Validate a parsed 3MF model
 ///
 /// Performs comprehensive validation of the model structure, including:
@@ -329,8 +336,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
             // If object has a pid, it should reference a valid property group
             // Only validate if there are property groups defined, otherwise pid might be unused
             if !valid_property_group_ids.is_empty() && !valid_property_group_ids.contains(&pid) {
-                let mut available_ids: Vec<usize> = valid_property_group_ids.iter().copied().collect();
-                available_ids.sort();
+                let available_ids = sorted_ids_from_set(&valid_property_group_ids);
                 return Err(Error::InvalidModel(format!(
                     "Object {} references non-existent property group ID: {}.\n\
                      Available property group IDs: {:?}\n\
@@ -344,8 +350,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
         if let Some(basematerialid) = object.basematerialid {
             // basematerialid should reference a valid base material group
             if !valid_basematerial_ids.contains(&basematerialid) {
-                let mut available_ids: Vec<usize> = valid_basematerial_ids.iter().copied().collect();
-                available_ids.sort();
+                let available_ids = sorted_ids_from_set(&valid_basematerial_ids);
                 return Err(Error::InvalidModel(format!(
                     "Object {} references non-existent base material group ID: {}.\n\
                      Available base material group IDs: {:?}\n\
@@ -540,8 +545,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
         if let Some(ref boolean_shape) = object.boolean_shape {
             // Validate the base object ID exists (skip if it has a path to an external file)
             if boolean_shape.path.is_none() && !valid_object_ids.contains(&boolean_shape.objectid) {
-                let mut available_ids: Vec<usize> = valid_object_ids.iter().copied().collect();
-                available_ids.sort();
+                let available_ids = sorted_ids_from_set(&valid_object_ids);
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Boolean shape references non-existent object ID {}.\n\
                      Available object IDs: {:?}\n\
@@ -553,8 +557,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
             // Validate all operand object IDs exist (skip external references)
             for operand in &boolean_shape.operands {
                 if operand.path.is_none() && !valid_object_ids.contains(&operand.objectid) {
-                    let mut available_ids: Vec<usize> = valid_object_ids.iter().copied().collect();
-                    available_ids.sort();
+                    let available_ids = sorted_ids_from_set(&valid_object_ids);
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Boolean operand references non-existent object ID {}.\n\
                          Available object IDs: {:?}\n\
@@ -617,8 +620,7 @@ fn validate_component_references(model: &Model) -> Result<()> {
             }
 
             if !valid_object_ids.contains(&component.objectid) {
-                let mut available_ids: Vec<usize> = valid_object_ids.iter().copied().collect();
-                available_ids.sort();
+                let available_ids = sorted_ids_from_set(&valid_object_ids);
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Component references non-existent object ID {}.\n\
                      Available object IDs: {:?}\n\
