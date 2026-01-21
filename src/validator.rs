@@ -202,7 +202,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     // For now, just validate that pid references point to existing color groups or materials
     // Full validation would require checking basematerialid attributes on objects
 

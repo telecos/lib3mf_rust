@@ -181,7 +181,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
                                     t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
-                                
+
                                 // Check for duplicate metadata names
                                 // Per 3MF Core spec: metadata element names must be unique
                                 if model.metadata.contains_key(name) {
@@ -190,7 +190,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                         name
                                     )));
                                 }
-                                
+
                                 model.metadata.insert(name.clone(), value.to_string());
                             }
                         }
@@ -519,14 +519,7 @@ fn parse_object<R: std::io::BufRead>(
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &[
-            "id",
-            "name",
-            "type",
-            "pid",
-            "pindex",
-            "partnumber",
-        ],
+        &["id", "name", "type", "pid", "pindex", "partnumber"],
         "object",
     )?;
 

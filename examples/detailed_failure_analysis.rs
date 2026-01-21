@@ -7,14 +7,15 @@ fn main() {
     // Find all test suite directories
     let test_suites_path = "test_suites";
     let mut suites = Vec::new();
-    
+
     if let Ok(entries) = std::fs::read_dir(test_suites_path) {
         for entry in entries.flatten() {
             if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
                 let suite_name = entry.file_name().to_string_lossy().to_string();
                 // Skip non-suite directories
                 if suite_name.starts_with("suite") {
-                    let neg_test_path = format!("{}/{}/negative_test_cases", test_suites_path, suite_name);
+                    let neg_test_path =
+                        format!("{}/{}/negative_test_cases", test_suites_path, suite_name);
                     if std::path::Path::new(&neg_test_path).exists() {
                         suites.push(suite_name);
                     }
@@ -22,9 +23,9 @@ fn main() {
             }
         }
     }
-    
+
     suites.sort();
-    
+
     let mut failures_by_code: HashMap<String, Vec<(String, String)>> = HashMap::new();
     let mut total_passed = 0;
     let mut total_failed = 0;
@@ -105,7 +106,7 @@ fn main() {
         }
         println!();
     }
-    
+
     println!("\n=== Test Suites Analyzed ===");
     for suite in &suites {
         println!("- {}", suite);
