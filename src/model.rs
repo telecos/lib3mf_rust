@@ -1368,6 +1368,9 @@ pub struct Object {
     pub boolean_shape: Option<BooleanShape>,
     /// Components that reference other objects (assemblies)
     pub components: Vec<Component>,
+    /// Thumbnail attribute (deprecated, should not be used with production extension)
+    /// This is stored only for validation purposes - the attribute is accepted but not functional
+    pub(crate) has_thumbnail_attribute: bool,
 }
 
 /// Type of 3D object
@@ -1400,6 +1403,7 @@ impl Object {
             production: None,
             boolean_shape: None,
             components: Vec::new(),
+            has_thumbnail_attribute: false,
         }
     }
 }
