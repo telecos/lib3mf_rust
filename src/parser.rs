@@ -65,6 +65,8 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut current_basematerialgroup: Option<BaseMaterialGroup> = None;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
+    let mut current_beamset: Option<BeamSet> = None;
+    let mut in_beamset = false;
     let mut current_slicestack: Option<SliceStack> = None;
     let mut in_slicestack = false;
     let mut current_slice: Option<Slice> = None;
@@ -312,6 +314,60 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                     }
+                    "beamlattice" if current_mesh.is_some() => {
+                        in_beamset = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let mut beamset = BeamSet::new();
+                        
+                        // Parse radius attribute (default 1.0)
+                        if let Some(radius_str) = attrs.get("radius") {
+                            let radius = radius_str.parse::<f64>()?;
+                            // Validate radius is finite and positive
+                            if !radius.is_finite() || radius <= 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice radius must be positive and finite (got {})",
+                                    radius
+                                )));
+                            }
+                            beamset.radius = radius;
+                        }
+                        
+                        // Parse minlength attribute (default 0.0001)
+                        if let Some(minlength_str) = attrs.get("minlength") {
+                            let minlength = minlength_str.parse::<f64>()?;
+                            // Validate minlength is finite and non-negative
+                            if !minlength.is_finite() || minlength < 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice minlength must be non-negative and finite (got {})",
+                                    minlength
+                                )));
+                            }
+                            beamset.min_length = minlength;
+                        }
+                        
+                        // Parse cap mode attribute (default sphere)
+                        if let Some(cap_str) = attrs.get("cap") {
+                            beamset.cap_mode = match cap_str.as_str() {
+                                "sphere" => BeamCapMode::Sphere,
+                                "butt" => BeamCapMode::Butt,
+                                _ => {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Invalid cap mode '{}'. Must be 'sphere' or 'butt'",
+                                        cap_str
+                                    )));
+                                }
+                            };
+                        }
+                        
+                        current_beamset = Some(beamset);
+                    }
+                    "beams" if in_beamset => {
+                        // Beams container element - beams will be parsed as individual beam elements
+                    }
+                    "beam" if in_beamset => {
+                        if let Some(ref mut beamset) = current_beamset {
+                            let beam = parse_beam(&reader, e)?;
+                            beamset.beams.push(beam);
                     "slicestack" if in_resources => {
                         in_slicestack = true;
                         let attrs = parse_attributes(&reader, e)?;
@@ -452,6 +508,13 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         }
                         in_colorgroup = false;
                     }
+                    "beamlattice" => {
+                        if let Some(beamset) = current_beamset.take() {
+                            if let Some(ref mut mesh) = current_mesh {
+                                mesh.beamset = Some(beamset);
+                            }
+                        }
+                        in_beamset = false;
                     "slicestack" => {
                         if let Some(slicestack) = current_slicestack.take() {
                             model.resources.slice_stacks.push(slicestack);
@@ -776,6 +839,56 @@ fn parse_base_material<R: std::io::BufRead>(
     }
 
     Ok(material)
+}
+
+/// Parse beam element attributes
+fn parse_beam<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<Beam> {
+    let attrs = parse_attributes(reader, e)?;
+
+    // Validate only allowed attributes are present
+    // Per Beam Lattice Extension spec: v1, v2, r1, r2
+    validate_attributes(&attrs, &["v1", "v2", "r1", "r2"], "beam")?;
+
+    let v1 = attrs
+        .get("v1")
+        .ok_or_else(|| Error::InvalidXml("Beam missing v1 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let v2 = attrs
+        .get("v2")
+        .ok_or_else(|| Error::InvalidXml("Beam missing v2 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let mut beam = Beam::new(v1, v2);
+
+    if let Some(r1) = attrs.get("r1") {
+        let r1_val = r1.parse::<f64>()?;
+        // Validate radius is finite and positive
+        if !r1_val.is_finite() || r1_val <= 0.0 {
+            return Err(Error::InvalidXml(format!(
+                "Beam r1 must be positive and finite (got {})",
+                r1_val
+            )));
+        }
+        beam.r1 = Some(r1_val);
+    }
+
+    if let Some(r2) = attrs.get("r2") {
+        let r2_val = r2.parse::<f64>()?;
+        // Validate radius is finite and positive
+        if !r2_val.is_finite() || r2_val <= 0.0 {
+            return Err(Error::InvalidXml(format!(
+                "Beam r2 must be positive and finite (got {})",
+                r2_val
+            )));
+        }
+        beam.r2 = Some(r2_val);
+    }
+
+    Ok(beam)
 }
 
 /// Parse color string in format #RRGGBBAA or #RRGGBB

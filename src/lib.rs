@@ -40,7 +40,7 @@ mod validator;
 
 pub use error::{Error, Result};
 pub use model::{
-    BaseMaterial, BaseMaterialGroup, Build, BuildItem, ColorGroup, Extension, Material, Mesh,
+    Beam, BeamCapMode, BeamSet, BaseMaterial, BaseMaterialGroup, Build, BuildItem, ColorGroup, Extension, Material, Mesh,
     Model, Object, ParserConfig, Resources, Triangle, Vertex,
 };
 
