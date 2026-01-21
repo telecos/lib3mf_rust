@@ -52,10 +52,17 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
         "suite9_core_ext" => ParserConfig::with_all_extensions(),
 
         // Suite 10: Boolean Operations
+        // The built-in extension uses schemas.3mf.io, which should cover the test files
         "suite10_boolean" => ParserConfig::new().with_extension(Extension::BooleanOperations),
 
         // Suite 11: Displacement
-        "suite11_Displacement" => ParserConfig::new().with_extension(Extension::Displacement),
+        // Register both the built-in 2022/07 namespace and the newer 2023/10 namespace
+        "suite11_Displacement" => ParserConfig::new()
+            .with_extension(Extension::Displacement)
+            .with_custom_extension(
+                "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10",
+                "Displacement 2023/10",
+            ),
 
         // Default: support all extensions for unknown suites
         _ => ParserConfig::with_all_extensions(),
