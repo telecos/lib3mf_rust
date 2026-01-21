@@ -74,14 +74,41 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+            Ok(Event::Start(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 let local_name = get_local_name(name_str);
 
-                match local_name {
+                // Check if this is a custom extension element FIRST (before matching local names)
+                if let Some(namespace_uri) = is_custom_element(name_str, &declared_namespaces, &config) {
+                    // Create a new buffer for parsing custom elements
+                    let mut custom_buf = Vec::new();
+                    // Parse custom element
+                    let custom_elem = parse_custom_element(
+                        &mut reader,
+                        e,
+                        namespace_uri.clone(),
+                        local_name.to_string(),
+                        &mut custom_buf,
+                    )?;
+                    
+                    // Invoke callback if registered
+                    if let Some(custom_ext) = config.get_custom_extension(&namespace_uri) {
+                        if let Some(callback) = custom_ext.callback() {
+                            callback(&custom_elem)?;
+                        }
+                    }
+                    
+                    // Store the custom element
+                    model.custom_extension_elements
+                        .entry(namespace_uri)
+                        .or_insert_with(Vec::new)
+                        .push(custom_elem);
+                } else {
+                    // Not a custom element, proceed with standard parsing
+                    match local_name {
                     "model" => {
                         // Parse model element using two-pass approach:
                         // 1. First collect all namespace declarations (xmlns:prefix attributes)
@@ -256,7 +283,74 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                     }
-                    _ => {}
+                    _ => {
+                        // Ignore unknown elements (backward compatible behavior)
+                    }
+                    }
+                }
+            }
+            Ok(Event::Empty(ref e)) => {
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                let local_name = get_local_name(name_str);
+
+                // Check if this is a custom extension element FIRST (before matching local names)
+                if let Some(namespace_uri) = is_custom_element(name_str, &declared_namespaces, &config) {
+                    // For empty elements, create element with just attributes
+                    let custom_elem = parse_custom_element_empty(e, namespace_uri.clone(), local_name.to_string())?;
+                    
+                    // Invoke callback if registered
+                    if let Some(custom_ext) = config.get_custom_extension(&namespace_uri) {
+                        if let Some(callback) = custom_ext.callback() {
+                            callback(&custom_elem)?;
+                        }
+                    }
+                    
+                    // Store the custom element
+                    model.custom_extension_elements
+                        .entry(namespace_uri)
+                        .or_insert_with(Vec::new)
+                        .push(custom_elem);
+                } else {
+                    // Not a custom element, proceed with standard parsing
+                    match local_name {
+                    "vertex" if current_mesh.is_some() => {
+                        if let Some(ref mut mesh) = current_mesh {
+                            let vertex = parse_vertex(&reader, e)?;
+                            mesh.vertices.push(vertex);
+                        }
+                    }
+                    "triangle" if current_mesh.is_some() => {
+                        if let Some(ref mut mesh) = current_mesh {
+                            let triangle = parse_triangle(&reader, e)?;
+                            mesh.triangles.push(triangle);
+                        }
+                    }
+                    "item" if in_build => {
+                        let item = parse_build_item(&reader, e)?;
+                        model.build.items.push(item);
+                    }
+                    "base" if in_basematerials => {
+                        let material = parse_base_material(&reader, e, material_index)?;
+                        model.resources.materials.push(material);
+                        material_index += 1;
+                    }
+                    "color" if in_colorgroup => {
+                        if let Some(ref mut colorgroup) = current_colorgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            if let Some(color_str) = attrs.get("color") {
+                                if let Some(color) = parse_color(color_str) {
+                                    colorgroup.colors.push(color);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // Ignore unknown elements (backward compatible behavior)
+                    }
+                    }
                 }
             }
             Ok(Event::End(ref e)) => {
@@ -719,6 +813,157 @@ fn validate_attributes(
         }
     }
     Ok(())
+}
+
+/// Extract namespace from element name
+///
+/// Returns (namespace_prefix, local_name) if element has a namespace prefix,
+/// or (None, element_name) if not
+fn get_namespace_prefix(name_str: &str) -> (Option<&str>, &str) {
+    if let Some(pos) = name_str.rfind(':') {
+        (Some(&name_str[..pos]), &name_str[pos + 1..])
+    } else {
+        (None, name_str)
+    }
+}
+
+/// Check if element belongs to a custom extension
+///
+/// Returns true if the element has a namespace prefix that corresponds to a
+/// custom extension in the config
+fn is_custom_element(
+    name_str: &str,
+    namespaces: &HashMap<String, String>,
+    config: &ParserConfig,
+) -> Option<String> {
+    let (prefix, _local_name) = get_namespace_prefix(name_str);
+    
+    if let Some(prefix) = prefix {
+        // Get the namespace URI for this prefix
+        if let Some(namespace_uri) = namespaces.get(prefix) {
+            // Check if it's a known extension (not custom)
+            if Extension::from_namespace(namespace_uri).is_some() {
+                return None;
+            }
+            // Check if it's registered as a custom extension
+            if config.has_custom_extension(namespace_uri) {
+                return Some(namespace_uri.clone());
+            }
+        }
+    }
+    None
+}
+
+/// Parse a custom extension element (empty element variant)
+///
+/// Parses an empty custom extension element (self-closing tag) with only attributes
+fn parse_custom_element_empty(
+    e: &quick_xml::events::BytesStart,
+    namespace: String,
+    local_name: String,
+) -> Result<CustomElementData> {
+    let mut element = CustomElementData::new(local_name, namespace);
+    
+    // Parse attributes
+    for attr in e.attributes() {
+        let attr = attr?;
+        let key = std::str::from_utf8(attr.key.as_ref())
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let value = std::str::from_utf8(&attr.value)
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        element.attributes.insert(key.to_string(), value.to_string());
+    }
+    
+    Ok(element)
+}
+
+/// Parse a custom extension element
+///
+/// Recursively parses a custom extension element and its children.
+/// Note: This function expects a Start event, not an Empty event.
+fn parse_custom_element<R: std::io::BufRead>(
+    reader: &mut Reader<R>,
+    e: &quick_xml::events::BytesStart,
+    namespace: String,
+    local_name: String,
+    buf: &mut Vec<u8>,
+) -> Result<CustomElementData> {
+    let mut element = CustomElementData::new(local_name, namespace);
+    
+    // Parse attributes
+    for attr in e.attributes() {
+        let attr = attr?;
+        let key = std::str::from_utf8(attr.key.as_ref())
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let value = std::str::from_utf8(&attr.value)
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        element.attributes.insert(key.to_string(), value.to_string());
+    }
+    
+    // Parse children and text content if this is a Start event
+    let element_name = e.name();
+    loop {
+        buf.clear();
+        match reader.read_event_into(buf) {
+            Ok(Event::Start(ref child_e)) => {
+                let child_name = child_e.name();
+                let child_name_str = std::str::from_utf8(child_name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let child_local_name = get_local_name(child_name_str);
+                
+                // Clone the element to avoid borrow issues
+                let child_e_clone = child_e.to_owned();
+                
+                // Create new buffer for recursive call
+                let mut child_buf = Vec::new();
+                
+                // Recursively parse child element (Start event)
+                let child = parse_custom_element(
+                    reader,
+                    &child_e_clone,
+                    element.namespace.clone(),
+                    child_local_name.to_string(),
+                    &mut child_buf,
+                )?;
+                element.children.push(child);
+            }
+            Ok(Event::Empty(ref child_e)) => {
+                let child_name = child_e.name();
+                let child_name_str = std::str::from_utf8(child_name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let child_local_name = get_local_name(child_name_str);
+                
+                // For empty elements, just parse attributes (no children)
+                let child = parse_custom_element_empty(
+                    child_e,
+                    element.namespace.clone(),
+                    child_local_name.to_string(),
+                )?;
+                element.children.push(child);
+            }
+            Ok(Event::Text(ref t)) => {
+                let text = t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                if !text.trim().is_empty() {
+                    element.text_content = Some(text.to_string());
+                }
+            }
+            Ok(Event::End(ref end_e)) => {
+                if end_e.name() == element_name {
+                    break;
+                }
+            }
+            Ok(Event::Eof) => {
+                return Err(Error::InvalidXml(format!(
+                    "Unexpected EOF while parsing custom element '{}'", 
+                    element.local_name
+                )));
+            }
+            Err(e) => return Err(Error::Xml(e)),
+            _ => {}
+        }
+    }
+    
+    Ok(element)
 }
 
 #[cfg(test)]

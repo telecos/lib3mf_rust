@@ -168,6 +168,62 @@ let config = ParserConfig::with_all_extensions();
 
 **Note:** While all extensions are recognized for validation purposes, extension-specific data structures (beams, slices, production UUIDs) are not yet fully extracted. Basic mesh geometry and materials are fully supported.
 
+## Custom Extensions
+
+The library supports custom/proprietary 3MF extensions, allowing you to handle vendor-specific or experimental extensions:
+
+```rust
+use lib3mf::{CustomExtension, ParserConfig, Model};
+use std::fs::File;
+use std::sync::Arc;
+
+// Register a custom extension
+let custom_ext = CustomExtension::new(
+    "http://example.com/myextension".to_string(),
+    "MyExtension".to_string()
+);
+
+let config = ParserConfig::new()
+    .with_custom_extension(custom_ext);
+
+// Parse file with custom extension support
+let file = File::open("model.3mf")?;
+let model = Model::from_reader_with_config(file, config)?;
+
+// Access custom extension data
+if let Some(elements) = model.get_custom_elements("http://example.com/myextension") {
+    for element in elements {
+        println!("Custom element: {}", element.local_name);
+        // Access attributes, text content, and child elements
+    }
+}
+```
+
+You can also provide validation callbacks for custom extensions:
+
+```rust
+use lib3mf::{CustomElementData, CustomExtension};
+
+let callback = Arc::new(|element: &CustomElementData| {
+    // Validate custom element
+    if element.local_name == "myelem" {
+        Ok(())
+    } else {
+        Err(lib3mf::Error::InvalidXml(
+            format!("Unknown element: {}", element.local_name)
+        ))
+    }
+});
+
+let validated_ext = CustomExtension::with_callback(
+    "http://example.com/validated".to_string(),
+    "ValidatedExtension".to_string(),
+    callback
+);
+```
+
+See `examples/custom_extension.rs` for more detailed examples.
+
 ### Future Enhancements
 
 Potential future additions could include:
@@ -176,7 +232,6 @@ Potential future additions could include:
 - Beam lattice extension support (beam definitions and properties)
 - Advanced material properties (textures, composite materials)
 - Components and assemblies
-- Custom extensions
 
 ## Testing
 

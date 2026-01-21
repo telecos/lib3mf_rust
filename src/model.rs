@@ -1,6 +1,7 @@
 //! Data structures representing 3MF models
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// 3MF extension specification
 ///
@@ -93,14 +94,181 @@ impl Extension {
     }
 }
 
+/// Data structure representing parsed custom extension elements
+///
+/// This holds arbitrary XML element data from custom extensions that can be
+/// accessed after parsing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomElementData {
+    /// The element name (without namespace prefix)
+    pub local_name: String,
+    /// The namespace URI
+    pub namespace: String,
+    /// Element attributes as key-value pairs
+    pub attributes: HashMap<String, String>,
+    /// Optional text content
+    pub text_content: Option<String>,
+    /// Nested child elements
+    pub children: Vec<CustomElementData>,
+}
+
+impl CustomElementData {
+    /// Create a new custom element data structure
+    pub fn new(local_name: String, namespace: String) -> Self {
+        Self {
+            local_name,
+            namespace,
+            attributes: HashMap::new(),
+            text_content: None,
+            children: Vec::new(),
+        }
+    }
+}
+
+/// Callback function type for custom element parsing
+///
+/// This function is called when a custom extension element is encountered.
+/// It receives the element data and should return Ok(()) if the element is valid,
+/// or an error if validation fails.
+///
+/// # Arguments
+///
+/// * `element` - The parsed custom element data
+///
+/// # Returns
+///
+/// Ok(()) if the element is valid, or an error describing the validation failure
+pub type CustomElementCallback = Arc<dyn Fn(&CustomElementData) -> crate::error::Result<()> + Send + Sync>;
+
+/// Custom extension specification
+///
+/// Represents a user-defined 3MF extension with its namespace URI and
+/// optional parsing/validation callback.
+#[derive(Clone)]
+pub struct CustomExtension {
+    /// Namespace URI for this custom extension
+    namespace: String,
+    /// Human-readable name for this extension
+    name: String,
+    /// Optional callback for parsing and validating custom elements
+    /// If provided, this callback will be invoked for each element in this namespace
+    callback: Option<CustomElementCallback>,
+}
+
+impl CustomExtension {
+    /// Create a new custom extension
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace URI for this extension
+    /// * `name` - A human-readable name for this extension
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::CustomExtension;
+    ///
+    /// let ext = CustomExtension::new(
+    ///     "http://example.com/myextension".to_string(),
+    ///     "MyExtension".to_string()
+    /// );
+    /// ```
+    pub fn new(namespace: String, name: String) -> Self {
+        Self {
+            namespace,
+            name,
+            callback: None,
+        }
+    }
+
+    /// Create a custom extension with a parsing callback
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace URI for this extension
+    /// * `name` - A human-readable name for this extension
+    /// * `callback` - Callback function to be invoked when parsing elements from this namespace
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::{CustomExtension, CustomElementData};
+    /// use std::sync::Arc;
+    ///
+    /// let callback = Arc::new(|element: &CustomElementData| {
+    ///     // Validate custom element
+    ///     if element.local_name == "myelem" {
+    ///         Ok(())
+    ///     } else {
+    ///         Err(lib3mf::Error::InvalidXml(
+    ///             format!("Unknown element: {}", element.local_name)
+    ///         ))
+    ///     }
+    /// });
+    ///
+    /// let ext = CustomExtension::with_callback(
+    ///     "http://example.com/myextension".to_string(),
+    ///     "MyExtension".to_string(),
+    ///     callback
+    /// );
+    /// ```
+    pub fn with_callback(
+        namespace: String,
+        name: String,
+        callback: CustomElementCallback,
+    ) -> Self {
+        Self {
+            namespace,
+            name,
+            callback: Some(callback),
+        }
+    }
+
+    /// Get the namespace URI for this extension
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    /// Get the human-readable name for this extension
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the callback function if one is registered
+    pub(crate) fn callback(&self) -> Option<&CustomElementCallback> {
+        self.callback.as_ref()
+    }
+}
+
+impl std::fmt::Debug for CustomExtension {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CustomExtension")
+            .field("namespace", &self.namespace)
+            .field("name", &self.name)
+            .field("callback", &self.callback.is_some())
+            .finish()
+    }
+}
+
 /// Configuration for parsing 3MF files
 ///
 /// Allows consumers to specify which extensions they support.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ParserConfig {
     /// Set of extensions supported by the consumer
     /// Core is always implicitly supported
     supported_extensions: HashSet<Extension>,
+    /// Map of custom extensions by namespace URI
+    custom_extensions: HashMap<String, CustomExtension>,
+}
+
+impl std::fmt::Debug for ParserConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParserConfig")
+            .field("supported_extensions", &self.supported_extensions)
+            .field("custom_extensions", &self.custom_extensions.keys())
+            .finish()
+    }
 }
 
 impl ParserConfig {
@@ -110,6 +278,7 @@ impl ParserConfig {
         supported.insert(Extension::Core);
         Self {
             supported_extensions: supported,
+            custom_extensions: HashMap::new(),
         }
     }
 
@@ -129,6 +298,7 @@ impl ParserConfig {
         supported.insert(Extension::Displacement);
         Self {
             supported_extensions: supported,
+            custom_extensions: HashMap::new(),
         }
     }
 
@@ -138,14 +308,57 @@ impl ParserConfig {
         self
     }
 
+    /// Register a custom extension
+    ///
+    /// This allows you to register a custom/proprietary 3MF extension that is not
+    /// part of the official 3MF specification. When the parser encounters elements
+    /// from this namespace, it will invoke the callback (if provided) for validation.
+    ///
+    /// # Arguments
+    ///
+    /// * `extension` - The custom extension to register
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::{ParserConfig, CustomExtension};
+    ///
+    /// let custom_ext = CustomExtension::new(
+    ///     "http://example.com/myextension".to_string(),
+    ///     "MyExtension".to_string()
+    /// );
+    ///
+    /// let config = ParserConfig::new()
+    ///     .with_custom_extension(custom_ext);
+    /// ```
+    pub fn with_custom_extension(mut self, extension: CustomExtension) -> Self {
+        self.custom_extensions.insert(extension.namespace().to_string(), extension);
+        self
+    }
+
     /// Check if an extension is supported
     pub fn supports(&self, extension: &Extension) -> bool {
         self.supported_extensions.contains(extension)
     }
 
+    /// Check if a custom extension is registered by namespace
+    pub fn has_custom_extension(&self, namespace: &str) -> bool {
+        self.custom_extensions.contains_key(namespace)
+    }
+
+    /// Get a custom extension by namespace
+    pub(crate) fn get_custom_extension(&self, namespace: &str) -> Option<&CustomExtension> {
+        self.custom_extensions.get(namespace)
+    }
+
     /// Get the set of supported extensions
     pub fn supported_extensions(&self) -> &HashSet<Extension> {
         &self.supported_extensions
+    }
+
+    /// Get all registered custom extensions
+    pub fn custom_extensions(&self) -> impl Iterator<Item = &CustomExtension> {
+        self.custom_extensions.values()
     }
 }
 
@@ -429,6 +642,9 @@ pub struct Model {
     pub resources: Resources,
     /// Build specification
     pub build: Build,
+    /// Custom extension elements parsed from the file
+    /// Organized by namespace URI
+    pub custom_extension_elements: HashMap<String, Vec<CustomElementData>>,
 }
 
 impl Model {
@@ -441,7 +657,36 @@ impl Model {
             metadata: HashMap::new(),
             resources: Resources::new(),
             build: Build::new(),
+            custom_extension_elements: HashMap::new(),
         }
+    }
+
+    /// Get custom extension elements for a specific namespace
+    ///
+    /// Returns the custom extension elements parsed from the file for the given namespace.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace URI to look up
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::Model;
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let file = File::open("model.3mf")?;
+    /// let model = Model::from_reader(file)?;
+    ///
+    /// if let Some(elements) = model.get_custom_elements("http://example.com/myextension") {
+    ///     println!("Found {} custom elements", elements.len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_custom_elements(&self, namespace: &str) -> Option<&Vec<CustomElementData>> {
+        self.custom_extension_elements.get(namespace)
     }
 }
 
