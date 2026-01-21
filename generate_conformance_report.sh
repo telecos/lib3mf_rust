@@ -98,9 +98,16 @@ echo "" >> CONFORMANCE_REPORT.md
 # Extract total line and format it
 TOTAL_LINE=$(grep "^TOTAL" "$TEMP_OUTPUT" || echo "")
 if [ -n "$TOTAL_LINE" ]; then
+    # TOTAL line format: "TOTAL    Positive:  45/ 50  Negative:  30/ 35"
+    # Field 1: TOTAL, Field 2: Positive:, Field 3: 45/, Field 4: 50, Field 5: Negative:, Field 6: 30/, Field 7: 35
     echo "$TOTAL_LINE" | awk '{
-        printf "- **Positive Tests:** %s/%s passed\n", $3, $4
-        printf "- **Negative Tests:** %s/%s passed\n", $5, $6
+        # Remove trailing slash from field 3 and 6
+        pos_passed = $3; sub(/\/$/, "", pos_passed)
+        pos_total = $4
+        neg_passed = $6; sub(/\/$/, "", neg_passed)
+        neg_total = $7
+        printf "- **Positive Tests:** %s/%s passed\n", pos_passed, pos_total
+        printf "- **Negative Tests:** %s/%s passed\n", neg_passed, neg_total
     }' >> CONFORMANCE_REPORT.md || true
 fi
 echo "" >> CONFORMANCE_REPORT.md
@@ -117,7 +124,8 @@ TABLE_HEADER
 grep -E "^suite[0-9]+_" "$TEMP_OUTPUT" | while read -r line; do
     suite=$(echo "$line" | awk '{print $1}')
     pos=$(echo "$line" | awk '{print $3}')
-    neg=$(echo "$line" | awk '{print $5}')
+    # Negative value is split across fields 5 and 6 due to space (e.g., "20/ 80")
+    neg=$(echo "$line" | awk '{print $5 $6}')  # Concatenate to get "20/80"
     
     # Get description using function
     desc=$(get_suite_description "$suite")
@@ -171,7 +179,8 @@ DETAILED_HEADER
 grep -E "^suite[0-9]+_" "$TEMP_OUTPUT" | while read -r line; do
     suite=$(echo "$line" | awk '{print $1}')
     pos=$(echo "$line" | awk '{print $3}')
-    neg=$(echo "$line" | awk '{print $5}')
+    # Negative value is split across fields 5 and 6 due to space (e.g., "20/ 80")
+    neg=$(echo "$line" | awk '{print $5 $6}')  # Concatenate to get "20/80"
     
     # Get description using function
     desc=$(get_suite_description "$suite")
