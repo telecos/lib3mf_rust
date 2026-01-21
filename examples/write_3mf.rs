@@ -39,26 +39,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Red".to_string(),
         (255, 0, 0, 255), // RGBA
     ));
-    material_group.materials.push(BaseMaterial::new(
-        "Green".to_string(),
-        (0, 255, 0, 255),
-    ));
-    material_group.materials.push(BaseMaterial::new(
-        "Blue".to_string(),
-        (0, 0, 255, 255),
-    ));
-    material_group.materials.push(BaseMaterial::new(
-        "Yellow".to_string(),
-        (255, 255, 0, 255),
-    ));
-    material_group.materials.push(BaseMaterial::new(
-        "Cyan".to_string(),
-        (0, 255, 255, 255),
-    ));
-    material_group.materials.push(BaseMaterial::new(
-        "Magenta".to_string(),
-        (255, 0, 255, 255),
-    ));
+    material_group
+        .materials
+        .push(BaseMaterial::new("Green".to_string(), (0, 255, 0, 255)));
+    material_group
+        .materials
+        .push(BaseMaterial::new("Blue".to_string(), (0, 0, 255, 255)));
+    material_group
+        .materials
+        .push(BaseMaterial::new("Yellow".to_string(), (255, 255, 0, 255)));
+    material_group
+        .materials
+        .push(BaseMaterial::new("Cyan".to_string(), (0, 255, 255, 255)));
+    material_group
+        .materials
+        .push(BaseMaterial::new("Magenta".to_string(), (255, 0, 255, 255)));
     model.resources.base_material_groups.push(material_group);
 
     // Create a cube mesh (8 vertices, 12 triangles)

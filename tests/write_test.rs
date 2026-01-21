@@ -139,10 +139,7 @@ fn test_roundtrip_tetrahedron() {
     let parsed_model = Model::from_reader(cursor).expect("Failed to parse written model");
 
     // Verify
-    let parsed_mesh = parsed_model.resources.objects[0]
-        .mesh
-        .as_ref()
-        .unwrap();
+    let parsed_mesh = parsed_model.resources.objects[0].mesh.as_ref().unwrap();
     assert_eq!(parsed_mesh.vertices.len(), 4);
     assert_eq!(parsed_mesh.triangles.len(), 4);
 }
@@ -159,10 +156,9 @@ fn test_roundtrip_with_materials() {
         "Red".to_string(),
         (255, 0, 0, 255), // RGBA
     ));
-    material_group.materials.push(BaseMaterial::new(
-        "Blue".to_string(),
-        (0, 0, 255, 255),
-    ));
+    material_group
+        .materials
+        .push(BaseMaterial::new("Blue".to_string(), (0, 0, 255, 255)));
     model.resources.base_material_groups.push(material_group);
 
     // Add object with material references
@@ -334,7 +330,9 @@ fn test_roundtrip_with_transform() {
     // Add build item with transformation matrix
     let mut item = BuildItem::new(1);
     // Identity matrix with translation (10, 20, 30)
-    item.transform = Some([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0]);
+    item.transform = Some([
+        1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0,
+    ]);
     model.build.items.push(item);
 
     // Write and read back

@@ -33,7 +33,7 @@ pub fn write_model_xml<W: IoWrite>(model: &Model, writer: W) -> Result<()> {
         if *ext == Extension::Core {
             continue; // Core is already added as default xmlns
         }
-        
+
         let (prefix, namespace) = match ext {
             Extension::Material => ("m", ext.namespace()),
             Extension::Production => ("p", ext.namespace()),
@@ -44,10 +44,10 @@ pub fn write_model_xml<W: IoWrite>(model: &Model, writer: W) -> Result<()> {
             Extension::Displacement => ("d", ext.namespace()),
             Extension::Core => continue,
         };
-        
+
         ns_attrs.push((format!("xmlns:{}", prefix), namespace));
     }
-    
+
     for (name, value) in &ns_attrs {
         model_elem.push_attribute((name.as_str(), *value));
     }
@@ -101,13 +101,10 @@ pub fn write_model_xml<W: IoWrite>(model: &Model, writer: W) -> Result<()> {
 }
 
 /// Write a metadata entry
-fn write_metadata<W: IoWrite>(
-    writer: &mut Writer<W>,
-    entry: &MetadataEntry,
-) -> Result<()> {
+fn write_metadata<W: IoWrite>(writer: &mut Writer<W>, entry: &MetadataEntry) -> Result<()> {
     let mut elem = BytesStart::new("metadata");
     elem.push_attribute(("name", entry.name.as_str()));
-    
+
     if let Some(preserve) = entry.preserve {
         elem.push_attribute(("preserve", if preserve { "1" } else { "0" }));
     }
@@ -200,7 +197,7 @@ fn write_base_material_group<W: IoWrite>(
     for material in &group.materials {
         let mut mat_elem = BytesStart::new("m:base");
         mat_elem.push_attribute(("name", material.name.as_str()));
-        
+
         let color = format!(
             "#{:02X}{:02X}{:02X}{:02X}",
             material.displaycolor.0,
@@ -228,7 +225,7 @@ fn write_texture2d<W: IoWrite>(writer: &mut Writer<W>, texture: &Texture2D) -> R
     elem.push_attribute(("id", texture.id.to_string().as_str()));
     elem.push_attribute(("path", texture.path.as_str()));
     elem.push_attribute(("contenttype", texture.contenttype.as_str()));
-    
+
     let tilestyleu = match texture.tilestyleu {
         TileStyle::Wrap => "wrap",
         TileStyle::Mirror => "mirror",
@@ -236,7 +233,7 @@ fn write_texture2d<W: IoWrite>(writer: &mut Writer<W>, texture: &Texture2D) -> R
         TileStyle::None => "none",
     };
     elem.push_attribute(("tilestyleu", tilestyleu));
-    
+
     let tilestylev = match texture.tilestylev {
         TileStyle::Wrap => "wrap",
         TileStyle::Mirror => "mirror",
@@ -244,7 +241,7 @@ fn write_texture2d<W: IoWrite>(writer: &mut Writer<W>, texture: &Texture2D) -> R
         TileStyle::None => "none",
     };
     elem.push_attribute(("tilestylev", tilestylev));
-    
+
     let filter = match texture.filter {
         FilterMode::Auto => "auto",
         FilterMode::Linear => "linear",
@@ -260,10 +257,7 @@ fn write_texture2d<W: IoWrite>(writer: &mut Writer<W>, texture: &Texture2D) -> R
 }
 
 /// Write a texture2dgroup resource
-fn write_texture2d_group<W: IoWrite>(
-    writer: &mut Writer<W>,
-    group: &Texture2DGroup,
-) -> Result<()> {
+fn write_texture2d_group<W: IoWrite>(writer: &mut Writer<W>, group: &Texture2DGroup) -> Result<()> {
     let mut elem = BytesStart::new("m:texture2dgroup");
     elem.push_attribute(("id", group.id.to_string().as_str()));
     elem.push_attribute(("texid", group.texid.to_string().as_str()));
@@ -326,7 +320,7 @@ fn write_composite_materials<W: IoWrite>(
     let mut elem = BytesStart::new("m:compositematerials");
     elem.push_attribute(("id", composite.id.to_string().as_str()));
     elem.push_attribute(("matid", composite.matid.to_string().as_str()));
-    
+
     // Convert matindices to space-separated string
     let matindices_str = composite
         .matindices
@@ -336,9 +330,9 @@ fn write_composite_materials<W: IoWrite>(
         .join(" ");
     elem.push_attribute(("matindices", matindices_str.as_str()));
 
-    writer
-        .write_event(Event::Start(elem))
-        .map_err(|e| Error::xml_write(format!("Failed to write compositematerials element: {}", e)))?;
+    writer.write_event(Event::Start(elem)).map_err(|e| {
+        Error::xml_write(format!("Failed to write compositematerials element: {}", e))
+    })?;
 
     for comp in &composite.composites {
         write_composite(writer, comp)?;
@@ -346,7 +340,9 @@ fn write_composite_materials<W: IoWrite>(
 
     writer
         .write_event(Event::End(BytesEnd::new("m:compositematerials")))
-        .map_err(|e| Error::xml_write(format!("Failed to close compositematerials element: {}", e)))?;
+        .map_err(|e| {
+            Error::xml_write(format!("Failed to close compositematerials element: {}", e))
+        })?;
 
     Ok(())
 }
@@ -354,7 +350,7 @@ fn write_composite_materials<W: IoWrite>(
 /// Write a composite entry
 fn write_composite<W: IoWrite>(writer: &mut Writer<W>, composite: &Composite) -> Result<()> {
     let mut elem = BytesStart::new("m:composite");
-    
+
     // Convert values to space-separated string
     let values_str = composite
         .values
@@ -378,7 +374,7 @@ fn write_multi_properties<W: IoWrite>(
 ) -> Result<()> {
     let mut elem = BytesStart::new("m:multiproperties");
     elem.push_attribute(("id", multi.id.to_string().as_str()));
-    
+
     // Convert pids to space-separated string
     let pids_str = multi
         .pids
@@ -387,7 +383,7 @@ fn write_multi_properties<W: IoWrite>(
         .collect::<Vec<_>>()
         .join(" ");
     elem.push_attribute(("pids", pids_str.as_str()));
-    
+
     // Convert blendmethods to space-separated string
     if !multi.blendmethods.is_empty() {
         let blendmethods_str = multi
@@ -420,7 +416,7 @@ fn write_multi_properties<W: IoWrite>(
 /// Write a multi entry
 fn write_multi<W: IoWrite>(writer: &mut Writer<W>, multi: &Multi) -> Result<()> {
     let mut elem = BytesStart::new("m:multi");
-    
+
     // Convert pindices to space-separated string
     let pindices_str = multi
         .pindices
@@ -501,7 +497,7 @@ fn write_disp2d_group<W: IoWrite>(writer: &mut Writer<W>, group: &Disp2DGroup) -
 fn write_object<W: IoWrite>(writer: &mut Writer<W>, object: &Object) -> Result<()> {
     let mut elem = BytesStart::new("object");
     elem.push_attribute(("id", object.id.to_string().as_str()));
-    
+
     let obj_type = match object.object_type {
         ObjectType::Model => "model",
         ObjectType::Support => "support",
@@ -510,25 +506,25 @@ fn write_object<W: IoWrite>(writer: &mut Writer<W>, object: &Object) -> Result<(
         ObjectType::Other => "other",
     };
     elem.push_attribute(("type", obj_type));
-    
+
     if let Some(ref name) = object.name {
         elem.push_attribute(("name", name.as_str()));
     }
-    
+
     if let Some(pid) = object.pid {
         elem.push_attribute(("pid", pid.to_string().as_str()));
     }
-    
+
     if let Some(pindex) = object.pindex {
         elem.push_attribute(("pindex", pindex.to_string().as_str()));
     }
-    
+
     // Production extension attributes
     if let Some(ref production) = object.production {
         if let Some(ref uuid) = production.uuid {
             elem.push_attribute(("p:UUID", uuid.as_str()));
         }
-        
+
         if let Some(ref path) = production.path {
             elem.push_attribute(("p:path", path.as_str()));
         }
@@ -596,23 +592,23 @@ fn write_mesh<W: IoWrite>(writer: &mut Writer<W>, mesh: &Mesh) -> Result<()> {
         t_elem.push_attribute(("v1", triangle.v1.to_string().as_str()));
         t_elem.push_attribute(("v2", triangle.v2.to_string().as_str()));
         t_elem.push_attribute(("v3", triangle.v3.to_string().as_str()));
-        
+
         if let Some(pid) = triangle.pid {
             t_elem.push_attribute(("pid", pid.to_string().as_str()));
         }
-        
+
         if let Some(pindex) = triangle.pindex {
             t_elem.push_attribute(("pindex", pindex.to_string().as_str()));
         }
-        
+
         if let Some(p1) = triangle.p1 {
             t_elem.push_attribute(("p1", p1.to_string().as_str()));
         }
-        
+
         if let Some(p2) = triangle.p2 {
             t_elem.push_attribute(("p2", p2.to_string().as_str()));
         }
-        
+
         if let Some(p3) = triangle.p3 {
             t_elem.push_attribute(("p3", p3.to_string().as_str()));
         }
@@ -641,10 +637,10 @@ fn write_mesh<W: IoWrite>(writer: &mut Writer<W>, mesh: &Mesh) -> Result<()> {
 /// Write beamset (beam lattice extension)
 fn write_beamset<W: IoWrite>(writer: &mut Writer<W>, beamset: &BeamSet) -> Result<()> {
     let mut elem = BytesStart::new("b:beamset");
-    
+
     elem.push_attribute(("radius", beamset.radius.to_string().as_str()));
     elem.push_attribute(("minlength", beamset.min_length.to_string().as_str()));
-    
+
     let cap_mode = match beamset.cap_mode {
         BeamCapMode::Sphere => "sphere",
         BeamCapMode::Butt => "butt",
@@ -659,11 +655,11 @@ fn write_beamset<W: IoWrite>(writer: &mut Writer<W>, beamset: &BeamSet) -> Resul
         let mut beam_elem = BytesStart::new("b:beam");
         beam_elem.push_attribute(("v1", beam.v1.to_string().as_str()));
         beam_elem.push_attribute(("v2", beam.v2.to_string().as_str()));
-        
+
         if let Some(r1) = beam.r1 {
             beam_elem.push_attribute(("r1", r1.to_string().as_str()));
         }
-        
+
         if let Some(r2) = beam.r2 {
             beam_elem.push_attribute(("r2", r2.to_string().as_str()));
         }
@@ -689,7 +685,7 @@ fn write_components<W: IoWrite>(writer: &mut Writer<W>, components: &[Component]
     for component in components {
         let mut elem = BytesStart::new("component");
         elem.push_attribute(("objectid", component.objectid.to_string().as_str()));
-        
+
         if let Some(transform) = component.transform {
             let transform_str = transform
                 .iter()
@@ -712,20 +708,17 @@ fn write_components<W: IoWrite>(writer: &mut Writer<W>, components: &[Component]
 }
 
 /// Write boolean shape (boolean operations extension)
-fn write_boolean_shape<W: IoWrite>(
-    writer: &mut Writer<W>,
-    shape: &BooleanShape,
-) -> Result<()> {
+fn write_boolean_shape<W: IoWrite>(writer: &mut Writer<W>, shape: &BooleanShape) -> Result<()> {
     let mut elem = BytesStart::new("bool:booleanshape");
     elem.push_attribute(("objectid", shape.objectid.to_string().as_str()));
-    
+
     let op_type = match shape.operation {
         BooleanOpType::Union => "union",
         BooleanOpType::Intersection => "intersection",
         BooleanOpType::Difference => "difference",
     };
     elem.push_attribute(("op", op_type));
-    
+
     if let Some(ref path) = shape.path {
         elem.push_attribute(("path", path.as_str()));
     }
@@ -738,7 +731,7 @@ fn write_boolean_shape<W: IoWrite>(
     for boolean_ref in &shape.operands {
         let mut ref_elem = BytesStart::new("bool:booleanref");
         ref_elem.push_attribute(("objectid", boolean_ref.objectid.to_string().as_str()));
-        
+
         if let Some(ref path) = boolean_ref.path {
             ref_elem.push_attribute(("path", path.as_str()));
         }
@@ -758,7 +751,7 @@ fn write_boolean_shape<W: IoWrite>(
 /// Write build section
 fn write_build<W: IoWrite>(writer: &mut Writer<W>, build: &Build) -> Result<()> {
     let mut elem = BytesStart::new("build");
-    
+
     if let Some(ref uuid) = build.production_uuid {
         elem.push_attribute(("p:UUID", uuid.as_str()));
     }
@@ -782,7 +775,7 @@ fn write_build<W: IoWrite>(writer: &mut Writer<W>, build: &Build) -> Result<()> 
 fn write_build_item<W: IoWrite>(writer: &mut Writer<W>, item: &BuildItem) -> Result<()> {
     let mut elem = BytesStart::new("item");
     elem.push_attribute(("objectid", item.objectid.to_string().as_str()));
-    
+
     if let Some(transform) = item.transform {
         let transform_str = transform
             .iter()
@@ -791,7 +784,7 @@ fn write_build_item<W: IoWrite>(writer: &mut Writer<W>, item: &BuildItem) -> Res
             .join(" ");
         elem.push_attribute(("transform", transform_str.as_str()));
     }
-    
+
     // Production extension attributes
     if let Some(ref uuid) = item.production_uuid {
         elem.push_attribute(("p:UUID", uuid.as_str()));
@@ -847,16 +840,16 @@ mod tests {
     #[test]
     fn test_write_model_with_simple_mesh() {
         let mut model = Model::new();
-        
+
         let mut mesh = Mesh::new();
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
         mesh.triangles.push(Triangle::new(0, 1, 2));
-        
+
         let mut object = Object::new(1);
         object.mesh = Some(mesh);
-        
+
         model.resources.objects.push(object);
         model.build.items.push(BuildItem::new(1));
 

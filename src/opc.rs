@@ -645,34 +645,6 @@ impl<R: Read + std::io::Seek> Package<R> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Cursor;
-
-    #[test]
-    fn test_package_constants() {
-        assert_eq!(MODEL_PATH, "3D/3dmodel.model");
-        assert_eq!(CONTENT_TYPES_PATH, "[Content_Types].xml");
-    }
-
-    #[test]
-    fn test_package_from_empty_zip() {
-        // Create an empty ZIP archive
-        let buffer = Vec::new();
-        let cursor = Cursor::new(buffer);
-        let zip = zip::ZipWriter::new(cursor);
-        let cursor = zip.finish().unwrap();
-
-        // Should fail validation because it's missing required files
-        let result = Package::open(cursor);
-        assert!(
-            result.is_err(),
-            "Expected package validation to fail for empty ZIP"
-        );
-    }
-}
-
 /// Create a 3MF package (ZIP archive) from model data
 ///
 /// This function creates a complete 3MF file including:
@@ -688,10 +660,7 @@ mod tests {
 /// # Returns
 ///
 /// Returns the writer after finishing the ZIP archive
-pub fn create_package<W: std::io::Write + std::io::Seek>(
-    writer: W,
-    model_xml: &str,
-) -> Result<W> {
+pub fn create_package<W: std::io::Write + std::io::Seek>(writer: W, model_xml: &str) -> Result<W> {
     use std::io::Write;
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
@@ -848,4 +817,32 @@ pub fn create_package_with_thumbnail<W: std::io::Write + std::io::Seek>(
         .map_err(|e| Error::xml_write(format!("Failed to finalize ZIP archive: {}", e)))?;
 
     Ok(writer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_package_constants() {
+        assert_eq!(MODEL_PATH, "3D/3dmodel.model");
+        assert_eq!(CONTENT_TYPES_PATH, "[Content_Types].xml");
+    }
+
+    #[test]
+    fn test_package_from_empty_zip() {
+        // Create an empty ZIP archive
+        let buffer = Vec::new();
+        let cursor = Cursor::new(buffer);
+        let zip = zip::ZipWriter::new(cursor);
+        let cursor = zip.finish().unwrap();
+
+        // Should fail validation because it's missing required files
+        let result = Package::open(cursor);
+        assert!(
+            result.is_err(),
+            "Expected package validation to fail for empty ZIP"
+        );
+    }
 }
