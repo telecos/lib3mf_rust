@@ -72,11 +72,39 @@ fn test_slice_data_structure() {
 
     let model = Model::from_reader(file).expect("Failed to parse box_sliced.3mf");
 
-    // Note: The actual slices are in a separate file referenced by sliceref
-    // This test just verifies the slice stack structure is available
+    // Verify slice stack exists
     assert_eq!(
         model.resources.slice_stacks.len(),
         1,
         "Should have exactly 1 slice stack"
+    );
+
+    // Verify that slices are loaded from the external file
+    let slice_stack = &model.resources.slice_stacks[0];
+    assert!(
+        !slice_stack.slices.is_empty(),
+        "Slices should be loaded from external slice file"
+    );
+
+    // Verify first slice has data
+    let first_slice = &slice_stack.slices[0];
+    assert!(
+        first_slice.ztop > 0.0,
+        "First slice should have a ztop value"
+    );
+    assert!(
+        !first_slice.vertices.is_empty(),
+        "First slice should have vertices"
+    );
+    assert!(
+        !first_slice.polygons.is_empty(),
+        "First slice should have polygons"
+    );
+
+    // Verify polygon structure
+    let first_polygon = &first_slice.polygons[0];
+    assert!(
+        !first_polygon.segments.is_empty(),
+        "First polygon should have segments"
     );
 }

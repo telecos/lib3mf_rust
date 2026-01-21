@@ -88,8 +88,8 @@ Updated documentation:
 |-----------|--------|-------|
 | Core Specification | ✅ Fully Supported | All features implemented and tested |
 | Materials Extension | ✅ Fully Supported | Color groups and base materials |
+| Slice Extension | ✅ Fully Supported | Slice stacks, slices, polygons, and segments extracted from external files |
 | Production Extension | ✅ Fully Supported | UUID and path extraction from objects, build, and build items |
-| Slice Extension | ⚠️ Partially Supported | Files parse, slice data not yet extracted |
 | Beam Lattice Extension | ✅ Fully Supported | BeamSet, Beam structures, radii, cap modes fully extracted |
 | Secure Content | ⚠️ Read-Only Validation | Extension recognized, basic metadata extraction, NO cryptography |
 | Boolean Operations | ❌ Not Tested | No test files available |
@@ -130,6 +130,41 @@ pub struct Build {
 }
 ```
 
+**Slice Extension:**
+```rust
+pub struct SliceStack {
+    pub id: usize,
+    pub zbottom: f64,
+    pub slices: Vec<Slice>,
+    pub slice_refs: Vec<SliceRef>,
+}
+
+pub struct Slice {
+    pub ztop: f64,
+    pub vertices: Vec<Vertex2D>,
+    pub polygons: Vec<SlicePolygon>,
+}
+
+pub struct SlicePolygon {
+    pub startv: usize,
+    pub segments: Vec<SliceSegment>,
+}
+
+pub struct SliceSegment {
+    pub v2: usize,
+}
+
+pub struct SliceRef {
+    pub slicestackid: usize,
+    pub slicepath: String,
+}
+
+// Added to Object structure
+pub struct Object {
+    // ... existing fields
+    pub slicestackid: Option<usize>,
+```
+
 **Beam Lattice Extension:**
 ```rust
 pub enum BeamCapMode {
@@ -165,6 +200,8 @@ pub struct Mesh {
 - Color parsing in #RRGGBB and #RRGGBBAA formats
 - Production extension p:UUID attribute extraction from objects, build items, and build elements
 - Production extension p:path attribute extraction from objects
+- Slice extension external file loading and parsing
+- Slice polygon and segment extraction from referenced files
 - Beam Lattice extension parsing:
   - BeamSet extraction with radius, minlength, and cap mode attributes
   - Individual beam parsing with v1, v2, r1, r2 attributes
@@ -203,6 +240,8 @@ All quality checks pass:
 ## Future Work
 
 While the implementation successfully parses all extension files, some extension-specific data is not yet extracted:
+- Beam lattice extension: Beam definitions, beam properties
+
 - Slice extension: Slice stack definitions, slice references
 
 The Beam Lattice extension is now fully supported with complete data extraction including BeamSet structures, individual Beam definitions with vertex references (v1, v2), radii (r1, r2), and cap modes.

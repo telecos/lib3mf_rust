@@ -26,6 +26,24 @@ fn main() {
                 slice_ref.slicestackid, slice_ref.slicepath
             );
         }
+
+        // Display details for first few slices
+        if !slice_stack.slices.is_empty() {
+            println!("\n  First 3 slices (showing layer details):");
+            for (i, slice) in slice_stack.slices.iter().take(3).enumerate() {
+                println!("    Slice {}: ztop={:.3}mm", i, slice.ztop);
+                println!("      Vertices: {}", slice.vertices.len());
+                println!("      Polygons: {}", slice.polygons.len());
+
+                if let Some(polygon) = slice.polygons.first() {
+                    println!(
+                        "        First polygon: startv={}, segments={}",
+                        polygon.startv,
+                        polygon.segments.len()
+                    );
+                }
+            }
+        }
     }
 
     // Display objects with slice references
