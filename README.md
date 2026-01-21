@@ -698,7 +698,7 @@ at your option.
 - [3MF Specification](https://3mf.io/specification/)
 - [3MF Consortium](https://3mf.io/)
 - [lib3mf (Official C++ implementation)](https://github.com/3MFConsortium/lib3mf)
-- [Migration Guide from C++ lib3mf](MIGRATION.md) - Comprehensive guide for migrating from the C++ implementation
+- [Migration Guide from C++ lib3mf](MIGRATION_FROM_CPP.md) - Comprehensive guide for migrating from the C++ implementation
 
 ## Acknowledgments
 
