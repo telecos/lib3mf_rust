@@ -214,7 +214,7 @@ The implementation maintains full backward compatibility:
 
 The implementation provides a foundation for:
 
-1. **Extension-specific data extraction**: While extensions are now validated, the actual extension-specific data structures (beams, slices, UUIDs) can be added incrementally
+1. **Extension-specific data extraction**: Extension-specific data structures (slices, beams) can be added incrementally
 2. **Custom extensions**: The parser silently ignores unknown extensions, allowing for future or custom extension support
 3. **Extension capabilities**: The Extension enum can be extended with capability queries (e.g., "does this extension support textures?")
 
