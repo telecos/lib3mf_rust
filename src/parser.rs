@@ -35,7 +35,7 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 /// - `"m:colorgroup"` returns `"colorgroup"`
 /// - `"p:UUID"` returns `"UUID"`
 /// - `"object"` returns `"object"`
-fn get_local_name(name_str: &str) -> &str {
+pub(crate) fn get_local_name(name_str: &str) -> &str {
     if let Some(pos) = name_str.rfind(':') {
         &name_str[pos + 1..]
     } else {

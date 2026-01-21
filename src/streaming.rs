@@ -220,12 +220,12 @@ impl ObjectIterator {
 
         loop {
             match reader.read_event_into(&mut self.buf) {
-                Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                Ok(Event::Start(ref e)) => {
                     let name = e.name();
                     let name_str =
                         std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
 
-                    let local_name = get_local_name(name_str);
+                    let local_name = parser::get_local_name(name_str);
 
                     match local_name {
                         "resources" => {
@@ -233,13 +233,83 @@ impl ObjectIterator {
                         }
                         "object" if self.in_resources => {
                             // Parse the complete object including its mesh
-                            let object = parser::parse_object(reader, e)?;
-                            // For now, return the object without parsing its mesh content
-                            // A more complete implementation would parse the full object tree
-                            self.buf.clear();
-                            return Ok(Some(object));
+                            let mut object = parser::parse_object(reader, e)?;
+                            let mut current_mesh: Option<Mesh> = None;
+                            let mut depth = 1; // We're inside the object element
+
+                            // Continue parsing until we hit the closing </object> tag
+                            loop {
+                                match reader.read_event_into(&mut self.buf) {
+                                    Ok(Event::Start(ref e)) => {
+                                        depth += 1;
+                                        let name = e.name();
+                                        let name_str = std::str::from_utf8(name.as_ref())
+                                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                        let local_name = parser::get_local_name(name_str);
+
+                                        match local_name {
+                                            "mesh" => {
+                                                current_mesh = Some(Mesh::new());
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    Ok(Event::Empty(ref e)) => {
+                                        let name = e.name();
+                                        let name_str = std::str::from_utf8(name.as_ref())
+                                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                        let local_name = parser::get_local_name(name_str);
+
+                                        match local_name {
+                                            "vertex" if current_mesh.is_some() => {
+                                                if let Some(ref mut mesh) = current_mesh {
+                                                    let vertex = parser::parse_vertex(reader, e)?;
+                                                    mesh.vertices.push(vertex);
+                                                }
+                                            }
+                                            "triangle" if current_mesh.is_some() => {
+                                                if let Some(ref mut mesh) = current_mesh {
+                                                    let triangle = parser::parse_triangle(reader, e)?;
+                                                    mesh.triangles.push(triangle);
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    Ok(Event::End(_)) => {
+                                        depth -= 1;
+                                        if depth == 0 {
+                                            // End of object element
+                                            object.mesh = current_mesh;
+                                            self.buf.clear();
+                                            return Ok(Some(object));
+                                        }
+                                    }
+                                    Ok(Event::Eof) => {
+                                        self.done = true;
+                                        return Err(Error::InvalidXml("Unexpected EOF while parsing object".to_string()));
+                                    }
+                                    Err(e) => {
+                                        self.done = true;
+                                        return Err(Error::Xml(e));
+                                    }
+                                    _ => {}
+                                }
+                                self.buf.clear();
+                            }
                         }
                         _ => {}
+                    }
+                }
+                Ok(Event::Empty(ref e)) => {
+                    let name = e.name();
+                    let name_str =
+                        std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                    let local_name = parser::get_local_name(name_str);
+
+                    if local_name == "resources" {
+                        self.in_resources = true;
                     }
                 }
                 Ok(Event::End(ref e)) => {
@@ -247,7 +317,7 @@ impl ObjectIterator {
                     let name_str =
                         std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
 
-                    let local_name = get_local_name(name_str);
+                    let local_name = parser::get_local_name(name_str);
 
                     if local_name == "resources" {
                         self.in_resources = false;
@@ -285,15 +355,6 @@ impl Iterator for ObjectIterator {
     }
 }
 
-/// Extract local name from potentially namespaced XML element name
-fn get_local_name(name_str: &str) -> &str {
-    if let Some(pos) = name_str.rfind(':') {
-        &name_str[pos + 1..]
-    } else {
-        name_str
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,6 +371,12 @@ mod tests {
         
         assert_eq!(objects.len(), 1);
         assert_eq!(objects[0].id, 1);
+        
+        // Verify mesh data is loaded
+        assert!(objects[0].mesh.is_some());
+        let mesh = objects[0].mesh.as_ref().unwrap();
+        assert_eq!(mesh.vertices.len(), 3);
+        assert_eq!(mesh.triangles.len(), 1);
     }
 
     fn create_test_3mf() -> Vec<u8> {
