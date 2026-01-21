@@ -1,8 +1,8 @@
 //! Tests for 3MF writing/serialization functionality
 
+use lib3mf::model::MetadataEntry;
 use lib3mf::{
-    BaseMaterial, BaseMaterialGroup, BuildItem, ColorGroup, Mesh, MetadataEntry, Model, Object,
-    Triangle, Vertex,
+    BaseMaterial, BaseMaterialGroup, BuildItem, ColorGroup, Mesh, Model, Object, Triangle, Vertex,
 };
 use std::io::Cursor;
 
