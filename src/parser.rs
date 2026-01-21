@@ -388,9 +388,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("BaseMaterials missing id attribute".to_string())
-                            })?
+                            .ok_or_else(|| Error::missing_attribute("basematerials", "id"))?
                             .parse::<usize>()?;
                         current_basematerialgroup = Some(BaseMaterialGroup::new(id));
                     }
@@ -426,9 +424,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("ColorGroup missing id attribute".to_string())
-                            })?
+                            .ok_or_else(|| Error::missing_attribute("colorgroup", "id"))?
                             .parse::<usize>()?;
                         current_colorgroup = Some(ColorGroup::new(id));
                     }
@@ -446,15 +442,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("texture2d missing id attribute".to_string())
-                            })?
+                            .ok_or_else(|| Error::missing_attribute("texture2d", "id"))?
                             .parse::<usize>()?;
                         let path = attrs
                             .get("path")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("texture2d missing path attribute".to_string())
-                            })?
+                            .ok_or_else(|| Error::missing_attribute("texture2d", "path"))?
                             .to_string();
                         let contenttype = attrs
                             .get("contenttype")
@@ -504,17 +496,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("texture2dgroup missing id attribute".to_string())
-                            })?
+                            .ok_or_else(|| Error::missing_attribute("texture2dgroup", "id"))?
                             .parse::<usize>()?;
                         let texid = attrs
                             .get("texid")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "texture2dgroup missing texid attribute".to_string(),
-                                )
-                            })?
+                            .ok_or_else(|| Error::missing_attribute("texture2dgroup", "texid"))?
                             .parse::<usize>()?;
                         current_texture2dgroup = Some(Texture2DGroup::new(id, texid));
                     }
@@ -523,15 +509,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             let attrs = parse_attributes(&reader, e)?;
                             let u = attrs
                                 .get("u")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("tex2coord missing u attribute".to_string())
-                                })?
+                                .ok_or_else(|| Error::missing_attribute("tex2coord", "u"))?
                                 .parse::<f32>()?;
                             let v = attrs
                                 .get("v")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("tex2coord missing v attribute".to_string())
-                                })?
+                                .ok_or_else(|| Error::missing_attribute("tex2coord", "v"))?
                                 .parse::<f32>()?;
                             group.tex2coords.push(Tex2Coord::new(u, v));
                         }
