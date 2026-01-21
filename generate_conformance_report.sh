@@ -9,6 +9,49 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Function to get suite description
+get_suite_description() {
+    local suite="$1"
+    case "$suite" in
+        "suite1_core_slice_prod")
+            echo "Core + Production + Slice Extensions"
+            ;;
+        "suite2_core_prod_matl")
+            echo "Core + Production + Materials Extensions"
+            ;;
+        "suite3_core")
+            echo "Core Specification (Basic)"
+            ;;
+        "suite4_core_slice")
+            echo "Core + Slice Extension"
+            ;;
+        "suite5_core_prod")
+            echo "Core + Production Extension"
+            ;;
+        "suite6_core_matl")
+            echo "Core + Materials Extension"
+            ;;
+        "suite7_beam")
+            echo "Beam Lattice Extension"
+            ;;
+        "suite8_secure")
+            echo "Secure Content Extension"
+            ;;
+        "suite9_core_ext")
+            echo "Core Extensions"
+            ;;
+        "suite10_boolean")
+            echo "Boolean Operations Extension"
+            ;;
+        "suite11_Displacement")
+            echo "Displacement Extension"
+            ;;
+        *)
+            echo "$suite"
+            ;;
+    esac
+}
+
 echo "============================================================"
 echo "3MF Conformance Report Generator"
 echo "============================================================"
@@ -56,8 +99,8 @@ echo "" >> CONFORMANCE_REPORT.md
 TOTAL_LINE=$(grep "^TOTAL" "$TEMP_OUTPUT" || echo "")
 if [ -n "$TOTAL_LINE" ]; then
     echo "$TOTAL_LINE" | awk '{
-        printf "- **Positive Tests:** %s/%s passed\n", $3, $3
-        printf "- **Negative Tests:** %s/%s passed\n", $5, $5
+        printf "- **Positive Tests:** %s/%s passed\n", $3, $4
+        printf "- **Negative Tests:** %s/%s passed\n", $5, $6
     }' >> CONFORMANCE_REPORT.md || true
 fi
 echo "" >> CONFORMANCE_REPORT.md
@@ -76,45 +119,8 @@ grep -E "^suite[0-9]+_" "$TEMP_OUTPUT" | while read -r line; do
     pos=$(echo "$line" | awk '{print $3}')
     neg=$(echo "$line" | awk '{print $5}')
     
-    # Get description
-    case "$suite" in
-        "suite1_core_slice_prod")
-            desc="Core + Production + Slice Extensions"
-            ;;
-        "suite2_core_prod_matl")
-            desc="Core + Production + Materials Extensions"
-            ;;
-        "suite3_core")
-            desc="Core Specification (Basic)"
-            ;;
-        "suite4_core_slice")
-            desc="Core + Slice Extension"
-            ;;
-        "suite5_core_prod")
-            desc="Core + Production Extension"
-            ;;
-        "suite6_core_matl")
-            desc="Core + Materials Extension"
-            ;;
-        "suite7_beam")
-            desc="Beam Lattice Extension"
-            ;;
-        "suite8_secure")
-            desc="Secure Content Extension"
-            ;;
-        "suite9_core_ext")
-            desc="Core Extensions"
-            ;;
-        "suite10_boolean")
-            desc="Boolean Operations Extension"
-            ;;
-        "suite11_Displacement")
-            desc="Displacement Extension"
-            ;;
-        *)
-            desc="$suite"
-            ;;
-    esac
+    # Get description using function
+    desc=$(get_suite_description "$suite")
     
     # Parse pass/total for positive and negative
     pos_passed=$(echo "$pos" | cut -d'/' -f1 | tr -d ' ')
@@ -167,45 +173,8 @@ grep -E "^suite[0-9]+_" "$TEMP_OUTPUT" | while read -r line; do
     pos=$(echo "$line" | awk '{print $3}')
     neg=$(echo "$line" | awk '{print $5}')
     
-    # Get description
-    case "$suite" in
-        "suite1_core_slice_prod")
-            desc="Core + Production + Slice Extensions"
-            ;;
-        "suite2_core_prod_matl")
-            desc="Core + Production + Materials Extensions"
-            ;;
-        "suite3_core")
-            desc="Core Specification (Basic)"
-            ;;
-        "suite4_core_slice")
-            desc="Core + Slice Extension"
-            ;;
-        "suite5_core_prod")
-            desc="Core + Production Extension"
-            ;;
-        "suite6_core_matl")
-            desc="Core + Materials Extension"
-            ;;
-        "suite7_beam")
-            desc="Beam Lattice Extension"
-            ;;
-        "suite8_secure")
-            desc="Secure Content Extension"
-            ;;
-        "suite9_core_ext")
-            desc="Core Extensions"
-            ;;
-        "suite10_boolean")
-            desc="Boolean Operations Extension"
-            ;;
-        "suite11_Displacement")
-            desc="Displacement Extension"
-            ;;
-        *)
-            desc="$suite"
-            ;;
-    esac
+    # Get description using function
+    desc=$(get_suite_description "$suite")
     
     echo "### $suite" >> CONFORMANCE_REPORT.md
     echo "*$desc*" >> CONFORMANCE_REPORT.md
