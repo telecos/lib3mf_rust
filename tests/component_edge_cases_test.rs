@@ -80,7 +80,10 @@ fn test_component_deep_non_circular_hierarchy() {
 </model>"#;
 
     let result = parse_model_xml(xml);
-    assert!(result.is_ok(), "Deep non-circular hierarchy should be valid");
+    assert!(
+        result.is_ok(),
+        "Deep non-circular hierarchy should be valid"
+    );
 }
 
 #[test]
@@ -119,7 +122,7 @@ fn test_component_with_transformation_matrix() {
     assert_eq!(obj2.components.len(), 1);
     assert!(obj2.components[0].transform.is_some());
     let transform = obj2.components[0].transform.unwrap();
-    assert_eq!(transform[9], 10.0);  // tx
+    assert_eq!(transform[9], 10.0); // tx
     assert_eq!(transform[10], 20.0); // ty
     assert_eq!(transform[11], 30.0); // tz
 }
@@ -193,4 +196,3 @@ fn test_component_invalid_transform_infinity() {
     let err = result.unwrap_err();
     assert!(err.to_string().contains("finite"));
 }
-
