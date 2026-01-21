@@ -44,13 +44,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct ErrorContext {
     /// The file where the error occurred (typically a path within the 3MF archive)
     pub file: Option<String>,
-    
+
     /// Line number where the error occurred (when available from XML parsing)
     pub line: Option<usize>,
-    
+
     /// Column number where the error occurred (when available from XML parsing)
     pub column: Option<usize>,
-    
+
     /// A helpful hint for resolving the error
     pub hint: Option<String>,
 }
@@ -65,7 +65,7 @@ impl ErrorContext {
             hint: None,
         }
     }
-    
+
     /// Create an error context with just a hint
     pub fn with_hint(hint: impl Into<String>) -> Self {
         Self {
@@ -75,25 +75,25 @@ impl ErrorContext {
             hint: Some(hint.into()),
         }
     }
-    
+
     /// Set the file location
     pub fn file(mut self, file: impl Into<String>) -> Self {
         self.file = Some(file.into());
         self
     }
-    
+
     /// Set the line number
     pub fn line(mut self, line: usize) -> Self {
         self.line = Some(line);
         self
     }
-    
+
     /// Set the column number
     pub fn column(mut self, column: usize) -> Self {
         self.column = Some(column);
         self
     }
-    
+
     /// Set the hint
     pub fn hint(mut self, hint: impl Into<String>) -> Self {
         self.hint = Some(hint.into());
@@ -110,21 +110,21 @@ impl Default for ErrorContext {
 impl std::fmt::Display for ErrorContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut parts = Vec::new();
-        
+
         if let Some(ref file) = self.file {
             parts.push(format!("File: {}", file));
         }
-        
+
         if let (Some(line), Some(column)) = (self.line, self.column) {
             parts.push(format!("Location: line {}, column {}", line, column));
         } else if let Some(line) = self.line {
             parts.push(format!("Line: {}", line));
         }
-        
+
         if let Some(ref hint) = self.hint {
             parts.push(format!("Hint: {}", hint));
         }
-        
+
         if !parts.is_empty() {
             write!(f, "\n{}", parts.join("\n"))
         } else {
