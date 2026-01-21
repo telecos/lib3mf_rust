@@ -595,11 +595,10 @@ The roadmap includes:
 
 ## Getting Help
 
-- **Documentation**: [docs.rs/lib3mf](https://docs.rs/lib3mf) (when published)
 - **Examples**: See `examples/` directory in the repository
 - **Issues**: [GitHub Issues](https://github.com/telecos/lib3mf_rust/issues)
 - **3MF Spec**: [3mf.io/specification](https://3mf.io/specification/)
-- **C++ Reference**: [lib3mf.readthedocs.io](https://lib3mf.readthedocs.io/)
+- **C++ Reference**: [https://lib3mf.readthedocs.io/](https://lib3mf.readthedocs.io/)
 
 ## Conclusion
 
