@@ -1479,7 +1479,7 @@ pub(crate) fn parse_object<R: std::io::BufRead>(
     }
 
     // Track if thumbnail attribute is present (for validation)
-    if attrs.get("thumbnail").is_some() {
+    if attrs.contains_key("thumbnail") {
         object.has_thumbnail_attribute = true;
     }
 
