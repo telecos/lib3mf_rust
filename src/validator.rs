@@ -511,11 +511,18 @@ fn validate_component_references(model: &Model) -> Result<()> {
         for component in &object.components {
             // Skip validation for components referencing encrypted files
             // These files cannot be loaded/parsed, so their objects won't exist in resources
-            if let Some(ref path) = component.path {
-                if encrypted_paths.contains(path.as_str()) {
-                    // This component references an encrypted file - skip validation
-                    continue;
-                }
+            // Only skip if BOTH conditions are true:
+            // 1. Component has a path (references external file)
+            // 2. That path is in the encrypted files list
+            let is_encrypted_reference = if let Some(ref path) = component.path {
+                encrypted_paths.contains(path.as_str())
+            } else {
+                false
+            };
+
+            if is_encrypted_reference {
+                // This component references an encrypted file - skip validation
+                continue;
             }
 
             if !valid_object_ids.contains(&component.objectid) {
