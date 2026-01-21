@@ -34,10 +34,13 @@ fn main() {
                 println!("    Slice {}: ztop={:.3}mm", i, slice.ztop);
                 println!("      Vertices: {}", slice.vertices.len());
                 println!("      Polygons: {}", slice.polygons.len());
-                
+
                 if let Some(polygon) = slice.polygons.first() {
-                    println!("        First polygon: startv={}, segments={}", 
-                             polygon.startv, polygon.segments.len());
+                    println!(
+                        "        First polygon: startv={}, segments={}",
+                        polygon.startv,
+                        polygon.segments.len()
+                    );
                 }
             }
         }

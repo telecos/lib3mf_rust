@@ -1227,7 +1227,7 @@ fn load_slice_references<R: Read + std::io::Seek>(
     // Process each slice stack independently
     for slice_stack in &mut model.resources.slice_stacks {
         let stack_id = slice_stack.id;
-        
+
         // Load slices from each referenced file
         for slice_ref in &slice_stack.slice_refs {
             // Normalize the path (remove leading slash if present)
@@ -1238,14 +1238,12 @@ fn load_slice_references<R: Read + std::io::Seek>(
             };
 
             // Load the slice file from the package
-            let slice_xml = package
-                .get_file(normalized_path)
-                .map_err(|e| {
-                    Error::InvalidXml(format!(
-                        "Failed to load slice reference file '{}': {}",
-                        slice_ref.slicepath, e
-                    ))
-                })?;
+            let slice_xml = package.get_file(normalized_path).map_err(|e| {
+                Error::InvalidXml(format!(
+                    "Failed to load slice reference file '{}': {}",
+                    slice_ref.slicepath, e
+                ))
+            })?;
 
             // Parse the slice file to extract slices
             let slices = parse_slice_file(&slice_xml, stack_id)?;
@@ -1413,7 +1411,6 @@ fn parse_slice_file(xml: &str, expected_stack_id: usize) -> Result<Vec<Slice>> {
 
     Ok(slices)
 }
-
 
 /// Parse object element attributes
 pub(crate) fn parse_object<R: std::io::BufRead>(

@@ -88,7 +88,10 @@ fn test_slice_data_structure() {
 
     // Verify first slice has data
     let first_slice = &slice_stack.slices[0];
-    assert!(first_slice.ztop > 0.0, "First slice should have a ztop value");
+    assert!(
+        first_slice.ztop > 0.0,
+        "First slice should have a ztop value"
+    );
     assert!(
         !first_slice.vertices.is_empty(),
         "First slice should have vertices"
@@ -105,4 +108,3 @@ fn test_slice_data_structure() {
         "First polygon should have segments"
     );
 }
-
