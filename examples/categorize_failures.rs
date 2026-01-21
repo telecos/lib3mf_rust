@@ -67,7 +67,7 @@ fn main() {
     for code in codes {
         let failures = &failures_by_code[code];
         println!("Code {} - {} failing tests", code, failures.len());
-        for (i, f) in failures.iter().enumerate().take(3) {
+        for (_i, f) in failures.iter().enumerate().take(3) {
             println!("  - {}", f);
         }
         if failures.len() > 3 {
