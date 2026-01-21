@@ -231,6 +231,8 @@ pub struct Mesh {
     pub vertices: Vec<Vertex>,
     /// List of triangles
     pub triangles: Vec<Triangle>,
+    /// Optional beam lattice structure (Beam Lattice Extension)
+    pub beamset: Option<BeamSet>,
 }
 
 impl Mesh {
@@ -239,11 +241,119 @@ impl Mesh {
         Self {
             vertices: Vec::new(),
             triangles: Vec::new(),
+            beamset: None,
         }
     }
 }
 
 impl Default for Mesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cap mode for beam lattice ends
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BeamCapMode {
+    /// Sphere cap (rounded ends)
+    Sphere,
+    /// Butt cap (flat ends)
+    Butt,
+}
+
+impl Default for BeamCapMode {
+    fn default() -> Self {
+        BeamCapMode::Sphere
+    }
+}
+
+/// A single beam in a beam lattice structure
+///
+/// Beams connect two vertices with optional varying radii along the beam.
+/// Part of the Beam Lattice Extension specification.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Beam {
+    /// Index of first vertex
+    pub v1: usize,
+    /// Index of second vertex
+    pub v2: usize,
+    /// Radius at first vertex (optional, defaults to beamset radius)
+    pub r1: Option<f64>,
+    /// Radius at second vertex (optional, defaults to r1 or beamset radius)
+    pub r2: Option<f64>,
+}
+
+impl Beam {
+    /// Create a new beam between two vertices
+    pub fn new(v1: usize, v2: usize) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: None,
+            r2: None,
+        }
+    }
+
+    /// Create a new beam with a specific radius at v1
+    pub fn with_radius(v1: usize, v2: usize, r1: f64) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: Some(r1),
+            r2: None,
+        }
+    }
+
+    /// Create a new beam with different radii at both ends
+    pub fn with_radii(v1: usize, v2: usize, r1: f64, r2: f64) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: Some(r1),
+            r2: Some(r2),
+        }
+    }
+}
+
+/// A beam lattice structure containing beams and lattice properties
+///
+/// Part of the Beam Lattice Extension specification.
+/// Defines a lattice structure made of beams connecting vertices.
+#[derive(Debug, Clone)]
+pub struct BeamSet {
+    /// Default radius for beams (when not specified per-beam)
+    pub radius: f64,
+    /// Minimum length for beams
+    pub min_length: f64,
+    /// Cap mode for beam ends
+    pub cap_mode: BeamCapMode,
+    /// List of beams in the lattice
+    pub beams: Vec<Beam>,
+}
+
+impl BeamSet {
+    /// Create a new beam set with default values
+    pub fn new() -> Self {
+        Self {
+            radius: 1.0,
+            min_length: 0.0001,
+            cap_mode: BeamCapMode::Sphere,
+            beams: Vec::new(),
+        }
+    }
+
+    /// Create a new beam set with a specific radius
+    pub fn with_radius(radius: f64) -> Self {
+        Self {
+            radius,
+            min_length: 0.0001,
+            cap_mode: BeamCapMode::Sphere,
+            beams: Vec::new(),
+        }
+    }
+}
+
+impl Default for BeamSet {
     fn default() -> Self {
         Self::new()
     }
