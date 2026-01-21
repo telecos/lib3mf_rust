@@ -246,7 +246,7 @@ impl Mesh {
     }
 
     /// Create a new mesh with pre-allocated capacity
-    /// 
+    ///
     /// This is useful for performance when the number of vertices and triangles
     /// is known in advance, as it avoids multiple reallocations.
     pub fn with_capacity(vertices: usize, triangles: usize) -> Self {
