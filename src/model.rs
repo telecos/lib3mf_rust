@@ -1312,6 +1312,12 @@ pub struct Component {
     /// - ty (index 10): translation along Y axis  
     /// - tz (index 11): translation along Z axis
     pub transform: Option<[f64; 12]>,
+    /// Optional path to external model file (Production extension: p:path attribute)
+    ///
+    /// When set, indicates the component references an object in an external model file
+    /// rather than in the current file's resources. Used with Production extension
+    /// to reference objects from separate model streams.
+    pub path: Option<String>,
 }
 
 impl Component {
@@ -1320,6 +1326,7 @@ impl Component {
         Self {
             objectid,
             transform: None,
+            path: None,
         }
     }
 
@@ -1328,6 +1335,7 @@ impl Component {
         Self {
             objectid,
             transform: Some(transform),
+            path: None,
         }
     }
 }

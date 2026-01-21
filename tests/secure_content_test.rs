@@ -170,3 +170,56 @@ fn test_parse_without_secure_content() {
         .required_extensions
         .contains(&Extension::SecureContent));
 }
+
+/// Test parsing keystore.xml from a 3MF package
+#[test]
+fn test_keystore_parsing() {
+    use std::fs::File;
+
+    // Use a positive test case that has keystore but doesn't fail validation
+    // This file has encrypted texture but the model itself is valid
+    let file = File::open(
+        "test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf",
+    )
+    .unwrap();
+
+    // This test file uses the older 2019/04 namespace and requires Production + Material extensions
+    let config = ParserConfig::new()
+        .with_extension(Extension::SecureContent)
+        .with_extension(Extension::Production)
+        .with_extension(Extension::Material)
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04",
+            "SecureContent 2019/04",
+        );
+
+    let model = lib3mf::parser::parse_3mf_with_config(file, config).unwrap();
+
+    // Verify secure_content was populated
+    assert!(
+        model.secure_content.is_some(),
+        "SecureContent info should be populated"
+    );
+
+    let sc = model.secure_content.unwrap();
+
+    // Verify keystore UUID was extracted
+    assert!(
+        sc.keystore_uuid.is_some(),
+        "Keystore UUID should be present"
+    );
+    assert_eq!(
+        sc.keystore_uuid.unwrap(),
+        "9a39333b-a20c-4932-9ddb-762dde47d06e"
+    );
+
+    // Verify encrypted files were extracted
+    assert!(
+        !sc.encrypted_files.is_empty(),
+        "Should have at least one encrypted file"
+    );
+    assert!(sc
+        .encrypted_files
+        .contains(&"/3D/Texture/photo_1_encrypted.jpg".to_string()));
+}
+

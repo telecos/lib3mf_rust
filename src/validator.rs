@@ -499,9 +499,25 @@ fn validate_component_references(model: &Model) -> Result<()> {
     // Build a set of valid object IDs for quick lookup
     let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
 
+    // Get list of encrypted file paths from SecureContent metadata
+    let encrypted_paths: HashSet<&str> = if let Some(ref sc_info) = model.secure_content {
+        sc_info.encrypted_files.iter().map(|s| s.as_str()).collect()
+    } else {
+        HashSet::new()
+    };
+
     // Validate that all component object references exist
     for object in &model.resources.objects {
         for component in &object.components {
+            // Skip validation for components referencing encrypted files
+            // These files cannot be loaded/parsed, so their objects won't exist in resources
+            if let Some(ref path) = component.path {
+                if encrypted_paths.contains(path.as_str()) {
+                    // This component references an encrypted file - skip validation
+                    continue;
+                }
+            }
+
             if !valid_object_ids.contains(&component.objectid) {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Component references non-existent object ID {}",
