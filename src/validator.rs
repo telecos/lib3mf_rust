@@ -371,6 +371,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 // Validate object-level pindex
                 if let Some(pindex) = object.pindex {
                     if pindex >= colorgroup.colors.len() {
+                        let max_index = colorgroup.colors.len().saturating_sub(1);
                         return Err(Error::InvalidModel(format!(
                             "Object {}: pindex {} is out of bounds.\n\
                              Color group {} has {} colors (valid indices: 0-{}).\n\
@@ -379,7 +380,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
                             pindex,
                             obj_pid,
                             colorgroup.colors.len(),
-                            colorgroup.colors.len() - 1
+                            max_index
                         )));
                     }
                 }
@@ -394,6 +395,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 // Validate object-level pindex
                 if let Some(pindex) = object.pindex {
                     if pindex >= basematerialgroup.materials.len() {
+                        let max_index = basematerialgroup.materials.len().saturating_sub(1);
                         return Err(Error::InvalidModel(format!(
                             "Object {}: pindex {} is out of bounds.\n\
                              Base material group {} has {} materials (valid indices: 0-{}).\n\
@@ -402,7 +404,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
                             pindex,
                             obj_pid,
                             basematerialgroup.materials.len(),
-                            basematerialgroup.materials.len() - 1
+                            max_index
                         )));
                     }
                 }
@@ -425,11 +427,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         // Validate triangle-level pindex
                         if let Some(pindex) = triangle.pindex {
                             if pindex >= num_colors {
+                                let max_index = num_colors.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} pindex {} is out of bounds.\n\
                                      Color group {} has {} colors (valid indices: 0-{}).\n\
                                      Hint: pindex must be less than the number of colors in the color group.",
-                                    object.id, tri_idx, pindex, pid, num_colors, num_colors - 1
+                                    object.id, tri_idx, pindex, pid, num_colors, max_index
                                 )));
                             }
                         }
@@ -437,33 +440,36 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         // Validate per-vertex property indices (p1, p2, p3)
                         if let Some(p1) = triangle.p1 {
                             if p1 >= num_colors {
+                                let max_index = num_colors.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p1 {} is out of bounds.\n\
                                      Color group {} has {} colors (valid indices: 0-{}).\n\
                                      Hint: p1 must be less than the number of colors in the color group.",
-                                    object.id, tri_idx, p1, pid, num_colors, num_colors - 1
+                                    object.id, tri_idx, p1, pid, num_colors, max_index
                                 )));
                             }
                         }
 
                         if let Some(p2) = triangle.p2 {
                             if p2 >= num_colors {
+                                let max_index = num_colors.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p2 {} is out of bounds.\n\
                                      Color group {} has {} colors (valid indices: 0-{}).\n\
                                      Hint: p2 must be less than the number of colors in the color group.",
-                                    object.id, tri_idx, p2, pid, num_colors, num_colors - 1
+                                    object.id, tri_idx, p2, pid, num_colors, max_index
                                 )));
                             }
                         }
 
                         if let Some(p3) = triangle.p3 {
                             if p3 >= num_colors {
+                                let max_index = num_colors.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p3 {} is out of bounds.\n\
                                      Color group {} has {} colors (valid indices: 0-{}).\n\
                                      Hint: p3 must be less than the number of colors in the color group.",
-                                    object.id, tri_idx, p3, pid, num_colors, num_colors - 1
+                                    object.id, tri_idx, p3, pid, num_colors, max_index
                                 )));
                             }
                         }
@@ -480,11 +486,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         // Validate triangle-level pindex
                         if let Some(pindex) = triangle.pindex {
                             if pindex >= num_materials {
+                                let max_index = num_materials.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} pindex {} is out of bounds.\n\
                                      Base material group {} has {} materials (valid indices: 0-{}).\n\
                                      Hint: pindex must be less than the number of materials in the base material group.",
-                                    object.id, tri_idx, pindex, pid, num_materials, num_materials - 1
+                                    object.id, tri_idx, pindex, pid, num_materials, max_index
                                 )));
                             }
                         }
@@ -492,33 +499,36 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         // Validate per-vertex property indices (p1, p2, p3)
                         if let Some(p1) = triangle.p1 {
                             if p1 >= num_materials {
+                                let max_index = num_materials.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p1 {} is out of bounds.\n\
                                      Base material group {} has {} materials (valid indices: 0-{}).\n\
                                      Hint: p1 must be less than the number of materials in the base material group.",
-                                    object.id, tri_idx, p1, pid, num_materials, num_materials - 1
+                                    object.id, tri_idx, p1, pid, num_materials, max_index
                                 )));
                             }
                         }
 
                         if let Some(p2) = triangle.p2 {
                             if p2 >= num_materials {
+                                let max_index = num_materials.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p2 {} is out of bounds.\n\
                                      Base material group {} has {} materials (valid indices: 0-{}).\n\
                                      Hint: p2 must be less than the number of materials in the base material group.",
-                                    object.id, tri_idx, p2, pid, num_materials, num_materials - 1
+                                    object.id, tri_idx, p2, pid, num_materials, max_index
                                 )));
                             }
                         }
 
                         if let Some(p3) = triangle.p3 {
                             if p3 >= num_materials {
+                                let max_index = num_materials.saturating_sub(1);
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p3 {} is out of bounds.\n\
                                      Base material group {} has {} materials (valid indices: 0-{}).\n\
                                      Hint: p3 must be less than the number of materials in the base material group.",
-                                    object.id, tri_idx, p3, pid, num_materials, num_materials - 1
+                                    object.id, tri_idx, p3, pid, num_materials, max_index
                                 )));
                             }
                         }
