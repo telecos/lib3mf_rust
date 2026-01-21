@@ -79,6 +79,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if with_pid > 0 {
                                 println!("        Triangles with material refs: {}", with_pid);
                             }
+
+                            // Show beam lattice data if present
+                            if let Some(ref beamset) = mesh.beamset {
+                                println!("      Beam Lattice:");
+                                println!("        Beams: {}", beamset.beams.len());
+                                println!("        Default radius: {}", beamset.radius);
+                                println!("        Min length: {}", beamset.min_length);
+                                println!("        Cap mode: {:?}", beamset.cap_mode);
+                                if !beamset.beams.is_empty() {
+                                    let beam = &beamset.beams[0];
+                                    println!(
+                                        "        First beam: v{}->v{}, r1={:?}, r2={:?}",
+                                        beam.v1, beam.v2, beam.r1, beam.r2
+                                    );
+                                }
+                            }
                         } else {
                             println!("      No mesh data");
                         }
@@ -114,10 +130,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ Color groups (materials extension)");
     println!("  ✓ Transformations on build items");
     println!("  ✓ Named objects");
+    println!("  ✓ Beam lattice structures (beamsets, beams, radii, cap modes)");
     println!("\nPartially supported (files parse, some data extracted):");
     println!("  ⚠ Production extension (basic parsing)");
     println!("  ⚠ Slice extension (basic parsing)");
-    println!("  ⚠ Beam lattice extension (basic parsing)");
 
     Ok(())
 }
