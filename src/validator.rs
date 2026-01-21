@@ -192,6 +192,17 @@ fn validate_build_references(model: &Model) -> Result<()> {
 
 /// Validate material and color group references
 fn validate_material_references(model: &Model) -> Result<()> {
+    // Validate that color group IDs are unique
+    let mut seen_colorgroup_ids = HashSet::new();
+    for colorgroup in &model.resources.color_groups {
+        if !seen_colorgroup_ids.insert(colorgroup.id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate color group ID: {}. Each color group must have a unique id attribute",
+                colorgroup.id
+            )));
+        }
+    }
+    
     // For now, just validate that pid references point to existing color groups or materials
     // Full validation would require checking basematerialid attributes on objects
 
