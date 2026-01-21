@@ -10,7 +10,7 @@ import subprocess
 import sys
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -134,7 +134,7 @@ def generate_report(results: Dict) -> str:
     # Header
     report.append("# 3MF Conformance Test Report")
     report.append("")
-    report.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    report.append(f"**Generated:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     report.append("")
     
     # Overall Summary
