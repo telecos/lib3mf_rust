@@ -195,8 +195,13 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         }
                         in_build = true;
 
-                        // Extract Production extension UUID (p:UUID) from build element
+                        // Extract and validate build element attributes
                         let attrs = parse_attributes(&reader, e)?;
+                        // Per 3MF Core spec: build element has no standard attributes
+                        // Only extension attributes (like p:UUID) are allowed
+                        validate_attributes(&attrs, &[], "build")?;
+
+                        // Extract Production extension UUID (p:UUID) from build element
                         if let Some(p_uuid) = attrs.get("p:UUID") {
                             model.build.production_uuid = Some(p_uuid.clone());
                         }
