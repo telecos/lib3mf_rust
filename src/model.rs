@@ -253,18 +253,13 @@ impl Default for Mesh {
 }
 
 /// Cap mode for beam lattice ends
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BeamCapMode {
     /// Sphere cap (rounded ends)
+    #[default]
     Sphere,
     /// Butt cap (flat ends)
     Butt,
-}
-
-impl Default for BeamCapMode {
-    fn default() -> Self {
-        BeamCapMode::Sphere
-    }
 }
 
 /// A single beam in a beam lattice structure
@@ -437,6 +432,8 @@ pub struct SecureContentInfo {
     pub keystore_uuid: Option<String>,
     /// Paths to encrypted files in the package
     pub encrypted_files: Vec<String>,
+}
+
 /// A 2D vertex with x, y coordinates (used in slice extension)
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vertex2D {

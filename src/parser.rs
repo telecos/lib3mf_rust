@@ -381,6 +381,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if let Some(ref mut beamset) = current_beamset {
                             let beam = parse_beam(&reader, e)?;
                             beamset.beams.push(beam);
+                        }
+                    }
                     "slicestack" if in_resources => {
                         in_slicestack = true;
                         let attrs = parse_attributes(&reader, e)?;
@@ -528,6 +530,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                         in_beamset = false;
+                    }
                     "slicestack" => {
                         if let Some(slicestack) = current_slicestack.take() {
                             model.resources.slice_stacks.push(slicestack);
