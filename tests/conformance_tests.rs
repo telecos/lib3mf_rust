@@ -88,22 +88,23 @@ macro_rules! suite_tests {
                     }
                 }
 
-                if !failed.is_empty() {
-                    let error_msg = format!(
-                        "\n{} positive test failures ({}/{} passed):\n{}",
-                        failed.len(),
-                        passed,
-                        test_files.len(),
-                        failed.join("\n")
-                    );
-                    panic!("{}", error_msg);
-                }
-
                 println!(
-                    "{}: All {} positive tests passed",
+                    "{}: {}/{} positive tests passed",
                     stringify!($suite_name),
+                    passed,
                     test_files.len()
                 );
+
+                if !failed.is_empty() {
+                    println!("\nFailed tests:");
+                    for (i, err) in failed.iter().enumerate() {
+                        println!("  {}. {}", i + 1, err);
+                    }
+                    panic!(
+                        "\n{} positive test(s) failed",
+                        failed.len()
+                    );
+                }
             }
 
             #[test]
@@ -130,22 +131,23 @@ macro_rules! suite_tests {
                     }
                 }
 
-                if !failed.is_empty() {
-                    let error_msg = format!(
-                        "\n{} negative test failures ({}/{} passed):\n{}",
-                        failed.len(),
-                        passed,
-                        test_files.len(),
-                        failed.join("\n")
-                    );
-                    panic!("{}", error_msg);
-                }
-
                 println!(
-                    "{}: All {} negative tests passed",
+                    "{}: {}/{} negative tests passed",
                     stringify!($suite_name),
+                    passed,
                     test_files.len()
                 );
+
+                if !failed.is_empty() {
+                    println!("\nFailed tests:");
+                    for (i, err) in failed.iter().enumerate() {
+                        println!("  {}. {}", i + 1, err);
+                    }
+                    panic!(
+                        "\n{} negative test(s) failed",
+                        failed.len()
+                    );
+                }
             }
         }
     };
