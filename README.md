@@ -171,7 +171,6 @@ let config = ParserConfig::with_all_extensions();
 ### Future Enhancements
 
 Potential future additions could include:
-- Full production extension support (UUID extraction, path references)
 - Slice extension support (slice stacks and slice data)
 - Beam lattice extension support (beam definitions and properties)
 - Advanced material properties (textures, composite materials)
