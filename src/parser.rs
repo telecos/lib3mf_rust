@@ -1267,13 +1267,16 @@ fn load_slice_references<R: Read + std::io::Seek>(
 /// build sections), so we parse them and skip validation.
 fn parse_slice_file_with_objects(xml: &str, expected_stack_id: usize) -> Result<(Vec<Slice>, Vec<Object>)> {
     // Parse the entire model XML
+    // Note: We use all extensions here because external slice files are part of the same
+    // 3MF package and should be parsed with the same extension support as the main model.
+    // The 3MF spec requires that all files in a package share the same extension context.
     let mut external_model = parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())?;
     
     // Find the slice stack with the expected ID and extract its slices
     let slices = external_model.resources.slice_stacks
-        .iter()
+        .iter_mut()
         .find(|stack| stack.id == expected_stack_id)
-        .map(|stack| stack.slices.clone())
+        .map(|stack| std::mem::take(&mut stack.slices))
         .unwrap_or_else(Vec::new);
     
     // Extract all objects from the external model
