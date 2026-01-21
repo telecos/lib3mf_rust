@@ -63,14 +63,19 @@ fn validate_required_structure(model: &Model) -> Result<()> {
     // Model must contain at least one object
     if model.resources.objects.is_empty() {
         return Err(Error::InvalidModel(
-            "Model must contain at least one object in resources".to_string(),
+            "Model must contain at least one object in resources. \
+             A valid 3MF file requires at least one <object> element within the <resources> section. \
+             Check that your 3MF file has proper model content.".to_string()
         ));
     }
 
     // Build section must contain at least one item
     if model.build.items.is_empty() {
         return Err(Error::InvalidModel(
-            "Build section must contain at least one item".to_string(),
+            "Build section must contain at least one item. \
+             A valid 3MF file requires at least one <item> element within the <build> section. \
+             The build section specifies which objects should be printed."
+                .to_string(),
         ));
     }
 
@@ -85,14 +90,19 @@ fn validate_object_ids(model: &Model) -> Result<()> {
         // Object IDs must be positive (non-zero)
         if object.id == 0 {
             return Err(Error::InvalidModel(
-                "Object ID must be a positive integer".to_string(),
+                "Object ID must be a positive integer (greater than 0). \
+                 Per the 3MF specification, object IDs must be positive integers. \
+                 Found object with ID = 0, which is invalid."
+                    .to_string(),
             ));
         }
 
         // Check for duplicate IDs
         if !seen_ids.insert(object.id) {
             return Err(Error::InvalidModel(format!(
-                "Duplicate object ID found: {}",
+                "Duplicate object ID found: {}. \
+                 Each object in the resources section must have a unique ID attribute. \
+                 Check your model for multiple objects with the same ID value.",
                 object.id
             )));
         }
@@ -110,8 +120,11 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
             // like beam lattice, so we don't require triangles to be present
             if !mesh.triangles.is_empty() && mesh.vertices.is_empty() {
                 return Err(Error::InvalidModel(format!(
-                    "Object {}: Mesh has triangles but no vertices",
-                    object.id
+                    "Object {}: Mesh has {} triangle(s) but no vertices. \
+                     A mesh with triangles must also have vertex data. \
+                     Check that the <vertices> element contains <vertex> elements.",
+                    object.id,
+                    mesh.triangles.len()
                 )));
             }
 
@@ -121,20 +134,26 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
                 // Validate vertex indices are within bounds
                 if triangle.v1 >= num_vertices {
                     return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} vertex v1={} is out of bounds (have {} vertices)",
-                        object.id, tri_idx, triangle.v1, num_vertices
+                        "Object {}: Triangle {} vertex v1={} is out of bounds (mesh has {} vertices, valid indices: 0-{}). \
+                         Vertex indices must reference valid vertices in the mesh. \
+                         Check that all triangle vertex indices are less than the vertex count.",
+                        object.id, tri_idx, triangle.v1, num_vertices, num_vertices - 1
                     )));
                 }
                 if triangle.v2 >= num_vertices {
                     return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} vertex v2={} is out of bounds (have {} vertices)",
-                        object.id, tri_idx, triangle.v2, num_vertices
+                        "Object {}: Triangle {} vertex v2={} is out of bounds (mesh has {} vertices, valid indices: 0-{}). \
+                         Vertex indices must reference valid vertices in the mesh. \
+                         Check that all triangle vertex indices are less than the vertex count.",
+                        object.id, tri_idx, triangle.v2, num_vertices, num_vertices - 1
                     )));
                 }
                 if triangle.v3 >= num_vertices {
                     return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} vertex v3={} is out of bounds (have {} vertices)",
-                        object.id, tri_idx, triangle.v3, num_vertices
+                        "Object {}: Triangle {} vertex v3={} is out of bounds (mesh has {} vertices, valid indices: 0-{}). \
+                         Vertex indices must reference valid vertices in the mesh. \
+                         Check that all triangle vertex indices are less than the vertex count.",
+                        object.id, tri_idx, triangle.v3, num_vertices, num_vertices - 1
                     )));
                 }
 
@@ -144,7 +163,9 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
                     || triangle.v1 == triangle.v3
                 {
                     return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} is degenerate (v1={}, v2={}, v3={})",
+                        "Object {}: Triangle {} is degenerate (v1={}, v2={}, v3={}). \
+                         All three vertices of a triangle must be distinct. \
+                         Degenerate triangles with repeated vertices are not allowed in 3MF models.",
                         object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3
                     )));
                 }
@@ -170,7 +191,7 @@ fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result
     // Pre-allocate capacity: each triangle has 3 edges, but adjacent triangles share edges.
     // For typical manifold meshes, we expect roughly 1.5 edges per triangle.
     // We use a conservative estimate of 2 edges per triangle to avoid reallocation.
-    let mut edge_count: HashMap<(usize, usize), usize> = 
+    let mut edge_count: HashMap<(usize, usize), usize> =
         HashMap::with_capacity(mesh.triangles.len() * 2);
 
     for triangle in &mesh.triangles {
@@ -190,7 +211,10 @@ fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result
     for (edge, count) in edge_count {
         if count > 2 {
             return Err(Error::InvalidModel(format!(
-                "Object {}: Non-manifold edge ({}, {}) is shared by {} triangles (max 2 allowed)",
+                "Object {}: Non-manifold edge (vertices {}-{}) is shared by {} triangles (maximum 2 allowed). \
+                 Manifold meshes require each edge to be shared by at most 2 triangles. \
+                 This is often caused by T-junctions or overlapping faces. \
+                 Use mesh repair tools to fix non-manifold geometry.",
                 object_id, edge.0, edge.1, count
             )));
         }
@@ -209,8 +233,10 @@ fn validate_build_references(model: &Model) -> Result<()> {
     for (item_idx, item) in model.build.items.iter().enumerate() {
         if !valid_object_ids.contains(&item.objectid) {
             return Err(Error::InvalidModel(format!(
-                "Build item {} references non-existent object ID: {}",
-                item_idx, item.objectid
+                "Build item {} references non-existent object ID: {}. \
+                 All build items must reference objects defined in the resources section. \
+                 Available object IDs: {:?}",
+                item_idx, item.objectid, valid_object_ids
             )));
         }
     }
@@ -225,7 +251,9 @@ fn validate_material_references(model: &Model) -> Result<()> {
     for colorgroup in &model.resources.color_groups {
         if !seen_colorgroup_ids.insert(colorgroup.id) {
             return Err(Error::InvalidModel(format!(
-                "Duplicate color group ID: {}. Each color group must have a unique id attribute",
+                "Duplicate color group ID: {}. \
+                 Each color group must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
                 colorgroup.id
             )));
         }
@@ -655,10 +683,15 @@ mod tests {
 
         let result = validate_mesh_geometry(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("has triangles but no vertices"));
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("triangle"),
+            "Error message should mention triangles"
+        );
+        assert!(
+            err_msg.contains("no vertices"),
+            "Error message should mention missing vertices"
+        );
     }
 
     #[test]

@@ -53,8 +53,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     obj_content.push_str(&format!("# Unit: {}\n", model.unit));
 
     // Check if we need a material file
-    let has_materials = !model.resources.materials.is_empty()
-        || !model.resources.color_groups.is_empty();
+    let has_materials =
+        !model.resources.materials.is_empty() || !model.resources.color_groups.is_empty();
 
     if has_materials {
         if let Some(output_path) = output_file {
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create materials
     let mut material_map: HashMap<usize, String> = HashMap::new();
-    
+
     mtl_content.push_str("# Materials from 3MF file\n\n");
 
     // Export base materials

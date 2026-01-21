@@ -90,8 +90,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
 
                     // Normalize
-                    let length = (normal.0 * normal.0 + normal.1 * normal.1 + normal.2 * normal.2)
-                        .sqrt();
+                    let length =
+                        (normal.0 * normal.0 + normal.1 * normal.1 + normal.2 * normal.2).sqrt();
                     let normal = if length > 0.0 {
                         (normal.0 / length, normal.1 / length, normal.2 / length)
                     } else {

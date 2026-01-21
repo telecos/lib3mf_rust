@@ -49,17 +49,27 @@ impl<R: Read + std::io::Seek> Package<R> {
     fn validate_opc_structure(&mut self) -> Result<()> {
         // Validate required files exist
         if !self.has_file(CONTENT_TYPES_PATH) {
-            return Err(Error::InvalidFormat(format!(
-                "Missing required file: {}",
-                CONTENT_TYPES_PATH
-            )));
+            return Err(Error::invalid_format_context(
+                "OPC package structure",
+                &format!(
+                    "Missing required file '{}'. \
+                     This file defines content types for the package and is required by the OPC specification. \
+                     The 3MF file may be corrupt or improperly formatted.",
+                    CONTENT_TYPES_PATH
+                )
+            ));
         }
 
         if !self.has_file(RELS_PATH) {
-            return Err(Error::InvalidFormat(format!(
-                "Missing required file: {}",
-                RELS_PATH
-            )));
+            return Err(Error::invalid_format_context(
+                "OPC package structure",
+                &format!(
+                    "Missing required file '{}'. \
+                     This file defines package relationships and is required by the OPC specification. \
+                     The 3MF file may be corrupt or improperly formatted.",
+                    RELS_PATH
+                )
+            ));
         }
 
         // Validate Content Types
@@ -159,15 +169,21 @@ impl<R: Read + std::io::Seek> Package<R> {
         }
 
         if !found_rels {
-            return Err(Error::InvalidFormat(
-                "Content Types missing required 'rels' extension definition".to_string(),
+            return Err(Error::invalid_format_context(
+                "Content Types validation",
+                "Missing required 'rels' extension definition in [Content_Types].xml. \
+                 The Content Types file must define a Default element for the '.rels' extension. \
+                 This is required by the OPC specification.",
             ));
         }
 
         if !found_model {
-            return Err(Error::InvalidFormat(
-                "Content Types missing required model content type (Default or Override)"
-                    .to_string(),
+            return Err(Error::invalid_format_context(
+                "Content Types validation",
+                "Missing required model content type definition in [Content_Types].xml. \
+                 The file must define either a Default or Override element for the 3D model content type \
+                 ('application/vnd.ms-package.3dmanufacturing-3dmodel+xml'). \
+                 Check that the model file has a proper content type declaration."
             ));
         }
 

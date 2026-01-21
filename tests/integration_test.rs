@@ -103,11 +103,8 @@ fn test_parse_minimal_3mf() {
     assert_eq!(model.build.items[0].objectid, 1);
 
     // Check metadata
-    assert_eq!(model.metadata.get("Title"), Some(&"Test Model".to_string()));
-    assert_eq!(
-        model.metadata.get("Designer"),
-        Some(&"lib3mf_rust".to_string())
-    );
+    assert_eq!(model.get_metadata("Title"), Some("Test Model"));
+    assert_eq!(model.get_metadata("Designer"), Some("lib3mf_rust"));
 }
 
 #[test]
