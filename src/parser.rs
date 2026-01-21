@@ -24,16 +24,16 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     config: ParserConfig,
 ) -> Result<Model> {
     let mut package = Package::open(reader)?;
-    
+
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
-    
+
     let model_xml = package.get_model()?;
     let mut model = parse_model_xml_with_config(&model_xml, config)?;
-    
+
     // Add thumbnail metadata to model
     model.thumbnail = thumbnail;
-    
+
     Ok(model)
 }
 
@@ -64,10 +64,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 /// ```
 pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u8>>> {
     let mut package = Package::open(reader)?;
-    
+
     // Get thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
-    
+
     match thumbnail {
         Some(thumb) => {
             // Read the binary data

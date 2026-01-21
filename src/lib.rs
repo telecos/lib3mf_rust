@@ -42,9 +42,9 @@ pub use error::{Error, Result};
 pub use model::{
     BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod, BooleanOpType,
     BooleanRef, BooleanShape, Build, BuildItem, Channel, ColorGroup, Component, Composite,
-    CompositeMaterials, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
-    Material, Mesh, Model, Multi, MultiProperties, NormVector, NormVectorGroup, Object,
-    ParserConfig, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup, Thumbnail, TileStyle,
+    CompositeMaterials, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode, Material,
+    Mesh, Model, Multi, MultiProperties, NormVector, NormVectorGroup, Object, ParserConfig,
+    Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup, Thumbnail, TileStyle,
     Triangle, Vertex,
 };
 
