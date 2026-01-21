@@ -404,13 +404,13 @@ fn test_displacement_extension_parsing() {
     assert_eq!(d2dgroup.height, 5.0);
     assert_eq!(d2dgroup.offset, 0.5);
     assert_eq!(d2dgroup.coords.len(), 3);
-    
+
     // Verify first coordinate
     assert_eq!(d2dgroup.coords[0].u, 0.0);
     assert_eq!(d2dgroup.coords[0].v, 0.0);
     assert_eq!(d2dgroup.coords[0].n, 0);
     assert_eq!(d2dgroup.coords[0].f, 1.0);
-    
+
     // Verify third coordinate (tests default f value)
     assert_eq!(d2dgroup.coords[2].u, 0.5);
     assert_eq!(d2dgroup.coords[2].v, 1.0);

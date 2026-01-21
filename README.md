@@ -65,6 +65,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Accessing Displacement Data
+
+The library parses displacement extension data into accessible structures:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("displaced_model.3mf")?;
+    let model = Model::from_reader(file)?;
+
+    // Access displacement maps
+    for disp_map in &model.resources.displacement_maps {
+        println!("Displacement map {} at path: {}", disp_map.id, disp_map.path);
+        println!("  Channel: {:?}, Filter: {:?}", disp_map.channel, disp_map.filter);
+        println!("  Tile U: {:?}, Tile V: {:?}", disp_map.tilestyleu, disp_map.tilestylev);
+    }
+
+    // Access normalized vector groups
+    for nvgroup in &model.resources.norm_vector_groups {
+        println!("NormVectorGroup {} with {} vectors", nvgroup.id, nvgroup.vectors.len());
+        for (i, vec) in nvgroup.vectors.iter().enumerate() {
+            println!("  Vector {}: ({}, {}, {})", i, vec.x, vec.y, vec.z);
+        }
+    }
+
+    // Access displacement coordinate groups
+    for d2dgroup in &model.resources.disp2d_groups {
+        println!("Disp2DGroup {} using displacement map {} and vectors {}",
+            d2dgroup.id, d2dgroup.dispid, d2dgroup.nid);
+        println!("  Height: {}, Offset: {}", d2dgroup.height, d2dgroup.offset);
+        println!("  Coordinates: {} entries", d2dgroup.coords.len());
+    }
+
+    Ok(())
+}
+```
+
 ### Extension Support
 
 3MF files can require specific extensions beyond the core specification. You can control which extensions your application supports:
@@ -135,6 +174,14 @@ This implementation currently supports:
   - Color groups (m:colorgroup)
   - Per-triangle material references (pid attributes)
   - Base materials with display colors
+
+- **Displacement Extension**
+  - Displacement2D resources (displacement maps with PNG textures)
+  - NormVectorGroup (normalized displacement vectors)
+  - Disp2DGroup (displacement coordinate groups)
+  - Displacement coordinates (u, v, n, f values)
+  - Texture filtering and tiling modes
+  - Surface displacement data structures
 
 ### Extension Support and Validation
 

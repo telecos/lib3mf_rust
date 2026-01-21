@@ -372,7 +372,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         let dispid = attrs
                             .get("dispid")
                             .ok_or_else(|| {
-                                Error::InvalidXml("disp2dgroup missing dispid attribute".to_string())
+                                Error::InvalidXml(
+                                    "disp2dgroup missing dispid attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
                         let nid = attrs
@@ -384,7 +386,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         let height = attrs
                             .get("height")
                             .ok_or_else(|| {
-                                Error::InvalidXml("disp2dgroup missing height attribute".to_string())
+                                Error::InvalidXml(
+                                    "disp2dgroup missing height attribute".to_string(),
+                                )
                             })?
                             .parse::<f64>()?;
 
@@ -403,19 +407,25 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             let u = attrs
                                 .get("u")
                                 .ok_or_else(|| {
-                                    Error::InvalidXml("disp2dcoords missing u attribute".to_string())
+                                    Error::InvalidXml(
+                                        "disp2dcoords missing u attribute".to_string(),
+                                    )
                                 })?
                                 .parse::<f64>()?;
                             let v = attrs
                                 .get("v")
                                 .ok_or_else(|| {
-                                    Error::InvalidXml("disp2dcoords missing v attribute".to_string())
+                                    Error::InvalidXml(
+                                        "disp2dcoords missing v attribute".to_string(),
+                                    )
                                 })?
                                 .parse::<f64>()?;
                             let n = attrs
                                 .get("n")
                                 .ok_or_else(|| {
-                                    Error::InvalidXml("disp2dcoords missing n attribute".to_string())
+                                    Error::InvalidXml(
+                                        "disp2dcoords missing n attribute".to_string(),
+                                    )
                                 })?
                                 .parse::<usize>()?;
 
