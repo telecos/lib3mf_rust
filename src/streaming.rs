@@ -247,11 +247,8 @@ impl ObjectIterator {
                                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                         let local_name = parser::get_local_name(name_str);
 
-                                        match local_name {
-                                            "mesh" => {
-                                                current_mesh = Some(Mesh::new());
-                                            }
-                                            _ => {}
+                                        if local_name == "mesh" {
+                                            current_mesh = Some(Mesh::new());
                                         }
                                     }
                                     Ok(Event::Empty(ref e)) => {
