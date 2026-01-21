@@ -216,6 +216,61 @@ The parser successfully handles files using all 3MF extensions including:
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
+## Error Handling
+
+This library provides comprehensive error handling with detailed error messages to help with debugging.
+
+### Error Codes
+
+All errors include a unique error code for categorization and programmatic handling:
+
+- **E1xxx**: IO and file system errors
+- **E2xxx**: ZIP/archive errors
+- **E3xxx**: XML parsing errors
+- **E4xxx**: Model structure validation errors
+- **E5xxx**: Extension and feature support errors
+
+### Error Messages
+
+Error messages include:
+- **Error code** - For categorization (e.g., `[E4001]`)
+- **Descriptive message** - Explaining what went wrong
+- **Context** - Location information where available (object IDs, triangle indices, etc.)
+- **Suggestions** - Helpful hints for fixing common issues
+
+### Example
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() {
+    let file = File::open("invalid.3mf").unwrap();
+    match Model::from_reader(file) {
+        Ok(model) => println!("Loaded {} objects", model.resources.objects.len()),
+        Err(e) => {
+            // Error includes code, message, context, and suggestion
+            eprintln!("Error: {}", e);
+            // Output example:
+            // [E4001] Invalid model: Object ID must be a positive integer
+            //   Suggestion: Object IDs must start from 1. Use id="1", id="2", etc.
+            
+            // Get error code programmatically
+            println!("Error code: {}", e.code());
+        }
+    }
+}
+```
+
+### Common Validation Errors
+
+- **E4002**: Invalid object ID (zero or duplicate)
+- **E4003**: Invalid mesh geometry (vertex indices out of bounds, degenerate triangles)
+- **E4004**: Invalid build reference (referencing non-existent objects)
+- **E4005**: Invalid material/color reference
+
+Each validation error includes specific suggestions for fixing the issue.
+
 ## Safety
 
 This library is designed with safety in mind:
