@@ -305,6 +305,11 @@ impl ColorGroup {
 /// without implementing actual cryptographic operations. It tracks which
 /// files are encrypted and keystore metadata.
 ///
+/// **Note**: These fields are currently unused placeholders reserved for
+/// future implementation. Parsing logic to populate these fields has not
+/// been implemented yet. The extension is recognized for validation purposes
+/// only.
+///
 /// **Security Warning**: This does NOT decrypt content or verify signatures.
 /// See SECURE_CONTENT_SUPPORT.md for security considerations.
 #[derive(Debug, Clone, Default)]
