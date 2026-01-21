@@ -60,7 +60,8 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
 /// - At least one build item
 fn validate_required_structure(model: &Model) -> Result<()> {
     // Check if we have objects in resources OR build items with external paths
-    let has_local_objects = !model.resources.objects.is_empty();
+    let has_local_objects =
+        !model.resources.objects.is_empty() || !model.resources.slice_stacks.is_empty();
     let has_external_objects = model
         .build
         .items
@@ -80,8 +81,13 @@ fn validate_required_structure(model: &Model) -> Result<()> {
         ));
     }
 
-    // Build section must contain at least one item
-    if model.build.items.is_empty() {
+    // Build section must contain at least one item for main model files
+    // However, external slice/resource files may have empty build sections
+    // We identify these by: having slice stacks but either no objects or empty build
+    let is_external_file = !model.resources.slice_stacks.is_empty()
+        && (model.resources.objects.is_empty() || model.build.items.is_empty());
+
+    if model.build.items.is_empty() && !is_external_file {
         return Err(Error::InvalidModel(
             "Build section must contain at least one item. \
              A valid 3MF file requires at least one <item> element within the <build> section. \
