@@ -173,6 +173,16 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
                                     t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                
+                                // Check for duplicate metadata names
+                                // Per 3MF Core spec: metadata element names must be unique
+                                if model.metadata.contains_key(name) {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Duplicate metadata name '{}'. Each metadata element must have a unique name attribute",
+                                        name
+                                    )));
+                                }
+                                
                                 model.metadata.insert(name.clone(), value.to_string());
                             }
                         }
