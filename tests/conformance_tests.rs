@@ -22,59 +22,12 @@
 //! Each suite runs with the appropriate extension support enabled to ensure
 //! proper validation of extension-specific features.
 
-use lib3mf::{Extension, Model, ParserConfig};
+mod common;
+
+use lib3mf::{Model, ParserConfig};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-
-/// Get parser configuration for a specific test suite
-///
-/// Each suite tests specific extensions, so we configure the parser
-/// to support only the extensions relevant to that suite. This ensures
-/// proper validation of extension support.
-fn get_suite_config(suite_name: &str) -> ParserConfig {
-    match suite_name {
-        // Suite 1: Core + Production + Slice
-        "suite1_core_slice_prod" => ParserConfig::new()
-            .with_extension(Extension::Production)
-            .with_extension(Extension::Slice),
-
-        // Suite 2: Core + Production + Materials
-        "suite2_core_prod_matl" => ParserConfig::new()
-            .with_extension(Extension::Production)
-            .with_extension(Extension::Material),
-
-        // Suite 3: Core only
-        "suite3_core" => ParserConfig::new(),
-
-        // Suite 4: Core + Slice
-        "suite4_core_slice" => ParserConfig::new().with_extension(Extension::Slice),
-
-        // Suite 5: Core + Production
-        "suite5_core_prod" => ParserConfig::new().with_extension(Extension::Production),
-
-        // Suite 6: Core + Materials
-        "suite6_core_matl" => ParserConfig::new().with_extension(Extension::Material),
-
-        // Suite 7: Beam Lattice
-        "suite7_beam" => ParserConfig::new().with_extension(Extension::BeamLattice),
-
-        // Suite 8: Secure Content
-        "suite8_secure" => ParserConfig::new().with_extension(Extension::SecureContent),
-
-        // Suite 9: Core Extensions - support all for compatibility
-        "suite9_core_ext" => ParserConfig::with_all_extensions(),
-
-        // Suite 10: Boolean Operations
-        "suite10_boolean" => ParserConfig::new().with_extension(Extension::BooleanOperations),
-
-        // Suite 11: Displacement
-        "suite11_Displacement" => ParserConfig::new().with_extension(Extension::Displacement),
-
-        // Default: support all extensions for unknown suites
-        _ => ParserConfig::with_all_extensions(),
-    }
-}
 
 /// Get all .3mf files in a directory recursively
 fn get_3mf_files<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
@@ -131,7 +84,7 @@ macro_rules! suite_tests {
                     return;
                 }
 
-                let config = get_suite_config($suite_dir);
+                let config = common::get_suite_config($suite_dir);
                 let mut passed = 0;
                 let mut failed = Vec::new();
 
@@ -172,7 +125,7 @@ macro_rules! suite_tests {
                     return;
                 }
 
-                let config = get_suite_config($suite_dir);
+                let config = common::get_suite_config($suite_dir);
                 let mut passed = 0;
                 let mut failed = Vec::new();
 
@@ -335,7 +288,7 @@ fn summary() {
             Vec::new()
         };
 
-        let config = get_suite_config(suite);
+        let config = common::get_suite_config(suite);
         let mut pos_passed = 0;
         let mut neg_passed = 0;
 
