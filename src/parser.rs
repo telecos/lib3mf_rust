@@ -486,6 +486,12 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "booleanshape" if in_resources && current_object.is_some() => {
+                        // Check if object already has a booleanshape
+                        if in_boolean_shape {
+                            return Err(Error::InvalidXml(
+                                "Object can only have one booleanshape element".to_string(),
+                            ));
+                        }
                         let attrs = parse_attributes(&reader, e)?;
                         let objectid = attrs
                             .get("objectid")
@@ -498,7 +504,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .get("operation")
                             .and_then(|s| BooleanOpType::from_str(s))
                             .unwrap_or(BooleanOpType::Union);
-                        current_boolean_shape = Some(BooleanShape::new(objectid, operation));
+                        let mut shape = BooleanShape::new(objectid, operation);
+                        // Extract optional path attribute for external object reference
+                        shape.path = attrs.get("path").cloned();
+                        current_boolean_shape = Some(shape);
                         in_boolean_shape = true;
                     }
                     "boolean" if in_boolean_shape => {
@@ -510,7 +519,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             })?
                             .parse::<usize>()?;
                         if let Some(ref mut shape) = current_boolean_shape {
-                            shape.operands.push(BooleanRef::new(objectid));
+                            let mut operand = BooleanRef::new(objectid);
+                            // Extract optional path attribute for external object reference
+                            operand.path = attrs.get("path").cloned();
+                            shape.operands.push(operand);
                         }
                     }
                     _ => {}

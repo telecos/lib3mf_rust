@@ -391,12 +391,14 @@ impl BooleanOpType {
 pub struct BooleanRef {
     /// ID of the object to use in the operation
     pub objectid: usize,
+    /// Optional path to external file (Production extension)
+    pub path: Option<String>,
 }
 
 impl BooleanRef {
     /// Create a new boolean reference
     pub fn new(objectid: usize) -> Self {
-        Self { objectid }
+        Self { objectid, path: None }
     }
 }
 
@@ -407,6 +409,8 @@ pub struct BooleanShape {
     pub objectid: usize,
     /// The boolean operation to perform
     pub operation: BooleanOpType,
+    /// Optional path to external file for base object (Production extension)
+    pub path: Option<String>,
     /// List of operand objects
     pub operands: Vec<BooleanRef>,
 }
@@ -417,6 +421,7 @@ impl BooleanShape {
         Self {
             objectid,
             operation,
+            path: None,
             operands: Vec::new(),
         }
     }
