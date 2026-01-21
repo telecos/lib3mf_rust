@@ -1,9 +1,10 @@
 //! Tests for 3MF writing/serialization functionality
 
 use lib3mf::{
-    BaseMaterial, BaseMaterialGroup, BuildItem, ColorGroup, Mesh, MetadataEntry, Model, Object,
+    BaseMaterial, BaseMaterialGroup, BuildItem, ColorGroup, Mesh, Model, Object,
     Triangle, Vertex,
 };
+use lib3mf::model::MetadataEntry;
 use std::io::Cursor;
 
 /// Test writing a minimal model
