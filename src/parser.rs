@@ -36,10 +36,23 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 /// - `"p:UUID"` returns `"UUID"`
 /// - `"object"` returns `"object"`
 fn get_local_name(name_str: &str) -> &str {
+    get_namespace_and_local(name_str).1
+}
+
+/// Extract namespace prefix and local name from potentially namespaced XML element name
+///
+/// Returns (namespace_prefix, local_name) if element has a namespace prefix,
+/// or (None, element_name) if not
+///
+/// # Examples
+///
+/// - `"m:colorgroup"` returns `(Some("m"), "colorgroup")`
+/// - `"object"` returns `(None, "object")`
+fn get_namespace_and_local(name_str: &str) -> (Option<&str>, &str) {
     if let Some(pos) = name_str.rfind(':') {
-        &name_str[pos + 1..]
+        (Some(&name_str[..pos]), &name_str[pos + 1..])
     } else {
-        name_str
+        (None, name_str)
     }
 }
 
@@ -299,10 +312,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                 // Check if this is a custom extension element FIRST (before matching local names)
                 if let Some(namespace_uri) = is_custom_element(name_str, &declared_namespaces, &config) {
                     // For empty elements, create element with just attributes
-                    let custom_elem = parse_custom_element_empty(e, namespace_uri.clone(), local_name.to_string())?;
+                    let custom_elem = parse_custom_element_empty(e, namespace_uri, local_name.to_string())?;
                     
                     // Invoke callback if registered
-                    if let Some(custom_ext) = config.get_custom_extension(&namespace_uri) {
+                    if let Some(custom_ext) = config.get_custom_extension(&custom_elem.namespace) {
                         if let Some(callback) = custom_ext.callback() {
                             callback(&custom_elem)?;
                         }
@@ -310,7 +323,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     
                     // Store the custom element
                     model.custom_extension_elements
-                        .entry(namespace_uri)
+                        .entry(custom_elem.namespace.clone())
                         .or_insert_with(Vec::new)
                         .push(custom_elem);
                 } else {
@@ -815,18 +828,6 @@ fn validate_attributes(
     Ok(())
 }
 
-/// Extract namespace from element name
-///
-/// Returns (namespace_prefix, local_name) if element has a namespace prefix,
-/// or (None, element_name) if not
-fn get_namespace_prefix(name_str: &str) -> (Option<&str>, &str) {
-    if let Some(pos) = name_str.rfind(':') {
-        (Some(&name_str[..pos]), &name_str[pos + 1..])
-    } else {
-        (None, name_str)
-    }
-}
-
 /// Check if element belongs to a custom extension
 ///
 /// Returns true if the element has a namespace prefix that corresponds to a
@@ -836,7 +837,7 @@ fn is_custom_element(
     namespaces: &HashMap<String, String>,
     config: &ParserConfig,
 ) -> Option<String> {
-    let (prefix, _local_name) = get_namespace_prefix(name_str);
+    let (prefix, _local_name) = get_namespace_and_local(name_str);
     
     if let Some(prefix) = prefix {
         // Get the namespace URI for this prefix

@@ -6,6 +6,9 @@ use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
 use zip::ZipWriter;
 
+// Test constants
+const TEST_CUSTOM_NAMESPACE: &str = "http://example.com/custom";
+
 /// Create a test 3MF file with custom extension elements
 fn create_test_3mf_with_custom_extension(custom_namespace: &str) -> Vec<u8> {
     let mut buffer = Vec::new();
@@ -83,20 +86,20 @@ fn create_test_3mf_with_custom_extension(custom_namespace: &str) -> Vec<u8> {
 fn test_custom_extension_basic() {
     // Create a custom extension without callback
     let custom_ext = CustomExtension::new(
-        "http://example.com/custom".to_string(),
+        TEST_CUSTOM_NAMESPACE.to_string(),
         "CustomExtension".to_string(),
     );
 
     let config = ParserConfig::new().with_custom_extension(custom_ext);
 
-    let data = create_test_3mf_with_custom_extension("http://example.com/custom");
+    let data = create_test_3mf_with_custom_extension(TEST_CUSTOM_NAMESPACE);
     let cursor = Cursor::new(data);
 
     let model = Model::from_reader_with_config(cursor, config).unwrap();
 
     // Check that custom elements were parsed
     let custom_elements = model
-        .get_custom_elements("http://example.com/custom")
+        .get_custom_elements(TEST_CUSTOM_NAMESPACE)
         .expect("Custom elements should be present");
 
     assert!(!custom_elements.is_empty(), "Should have custom elements");
@@ -107,7 +110,7 @@ fn test_custom_extension_basic() {
         .find(|e| e.local_name == "metadata")
         .expect("Should have metadata element");
 
-    assert_eq!(metadata.namespace, "http://example.com/custom");
+    assert_eq!(metadata.namespace, TEST_CUSTOM_NAMESPACE);
     assert_eq!(metadata.children.len(), 2, "Should have 2 child properties");
 }
 
@@ -143,14 +146,14 @@ fn test_custom_extension_with_callback() {
     });
 
     let custom_ext = CustomExtension::with_callback(
-        "http://example.com/custom".to_string(),
+        TEST_CUSTOM_NAMESPACE.to_string(),
         "CustomExtension".to_string(),
         callback,
     );
 
     let config = ParserConfig::new().with_custom_extension(custom_ext);
 
-    let data = create_test_3mf_with_custom_extension("http://example.com/custom");
+    let data = create_test_3mf_with_custom_extension(TEST_CUSTOM_NAMESPACE);
     let cursor = Cursor::new(data);
 
     let model = Model::from_reader_with_config(cursor, config).unwrap();
@@ -161,7 +164,7 @@ fn test_custom_extension_with_callback() {
 
     // Check that custom elements were parsed and stored
     let custom_elements = model
-        .get_custom_elements("http://example.com/custom")
+        .get_custom_elements(TEST_CUSTOM_NAMESPACE)
         .expect("Custom elements should be present");
 
     assert!(!custom_elements.is_empty(), "Should have custom elements");
@@ -178,14 +181,14 @@ fn test_custom_extension_validation_failure() {
     });
 
     let custom_ext = CustomExtension::with_callback(
-        "http://example.com/custom".to_string(),
+        TEST_CUSTOM_NAMESPACE.to_string(),
         "CustomExtension".to_string(),
         callback,
     );
 
     let config = ParserConfig::new().with_custom_extension(custom_ext);
 
-    let data = create_test_3mf_with_custom_extension("http://example.com/custom");
+    let data = create_test_3mf_with_custom_extension(TEST_CUSTOM_NAMESPACE);
     let cursor = Cursor::new(data);
 
     // Should fail because callback rejects all elements
@@ -218,19 +221,19 @@ fn test_multiple_custom_extensions() {
 #[test]
 fn test_custom_extension_element_attributes() {
     let custom_ext = CustomExtension::new(
-        "http://example.com/custom".to_string(),
+        TEST_CUSTOM_NAMESPACE.to_string(),
         "CustomExtension".to_string(),
     );
 
     let config = ParserConfig::new().with_custom_extension(custom_ext);
 
-    let data = create_test_3mf_with_custom_extension("http://example.com/custom");
+    let data = create_test_3mf_with_custom_extension(TEST_CUSTOM_NAMESPACE);
     let cursor = Cursor::new(data);
 
     let model = Model::from_reader_with_config(cursor, config).unwrap();
 
     let custom_elements = model
-        .get_custom_elements("http://example.com/custom")
+        .get_custom_elements(TEST_CUSTOM_NAMESPACE)
         .expect("Custom elements should be present");
 
     // Find a property element with attributes
@@ -258,19 +261,19 @@ fn test_custom_extension_element_attributes() {
 #[test]
 fn test_custom_extension_element_text_content() {
     let custom_ext = CustomExtension::new(
-        "http://example.com/custom".to_string(),
+        TEST_CUSTOM_NAMESPACE.to_string(),
         "CustomExtension".to_string(),
     );
 
     let config = ParserConfig::new().with_custom_extension(custom_ext);
 
-    let data = create_test_3mf_with_custom_extension("http://example.com/custom");
+    let data = create_test_3mf_with_custom_extension(TEST_CUSTOM_NAMESPACE);
     let cursor = Cursor::new(data);
 
     let model = Model::from_reader_with_config(cursor, config).unwrap();
 
     let custom_elements = model
-        .get_custom_elements("http://example.com/custom")
+        .get_custom_elements(TEST_CUSTOM_NAMESPACE)
         .expect("Custom elements should be present");
 
     // Find the property element with text content
@@ -296,12 +299,12 @@ fn test_unregistered_custom_extension_ignored() {
     // Don't register the custom extension
     let config = ParserConfig::new();
 
-    let data = create_test_3mf_with_custom_extension("http://example.com/custom");
+    let data = create_test_3mf_with_custom_extension(TEST_CUSTOM_NAMESPACE);
     let cursor = Cursor::new(data);
 
     // Should still parse successfully, but custom elements are ignored
     let model = Model::from_reader_with_config(cursor, config).unwrap();
 
     // Custom elements should not be present
-    assert!(model.get_custom_elements("http://example.com/custom").is_none());
+    assert!(model.get_custom_elements(TEST_CUSTOM_NAMESPACE).is_none());
 }
