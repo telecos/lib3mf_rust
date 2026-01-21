@@ -22,10 +22,12 @@ The 3MF format is the modern standard for 3D printing, supporting rich model inf
 - ✅ **Extension support** - Configurable support for 3MF extensions with validation
 - ✅ Parse 3MF file structure (ZIP/OPC container)
 - ✅ Read 3D model data including meshes, vertices, and triangles
+- ✅ **Write/Serialize 3MF files** - Create and write 3MF files
 - ✅ Support for materials and colors
-- ✅ Metadata extraction
+- ✅ Metadata extraction and writing
 - ✅ Build item specifications
 - ✅ Comprehensive error handling
+- ✅ Round-trip support (read-write-read)
 
 ## Installation
 
@@ -38,7 +40,9 @@ lib3mf = "0.1"
 
 ## Usage
 
-### Basic Example
+### Reading 3MF Files
+
+#### Basic Example
 
 ```rust
 use lib3mf::Model;
@@ -60,6 +64,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 obj.id, mesh.vertices.len(), mesh.triangles.len());
         }
     }
+
+    Ok(())
+}
+```
+
+### Writing 3MF Files
+
+#### Creating and Writing a Simple Model
+
+```rust
+use lib3mf::{Model, Object, Mesh, Vertex, Triangle, BuildItem};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a new model
+    let mut model = Model::new();
+    model.unit = "millimeter".to_string();
+
+    // Create a mesh with a simple triangle
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+    mesh.triangles.push(Triangle::new(0, 1, 2));
+
+    // Create an object with the mesh
+    let mut object = Object::new(1);
+    object.name = Some("Triangle".to_string());
+    object.mesh = Some(mesh);
+
+    // Add object to resources
+    model.resources.objects.push(object);
+
+    // Add to build
+    model.build.items.push(BuildItem::new(1));
+
+    // Write to file
+    model.write_to_file("output.3mf")?;
+
+    Ok(())
+}
+```
+
+#### Round-Trip Example
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Read an existing 3MF file
+    let file = File::open("input.3mf")?;
+    let model = Model::from_reader(file)?;
+
+    // Modify the model
+    // ... make changes ...
+
+    // Write back to a new file
+    model.write_to_file("output.3mf")?;
 
     Ok(())
 }
