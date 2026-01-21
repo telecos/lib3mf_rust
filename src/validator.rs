@@ -6,7 +6,7 @@
 //! - Triangle vertex indices reference valid vertices
 //! - Triangles are not degenerate (all three vertices must be distinct)
 //! - Build items reference existing objects
-//! - Material and color group references are valid
+//! - Material, color group, and base material references are valid
 
 use crate::error::{Error, Result};
 use crate::model::Model;
@@ -19,7 +19,7 @@ use std::collections::HashSet;
 /// - Object ID uniqueness
 /// - Triangle vertex bounds and degeneracy checks
 /// - Build item object references
-/// - Material and color group references
+/// - Material, color group, and base material references
 /// - Mesh requirements (must have vertices)
 pub fn validate_model(model: &Model) -> Result<()> {
     validate_required_structure(model)?;
@@ -190,7 +190,7 @@ fn validate_build_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// Validate material and color group references
+/// Validate material, color group, and base material references
 fn validate_material_references(model: &Model) -> Result<()> {
     // Collect valid color group IDs
     let valid_colorgroup_ids: HashSet<usize> = model
