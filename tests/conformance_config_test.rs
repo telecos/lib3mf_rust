@@ -74,6 +74,7 @@ fn test_suite8_config() {
     let config = common::get_suite_config("suite8_secure");
     assert!(config.supports(&Extension::Core));
     assert!(config.supports(&Extension::SecureContent));
+    assert!(config.supports(&Extension::Production));
     assert!(!config.supports(&Extension::Material));
     assert!(!config.supports(&Extension::BeamLattice));
 }
@@ -97,6 +98,8 @@ fn test_suite10_config() {
     let config = common::get_suite_config("suite10_boolean");
     assert!(config.supports(&Extension::Core));
     assert!(config.supports(&Extension::BooleanOperations));
+    assert!(config.supports(&Extension::Production));
+    assert!(config.supports(&Extension::BeamLattice));
     assert!(!config.supports(&Extension::Material));
     assert!(!config.supports(&Extension::Displacement));
 }
@@ -106,6 +109,7 @@ fn test_suite11_config() {
     let config = common::get_suite_config("suite11_Displacement");
     assert!(config.supports(&Extension::Core));
     assert!(config.supports(&Extension::Displacement));
+    assert!(config.supports(&Extension::BooleanOperations));
+    assert!(config.supports(&Extension::Production));
     assert!(!config.supports(&Extension::Material));
-    assert!(!config.supports(&Extension::BooleanOperations));
 }

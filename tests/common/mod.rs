@@ -46,19 +46,32 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
         "suite7_beam" => ParserConfig::new().with_extension(Extension::BeamLattice),
 
         // Suite 8: Secure Content
-        "suite8_secure" => ParserConfig::new().with_extension(Extension::SecureContent),
+        // Some test files also use Production extension
+        "suite8_secure" => ParserConfig::new()
+            .with_extension(Extension::SecureContent)
+            .with_extension(Extension::Production),
 
         // Suite 9: Core Extensions - support all for compatibility
-        "suite9_core_ext" => ParserConfig::with_all_extensions(),
+        // Also register custom extensions like trianglesets
+        "suite9_core_ext" => ParserConfig::with_all_extensions().with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/trianglesets/2021/07",
+            "TriangleSets",
+        ),
 
         // Suite 10: Boolean Operations
-        // The built-in extension uses schemas.3mf.io, which should cover the test files
-        "suite10_boolean" => ParserConfig::new().with_extension(Extension::BooleanOperations),
+        // Some test files also use Production and BeamLattice extensions
+        "suite10_boolean" => ParserConfig::new()
+            .with_extension(Extension::BooleanOperations)
+            .with_extension(Extension::Production)
+            .with_extension(Extension::BeamLattice),
 
         // Suite 11: Displacement
         // Register both the built-in 2022/07 namespace and the newer 2023/10 namespace
+        // Some test files also use BooleanOperations and Production extensions
         "suite11_Displacement" => ParserConfig::new()
             .with_extension(Extension::Displacement)
+            .with_extension(Extension::BooleanOperations)
+            .with_extension(Extension::Production)
             .with_custom_extension(
                 "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10",
                 "Displacement 2023/10",
