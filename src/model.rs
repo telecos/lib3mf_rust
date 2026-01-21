@@ -299,6 +299,159 @@ impl ColorGroup {
     }
 }
 
+/// Texture2D resource from materials extension
+#[derive(Debug, Clone)]
+pub struct Texture2D {
+    /// Texture ID
+    pub id: usize,
+    /// Path to texture file in the 3MF package
+    pub path: String,
+    /// Content type (e.g., "image/png", "image/jpeg")
+    pub contenttype: String,
+    /// Tiling mode in U direction
+    pub tilestyleu: Option<TileStyle>,
+    /// Tiling mode in V direction
+    pub tilestylev: Option<TileStyle>,
+    /// Optional texture filter type
+    pub filter: Option<TextureFilter>,
+}
+
+/// Texture tiling styles
+#[derive(Debug, Clone, PartialEq)]
+pub enum TileStyle {
+    /// Wrap texture at edges (repeat)
+    Wrap,
+    /// Mirror texture at edges
+    Mirror,
+    /// Clamp to edge color
+    Clamp,
+    /// No tiling
+    None,
+}
+
+/// Texture filter types
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextureFilter {
+    /// Auto filter selection
+    Auto,
+    /// Linear filtering
+    Linear,
+    /// Nearest neighbor filtering
+    Nearest,
+}
+
+impl Texture2D {
+    /// Create a new Texture2D
+    pub fn new(id: usize, path: String, contenttype: String) -> Self {
+        Self {
+            id,
+            path,
+            contenttype,
+            tilestyleu: None,
+            tilestylev: None,
+            filter: None,
+        }
+    }
+}
+
+/// Texture coordinate for 2D texture mapping
+#[derive(Debug, Clone, Copy)]
+pub struct TexCoord2D {
+    /// U coordinate (horizontal)
+    pub u: f64,
+    /// V coordinate (vertical)
+    pub v: f64,
+}
+
+/// Texture2DGroup containing texture coordinates
+#[derive(Debug, Clone)]
+pub struct Texture2DGroup {
+    /// Texture2DGroup ID
+    pub id: usize,
+    /// Reference to Texture2D resource ID
+    pub texid: usize,
+    /// List of texture coordinates
+    pub coords: Vec<TexCoord2D>,
+}
+
+impl Texture2DGroup {
+    /// Create a new Texture2DGroup
+    pub fn new(id: usize, texid: usize) -> Self {
+        Self {
+            id,
+            texid,
+            coords: Vec::new(),
+        }
+    }
+}
+
+/// Composite material component
+#[derive(Debug, Clone)]
+pub struct CompositeComponent {
+    /// Reference to base material ID
+    pub propertyid: usize,
+    /// Proportion of this material in the composite (0.0 to 1.0)
+    pub proportion: f64,
+}
+
+/// Composite material definition
+#[derive(Debug, Clone)]
+pub struct CompositeMaterial {
+    /// List of constituent materials and their proportions
+    pub components: Vec<CompositeComponent>,
+}
+
+/// Composite materials group
+#[derive(Debug, Clone)]
+pub struct CompositeMaterialGroup {
+    /// CompositeMaterialGroup ID
+    pub id: usize,
+    /// Reference to base materials group ID
+    pub basematerialid: usize,
+    /// List of composite materials in this group
+    pub composites: Vec<CompositeMaterial>,
+}
+
+impl CompositeMaterialGroup {
+    /// Create a new CompositeMaterialGroup
+    pub fn new(id: usize, basematerialid: usize) -> Self {
+        Self {
+            id,
+            basematerialid,
+            composites: Vec::new(),
+        }
+    }
+}
+
+/// Multi-property entry mapping multiple properties to an index
+#[derive(Debug, Clone)]
+pub struct MultiPropertyEntry {
+    /// Property IDs for this entry
+    pub pids: Vec<usize>,
+}
+
+/// Multi-properties group combining multiple property types
+#[derive(Debug, Clone)]
+pub struct MultiProperties {
+    /// MultiProperties ID
+    pub id: usize,
+    /// Property IDs that are combined in this group
+    pub pids: Vec<usize>,
+    /// List of multi-property entries (combinations)
+    pub entries: Vec<MultiPropertyEntry>,
+}
+
+impl MultiProperties {
+    /// Create a new MultiProperties
+    pub fn new(id: usize, pids: Vec<usize>) -> Self {
+        Self {
+            id,
+            pids,
+            entries: Vec::new(),
+        }
+    }
+}
+
 /// A 3D object that can be a mesh or reference other objects
 #[derive(Debug, Clone)]
 pub struct Object {
@@ -354,6 +507,14 @@ pub struct Resources {
     pub materials: Vec<Material>,
     /// List of color groups (materials extension)
     pub color_groups: Vec<ColorGroup>,
+    /// List of texture2d resources (materials extension)
+    pub texture2d: Vec<Texture2D>,
+    /// List of texture2dgroup resources (materials extension)
+    pub texture2dgroups: Vec<Texture2DGroup>,
+    /// List of composite material groups (materials extension)
+    pub composite_materials: Vec<CompositeMaterialGroup>,
+    /// List of multi-properties (materials extension)
+    pub multi_properties: Vec<MultiProperties>,
 }
 
 impl Resources {
@@ -363,6 +524,10 @@ impl Resources {
             objects: Vec::new(),
             materials: Vec::new(),
             color_groups: Vec::new(),
+            texture2d: Vec::new(),
+            texture2dgroups: Vec::new(),
+            composite_materials: Vec::new(),
+            multi_properties: Vec::new(),
         }
     }
 }

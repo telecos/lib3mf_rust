@@ -64,6 +64,13 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut material_index: usize = 0;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
+    let mut current_texture2dgroup: Option<Texture2DGroup> = None;
+    let mut in_texture2dgroup = false;
+    let mut current_composite_group: Option<CompositeMaterialGroup> = None;
+    let mut in_composite_group = false;
+    let mut current_composite: Option<CompositeMaterial> = None;
+    let mut current_multiproperties: Option<MultiProperties> = None;
+    let mut in_multiproperties = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -256,6 +263,129 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                     }
+                    "texture2d" if in_resources => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| Error::InvalidXml("texture2d missing id attribute".to_string()))?
+                            .parse::<usize>()?;
+                        let path = attrs
+                            .get("path")
+                            .ok_or_else(|| Error::InvalidXml("texture2d missing path attribute".to_string()))?
+                            .to_string();
+                        let contenttype = attrs
+                            .get("contenttype")
+                            .ok_or_else(|| Error::InvalidXml("texture2d missing contenttype attribute".to_string()))?
+                            .to_string();
+                        
+                        let mut texture = Texture2D::new(id, path, contenttype);
+                        
+                        // Parse optional tiling styles
+                        if let Some(tilestyle_u) = attrs.get("tilestyleu") {
+                            texture.tilestyleu = parse_tilestyle(tilestyle_u);
+                        }
+                        if let Some(tilestyle_v) = attrs.get("tilestylev") {
+                            texture.tilestylev = parse_tilestyle(tilestyle_v);
+                        }
+                        if let Some(filter) = attrs.get("filter") {
+                            texture.filter = parse_texture_filter(filter);
+                        }
+                        
+                        model.resources.texture2d.push(texture);
+                    }
+                    "texture2dgroup" if in_resources => {
+                        in_texture2dgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| Error::InvalidXml("texture2dgroup missing id attribute".to_string()))?
+                            .parse::<usize>()?;
+                        let texid = attrs
+                            .get("texid")
+                            .ok_or_else(|| Error::InvalidXml("texture2dgroup missing texid attribute".to_string()))?
+                            .parse::<usize>()?;
+                        current_texture2dgroup = Some(Texture2DGroup::new(id, texid));
+                    }
+                    "tex2coord" if in_texture2dgroup => {
+                        if let Some(ref mut tex2dgroup) = current_texture2dgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let u = attrs
+                                .get("u")
+                                .ok_or_else(|| Error::InvalidXml("tex2coord missing u attribute".to_string()))?
+                                .parse::<f64>()?;
+                            let v = attrs
+                                .get("v")
+                                .ok_or_else(|| Error::InvalidXml("tex2coord missing v attribute".to_string()))?
+                                .parse::<f64>()?;
+                            tex2dgroup.coords.push(TexCoord2D { u, v });
+                        }
+                    }
+                    "compositematerials" if in_resources => {
+                        in_composite_group = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| Error::InvalidXml("compositematerials missing id attribute".to_string()))?
+                            .parse::<usize>()?;
+                        let basematerialid = attrs
+                            .get("basematerialid")
+                            .ok_or_else(|| Error::InvalidXml("compositematerials missing basematerialid attribute".to_string()))?
+                            .parse::<usize>()?;
+                        current_composite_group = Some(CompositeMaterialGroup::new(id, basematerialid));
+                    }
+                    "composite" if in_composite_group => {
+                        // Start a new composite material
+                        current_composite = Some(CompositeMaterial { components: Vec::new() });
+                    }
+                    "component" if in_composite_group && current_composite.is_some() => {
+                        if let Some(ref mut composite) = current_composite {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let propertyid = attrs
+                                .get("propertyid")
+                                .ok_or_else(|| Error::InvalidXml("component missing propertyid attribute".to_string()))?
+                                .parse::<usize>()?;
+                            let proportion = attrs
+                                .get("proportion")
+                                .ok_or_else(|| Error::InvalidXml("component missing proportion attribute".to_string()))?
+                                .parse::<f64>()?;
+                            composite.components.push(CompositeComponent { propertyid, proportion });
+                        }
+                    }
+                    "multiproperties" if in_resources => {
+                        in_multiproperties = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| Error::InvalidXml("multiproperties missing id attribute".to_string()))?
+                            .parse::<usize>()?;
+                        let pids_str = attrs
+                            .get("pids")
+                            .ok_or_else(|| Error::InvalidXml("multiproperties missing pids attribute".to_string()))?;
+                        
+                        // Parse space-separated list of property IDs
+                        let pids: std::result::Result<Vec<usize>, _> = pids_str.split_whitespace()
+                            .map(|s| s.parse::<usize>())
+                            .collect();
+                        let pids = pids.map_err(|e| Error::InvalidXml(format!("Invalid property ID in multiproperties: {}", e)))?;
+                        
+                        current_multiproperties = Some(MultiProperties::new(id, pids));
+                    }
+                    "multi" if in_multiproperties => {
+                        if let Some(ref mut multiprops) = current_multiproperties {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let pindices_str = attrs
+                                .get("pindices")
+                                .ok_or_else(|| Error::InvalidXml("multi missing pindices attribute".to_string()))?;
+                            
+                            // Parse space-separated list of property indices
+                            let pids: std::result::Result<Vec<usize>, _> = pindices_str.split_whitespace()
+                                .map(|s| s.parse::<usize>())
+                                .collect();
+                            let pids = pids.map_err(|e| Error::InvalidXml(format!("Invalid property index in multi: {}", e)))?;
+                            
+                            multiprops.entries.push(MultiPropertyEntry { pids });
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -292,6 +422,31 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             model.resources.color_groups.push(colorgroup);
                         }
                         in_colorgroup = false;
+                    }
+                    "texture2dgroup" => {
+                        if let Some(tex2dgroup) = current_texture2dgroup.take() {
+                            model.resources.texture2dgroups.push(tex2dgroup);
+                        }
+                        in_texture2dgroup = false;
+                    }
+                    "compositematerials" => {
+                        if let Some(comp_group) = current_composite_group.take() {
+                            model.resources.composite_materials.push(comp_group);
+                        }
+                        in_composite_group = false;
+                    }
+                    "composite" => {
+                        if let Some(composite) = current_composite.take() {
+                            if let Some(ref mut comp_group) = current_composite_group {
+                                comp_group.composites.push(composite);
+                            }
+                        }
+                    }
+                    "multiproperties" => {
+                        if let Some(multiprops) = current_multiproperties.take() {
+                            model.resources.multi_properties.push(multiprops);
+                        }
+                        in_multiproperties = false;
                     }
                     _ => {}
                 }
@@ -590,6 +745,27 @@ fn parse_color(color_str: &str) -> Option<(u8, u8, u8, u8)> {
     }
 }
 
+/// Parse TileStyle from string
+fn parse_tilestyle(style_str: &str) -> Option<TileStyle> {
+    match style_str.to_lowercase().as_str() {
+        "wrap" => Some(TileStyle::Wrap),
+        "mirror" => Some(TileStyle::Mirror),
+        "clamp" => Some(TileStyle::Clamp),
+        "none" => Some(TileStyle::None),
+        _ => None,
+    }
+}
+
+/// Parse TextureFilter from string
+fn parse_texture_filter(filter_str: &str) -> Option<TextureFilter> {
+    match filter_str.to_lowercase().as_str() {
+        "auto" => Some(TextureFilter::Auto),
+        "linear" => Some(TextureFilter::Linear),
+        "nearest" => Some(TextureFilter::Nearest),
+        _ => None,
+    }
+}
+
 /// Parse required extensions from a space-separated list of namespace URIs
 #[allow(dead_code)] // Kept for backward compatibility
 fn parse_required_extensions(extensions_str: &str) -> Result<Vec<Extension>> {
@@ -772,5 +948,24 @@ mod tests {
         );
         assert_eq!(model.resources.objects.len(), 1);
         assert_eq!(model.build.items.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_tilestyle() {
+        assert_eq!(parse_tilestyle("wrap"), Some(TileStyle::Wrap));
+        assert_eq!(parse_tilestyle("mirror"), Some(TileStyle::Mirror));
+        assert_eq!(parse_tilestyle("clamp"), Some(TileStyle::Clamp));
+        assert_eq!(parse_tilestyle("none"), Some(TileStyle::None));
+        assert_eq!(parse_tilestyle("WRAP"), Some(TileStyle::Wrap)); // Case insensitive
+        assert_eq!(parse_tilestyle("invalid"), None);
+    }
+
+    #[test]
+    fn test_parse_texture_filter() {
+        assert_eq!(parse_texture_filter("auto"), Some(TextureFilter::Auto));
+        assert_eq!(parse_texture_filter("linear"), Some(TextureFilter::Linear));
+        assert_eq!(parse_texture_filter("nearest"), Some(TextureFilter::Nearest));
+        assert_eq!(parse_texture_filter("AUTO"), Some(TextureFilter::Auto)); // Case insensitive
+        assert_eq!(parse_texture_filter("invalid"), None);
     }
 }
