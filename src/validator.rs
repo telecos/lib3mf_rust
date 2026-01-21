@@ -143,7 +143,9 @@ fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result
 
     // Count how many times each edge appears
     // Edge is represented as (min_vertex, max_vertex) to be direction-independent
-    let mut edge_count: HashMap<(usize, usize), usize> = HashMap::new();
+    // Pre-allocate capacity based on triangle count (each triangle has 3 edges)
+    let mut edge_count: HashMap<(usize, usize), usize> = 
+        HashMap::with_capacity(mesh.triangles.len() * 3);
 
     for triangle in &mesh.triangles {
         // Add the three edges of this triangle

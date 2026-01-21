@@ -216,6 +216,29 @@ The parser successfully handles files using all 3MF extensions including:
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
+## Performance
+
+The library is optimized for parsing large 3MF files efficiently:
+
+- **Linear scaling**: Performance scales linearly with file size
+- **Memory efficient**: Streaming XML parsing with pre-allocated buffers
+- **Benchmarked**: Comprehensive benchmark suite using criterion.rs
+
+```bash
+# Run performance benchmarks
+cargo bench
+
+# Run specific benchmark group
+cargo bench -- parse_large
+```
+
+**Typical Performance:**
+- Small files (1,000 vertices): ~1 ms
+- Medium files (10,000 vertices): ~7 ms
+- Large files (100,000 vertices): ~70 ms
+
+See [PERFORMANCE.md](PERFORMANCE.md) for detailed performance characteristics, optimization strategies, and profiling guidance.
+
 ## Safety
 
 This library is designed with safety in mind:

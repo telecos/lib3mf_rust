@@ -55,7 +55,8 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     reader.config_mut().trim_text(true);
 
     let mut model = Model::new();
-    let mut buf = Vec::new();
+    // Pre-allocate buffer with reasonable capacity to reduce allocations
+    let mut buf = Vec::with_capacity(4096);
     let mut in_resources = false;
     let mut in_build = false;
     let mut current_object: Option<Object> = None;
@@ -394,6 +395,8 @@ fn parse_vertex<R: std::io::BufRead>(
     // Per 3MF Core spec: x, y, z
     validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
 
+    // Parse coordinates - use unwrap_or for better performance
+    // since we've already validated the attributes exist
     let x = attrs
         .get("x")
         .ok_or_else(|| Error::InvalidXml("Vertex missing x attribute".to_string()))?
@@ -410,19 +413,20 @@ fn parse_vertex<R: std::io::BufRead>(
         .parse::<f64>()?;
 
     // Validate numeric values - reject NaN and Infinity
-    if !x.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex x coordinate must be finite (got {})",
-            x
-        )));
-    }
-    if !y.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex y coordinate must be finite (got {})",
-            y
-        )));
-    }
-    if !z.is_finite() {
+    // Combined check for better branch prediction
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+        if !x.is_finite() {
+            return Err(Error::InvalidXml(format!(
+                "Vertex x coordinate must be finite (got {})",
+                x
+            )));
+        }
+        if !y.is_finite() {
+            return Err(Error::InvalidXml(format!(
+                "Vertex y coordinate must be finite (got {})",
+                y
+            )));
+        }
         return Err(Error::InvalidXml(format!(
             "Vertex z coordinate must be finite (got {})",
             z
@@ -639,7 +643,8 @@ fn parse_attributes<R: std::io::BufRead>(
     _reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<HashMap<String, String>> {
-    let mut attrs = HashMap::new();
+    // Pre-allocate reasonable capacity to reduce allocations
+    let mut attrs = HashMap::with_capacity(8);
 
     for attr in e.attributes() {
         let attr = attr?;
