@@ -36,6 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         suite:
+          # Suites 1-8 use lowercase directory names
           - name: suite1_core_slice_prod
             dir: suite1_core_slice_prod
             pos_dir: positive_test_cases
@@ -68,6 +69,7 @@ jobs:
             dir: suite8_secure
             pos_dir: positive_test_cases
             neg_dir: negative_test_cases
+          # Suites 9-11 use title case with spaces (as defined in upstream test suite repo)
           - name: suite9_core_ext
             dir: suite9_core_ext
             pos_dir: Positive Tests
@@ -105,6 +107,7 @@ jobs:
           git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
       
       - name: Run conformance tests for ${{ matrix.suite.name }}
+        id: run-tests
         run: |
           echo "Testing suite: ${{ matrix.suite.name }}"
           cargo test --test conformance_tests ${{ matrix.suite.name }} -- --nocapture
@@ -113,7 +116,7 @@ jobs:
         if: always()
         run: |
           echo "# ${{ matrix.suite.name }} Results" > ${{ matrix.suite.name }}-results.md
-          cargo test --test conformance_tests ${{ matrix.suite.name }} -- --nocapture 2>&1 | tee -a ${{ matrix.suite.name }}-results.md || true
+          echo "Exit code from tests: ${{ steps.run-tests.outcome }}" >> ${{ matrix.suite.name }}-results.md
       
       - name: Upload suite report
         if: always()
