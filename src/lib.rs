@@ -40,8 +40,9 @@ mod validator;
 
 pub use error::{Error, Result};
 pub use model::{
-    Build, BuildItem, ColorGroup, Extension, Material, Mesh, Model, Object, ParserConfig,
-    Resources, Triangle, Vertex,
+    Build, BuildItem, ColorGroup, CompositeMaterial, CompositeMaterialGroup, Extension, Material,
+    Mesh, Model, MultiProperties, Object, ParserConfig, Resources, TexCoord2D, Texture2D,
+    Texture2DGroup, TextureFilter, TileStyle, Triangle, Vertex,
 };
 
 use std::io::Read;
@@ -105,5 +106,59 @@ impl Model {
         config: ParserConfig,
     ) -> Result<Self> {
         parser::parse_3mf_with_config(reader, config)
+    }
+
+    /// Parse a 3MF model from XML string
+    ///
+    /// This is useful for testing or when you have the XML content directly.
+    /// Uses the default parser configuration which supports all known extensions.
+    ///
+    /// # Arguments
+    ///
+    /// * `xml` - A string containing the 3MF model XML
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::Model;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+    /// <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+    ///   <resources>
+    ///     <object id="1">
+    ///       <mesh>
+    ///         <vertices>
+    ///           <vertex x="0" y="0" z="0"/>
+    ///           <vertex x="1" y="0" z="0"/>
+    ///           <vertex x="0" y="1" z="0"/>
+    ///         </vertices>
+    ///         <triangles>
+    ///           <triangle v1="0" v2="1" v3="2"/>
+    ///         </triangles>
+    ///       </mesh>
+    ///     </object>
+    ///   </resources>
+    ///   <build>
+    ///     <item objectid="1"/>
+    ///   </build>
+    /// </model>"#;
+    ///
+    /// let model = Model::from_xml(xml)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_xml(xml: &str) -> Result<Self> {
+        Self::from_xml_with_config(xml, ParserConfig::with_all_extensions())
+    }
+
+    /// Parse a 3MF model from XML string with custom configuration
+    ///
+    /// # Arguments
+    ///
+    /// * `xml` - A string containing the 3MF model XML
+    /// * `config` - Parser configuration specifying supported extensions
+    pub fn from_xml_with_config(xml: &str, config: ParserConfig) -> Result<Self> {
+        parser::parse_model_xml_with_config(xml, config)
     }
 }

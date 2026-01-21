@@ -135,6 +135,10 @@ This implementation currently supports:
   - Color groups (m:colorgroup)
   - Per-triangle material references (pid attributes)
   - Base materials with display colors
+  - Texture2D resources (m:texture2d)
+  - Texture coordinates and mappings (m:texture2dgroup)
+  - Composite materials (m:compositematerials)
+  - Multi-properties (m:multiproperties)
 
 ### Extension Support and Validation
 
@@ -143,7 +147,7 @@ The parser supports **conditional extension validation**, allowing consumers to 
 **Supported Extensions:**
 
 - ✅ **Core Specification** - Fully supported (always enabled)
-- ✅ **Materials Extension** - Color groups and base materials
+- ✅ **Materials Extension** - Fully supported (color groups, base materials, textures, composite materials, multi-properties)
 - ✅ **Production Extension** - Files parse successfully
 - ✅ **Slice Extension** - Files parse successfully  
 - ✅ **Beam Lattice Extension** - Files parse successfully
@@ -174,7 +178,6 @@ Potential future additions could include:
 - Full production extension support (UUID extraction, path references)
 - Slice extension support (slice stacks and slice data)
 - Beam lattice extension support (beam definitions and properties)
-- Advanced material properties (textures, composite materials)
 - Components and assemblies
 - Custom extensions
 

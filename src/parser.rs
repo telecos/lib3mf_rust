@@ -50,7 +50,7 @@ fn parse_model_xml(xml: &str) -> Result<Model> {
 }
 
 /// Parse the 3D model XML content with configuration
-fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
+pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
