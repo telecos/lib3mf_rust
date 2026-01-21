@@ -51,7 +51,8 @@ fn validate_required_structure(model: &Model) -> Result<()> {
         return Err(Error::InvalidModel(
             "Build section must contain at least one item. \
              A valid 3MF file requires at least one <item> element within the <build> section. \
-             The build section specifies which objects should be printed.".to_string()
+             The build section specifies which objects should be printed."
+                .to_string(),
         ));
     }
 
@@ -68,7 +69,8 @@ fn validate_object_ids(model: &Model) -> Result<()> {
             return Err(Error::InvalidModel(
                 "Object ID must be a positive integer (greater than 0). \
                  Per the 3MF specification, object IDs must be positive integers. \
-                 Found object with ID = 0, which is invalid.".to_string(),
+                 Found object with ID = 0, which is invalid."
+                    .to_string(),
             ));
         }
 
@@ -98,7 +100,8 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
                     "Object {}: Mesh has {} triangle(s) but no vertices. \
                      A mesh with triangles must also have vertex data. \
                      Check that the <vertices> element contains <vertex> elements.",
-                    object.id, mesh.triangles.len()
+                    object.id,
+                    mesh.triangles.len()
                 )));
             }
 
@@ -577,8 +580,14 @@ mod tests {
         let result = validate_mesh_geometry(&model);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("triangle"), "Error message should mention triangles");
-        assert!(err_msg.contains("no vertices"), "Error message should mention missing vertices");
+        assert!(
+            err_msg.contains("triangle"),
+            "Error message should mention triangles"
+        );
+        assert!(
+            err_msg.contains("no vertices"),
+            "Error message should mention missing vertices"
+        );
     }
 
     #[test]

@@ -21,7 +21,7 @@ mod tests {
         assert_eq!(group.id, 1);
         assert_eq!(group.texid, 5);
         assert_eq!(group.tex2coords.len(), 0);
-        
+
         group.tex2coords.push(Tex2Coord::new(0.0, 0.0));
         group.tex2coords.push(Tex2Coord::new(1.0, 1.0));
         assert_eq!(group.tex2coords.len(), 2);
@@ -34,7 +34,7 @@ mod tests {
         assert_eq!(comp.id, 1);
         assert_eq!(comp.matid, 10);
         assert_eq!(comp.matindices, matindices);
-        
+
         comp.composites.push(Composite::new(vec![0.5, 0.3, 0.2]));
         assert_eq!(comp.composites.len(), 1);
     }
@@ -45,11 +45,11 @@ mod tests {
         let mut multi = MultiProperties::new(1, pids.clone());
         assert_eq!(multi.id, 1);
         assert_eq!(multi.pids, pids);
-        
+
         multi.blendmethods.push(BlendMethod::Mix);
         multi.blendmethods.push(BlendMethod::Multiply);
         assert_eq!(multi.blendmethods.len(), 2);
-        
+
         multi.multis.push(Multi::new(vec![0, 1, 2]));
         assert_eq!(multi.multis.len(), 1);
     }

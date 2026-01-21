@@ -173,7 +173,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                 "Content Types validation",
                 "Missing required 'rels' extension definition in [Content_Types].xml. \
                  The Content Types file must define a Default element for the '.rels' extension. \
-                 This is required by the OPC specification."
+                 This is required by the OPC specification.",
             ));
         }
 
@@ -551,10 +551,7 @@ impl<R: Read + std::io::Seek> Package<R> {
             )));
         }
 
-        Ok(Some(crate::model::Thumbnail::new(
-            thumb_path,
-            content_type,
-        )))
+        Ok(Some(crate::model::Thumbnail::new(thumb_path, content_type)))
     }
 
     /// Get content type for a file from [Content_Types].xml

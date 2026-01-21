@@ -38,9 +38,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Error, Debug)]
 pub enum Error {
     /// IO error occurred while reading the file
-    /// 
+    ///
     /// **Error Code**: E1001
-    /// 
+    ///
     /// **Common Causes**:
     /// - File not found
     /// - Insufficient permissions
@@ -49,14 +49,14 @@ pub enum Error {
     Io(#[from] io::Error),
 
     /// ZIP archive error
-    /// 
+    ///
     /// **Error Code**: E1002
-    /// 
+    ///
     /// **Common Causes**:
     /// - Corrupted ZIP file
     /// - Unsupported compression method
     /// - Truncated archive
-    /// 
+    ///
     /// **Suggestions**:
     /// - Verify the file is a valid 3MF (ZIP) archive
     /// - Try re-downloading or re-exporting the file
@@ -64,9 +64,9 @@ pub enum Error {
     Zip(#[from] zip::result::ZipError),
 
     /// XML parsing error
-    /// 
+    ///
     /// **Error Code**: E2001
-    /// 
+    ///
     /// **Common Causes**:
     /// - Malformed XML syntax
     /// - Invalid character encoding
@@ -75,14 +75,14 @@ pub enum Error {
     Xml(#[from] quick_xml::Error),
 
     /// XML attribute error
-    /// 
+    ///
     /// **Error Code**: E2002
-    /// 
+    ///
     /// **Common Causes**:
     /// - Missing required attribute
     /// - Invalid attribute value
     /// - Duplicate attribute
-    /// 
+    ///
     /// **Suggestions**:
     /// - Check the 3MF specification for required attributes
     /// - Verify attribute values are properly formatted
@@ -90,14 +90,14 @@ pub enum Error {
     XmlAttr(String),
 
     /// Missing required file in the 3MF archive
-    /// 
+    ///
     /// **Error Code**: E1003
-    /// 
+    ///
     /// **Common Causes**:
     /// - Incomplete 3MF package
     /// - Missing 3D model file
     /// - Missing content types file
-    /// 
+    ///
     /// **Suggestions**:
     /// - Ensure the 3MF archive contains all required files
     /// - Check for [Content_Types].xml and 3D/3dmodel.model files
@@ -105,14 +105,14 @@ pub enum Error {
     MissingFile(String),
 
     /// Invalid 3MF format
-    /// 
+    ///
     /// **Error Code**: E2004
-    /// 
+    ///
     /// **Common Causes**:
     /// - Non-compliant OPC structure
     /// - Invalid content types
     /// - Missing required OPC relationships
-    /// 
+    ///
     /// **Suggestions**:
     /// - Verify the file was exported correctly
     /// - Check the 3MF specification for OPC requirements
@@ -120,14 +120,14 @@ pub enum Error {
     InvalidFormat(String),
 
     /// Invalid XML structure
-    /// 
+    ///
     /// **Error Code**: E2003
-    /// 
+    ///
     /// **Common Causes**:
     /// - Missing required XML elements
     /// - Elements in wrong order
     /// - Invalid element nesting
-    /// 
+    ///
     /// **Suggestions**:
     /// - Check element hierarchy matches 3MF specification
     /// - Verify required child elements are present
@@ -135,15 +135,15 @@ pub enum Error {
     InvalidXml(String),
 
     /// Invalid model structure or validation failure
-    /// 
+    ///
     /// **Error Code**: E3001
-    /// 
+    ///
     /// **Common Causes**:
     /// - Mesh topology errors (non-manifold, degenerate triangles)
     /// - Invalid object references
     /// - Out-of-bounds vertex indices
     /// - Duplicate object IDs
-    /// 
+    ///
     /// **Suggestions**:
     /// - Check mesh for manifold edges (each edge shared by at most 2 triangles)
     /// - Verify all vertex indices are within bounds
@@ -153,14 +153,14 @@ pub enum Error {
     InvalidModel(String),
 
     /// Parse error for numeric values
-    /// 
+    ///
     /// **Error Code**: E3002
-    /// 
+    ///
     /// **Common Causes**:
     /// - Invalid number format
     /// - Out-of-range values
     /// - Non-numeric characters in numeric fields
-    /// 
+    ///
     /// **Suggestions**:
     /// - Verify numeric values use proper format (e.g., "1.5" not "1,5")
     /// - Check for special characters or extra whitespace
@@ -168,13 +168,13 @@ pub enum Error {
     ParseError(String),
 
     /// Unsupported feature or extension
-    /// 
+    ///
     /// **Error Code**: E4001
-    /// 
+    ///
     /// **Common Causes**:
     /// - Using 3MF extensions not implemented by this parser
     /// - Future 3MF specification features
-    /// 
+    ///
     /// **Suggestions**:
     /// - Check if the feature is part of a 3MF extension
     /// - Verify this parser supports the required extensions
@@ -182,13 +182,13 @@ pub enum Error {
     Unsupported(String),
 
     /// Required extension not supported
-    /// 
+    ///
     /// **Error Code**: E4002
-    /// 
+    ///
     /// **Common Causes**:
     /// - 3MF file requires an extension not implemented by this parser
     /// - Extension marked as required in the XML namespace
-    /// 
+    ///
     /// **Suggestions**:
     /// - Check the file's required extensions in the model XML
     /// - Use a different parser that supports the required extension
@@ -322,7 +322,8 @@ mod tests {
 
     #[test]
     fn test_parse_error_with_context_helper() {
-        let err = Error::parse_error_with_context("vertex x coordinate", "abc", "floating-point number");
+        let err =
+            Error::parse_error_with_context("vertex x coordinate", "abc", "floating-point number");
         assert!(err.to_string().contains("vertex x coordinate"));
         assert!(err.to_string().contains("floating-point number"));
         assert!(err.to_string().contains("'abc'"));
@@ -334,7 +335,9 @@ mod tests {
     fn test_parse_float_error_conversion() {
         let parse_err: std::num::ParseFloatError = "not_a_number".parse::<f64>().unwrap_err();
         let err = Error::from(parse_err);
-        assert!(err.to_string().contains("Failed to parse floating-point number"));
+        assert!(err
+            .to_string()
+            .contains("Failed to parse floating-point number"));
         assert!(err.to_string().contains("[E3002]"));
     }
 
