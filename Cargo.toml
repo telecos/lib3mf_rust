@@ -19,10 +19,15 @@ tempfile = "3.14"
 zip = "2.3"
 walkdir = "2.5"
 libtest-mimic = "0.8"
+criterion = "0.5"
 
 [[test]]
 name = "conformance_individual"
 path = "tests/conformance_individual.rs"
+harness = false
+
+[[bench]]
+name = "parse_benchmark"
 harness = false
 
 [lints.rust]
