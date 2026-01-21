@@ -231,6 +231,8 @@ pub struct Mesh {
     pub vertices: Vec<Vertex>,
     /// List of triangles
     pub triangles: Vec<Triangle>,
+    /// Optional beam lattice structure (Beam Lattice Extension)
+    pub beamset: Option<BeamSet>,
 }
 
 impl Mesh {
@@ -239,11 +241,119 @@ impl Mesh {
         Self {
             vertices: Vec::new(),
             triangles: Vec::new(),
+            beamset: None,
         }
     }
 }
 
 impl Default for Mesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cap mode for beam lattice ends
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BeamCapMode {
+    /// Sphere cap (rounded ends)
+    Sphere,
+    /// Butt cap (flat ends)
+    Butt,
+}
+
+impl Default for BeamCapMode {
+    fn default() -> Self {
+        BeamCapMode::Sphere
+    }
+}
+
+/// A single beam in a beam lattice structure
+///
+/// Beams connect two vertices with optional varying radii along the beam.
+/// Part of the Beam Lattice Extension specification.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Beam {
+    /// Index of first vertex
+    pub v1: usize,
+    /// Index of second vertex
+    pub v2: usize,
+    /// Radius at first vertex (optional, defaults to beamset radius)
+    pub r1: Option<f64>,
+    /// Radius at second vertex (optional, defaults to r1 or beamset radius)
+    pub r2: Option<f64>,
+}
+
+impl Beam {
+    /// Create a new beam between two vertices
+    pub fn new(v1: usize, v2: usize) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: None,
+            r2: None,
+        }
+    }
+
+    /// Create a new beam with a specific radius at v1
+    pub fn with_radius(v1: usize, v2: usize, r1: f64) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: Some(r1),
+            r2: None,
+        }
+    }
+
+    /// Create a new beam with different radii at both ends
+    pub fn with_radii(v1: usize, v2: usize, r1: f64, r2: f64) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: Some(r1),
+            r2: Some(r2),
+        }
+    }
+}
+
+/// A beam lattice structure containing beams and lattice properties
+///
+/// Part of the Beam Lattice Extension specification.
+/// Defines a lattice structure made of beams connecting vertices.
+#[derive(Debug, Clone)]
+pub struct BeamSet {
+    /// Default radius for beams (when not specified per-beam)
+    pub radius: f64,
+    /// Minimum length for beams
+    pub min_length: f64,
+    /// Cap mode for beam ends
+    pub cap_mode: BeamCapMode,
+    /// List of beams in the lattice
+    pub beams: Vec<Beam>,
+}
+
+impl BeamSet {
+    /// Create a new beam set with default values
+    pub fn new() -> Self {
+        Self {
+            radius: 1.0,
+            min_length: 0.0001,
+            cap_mode: BeamCapMode::Sphere,
+            beams: Vec::new(),
+        }
+    }
+
+    /// Create a new beam set with a specific radius
+    pub fn with_radius(radius: f64) -> Self {
+        Self {
+            radius,
+            min_length: 0.0001,
+            cap_mode: BeamCapMode::Sphere,
+            beams: Vec::new(),
+        }
+    }
+}
+
+impl Default for BeamSet {
     fn default() -> Self {
         Self::new()
     }
@@ -289,6 +399,15 @@ pub struct ColorGroup {
     pub colors: Vec<(u8, u8, u8, u8)>,
 }
 
+/// Production extension information
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProductionInfo {
+    /// UUID identifier (p:UUID attribute)
+    pub uuid: Option<String>,
+    /// Production path (p:path attribute)
+    pub path: Option<String>,
+}
+
 impl ColorGroup {
     /// Create a new color group
     pub fn new(id: usize) -> Self {
@@ -318,6 +437,178 @@ pub struct SecureContentInfo {
     pub keystore_uuid: Option<String>,
     /// Paths to encrypted files in the package
     pub encrypted_files: Vec<String>,
+/// A 2D vertex with x, y coordinates (used in slice extension)
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vertex2D {
+    /// X coordinate
+    pub x: f64,
+    /// Y coordinate
+    pub y: f64,
+}
+
+impl Vertex2D {
+    /// Create a new 2D vertex
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+}
+
+/// A segment in a slice polygon (slice extension)
+#[derive(Debug, Clone, PartialEq)]
+pub struct SliceSegment {
+    /// Second vertex index (first is implied by startv or previous segment)
+    pub v2: usize,
+}
+
+impl SliceSegment {
+    /// Create a new slice segment
+    pub fn new(v2: usize) -> Self {
+        Self { v2 }
+    }
+}
+
+/// A polygon in a slice (slice extension)
+#[derive(Debug, Clone)]
+pub struct SlicePolygon {
+    /// Starting vertex index
+    pub startv: usize,
+    /// List of segments forming the polygon
+    pub segments: Vec<SliceSegment>,
+}
+
+impl SlicePolygon {
+    /// Create a new slice polygon
+    pub fn new(startv: usize) -> Self {
+        Self {
+            startv,
+            segments: Vec::new(),
+        }
+    }
+}
+
+/// A single slice at a specific Z height (slice extension)
+#[derive(Debug, Clone)]
+pub struct Slice {
+    /// Z coordinate of the top of this slice
+    pub ztop: f64,
+    /// List of 2D vertices for this slice
+    pub vertices: Vec<Vertex2D>,
+    /// List of polygons for this slice
+    pub polygons: Vec<SlicePolygon>,
+}
+
+impl Slice {
+    /// Create a new slice
+    pub fn new(ztop: f64) -> Self {
+        Self {
+            ztop,
+            vertices: Vec::new(),
+            polygons: Vec::new(),
+        }
+    }
+}
+
+/// Reference to an external slice file (slice extension)
+#[derive(Debug, Clone)]
+pub struct SliceRef {
+    /// Referenced slice stack ID
+    pub slicestackid: usize,
+    /// Path to the slice model file
+    pub slicepath: String,
+}
+
+impl SliceRef {
+    /// Create a new slice reference
+    pub fn new(slicestackid: usize, slicepath: String) -> Self {
+        Self {
+            slicestackid,
+            slicepath,
+        }
+    }
+}
+
+/// A stack of slices (slice extension)
+#[derive(Debug, Clone)]
+pub struct SliceStack {
+    /// SliceStack ID
+    pub id: usize,
+    /// Z coordinate of the bottom of the slice stack
+    pub zbottom: f64,
+    /// List of slices in this stack
+    pub slices: Vec<Slice>,
+    /// List of references to external slice files
+    pub slice_refs: Vec<SliceRef>,
+}
+
+impl SliceStack {
+    /// Create a new slice stack
+    pub fn new(id: usize, zbottom: f64) -> Self {
+        Self {
+            id,
+            zbottom,
+            slices: Vec::new(),
+            slice_refs: Vec::new(),
+        }
+    }
+}
+
+/// Base material group from materials extension
+#[derive(Debug, Clone)]
+pub struct BaseMaterialGroup {
+    /// Base material group ID
+    pub id: usize,
+    /// List of base materials in this group
+    pub materials: Vec<BaseMaterial>,
+}
+
+impl BaseMaterialGroup {
+    /// Create a new base material group
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            materials: Vec::new(),
+        }
+    }
+}
+
+/// Individual base material within a base material group
+#[derive(Debug, Clone)]
+pub struct BaseMaterial {
+    /// Material name
+    pub name: String,
+    /// Display color in RGBA format (red, green, blue, alpha)
+    pub displaycolor: (u8, u8, u8, u8),
+}
+
+impl BaseMaterial {
+    /// Create a new base material
+    pub fn new(name: String, displaycolor: (u8, u8, u8, u8)) -> Self {
+        Self { name, displaycolor }
+    }
+}
+
+impl ProductionInfo {
+    /// Create a new empty ProductionInfo
+    pub fn new() -> Self {
+        Self {
+            uuid: None,
+            path: None,
+        }
+    }
+
+    /// Create a ProductionInfo with just a UUID
+    pub fn with_uuid(uuid: String) -> Self {
+        Self {
+            uuid: Some(uuid),
+            path: None,
+        }
+    }
+}
+
+impl Default for ProductionInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// A 3D object that can be a mesh or reference other objects
@@ -335,6 +626,10 @@ pub struct Object {
     pub pid: Option<usize>,
     /// Optional material index (property index) - used with pid to select from color groups
     pub pindex: Option<usize>,
+    /// Optional slice stack ID (slice extension)
+    pub slicestackid: Option<usize>,
+    /// Production extension information (UUID, path)
+    pub production: Option<ProductionInfo>,
 }
 
 /// Type of 3D object
@@ -362,6 +657,8 @@ impl Object {
             mesh: None,
             pid: None,
             pindex: None,
+            slicestackid: None,
+            production: None,
         }
     }
 }
@@ -375,6 +672,10 @@ pub struct Resources {
     pub materials: Vec<Material>,
     /// List of color groups (materials extension)
     pub color_groups: Vec<ColorGroup>,
+    /// List of slice stacks (slice extension)
+    pub slice_stacks: Vec<SliceStack>,
+    /// List of base material groups (materials extension)
+    pub base_material_groups: Vec<BaseMaterialGroup>,
 }
 
 impl Resources {
@@ -384,6 +685,8 @@ impl Resources {
             objects: Vec::new(),
             materials: Vec::new(),
             color_groups: Vec::new(),
+            slice_stacks: Vec::new(),
+            base_material_groups: Vec::new(),
         }
     }
 }
@@ -402,6 +705,8 @@ pub struct BuildItem {
     /// Optional transformation matrix (4x3 affine transformation stored as 12 values)
     /// Represents a 3x4 matrix in row-major order for affine transformations
     pub transform: Option<[f64; 12]>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
 }
 
 impl BuildItem {
@@ -410,6 +715,7 @@ impl BuildItem {
         Self {
             objectid,
             transform: None,
+            production_uuid: None,
         }
     }
 }
@@ -419,12 +725,17 @@ impl BuildItem {
 pub struct Build {
     /// List of items to build
     pub items: Vec<BuildItem>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
 }
 
 impl Build {
     /// Create a new empty build section
     pub fn new() -> Self {
-        Self { items: Vec::new() }
+        Self {
+            items: Vec::new(),
+            production_uuid: None,
+        }
     }
 }
 
