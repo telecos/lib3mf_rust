@@ -1,6 +1,6 @@
 //! Tests for thumbnail validation and extraction
 
-use lib3mf::parser::parse_3mf;
+use lib3mf::parser::{parse_3mf, read_thumbnail};
 use std::fs::File;
 use std::io::{Cursor, Write};
 use zip::write::SimpleFileOptions;
@@ -243,4 +243,30 @@ fn test_thumbnail_validation_missing_file() {
         err.to_string().contains("non-existent file"),
         "Error should mention missing file"
     );
+}
+
+#[test]
+fn test_read_thumbnail_data() {
+    // Test reading thumbnail binary data
+    let data = create_3mf_with_thumbnail();
+    let cursor = Cursor::new(&data);
+    
+    let thumbnail_data = read_thumbnail(cursor).expect("Failed to read thumbnail");
+    assert!(thumbnail_data.is_some(), "Thumbnail data should be present");
+    
+    let thumb = thumbnail_data.unwrap();
+    assert!(!thumb.is_empty(), "Thumbnail data should not be empty");
+    
+    // Verify it's a valid PNG by checking signature
+    assert_eq!(&thumb[0..8], &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+}
+
+#[test]
+fn test_read_thumbnail_data_none() {
+    // Test reading thumbnail when none exists
+    let data = create_3mf_without_thumbnail();
+    let cursor = Cursor::new(data);
+    
+    let thumbnail_data = read_thumbnail(cursor).expect("Failed to read thumbnail");
+    assert!(thumbnail_data.is_none(), "Thumbnail data should not be present");
 }
