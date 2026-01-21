@@ -20,7 +20,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Iterate through objects looking for beam lattice data
     for obj in &model.resources.objects {
-        println!("Object {} - {}", obj.id, obj.name.as_deref().unwrap_or("(unnamed)"));
+        println!(
+            "Object {} - {}",
+            obj.id,
+            obj.name.as_deref().unwrap_or("(unnamed)")
+        );
 
         if let Some(ref mesh) = obj.mesh {
             println!("  Mesh:");
@@ -51,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\n  Example Beams:");
                 for (i, beam) in beamset.beams.iter().take(5).enumerate() {
                     print!("    Beam {}: v{} -> v{}", i + 1, beam.v1, beam.v2);
-                    
+
                     // Show radius information
                     match (beam.r1, beam.r2) {
                         (Some(r1), Some(r2)) => {
@@ -83,7 +87,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 println!("\n  Vertex Connectivity:");
-                println!("    Unique vertices with beams: {}", vertex_connections.len());
+                println!(
+                    "    Unique vertices with beams: {}",
+                    vertex_connections.len()
+                );
                 println!("    Average connections per vertex: {:.2}", avg_connections);
                 println!("    Maximum connections: {}", max_connections);
 
