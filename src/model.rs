@@ -1317,6 +1317,8 @@ pub struct Component {
     /// rather than in the current file's resources. Used with Production extension
     /// to reference objects from separate model streams.
     pub path: Option<String>,
+    /// Production extension information (UUID, path)
+    pub production: Option<ProductionInfo>,
 }
 
 impl Component {
@@ -1326,6 +1328,7 @@ impl Component {
             objectid,
             transform: None,
             path: None,
+            production: None,
         }
     }
 
@@ -1335,6 +1338,7 @@ impl Component {
             objectid,
             transform: Some(transform),
             path: None,
+            production: None,
         }
     }
 }
@@ -1465,6 +1469,8 @@ pub struct BuildItem {
     pub transform: Option<[f64; 12]>,
     /// Production extension UUID (p:UUID attribute)
     pub production_uuid: Option<String>,
+    /// Production extension path (p:path attribute) - references external file
+    pub production_path: Option<String>,
 }
 
 impl BuildItem {
@@ -1474,6 +1480,7 @@ impl BuildItem {
             objectid,
             transform: None,
             production_uuid: None,
+            production_path: None,
         }
     }
 }

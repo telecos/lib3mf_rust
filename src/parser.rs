@@ -1335,6 +1335,19 @@ fn load_slice_references<R: Read + std::io::Seek>(
                 &slice_ref.slicepath
             };
 
+            // Skip loading encrypted slice files (Secure Content extension)
+            // Encrypted files follow the pattern: *_encrypted.model (or other extension)
+            // They cannot be decrypted by this library per the Secure Content spec.
+            // Check if the filename (without directory path) contains "_encrypted"
+            // followed by a file extension (e.g., "_encrypted.model")
+            if let Some(filename) = normalized_path.rsplit('/').next() {
+                if filename.contains("_encrypted.") {
+                    // For encrypted slice files, we acknowledge they exist but can't load them
+                    // The file structure is valid even if we can't decrypt the content
+                    continue;
+                }
+            }
+
             // Load the slice file from the package
             let slice_xml = package.get_file(normalized_path).map_err(|e| {
                 Error::InvalidXml(format!(
@@ -1712,10 +1725,18 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec: objectid, transform, partnumber, thumbnail
+    // Production extension adds: p:UUID, p:path
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["objectid", "transform", "partnumber", "thumbnail"],
+        &[
+            "objectid",
+            "transform",
+            "partnumber",
+            "thumbnail",
+            "p:UUID",
+            "p:path",
+        ],
         "item",
     )?;
 
@@ -1764,6 +1785,11 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
         item.production_uuid = Some(p_uuid.clone());
     }
 
+    // Extract Production extension path (p:path)
+    if let Some(p_path) = attrs.get("p:path") {
+        item.production_path = Some(p_path.clone());
+    }
+
     Ok(item)
 }
 
@@ -1776,7 +1802,12 @@ fn parse_component<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec: objectid, transform
-    validate_attributes(&attrs, &["objectid", "transform"], "component")?;
+    // Production extension adds: p:UUID, p:path
+    validate_attributes(
+        &attrs,
+        &["objectid", "transform", "p:UUID", "p:path"],
+        "component",
+    )?;
 
     let objectid = attrs
         .get("objectid")
@@ -1822,6 +1853,16 @@ fn parse_component<R: std::io::BufRead>(
     // This indicates the component references an object in an external model file
     if let Some(path_str) = attrs.get("p:path") {
         component.path = Some(path_str.clone());
+    }
+    // Extract Production extension attributes (p:UUID, p:path)
+    let p_uuid = attrs.get("p:UUID");
+    let p_path = attrs.get("p:path");
+
+    if p_uuid.is_some() || p_path.is_some() {
+        let mut prod_info = ProductionInfo::new();
+        prod_info.uuid = p_uuid.cloned();
+        prod_info.path = p_path.cloned();
+        component.production = Some(prod_info);
     }
 
     Ok(component)
