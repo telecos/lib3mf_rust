@@ -261,13 +261,13 @@ impl ObjectIterator {
                                         let local_name = parser::get_local_name(name_str);
 
                                         match local_name {
-                                            "vertex" if current_mesh.is_some() => {
+                                            "vertex" => {
                                                 if let Some(ref mut mesh) = current_mesh {
                                                     let vertex = parser::parse_vertex(reader, e)?;
                                                     mesh.vertices.push(vertex);
                                                 }
                                             }
-                                            "triangle" if current_mesh.is_some() => {
+                                            "triangle" => {
                                                 if let Some(ref mut mesh) = current_mesh {
                                                     let triangle = parser::parse_triangle(reader, e)?;
                                                     mesh.triangles.push(triangle);
