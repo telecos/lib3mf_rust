@@ -38,6 +38,7 @@ pub mod opc;
 pub mod parser;
 pub mod streaming;
 mod validator;
+mod writer;
 
 pub use error::{Error, Result};
 pub use model::{
@@ -141,5 +142,67 @@ impl Model {
     /// ```
     pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u8>>> {
         parser::read_thumbnail(reader)
+    }
+
+    /// Write a 3MF file to a writer
+    ///
+    /// This method serializes the Model to a complete 3MF file (ZIP archive)
+    /// and writes it to the provided writer.
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - A writer to write the 3MF file data to
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::Model;
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut model = Model::new();
+    /// // ... populate model with data ...
+    ///
+    /// let file = File::create("output.3mf")?;
+    /// model.to_writer(file)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn to_writer<W: std::io::Write + std::io::Seek>(self, writer: W) -> Result<W> {
+        // Serialize model to XML
+        let mut xml_buffer = Vec::new();
+        writer::write_model_xml(&self, &mut xml_buffer)?;
+        let model_xml = String::from_utf8(xml_buffer)
+            .map_err(|e| Error::xml_write(format!("Failed to convert XML to UTF-8: {}", e)))?;
+
+        // Create OPC package
+        opc::create_package(writer, &model_xml)
+    }
+
+    /// Write a 3MF file to a file path
+    ///
+    /// This is a convenience method that creates a file and writes the 3MF data to it.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the output file
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::Model;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut model = Model::new();
+    /// // ... populate model with data ...
+    ///
+    /// model.write_to_file("output.3mf")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn write_to_file<P: AsRef<std::path::Path>>(self, path: P) -> Result<()> {
+        let file = std::fs::File::create(path)?;
+        self.to_writer(file)?;
+        Ok(())
     }
 }

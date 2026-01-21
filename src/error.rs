@@ -195,6 +195,21 @@ pub enum Error {
     /// - If possible, re-export without the extension
     #[error("[E4002] Required extension not supported: {0}")]
     UnsupportedExtension(String),
+
+    /// XML writing error
+    ///
+    /// **Error Code**: E2005
+    ///
+    /// **Common Causes**:
+    /// - Failed to serialize XML
+    /// - Invalid data for XML writing
+    /// - I/O error during writing
+    ///
+    /// **Suggestions**:
+    /// - Check that data structures are valid
+    /// - Ensure output stream is writable
+    #[error("[E2005] XML writing error: {0}")]
+    XmlWrite(String),
 }
 
 impl From<std::num::ParseFloatError> for Error {
@@ -269,6 +284,14 @@ impl Error {
              Verify the value is properly formatted.",
             field_name, expected_type, value
         ))
+    }
+
+    /// Create an XmlWrite error
+    ///
+    /// # Arguments
+    /// * `message` - Description of the writing error
+    pub fn xml_write(message: String) -> Self {
+        Error::XmlWrite(message)
     }
 }
 
