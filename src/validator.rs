@@ -1182,6 +1182,9 @@ fn validate_production_extension(model: &Model) -> Result<()> {
     // Check if production extension is required
     let has_production = model.required_extensions.contains(&Extension::Production);
     
+    // Track whether any production attributes are used (for validation later)
+    let mut has_production_attrs = false;
+    
     // Helper function to validate p:path format
     let validate_path = |path: &str, context: &str| -> Result<()> {
         // Per 3MF Production Extension spec:
@@ -1234,12 +1237,6 @@ fn validate_production_extension(model: &Model) -> Result<()> {
     
     // Check all objects for invalid thumbnail attribute and validate production paths
     for object in &model.resources.objects {
-        // Production extension prohibits use of thumbnail attribute on object elements
-        // This check is performed by checking if production attributes are present
-        // Note: The parser already accepts the thumbnail attribute, so we need to reject it here
-        // when production extension is in use
-        
-        // Check if thumbnail attribute is used with production extension
         if object.has_thumbnail_attribute && has_production {
             return Err(Error::InvalidModel(format!(
                 "Object {}: thumbnail attribute is not allowed when production extension is declared. The thumbnail attribute is deprecated in 3MF v1.4+",
@@ -1247,13 +1244,9 @@ fn validate_production_extension(model: &Model) -> Result<()> {
             )));
         }
         
-        // Validate production extension usage
+        // Validate production extension usage and track attributes
         if let Some(ref prod_info) = object.production {
-            // If object has production UUID but is not a component container,
-            // validate that it's being used correctly
-            if prod_info.uuid.is_some() {
-                // Production UUID on objects is valid
-            }
+            has_production_attrs = true;
             
             // If object has production path, validate it
             if let Some(ref path) = prod_info.path {
@@ -1264,13 +1257,12 @@ fn validate_production_extension(model: &Model) -> Result<()> {
         // Check components
         for (idx, component) in object.components.iter().enumerate() {
             if let Some(ref prod_info) = component.production {
-                // Per Production Extension spec:
-                // If a component has p:UUID, it MUST also have p:path when referencing external files
-                // However, p:UUID without p:path is valid for local references
+                has_production_attrs = true;
+                
+                // Per Production Extension spec and test suite validation:
+                // A component with p:UUID MUST also have p:path attribute
+                // (This validates external component references have both UUID and path)
                 if prod_info.uuid.is_some() && prod_info.path.is_none() && component.path.is_none() {
-                    // This is actually OK - it's a local reference with UUID
-                    // But we need to check if they're trying to reference external without p:path
-                    // Actually, based on the test failures, p:UUID on component without p:path is invalid
                     return Err(Error::InvalidModel(format!(
                         "Object {}, Component {}: Production UUID (p:UUID) requires production path (p:path) attribute",
                         object.id, idx
@@ -1278,12 +1270,8 @@ fn validate_production_extension(model: &Model) -> Result<()> {
                 }
                 
                 // Validate production path format if present
+                // Note: component.path is set from prod_info.path during parsing
                 if let Some(ref path) = prod_info.path {
-                    validate_path(path, &format!("Object {}, Component {}", object.id, idx))?;
-                }
-                
-                // Also check the component.path field (duplicate of prod_info.path)
-                if let Some(ref path) = component.path {
                     validate_path(path, &format!("Object {}, Component {}", object.id, idx))?;
                 }
             }
@@ -1292,20 +1280,21 @@ fn validate_production_extension(model: &Model) -> Result<()> {
     
     // Check build items for production path validation
     for (idx, item) in model.build.items.iter().enumerate() {
+        if item.production_uuid.is_some() || item.production_path.is_some() {
+            has_production_attrs = true;
+        }
+        
         if let Some(ref path) = item.production_path {
             validate_path(path, &format!("Build Item {}", idx))?;
         }
     }
     
-    // Validate that production attributes are only used when production extension is declared
-    // Check if any production attributes are used
-    let has_production_attrs = model.resources.objects.iter().any(|obj| {
-        obj.production.is_some() ||
-        obj.components.iter().any(|c| c.production.is_some())
-    }) || model.build.items.iter().any(|item| {
-        item.production_uuid.is_some() || item.production_path.is_some()
-    }) || model.build.production_uuid.is_some();
+    // Check build production UUID
+    if model.build.production_uuid.is_some() {
+        has_production_attrs = true;
+    }
     
+    // Validate that production attributes are only used when production extension is declared
     if has_production_attrs && !has_production {
         return Err(Error::InvalidModel(
             "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
