@@ -65,6 +65,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Streaming Parser for Large Files
+
+For very large files, use the streaming parser to process objects one at a time without loading everything into memory:
+
+```rust
+use lib3mf::streaming::StreamingParser;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("large_model.3mf")?;
+    let mut parser = StreamingParser::new(file)?;
+
+    // Process objects one at a time
+    for object in parser.objects() {
+        let object = object?;
+        if let Some(ref mesh) = object.mesh {
+            println!("Object {}: {} vertices",
+                object.id, mesh.vertices.len());
+        }
+        // Object is dropped here, freeing memory
 ### Accessing Displacement Data
 
 The library parses displacement extension data into accessible structures:
@@ -213,10 +233,49 @@ The parser supports the following extensions:
 
 ### Running Examples
 
-The repository includes a complete example demonstrating parsing:
+The repository includes several comprehensive examples demonstrating different features:
 
+#### Basic Parsing
 ```bash
 cargo run --example parse_3mf
+```
+
+#### Extension Support
+```bash
+cargo run --example extension_support test_files/material/kinect_scan.3mf all
+cargo run --example extension_support test_files/material/kinect_scan.3mf core-only
+```
+
+#### Export to Other Formats
+Convert 3MF files to STL (for 3D printing):
+```bash
+cargo run --example export_to_stl test_files/core/box.3mf output.stl
+```
+
+Convert 3MF files to OBJ (for 3D modeling):
+```bash
+cargo run --example export_to_obj test_files/core/box.3mf output.obj
+```
+
+#### Validation and Error Handling
+```bash
+cargo run --example validation_errors test_files/core/box.3mf permissive
+cargo run --example validation_errors test_files/core/box.3mf strict
+```
+
+#### Working with Build Items and Transformations
+```bash
+cargo run --example build_transformations test_files/core/box.3mf
+```
+
+#### Extracting Color Information
+```bash
+cargo run --example extract_colors test_files/material/kinect_scan.3mf
+```
+
+#### Testing Materials
+```bash
+cargo run --example test_materials
 ```
 
 ## Architecture
@@ -369,6 +428,29 @@ The parser successfully handles files using all 3MF extensions including:
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
+## Performance
+
+The library is optimized for parsing large 3MF files efficiently:
+
+- **Linear scaling**: Performance scales linearly with file size
+- **Memory efficient**: Streaming XML parsing with pre-allocated buffers
+- **Benchmarked**: Comprehensive benchmark suite using criterion.rs
+
+```bash
+# Run performance benchmarks
+cargo bench
+
+# Run specific benchmark group
+cargo bench -- parse_large
+```
+
+**Typical Performance:**
+- Small files (1,000 vertices): ~1 ms
+- Medium files (10,000 vertices): ~7 ms
+- Large files (100,000 vertices): ~70 ms
+
+See [PERFORMANCE.md](PERFORMANCE.md) for detailed performance characteristics, optimization strategies, and profiling guidance.
+
 ## Safety
 
 This library is designed with safety in mind:
@@ -406,6 +488,7 @@ at your option.
 - [3MF Specification](https://3mf.io/specification/)
 - [3MF Consortium](https://3mf.io/)
 - [lib3mf (Official C++ implementation)](https://github.com/3MFConsortium/lib3mf)
+- [Migration Guide from C++ lib3mf](MIGRATION.md) - Comprehensive guide for migrating from the C++ implementation
 
 ## Acknowledgments
 

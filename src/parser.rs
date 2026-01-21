@@ -9,6 +9,9 @@ use quick_xml::Reader;
 use std::collections::HashMap;
 use std::io::Read;
 
+/// Size of 3MF transformation matrix (4x3 affine transform in row-major order)
+const TRANSFORM_MATRIX_SIZE: usize = 12;
+
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     // Use default config that supports all extensions for backward compatibility
@@ -85,7 +88,7 @@ pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u
 /// - `"m:colorgroup"` returns `"colorgroup"`
 /// - `"p:UUID"` returns `"UUID"`
 /// - `"object"` returns `"object"`
-fn get_local_name(name_str: &str) -> &str {
+pub(crate) fn get_local_name(name_str: &str) -> &str {
     if let Some(pos) = name_str.rfind(':') {
         &name_str[pos + 1..]
     } else {
@@ -105,7 +108,6 @@ pub fn parse_model_xml(xml: &str) -> Result<Model> {
     parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
 }
 
-/// Parse the 3D model XML content with configuration
 ///
 /// This is primarily used for testing. For production use, use `Model::from_reader_with_config()`.
 ///
@@ -118,7 +120,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     reader.config_mut().trim_text(true);
 
     let mut model = Model::new();
-    let mut buf = Vec::new();
+    // Pre-allocate buffer with reasonable capacity to reduce allocations
+    let mut buf = Vec::with_capacity(4096);
     let mut in_resources = false;
     let mut in_build = false;
     let mut current_object: Option<Object> = None;
@@ -153,6 +156,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut in_compositematerials = false;
     let mut current_multiproperties: Option<MultiProperties> = None;
     let mut in_multiproperties = false;
+
+    // Component state
+    let mut in_components = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -344,6 +350,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "mesh" if in_resources && current_object.is_some() => {
                         current_mesh = Some(Mesh::new());
+                    }
+                    "components" if in_resources && current_object.is_some() => {
+                        in_components = true;
+                    }
+                    "component" if in_components => {
+                        if let Some(ref mut obj) = current_object {
+                            let component = parse_component(&reader, e)?;
+                            obj.components.push(component);
+                        }
                     }
                     "vertices" if current_mesh.is_some() => {
                         // Vertices will be parsed as individual vertex elements
@@ -804,8 +819,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.beams.push(beam);
                         }
                     }
-                    "slicestack" if in_resources => {
-                        in_slicestack = true;
+                    "normvectorgroup" if in_resources => {
+                        in_normvectorgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")
@@ -1092,6 +1107,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "mesh" => {
                         // Mesh parsing complete
                     }
+                    "components" => {
+                        in_components = false;
+                    }
                     "basematerials" => {
                         if let Some(group) = current_basematerialgroup.take() {
                             model.resources.base_material_groups.push(group);
@@ -1204,7 +1222,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 }
 
 /// Parse object element attributes
-fn parse_object<R: std::io::BufRead>(
+pub(crate) fn parse_object<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Object> {
@@ -1287,7 +1305,7 @@ fn parse_object<R: std::io::BufRead>(
 }
 
 /// Parse vertex element attributes
-fn parse_vertex<R: std::io::BufRead>(
+pub(crate) fn parse_vertex<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
@@ -1336,7 +1354,7 @@ fn parse_vertex<R: std::io::BufRead>(
 }
 
 /// Parse triangle element attributes
-fn parse_triangle<R: std::io::BufRead>(
+pub(crate) fn parse_triangle<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
@@ -1392,7 +1410,7 @@ fn parse_triangle<R: std::io::BufRead>(
 }
 
 /// Parse build item element attributes
-fn parse_build_item<R: std::io::BufRead>(
+pub(crate) fn parse_build_item<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<BuildItem> {
@@ -1418,10 +1436,11 @@ fn parse_build_item<R: std::io::BufRead>(
 
         let values = values?;
 
-        // Transform must have exactly 12 values
-        if values.len() != 12 {
+        // Transform must have exactly 12 values (TRANSFORM_MATRIX_SIZE)
+        if values.len() != TRANSFORM_MATRIX_SIZE {
             return Err(Error::InvalidXml(format!(
-                "Transform matrix must have exactly 12 values (got {})",
+                "Transform matrix must have exactly {} values (got {})",
+                TRANSFORM_MATRIX_SIZE,
                 values.len()
             )));
         }
@@ -1447,6 +1466,60 @@ fn parse_build_item<R: std::io::BufRead>(
     }
 
     Ok(item)
+}
+
+/// Parse component element attributes
+fn parse_component<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<Component> {
+    let attrs = parse_attributes(reader, e)?;
+
+    // Validate only allowed attributes are present
+    // Per 3MF Core spec: objectid, transform
+    validate_attributes(&attrs, &["objectid", "transform"], "component")?;
+
+    let objectid = attrs
+        .get("objectid")
+        .ok_or_else(|| Error::InvalidXml("Component missing objectid attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let mut component = Component::new(objectid);
+
+    if let Some(transform_str) = attrs.get("transform") {
+        // Parse transformation matrix (12 values)
+        let values: Result<Vec<f64>> = transform_str
+            .split_whitespace()
+            .map(|s| s.parse::<f64>().map_err(Error::from))
+            .collect();
+
+        let values = values?;
+
+        // Transform must have exactly 12 values (TRANSFORM_MATRIX_SIZE)
+        if values.len() != TRANSFORM_MATRIX_SIZE {
+            return Err(Error::InvalidXml(format!(
+                "Component transform matrix must have exactly {} values (got {})",
+                TRANSFORM_MATRIX_SIZE,
+                values.len()
+            )));
+        }
+
+        // Validate all values are finite (no NaN or Infinity)
+        for (idx, &val) in values.iter().enumerate() {
+            if !val.is_finite() {
+                return Err(Error::InvalidXml(format!(
+                    "Component transform matrix value at index {} must be finite (got {})",
+                    idx, val
+                )));
+            }
+        }
+
+        let mut transform = [0.0; 12];
+        transform.copy_from_slice(&values);
+        component.transform = Some(transform);
+    }
+
+    Ok(component)
 }
 
 /// Parse material (base) element attributes
@@ -1593,11 +1666,12 @@ fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<
 }
 
 /// Parse attributes from an XML element
-fn parse_attributes<R: std::io::BufRead>(
+pub(crate) fn parse_attributes<R: std::io::BufRead>(
     _reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<HashMap<String, String>> {
-    let mut attrs = HashMap::new();
+    // Pre-allocate reasonable capacity to reduce allocations
+    let mut attrs = HashMap::with_capacity(8);
 
     for attr in e.attributes() {
         let attr = attr?;
@@ -1655,7 +1729,7 @@ fn should_skip_attribute(key: &str) -> bool {
 /// // - attrs contains "id", "name", "p:UUID" -> OK (p:UUID skipped as extension attr)
 /// // - attrs contains "id", "xmlns:p" -> OK (xmlns:p skipped as namespace)
 /// ```
-fn validate_attributes(
+pub(crate) fn validate_attributes(
     attrs: &HashMap<String, String>,
     allowed: &[&str],
     element_name: &str,
@@ -1730,5 +1804,145 @@ mod tests {
         );
         assert_eq!(model.resources.objects.len(), 1);
         assert_eq!(model.build.items.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_component_simple() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <components>
+        <component objectid="1"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.objects.len(), 2);
+
+        // Check object 2 has a component
+        let obj2 = &model.resources.objects[1];
+        assert_eq!(obj2.id, 2);
+        assert_eq!(obj2.components.len(), 1);
+        assert_eq!(obj2.components[0].objectid, 1);
+        assert!(obj2.components[0].transform.is_none());
+    }
+
+    #[test]
+    fn test_parse_component_with_transform() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <components>
+        <component objectid="1" transform="1 0 0 0 1 0 0 0 1 10 20 30"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+
+        let model = parse_model_xml(xml).unwrap();
+
+        // Check object 2 has a component with transform
+        let obj2 = &model.resources.objects[1];
+        assert_eq!(obj2.components.len(), 1);
+        assert_eq!(obj2.components[0].objectid, 1);
+
+        let transform = obj2.components[0]
+            .transform
+            .expect("Transform should be present");
+        // Identity rotation/scale with translation (10, 20, 30)
+        assert_eq!(
+            transform,
+            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0]
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_components() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="2" y="0" z="0"/>
+          <vertex x="0" y="2" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="3">
+      <components>
+        <component objectid="1"/>
+        <component objectid="2" transform="1 0 0 0 1 0 0 0 1 5 5 5"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="3"/>
+  </build>
+</model>"#;
+
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.objects.len(), 3);
+
+        // Check object 3 has two components
+        let obj3 = &model.resources.objects[2];
+        assert_eq!(obj3.id, 3);
+        assert_eq!(obj3.components.len(), 2);
+
+        assert_eq!(obj3.components[0].objectid, 1);
+        assert!(obj3.components[0].transform.is_none());
+
+        assert_eq!(obj3.components[1].objectid, 2);
+        assert!(obj3.components[1].transform.is_some());
     }
 }
