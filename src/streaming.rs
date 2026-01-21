@@ -222,8 +222,8 @@ impl ObjectIterator {
             match reader.read_event_into(&mut self.buf) {
                 Ok(Event::Start(ref e)) => {
                     let name = e.name();
-                    let name_str =
-                        std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     let local_name = parser::get_local_name(name_str);
 
@@ -266,7 +266,8 @@ impl ObjectIterator {
                                             }
                                             "triangle" => {
                                                 if let Some(ref mut mesh) = current_mesh {
-                                                    let triangle = parser::parse_triangle(reader, e)?;
+                                                    let triangle =
+                                                        parser::parse_triangle(reader, e)?;
                                                     mesh.triangles.push(triangle);
                                                 }
                                             }
@@ -284,7 +285,9 @@ impl ObjectIterator {
                                     }
                                     Ok(Event::Eof) => {
                                         self.done = true;
-                                        return Err(Error::InvalidXml("Unexpected EOF while parsing object".to_string()));
+                                        return Err(Error::InvalidXml(
+                                            "Unexpected EOF while parsing object".to_string(),
+                                        ));
                                     }
                                     Err(e) => {
                                         self.done = true;
@@ -300,8 +303,8 @@ impl ObjectIterator {
                 }
                 Ok(Event::Empty(ref e)) => {
                     let name = e.name();
-                    let name_str =
-                        std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     let local_name = parser::get_local_name(name_str);
 
@@ -311,8 +314,8 @@ impl ObjectIterator {
                 }
                 Ok(Event::End(ref e)) => {
                     let name = e.name();
-                    let name_str =
-                        std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     let local_name = parser::get_local_name(name_str);
 
@@ -362,13 +365,13 @@ mod tests {
         // Create a minimal 3MF file in memory
         let file_data = create_test_3mf();
         let cursor = Cursor::new(file_data);
-        
+
         let mut parser = StreamingParser::new(cursor).unwrap();
         let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
-        
+
         assert_eq!(objects.len(), 1);
         assert_eq!(objects[0].id, 1);
-        
+
         // Verify mesh data is loaded
         assert!(objects[0].mesh.is_some());
         let mesh = objects[0].mesh.as_ref().unwrap();

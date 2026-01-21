@@ -100,10 +100,7 @@ macro_rules! suite_tests {
                     for (i, err) in failed.iter().enumerate() {
                         println!("  {}. {}", i + 1, err);
                     }
-                    panic!(
-                        "\n{} positive test(s) failed",
-                        failed.len()
-                    );
+                    panic!("\n{} positive test(s) failed", failed.len());
                 }
             }
 
@@ -143,10 +140,7 @@ macro_rules! suite_tests {
                     for (i, err) in failed.iter().enumerate() {
                         println!("  {}. {}", i + 1, err);
                     }
-                    panic!(
-                        "\n{} negative test(s) failed",
-                        failed.len()
-                    );
+                    panic!("\n{} negative test(s) failed", failed.len());
                 }
             }
         }

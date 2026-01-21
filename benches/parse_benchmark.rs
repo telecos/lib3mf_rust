@@ -19,8 +19,7 @@ fn generate_3mf(vertices: usize, triangles: usize) -> NamedTempFile {
     <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
 </Types>"#;
 
-    zip.start_file("[Content_Types].xml", options)
-        .unwrap();
+    zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(content_types.as_bytes()).unwrap();
 
     // Create _rels/.rels
@@ -29,8 +28,7 @@ fn generate_3mf(vertices: usize, triangles: usize) -> NamedTempFile {
     <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>"#;
 
-    zip.start_file("_rels/.rels", options)
-        .unwrap();
+    zip.start_file("_rels/.rels", options).unwrap();
     zip.write_all(rels.as_bytes()).unwrap();
 
     // Generate 3dmodel.model with many vertices and triangles
@@ -86,8 +84,7 @@ fn generate_3mf(vertices: usize, triangles: usize) -> NamedTempFile {
 </model>"#,
     );
 
-    zip.start_file("3D/3dmodel.model", options)
-        .unwrap();
+    zip.start_file("3D/3dmodel.model", options).unwrap();
     zip.write_all(model_xml.as_bytes()).unwrap();
 
     zip.finish().unwrap();
@@ -96,13 +93,16 @@ fn generate_3mf(vertices: usize, triangles: usize) -> NamedTempFile {
 
 fn bench_parse_small(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse_small");
-    
+
     for &(vertices, triangles) in &[(100, 50), (500, 250), (1000, 500)] {
         let temp_file = generate_3mf(vertices, triangles);
         let path = temp_file.path();
-        
+
         group.bench_with_input(
-            BenchmarkId::new("vertices_triangles", format!("{}v_{}t", vertices, triangles)),
+            BenchmarkId::new(
+                "vertices_triangles",
+                format!("{}v_{}t", vertices, triangles),
+            ),
             &path,
             |b, &path| {
                 b.iter(|| {
@@ -112,19 +112,22 @@ fn bench_parse_small(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 fn bench_parse_medium(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse_medium");
-    
+
     for &(vertices, triangles) in &[(5000, 2500), (10000, 5000)] {
         let temp_file = generate_3mf(vertices, triangles);
         let path = temp_file.path();
-        
+
         group.bench_with_input(
-            BenchmarkId::new("vertices_triangles", format!("{}v_{}t", vertices, triangles)),
+            BenchmarkId::new(
+                "vertices_triangles",
+                format!("{}v_{}t", vertices, triangles),
+            ),
             &path,
             |b, &path| {
                 b.iter(|| {
@@ -134,20 +137,23 @@ fn bench_parse_medium(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 fn bench_parse_large(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse_large");
     group.sample_size(10); // Reduce sample size for large files
-    
+
     for &(vertices, triangles) in &[(50000, 25000), (100000, 50000)] {
         let temp_file = generate_3mf(vertices, triangles);
         let path = temp_file.path();
-        
+
         group.bench_with_input(
-            BenchmarkId::new("vertices_triangles", format!("{}v_{}t", vertices, triangles)),
+            BenchmarkId::new(
+                "vertices_triangles",
+                format!("{}v_{}t", vertices, triangles),
+            ),
             &path,
             |b, &path| {
                 b.iter(|| {
@@ -157,19 +163,16 @@ fn bench_parse_large(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 fn bench_parse_real_files(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse_real_files");
-    
+
     // Test with real files if they exist
-    let test_files = [
-        "test_files/core/box.3mf",
-        "test_files/core/torus.3mf",
-    ];
-    
+    let test_files = ["test_files/core/box.3mf", "test_files/core/torus.3mf"];
+
     for file_path in &test_files {
         if std::path::Path::new(file_path).exists() {
             let file_name = std::path::Path::new(file_path)
@@ -177,7 +180,7 @@ fn bench_parse_real_files(c: &mut Criterion) {
                 .unwrap()
                 .to_str()
                 .unwrap();
-            
+
             group.bench_function(file_name, |b| {
                 b.iter(|| {
                     let file = File::open(file_path).unwrap();
@@ -186,7 +189,7 @@ fn bench_parse_real_files(c: &mut Criterion) {
             });
         }
     }
-    
+
     group.finish();
 }
 
