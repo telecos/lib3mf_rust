@@ -44,7 +44,7 @@ pub use model::{
     BooleanRef, BooleanShape, Build, BuildItem, Channel, ColorGroup, Composite,
     CompositeMaterials, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
     Material, Mesh, Model, Multi, MultiProperties, NormVector, NormVectorGroup, Object,
-    ParserConfig, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup, TileStyle,
+    ParserConfig, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup, Thumbnail, TileStyle,
     Triangle, Vertex,
 };
 
@@ -109,5 +109,36 @@ impl Model {
         config: ParserConfig,
     ) -> Result<Self> {
         parser::parse_3mf_with_config(reader, config)
+    }
+
+    /// Read thumbnail binary data from a 3MF file
+    ///
+    /// Returns the thumbnail image data as a byte vector if a thumbnail is present.
+    /// Returns None if no thumbnail is found.
+    ///
+    /// This is a convenience method that reads the thumbnail from a separate reader.
+    /// The model metadata must have already been parsed to know if a thumbnail exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - A reader containing the 3MF file data
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::Model;
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let file = File::open("model.3mf")?;
+    /// if let Some(thumbnail_data) = Model::read_thumbnail(file)? {
+    ///     println!("Thumbnail size: {} bytes", thumbnail_data.len());
+    ///     std::fs::write("thumbnail.png", thumbnail_data)?;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u8>>> {
+        parser::read_thumbnail(reader)
     }
 }

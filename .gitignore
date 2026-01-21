@@ -30,3 +30,4 @@ target
 
 # Official 3MF test suites (clone separately)
 test_suites/
+extracted_thumbnail.png

@@ -1159,6 +1159,25 @@ impl Default for Build {
     }
 }
 
+/// Thumbnail metadata for 3MF package
+///
+/// Represents a thumbnail image referenced in the package relationships.
+/// Thumbnails are typically stored in `/Metadata/thumbnail.png` or similar paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Thumbnail {
+    /// Path to the thumbnail file within the package
+    pub path: String,
+    /// Content type (e.g., "image/png", "image/jpeg")
+    pub content_type: String,
+}
+
+impl Thumbnail {
+    /// Create a new thumbnail metadata
+    pub fn new(path: String, content_type: String) -> Self {
+        Self { path, content_type }
+    }
+}
+
 /// Complete 3MF model
 #[derive(Debug, Clone)]
 pub struct Model {
@@ -1171,6 +1190,8 @@ pub struct Model {
     pub required_extensions: Vec<Extension>,
     /// Metadata key-value pairs
     pub metadata: HashMap<String, String>,
+    /// Thumbnail metadata (if present in the package)
+    pub thumbnail: Option<Thumbnail>,
     /// Resources (objects, materials)
     pub resources: Resources,
     /// Build specification
@@ -1187,6 +1208,7 @@ impl Model {
             xmlns: "http://schemas.microsoft.com/3dmanufacturing/core/2015/02".to_string(),
             required_extensions: Vec::new(),
             metadata: HashMap::new(),
+            thumbnail: None,
             resources: Resources::new(),
             build: Build::new(),
             secure_content: None,
