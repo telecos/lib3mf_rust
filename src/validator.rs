@@ -1114,4 +1114,73 @@ mod tests {
         let result = validate_component_references(&model);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_validate_multiproperties_reference() {
+        use crate::model::{Multi, MultiProperties};
+
+        let mut model = Model::new();
+
+        // Add a multiproperties group with ID 12
+        let mut multi_props = MultiProperties {
+            id: 12,
+            pids: vec![6, 9],
+            blendmethods: vec![],
+            multis: vec![],
+        };
+        multi_props.multis.push(Multi {
+            pindices: vec![0, 0],
+        });
+        model.resources.multi_properties.push(multi_props);
+
+        // Create an object that references the multiproperties group
+        let mut object = Object::new(1);
+        object.pid = Some(12); // Should reference the multiproperties group
+        object.pindex = Some(0);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation (multiproperties is a valid property group)
+        let result = validate_material_references(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_texture2d_group_reference() {
+        use crate::model::{Tex2Coord, Texture2DGroup};
+
+        let mut model = Model::new();
+
+        // Add a texture2d group with ID 9
+        let mut tex_group = Texture2DGroup::new(9, 4);
+        tex_group.tex2coords.push(Tex2Coord { u: 0.0, v: 0.0 });
+        tex_group.tex2coords.push(Tex2Coord { u: 1.0, v: 1.0 });
+        model.resources.texture2d_groups.push(tex_group);
+
+        // Create an object that references the texture2d group
+        let mut object = Object::new(1);
+        object.pid = Some(9); // Should reference the texture2d group
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation (texture2d group is a valid property group)
+        let result = validate_material_references(&model);
+        assert!(result.is_ok());
+    }
 }
