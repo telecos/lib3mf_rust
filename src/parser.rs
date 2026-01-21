@@ -242,12 +242,13 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             let attrs = parse_attributes(&reader, e)?;
                             
                             // Validate only allowed attributes are present
-                            // Per 3MF Core spec: name, displaycolor
+                            // Per 3MF Materials & Properties Extension spec: name, displaycolor
                             validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
                             
                             let name = attrs.get("name").cloned().unwrap_or_default();
                             
                             // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
+                            // If displaycolor is missing or invalid, use white as default
                             let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
                                 parse_color(color_str).unwrap_or((255, 255, 255, 255))
                             } else {

@@ -211,17 +211,18 @@ fn validate_material_references(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
             // If object has a pid, it should reference a valid color group or base material group
-            let is_valid_colorgroup = valid_colorgroup_ids.contains(&pid);
-            let is_valid_basematerial = valid_basematerial_ids.contains(&pid);
+            let is_valid = valid_colorgroup_ids.contains(&pid) 
+                || valid_basematerial_ids.contains(&pid);
             
-            if !is_valid_colorgroup && !is_valid_basematerial {
-                // Only error if there are material groups defined
-                if !valid_colorgroup_ids.is_empty() || !valid_basematerial_ids.is_empty() {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {} references non-existent color group or base material ID: {}",
-                        object.id, pid
-                    )));
-                }
+            // Only validate if there are material groups defined, otherwise pid might be unused
+            let has_materials = !valid_colorgroup_ids.is_empty() 
+                || !valid_basematerial_ids.is_empty();
+            
+            if has_materials && !is_valid {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} references non-existent color group or base material ID: {}",
+                    object.id, pid
+                )));
             }
         }
 
