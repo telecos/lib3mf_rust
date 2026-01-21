@@ -53,9 +53,14 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
 
         // Suite 8: Secure Content
         // Some test files also use Production extension
+        // Also register the older 2019/04 SecureContent namespace
         "suite8_secure" => ParserConfig::new()
             .with_extension(Extension::SecureContent)
-            .with_extension(Extension::Production),
+            .with_extension(Extension::Production)
+            .with_custom_extension(
+                "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04",
+                "SecureContent 2019/04",
+            ),
 
         // Suite 9: Core Extensions - support all for compatibility
         // Also register custom extensions like trianglesets

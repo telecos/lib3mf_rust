@@ -1405,8 +1405,13 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec: objectid, transform, partnumber
-    validate_attributes(&attrs, &["objectid", "transform", "partnumber"], "item")?;
+    // Per 3MF Core spec: objectid, transform, partnumber, thumbnail
+    // Note: thumbnail is deprecated in the spec but still commonly used in valid files
+    validate_attributes(
+        &attrs,
+        &["objectid", "transform", "partnumber", "thumbnail"],
+        "item",
+    )?;
 
     let objectid = attrs
         .get("objectid")
