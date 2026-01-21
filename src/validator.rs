@@ -514,7 +514,7 @@ fn validate_component_references(model: &Model) -> Result<()> {
             // When a component has a p:path attribute, the referenced object is in an external
             // file (potentially encrypted in Secure Content scenarios) and doesn't need to exist
             // in the current model's resources
-            if component.production.as_ref().map_or(false, |p| p.path.is_some()) {
+            if component.production.as_ref().is_some_and(|p| p.path.is_some()) {
                 continue;
             }
             
