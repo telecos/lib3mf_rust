@@ -149,7 +149,7 @@ fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result
     // Pre-allocate capacity: each triangle has 3 edges, but adjacent triangles share edges.
     // For typical manifold meshes, we expect roughly 1.5 edges per triangle.
     // We use a conservative estimate of 2 edges per triangle to avoid reallocation.
-    let mut edge_count: HashMap<(usize, usize), usize> = 
+    let mut edge_count: HashMap<(usize, usize), usize> =
         HashMap::with_capacity(mesh.triangles.len() * 2);
 
     for triangle in &mesh.triangles {

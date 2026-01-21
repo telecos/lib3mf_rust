@@ -1,6 +1,6 @@
 //! Data structures representing 3MF models
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// 3MF extension specification
 ///
@@ -246,7 +246,7 @@ impl Mesh {
     }
 
     /// Create a new mesh with pre-allocated capacity
-    /// 
+    ///
     /// This is useful for performance when the number of vertices and triangles
     /// is known in advance, as it avoids multiple reallocations.
     pub fn with_capacity(vertices: usize, triangles: usize) -> Self {
@@ -1218,6 +1218,42 @@ impl Default for Build {
     }
 }
 
+/// Metadata entry for 3MF package
+///
+/// Represents a metadata key-value pair with optional preservation flag.
+/// According to the 3MF Core Specification Chapter 4, metadata elements
+/// contain a required `name` attribute and text content value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataEntry {
+    /// Name of the metadata entry (required by 3MF spec)
+    pub name: String,
+    /// Value of the metadata entry
+    pub value: String,
+    /// Preservation flag (optional attribute)
+    /// When true, indicates this metadata should be preserved during editing
+    pub preserve: Option<bool>,
+}
+
+impl MetadataEntry {
+    /// Create a new metadata entry
+    pub fn new(name: String, value: String) -> Self {
+        Self {
+            name,
+            value,
+            preserve: None,
+        }
+    }
+
+    /// Create a new metadata entry with preservation flag
+    pub fn new_with_preserve(name: String, value: String, preserve: bool) -> Self {
+        Self {
+            name,
+            value,
+            preserve: Some(preserve),
+        }
+    }
+}
+
 /// Thumbnail metadata for 3MF package
 ///
 /// Represents a thumbnail image referenced in the package relationships.
@@ -1247,8 +1283,8 @@ pub struct Model {
     /// Required extensions for this model
     /// Extensions that the consumer must support to properly process this file
     pub required_extensions: Vec<Extension>,
-    /// Metadata key-value pairs
-    pub metadata: HashMap<String, String>,
+    /// Metadata entries with name, value, and optional preservation flag
+    pub metadata: Vec<MetadataEntry>,
     /// Thumbnail metadata (if present in the package)
     pub thumbnail: Option<Thumbnail>,
     /// Resources (objects, materials)
@@ -1266,12 +1302,25 @@ impl Model {
             unit: "millimeter".to_string(),
             xmlns: "http://schemas.microsoft.com/3dmanufacturing/core/2015/02".to_string(),
             required_extensions: Vec::new(),
-            metadata: HashMap::new(),
+            metadata: Vec::new(),
             thumbnail: None,
             resources: Resources::new(),
             build: Build::new(),
             secure_content: None,
         }
+    }
+
+    /// Get metadata value by name (helper for backward compatibility)
+    pub fn get_metadata(&self, name: &str) -> Option<&str> {
+        self.metadata
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.value.as_str())
+    }
+
+    /// Check if metadata entry exists with the given name
+    pub fn has_metadata(&self, name: &str) -> bool {
+        self.metadata.iter().any(|entry| entry.name == name)
     }
 }
 

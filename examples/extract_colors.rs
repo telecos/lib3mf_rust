@@ -73,20 +73,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Add color groups
     for color_group in &model.resources.color_groups {
-        println!("Color Group {}: {} colors", color_group.id, color_group.colors.len());
-        
+        println!(
+            "Color Group {}: {} colors",
+            color_group.id,
+            color_group.colors.len()
+        );
+
         // Show first few colors
         let preview_count = color_group.colors.len().min(5);
         for (idx, color) in color_group.colors.iter().take(preview_count).enumerate() {
             println!(
                 "  [{}] RGB({}, {}, {}) Alpha: {} (#{:02X}{:02X}{:02X}{:02X})",
-                idx, color.0, color.1, color.2, color.3,
-                color.0, color.1, color.2, color.3
+                idx, color.0, color.1, color.2, color.3, color.0, color.1, color.2, color.3
             );
         }
-        
+
         if color_group.colors.len() > preview_count {
-            println!("  ... and {} more colors", color_group.colors.len() - preview_count);
+            println!(
+                "  ... and {} more colors",
+                color_group.colors.len() - preview_count
+            );
         }
         println!();
     }
@@ -119,31 +125,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 for triangle in &mesh.triangles {
                     let color = color_lookup.get_triangle_color(obj, triangle);
-                    
+
                     if let Some(color) = color {
                         triangles_with_color += 1;
-                        let color_key = format!("#{:02X}{:02X}{:02X}{:02X}", 
-                            color.0, color.1, color.2, color.3);
+                        let color_key = format!(
+                            "#{:02X}{:02X}{:02X}{:02X}",
+                            color.0, color.1, color.2, color.3
+                        );
                         *color_stats.entry(color_key).or_insert(0) += 1;
                     }
                 }
 
                 println!("  Triangles with color: {}", triangles_with_color);
-                println!("  Triangles without color: {}", 
-                    mesh.triangles.len() - triangles_with_color);
+                println!(
+                    "  Triangles without color: {}",
+                    mesh.triangles.len() - triangles_with_color
+                );
 
                 if !color_stats.is_empty() {
                     println!();
                     println!("  Color Distribution:");
-                    
+
                     let mut sorted_colors: Vec<_> = color_stats.iter().collect();
                     sorted_colors.sort_by(|a, b| b.1.cmp(a.1));
-                    
+
                     for (color, count) in sorted_colors.iter().take(10) {
                         let percentage = (**count as f32 / mesh.triangles.len() as f32) * 100.0;
                         println!("    {} - {} triangles ({:.1}%)", color, count, percentage);
                     }
-                    
+
                     if sorted_colors.len() > 10 {
                         println!("    ... and {} more colors", sorted_colors.len() - 10);
                     }
@@ -156,20 +166,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let v1 = &mesh.vertices[triangle.v1];
                     let v2 = &mesh.vertices[triangle.v2];
                     let v3 = &mesh.vertices[triangle.v3];
-                    
-                    let color = color_lookup.get_triangle_color(obj, triangle)
+
+                    let color = color_lookup
+                        .get_triangle_color(obj, triangle)
                         .unwrap_or((180, 180, 180, 255)); // Default gray
 
                     println!("    Triangle {}:", i);
                     println!("      Vertices: [{:.2}, {:.2}, {:.2}], [{:.2}, {:.2}, {:.2}], [{:.2}, {:.2}, {:.2}]",
                         v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z);
-                    println!("      Color: RGB({}, {}, {}) Alpha: {}", 
-                        color.0, color.1, color.2, color.3);
-                    println!("      Color (float): ({:.3}, {:.3}, {:.3}, {:.3})",
+                    println!(
+                        "      Color: RGB({}, {}, {}) Alpha: {}",
+                        color.0, color.1, color.2, color.3
+                    );
+                    println!(
+                        "      Color (float): ({:.3}, {:.3}, {:.3}, {:.3})",
                         color.0 as f32 / 255.0,
                         color.1 as f32 / 255.0,
                         color.2 as f32 / 255.0,
-                        color.3 as f32 / 255.0);
+                        color.3 as f32 / 255.0
+                    );
                 }
             }
         }

@@ -87,7 +87,7 @@ fn main() {
 
             // Provide specific guidance based on error type
             let error_str = format!("{}", e);
-            
+
             if error_str.contains("ZIP") {
                 eprintln!("This appears to be a ZIP-related error.");
                 eprintln!("Possible causes:");
@@ -128,7 +128,7 @@ fn main() {
 
     // Step 3: Validate model content
     println!("Step 3: Validating model content...");
-    
+
     let mut warnings: Vec<String> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
 
@@ -180,10 +180,7 @@ fn main() {
 
                 // Check vertex indices are in range
                 let num_vertices = mesh.vertices.len();
-                if tri.v1 >= num_vertices
-                    || tri.v2 >= num_vertices
-                    || tri.v3 >= num_vertices
-                {
+                if tri.v1 >= num_vertices || tri.v2 >= num_vertices || tri.v3 >= num_vertices {
                     errors.push(format!(
                         "Object {} triangle {} has out-of-range vertex index",
                         obj.id, i
@@ -247,7 +244,7 @@ fn main() {
     println!("Model Summary:");
     println!("  Unit: {}", model.unit);
     println!("  Objects: {}", model.resources.objects.len());
-    
+
     let total_vertices: usize = model
         .resources
         .objects

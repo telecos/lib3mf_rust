@@ -66,23 +66,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Object Type: {:?}", obj.object_type);
 
             if let Some(ref mesh) = obj.mesh {
-                println!("  Mesh: {} vertices, {} triangles", 
-                    mesh.vertices.len(), 
+                println!(
+                    "  Mesh: {} vertices, {} triangles",
+                    mesh.vertices.len(),
                     mesh.triangles.len()
                 );
 
                 // Calculate bounding box
                 if !mesh.vertices.is_empty() {
-                    let (min_x, max_x, min_y, max_y, min_z, max_z) = 
+                    let (min_x, max_x, min_y, max_y, min_z, max_z) =
                         calculate_bounds(&mesh.vertices);
-                    
+
                     println!("  Bounding box (before transformation):");
-                    println!("    X: [{:.2}, {:.2}] (width: {:.2})", 
-                        min_x, max_x, max_x - min_x);
-                    println!("    Y: [{:.2}, {:.2}] (depth: {:.2})", 
-                        min_y, max_y, max_y - min_y);
-                    println!("    Z: [{:.2}, {:.2}] (height: {:.2})", 
-                        min_z, max_z, max_z - min_z);
+                    println!(
+                        "    X: [{:.2}, {:.2}] (width: {:.2})",
+                        min_x,
+                        max_x,
+                        max_x - min_x
+                    );
+                    println!(
+                        "    Y: [{:.2}, {:.2}] (depth: {:.2})",
+                        min_y,
+                        max_y,
+                        max_y - min_y
+                    );
+                    println!(
+                        "    Z: [{:.2}, {:.2}] (height: {:.2})",
+                        min_z,
+                        max_z,
+                        max_z - min_z
+                    );
                 }
             }
         } else {
@@ -94,12 +107,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!();
             println!("  Transformation Matrix:");
             println!("    ┌                                          ┐");
-            println!("    │ {:8.4} {:8.4} {:8.4} {:8.4} │", 
-                transform[0], transform[1], transform[2], transform[3]);
-            println!("    │ {:8.4} {:8.4} {:8.4} {:8.4} │", 
-                transform[4], transform[5], transform[6], transform[7]);
-            println!("    │ {:8.4} {:8.4} {:8.4} {:8.4} │", 
-                transform[8], transform[9], transform[10], transform[11]);
+            println!(
+                "    │ {:8.4} {:8.4} {:8.4} {:8.4} │",
+                transform[0], transform[1], transform[2], transform[3]
+            );
+            println!(
+                "    │ {:8.4} {:8.4} {:8.4} {:8.4} │",
+                transform[4], transform[5], transform[6], transform[7]
+            );
+            println!(
+                "    │ {:8.4} {:8.4} {:8.4} {:8.4} │",
+                transform[8], transform[9], transform[10], transform[11]
+            );
             println!("    └                                          ┘");
 
             // Analyze transformation components
@@ -109,22 +128,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(obj) = obj {
                 if let Some(ref mesh) = obj.mesh {
                     if !mesh.vertices.is_empty() {
-                        let transformed_verts: Vec<_> = mesh.vertices
+                        let transformed_verts: Vec<_> = mesh
+                            .vertices
                             .iter()
                             .map(|v| apply_transform(v, &transform))
                             .collect();
-                        
-                        let (min_x, max_x, min_y, max_y, min_z, max_z) = 
+
+                        let (min_x, max_x, min_y, max_y, min_z, max_z) =
                             calculate_bounds_from_points(&transformed_verts);
-                        
+
                         println!();
                         println!("  Bounding box (after transformation):");
-                        println!("    X: [{:.2}, {:.2}] (width: {:.2})", 
-                            min_x, max_x, max_x - min_x);
-                        println!("    Y: [{:.2}, {:.2}] (depth: {:.2})", 
-                            min_y, max_y, max_y - min_y);
-                        println!("    Z: [{:.2}, {:.2}] (height: {:.2})", 
-                            min_z, max_z, max_z - min_z);
+                        println!(
+                            "    X: [{:.2}, {:.2}] (width: {:.2})",
+                            min_x,
+                            max_x,
+                            max_x - min_x
+                        );
+                        println!(
+                            "    Y: [{:.2}, {:.2}] (depth: {:.2})",
+                            min_y,
+                            max_y,
+                            max_y - min_y
+                        );
+                        println!(
+                            "    Z: [{:.2}, {:.2}] (height: {:.2})",
+                            min_z,
+                            max_z,
+                            max_z - min_z
+                        );
                     }
                 }
             }
@@ -139,26 +171,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Summary
     println!("─────────────────────────────────────");
     println!("Build Plate Summary:");
-    
-    let items_with_transform = model.build.items.iter()
+
+    let items_with_transform = model
+        .build
+        .items
+        .iter()
         .filter(|i| i.transform.is_some())
         .count();
-    
+
     println!("  Total build items: {}", model.build.items.len());
     println!("  Items with transformations: {}", items_with_transform);
-    println!("  Items without transformations: {}", 
-        model.build.items.len() - items_with_transform);
+    println!(
+        "  Items without transformations: {}",
+        model.build.items.len() - items_with_transform
+    );
 
     // Calculate overall build volume
     if let Some((min, max)) = calculate_build_volume(&model) {
         println!();
         println!("  Overall build volume:");
-        println!("    X: [{:.2}, {:.2}] (width: {:.2})", 
-            min.0, max.0, max.0 - min.0);
-        println!("    Y: [{:.2}, {:.2}] (depth: {:.2})", 
-            min.1, max.1, max.1 - min.1);
-        println!("    Z: [{:.2}, {:.2}] (height: {:.2})", 
-            min.2, max.2, max.2 - min.2);
+        println!(
+            "    X: [{:.2}, {:.2}] (width: {:.2})",
+            min.0,
+            max.0,
+            max.0 - min.0
+        );
+        println!(
+            "    Y: [{:.2}, {:.2}] (depth: {:.2})",
+            min.1,
+            max.1,
+            max.1 - min.1
+        );
+        println!(
+            "    Z: [{:.2}, {:.2}] (height: {:.2})",
+            min.2,
+            max.2,
+            max.2 - min.2
+        );
     }
 
     Ok(())
@@ -226,8 +275,10 @@ fn analyze_transformation(transform: &[f64; 12]) {
 
     // Extract translation
     let translation = (transform[3], transform[7], transform[11]);
-    println!("    Translation: ({:.2}, {:.2}, {:.2})", 
-        translation.0, translation.1, translation.2);
+    println!(
+        "    Translation: ({:.2}, {:.2}, {:.2})",
+        translation.0, translation.1, translation.2
+    );
 
     // Check for rotation (non-diagonal elements in 3x3 part)
     let has_rotation = transform[1].abs() > 0.001
@@ -244,20 +295,27 @@ fn analyze_transformation(transform: &[f64; 12]) {
     }
 
     // Check for scaling
-    let scale_x = (transform[0] * transform[0] + transform[4] * transform[4] + transform[8] * transform[8]).sqrt();
-    let scale_y = (transform[1] * transform[1] + transform[5] * transform[5] + transform[9] * transform[9]).sqrt();
-    let scale_z = (transform[2] * transform[2] + transform[6] * transform[6] + transform[10] * transform[10]).sqrt();
+    let scale_x =
+        (transform[0] * transform[0] + transform[4] * transform[4] + transform[8] * transform[8])
+            .sqrt();
+    let scale_y =
+        (transform[1] * transform[1] + transform[5] * transform[5] + transform[9] * transform[9])
+            .sqrt();
+    let scale_z =
+        (transform[2] * transform[2] + transform[6] * transform[6] + transform[10] * transform[10])
+            .sqrt();
 
-    let is_uniform_scale = (scale_x - scale_y).abs() < 0.001 
-        && (scale_y - scale_z).abs() < 0.001;
+    let is_uniform_scale = (scale_x - scale_y).abs() < 0.001 && (scale_y - scale_z).abs() < 0.001;
 
     if is_uniform_scale && (scale_x - 1.0).abs() < 0.001 {
         println!("    Scale: None (1:1:1)");
     } else if is_uniform_scale {
         println!("    Scale: Uniform ({:.3})", scale_x);
     } else {
-        println!("    Scale: Non-uniform ({:.3}, {:.3}, {:.3})", 
-            scale_x, scale_y, scale_z);
+        println!(
+            "    Scale: Non-uniform ({:.3}, {:.3}, {:.3})",
+            scale_x, scale_y, scale_z
+        );
     }
 
     // Check for identity matrix
@@ -288,7 +346,12 @@ fn calculate_build_volume(model: &Model) -> Option<BoundingBox> {
     let mut all_points = Vec::new();
 
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh) = obj.mesh {
                 for vertex in &mesh.vertices {
                     let point = if let Some(transform) = item.transform {
