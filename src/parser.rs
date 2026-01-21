@@ -236,10 +236,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         // Now parse required extensions with namespace context
                         if let Some(ext_value) = required_ext_value {
-                            model.required_extensions =
+                            let (extensions, custom_extensions) =
                                 parse_required_extensions_with_namespaces(&ext_value, &namespaces)?;
+                            model.required_extensions = extensions;
+                            model.required_custom_extensions = custom_extensions;
                             // Validate that all required extensions are supported
-                            validate_extensions(&model.required_extensions, &config)?;
+                            validate_extensions(
+                                &model.required_extensions,
+                                &model.required_custom_extensions,
+                                &config,
+                            )?;
                         }
                     }
                     "metadata" => {
@@ -1589,16 +1595,18 @@ fn parse_color(color_str: &str) -> Option<(u8, u8, u8, u8)> {
 
 /// Parse required extensions from a space-separated list of namespace URIs
 #[allow(dead_code)] // Kept for backward compatibility
-fn parse_required_extensions(extensions_str: &str) -> Result<Vec<Extension>> {
+fn parse_required_extensions(extensions_str: &str) -> Result<(Vec<Extension>, Vec<String>)> {
     parse_required_extensions_with_namespaces(extensions_str, &HashMap::new())
 }
 
 /// Parse required extensions from a space-separated list that may contain prefixes or URIs
+/// Returns both known extensions and unknown namespace URIs (for custom extensions)
 fn parse_required_extensions_with_namespaces(
     extensions_str: &str,
     namespaces: &HashMap<String, String>,
-) -> Result<Vec<Extension>> {
+) -> Result<(Vec<Extension>, Vec<String>)> {
     let mut extensions = Vec::new();
+    let mut custom_namespaces = Vec::new();
 
     for item in extensions_str.split_whitespace() {
         // Try to resolve it as a full URI first
@@ -1608,17 +1616,30 @@ fn parse_required_extensions_with_namespaces(
             // It's a namespace prefix - resolve it to a URI
             if let Some(ext) = Extension::from_namespace(namespace_uri) {
                 extensions.push(ext);
+            } else {
+                // Unknown URI - track as custom extension
+                custom_namespaces.push(namespace_uri.clone());
             }
-            // Unknown URIs are silently ignored - we only track known extensions
+        } else {
+            // Could be a direct URI that's not a known extension
+            // If it looks like a URI (contains ://), track it as custom
+            if item.contains("://") {
+                custom_namespaces.push(item.to_string());
+            }
+            // Otherwise, silently ignore invalid items
         }
-        // Unknown items (not a known URI or resolvable prefix) are silently ignored
     }
 
-    Ok(extensions)
+    Ok((extensions, custom_namespaces))
 }
 
 /// Validate that all required extensions are supported by the parser configuration
-fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<()> {
+fn validate_extensions(
+    required: &[Extension],
+    required_custom: &[String],
+    config: &ParserConfig,
+) -> Result<()> {
+    // Validate known extensions
     for ext in required {
         if !config.supports(ext) {
             return Err(Error::UnsupportedExtension(format!(
@@ -1628,7 +1649,69 @@ fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<
             )));
         }
     }
+    
+    // Validate custom extensions
+    for namespace in required_custom {
+        if !config.has_custom_extension(namespace) {
+            return Err(Error::UnsupportedExtension(format!(
+                "Custom extension with namespace '{}' is required but not registered",
+                namespace
+            )));
+        }
+    }
+    
     Ok(())
+}
+
+/// Try to handle an element with custom extension handlers
+/// Returns true if a handler was invoked, false otherwise
+#[allow(dead_code)] // Will be used in future enhancement
+fn try_handle_custom_element<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+    config: &ParserConfig,
+) -> Result<bool> {
+    use crate::model::{CustomElementResult, CustomExtensionContext};
+    
+    // Extract namespace from element name
+    let name = e.name();
+    let name_str = std::str::from_utf8(name.as_ref())
+        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+    
+    // Try to get namespace prefix
+    if let Some((_prefix, local_name)) = name_str.split_once(':') {
+        // Look up the namespace URI for this prefix in reader's namespace map
+        // For now, we'll check if any registered custom extension matches
+        let attrs = parse_attributes(reader, e)?;
+        
+        // Check if we have a handler for any custom extension
+        for (namespace, ext_info) in config.custom_extensions() {
+            if let Some(handler) = &ext_info.element_handler {
+                let context = CustomExtensionContext {
+                    element_name: local_name.to_string(),
+                    namespace: namespace.clone(),
+                    attributes: attrs.clone(),
+                };
+                
+                match handler(&context) {
+                    Ok(CustomElementResult::Handled) => {
+                        return Ok(true);
+                    }
+                    Ok(CustomElementResult::NotHandled) => {
+                        continue;
+                    }
+                    Err(err) => {
+                        return Err(Error::InvalidXml(format!(
+                            "Custom extension handler error: {}",
+                            err
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(false)
 }
 
 /// Parse attributes from an XML element

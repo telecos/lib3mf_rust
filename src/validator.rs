@@ -9,7 +9,7 @@
 //! - Material, color group, and base material references are valid
 
 use crate::error::{Error, Result};
-use crate::model::Model;
+use crate::model::{Model, ParserConfig};
 use std::collections::HashSet;
 
 /// Validate a parsed 3MF model
@@ -30,6 +30,26 @@ pub fn validate_model(model: &Model) -> Result<()> {
     validate_material_references(model)?;
     validate_boolean_operations(model)?;
     validate_component_references(model)?;
+    Ok(())
+}
+
+/// Validate a parsed 3MF model with custom extension validation
+///
+/// This function performs the same validation as `validate_model` and additionally
+/// invokes any custom validation handlers registered in the parser configuration.
+pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
+    // Standard validation
+    validate_model(model)?;
+    
+    // Custom extension validation
+    for (_namespace, ext_info) in config.custom_extensions() {
+        if let Some(validator) = &ext_info.validation_handler {
+            validator(model).map_err(|e| {
+                Error::InvalidModel(format!("Custom validation failed: {}", e))
+            })?;
+        }
+    }
+    
     Ok(())
 }
 
