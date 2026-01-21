@@ -240,7 +240,31 @@ cargo clippy -- -D warnings
 
 # Run official 3MF conformance tests
 cargo test --test conformance_tests summary -- --ignored --nocapture
+
+# Run a specific conformance suite
+cargo test --test conformance_tests suite3_core -- --nocapture
 ```
+
+### Continuous Integration
+
+The repository uses GitHub Actions for continuous integration with optimized parallel execution:
+
+- **Basic Tests Job**: Runs standard library and integration tests as a fast preliminary check
+- **Conformance Test Matrix**: Runs all 11 conformance test suites in parallel for faster feedback
+  - suite1_core_slice_prod
+  - suite2_core_prod_matl
+  - suite3_core
+  - suite4_core_slice
+  - suite5_core_prod
+  - suite6_core_matl
+  - suite7_beam
+  - suite8_secure
+  - suite9_core_ext
+  - suite10_boolean
+  - suite11_displacement
+- **Conformance Summary Job**: Generates an overall conformance report after all suites complete
+
+This parallel approach significantly reduces CI execution time compared to running suites sequentially.
 
 ### Conformance Testing
 

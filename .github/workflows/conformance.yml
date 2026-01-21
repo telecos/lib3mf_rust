@@ -1,5 +1,7 @@
 name: Conformance Tests
 
+# This workflow runs conformance tests in parallel to reduce CI time
+
 on:
   push:
     branches: [ main, develop ]
@@ -7,9 +9,85 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:  # Allow manual triggering
 
+# Set minimal permissions for GITHUB_TOKEN
+permissions:
+  contents: read
+
 jobs:
+  # Run standard library and integration tests first (fast, basic checks)
+  basic-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Run standard library tests
+        run: cargo test --lib
+      
+      - name: Run integration tests
+        run: cargo test --test integration_test --test test_real_files
+  
+  # Run each conformance suite in parallel
   conformance:
     runs-on: ubuntu-latest
+    needs: basic-tests
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          # Suites 1-8 use lowercase directory names
+          - name: suite1_core_slice_prod
+            dir: suite1_core_slice_prod
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite2_core_prod_matl
+            dir: suite2_core_prod_matl
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite3_core
+            dir: suite3_core
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite4_core_slice
+            dir: suite4_core_slice
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite5_core_prod
+            dir: suite5_core_prod
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite6_core_matl
+            dir: suite6_core_matl
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite7_beam
+            dir: suite7_beam
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          - name: suite8_secure
+            dir: suite8_secure
+            pos_dir: positive_test_cases
+            neg_dir: negative_test_cases
+          # Suites 9-11 use title case with spaces (as defined in upstream test suite repo)
+          - name: suite9_core_ext
+            dir: suite9_core_ext
+            pos_dir: Positive Tests
+            neg_dir: Negative Tests
+          - name: suite10_boolean
+            dir: suite10_boolean
+            pos_dir: Positive Tests
+            neg_dir: Negative Tests
+          - name: suite11_displacement
+            dir: suite11_Displacement
+            pos_dir: Positive Tests
+            neg_dir: Negative Tests
     
     steps:
       - name: Checkout repository
@@ -30,46 +108,36 @@ jobs:
             ${{ runner.os }}-test-suites-
       
       - name: Clone 3MF test suites
-        if: steps.cache-test-suites.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+          if [ ! -d "test_suites" ]; then
+            git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+          fi
       
-      - name: Run standard library tests
-        run: cargo test --lib
-      
-      - name: Run integration tests
-        run: cargo test --test integration_test --test test_real_files
-      
-      - name: Run conformance summary
-        run: cargo test --test conformance_tests summary -- --ignored --nocapture
-        continue-on-error: true
-      
-      - name: Generate detailed conformance report
+      - name: Run conformance tests for ${{ matrix.suite.name }}
+        id: run-tests
         run: |
-          echo "# Conformance Test Results" > conformance-results.md
-          echo "" >> conformance-results.md
-          echo "## Summary" >> conformance-results.md
-          cargo test --test conformance_tests summary -- --ignored --nocapture 2>&1 | tee -a conformance-results.md
+          echo "Testing suite: ${{ matrix.suite.name }}"
+          cargo test --test conformance_tests ${{ matrix.suite.name }} -- --nocapture
       
-      - name: Upload conformance report
+      - name: Generate suite report
+        if: always()
+        run: |
+          echo "# ${{ matrix.suite.name }} Results" > ${{ matrix.suite.name }}-results.md
+          echo "Exit code from tests: ${{ steps.run-tests.outcome }}" >> ${{ matrix.suite.name }}-results.md
+      
+      - name: Upload suite report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: conformance-report
-          path: conformance-results.md
+          name: conformance-report-${{ matrix.suite.name }}
+          path: ${{ matrix.suite.name }}-results.md
           retention-days: 30
   
-  # Optional: Run parameterized tests on a schedule (they take longer)
-  conformance-detailed:
+  # Generate overall summary after all suites complete
+  conformance-summary:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - suite3_core
-          - suite7_beam
-          - suite10_boolean
+    needs: conformance
+    if: always()
     
     steps:
       - name: Checkout repository
@@ -77,8 +145,11 @@ jobs:
       
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       
       - name: Cache test suites
+        id: cache-test-suites
         uses: actions/cache@v4
         with:
           path: test_suites
@@ -92,5 +163,26 @@ jobs:
             git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
           fi
       
-      - name: Run parameterized tests for ${{ matrix.suite }}
-        run: cargo test --test conformance_parameterized ${{ matrix.suite }} -- --ignored --nocapture
+      - name: Generate overall conformance summary
+        run: |
+          echo "# Conformance Test Results" > conformance-summary.md
+          echo "" >> conformance-summary.md
+          echo "## Overall Summary" >> conformance-summary.md
+          cargo test --test conformance_tests summary -- --ignored --nocapture 2>&1 | tee -a conformance-summary.md
+        continue-on-error: true
+      
+      - name: Download all suite reports
+        uses: actions/download-artifact@v4.1.3
+        with:
+          pattern: conformance-report-*
+          path: suite-reports
+      
+      - name: Upload combined conformance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-combined
+          path: |
+            conformance-summary.md
+            suite-reports/
+          retention-days: 30
+
