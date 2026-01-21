@@ -778,8 +778,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.beams.push(beam);
                         }
                     }
-                    "slicestack" if in_resources => {
-                        in_slicestack = true;
+                    "normvectorgroup" if in_resources => {
+                        in_normvectorgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
                         let id = attrs
                             .get("id")

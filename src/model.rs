@@ -253,6 +253,7 @@ impl Mesh {
         Self {
             vertices: Vec::with_capacity(vertices),
             triangles: Vec::with_capacity(triangles),
+            beamset: None,
         }
     }
 }
