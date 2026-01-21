@@ -516,11 +516,17 @@ fn validate_component_references(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if !object.components.is_empty() {
             let mut visited = HashSet::new();
-            let mut recursion_stack = HashSet::new();
-            if has_circular_dependency(object.id, model, &mut visited, &mut recursion_stack)? {
+            let mut path = Vec::new();
+            if let Some(cycle_path) =
+                detect_circular_components(object.id, model, &mut visited, &mut path)?
+            {
                 return Err(Error::InvalidModel(format!(
-                    "Circular component reference detected starting from object {}",
-                    object.id
+                    "Circular component reference: {}",
+                    cycle_path
+                        .iter()
+                        .map(|id| id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" → ")
                 )));
             }
         }
@@ -531,40 +537,45 @@ fn validate_component_references(model: &Model) -> Result<()> {
 
 /// Recursive helper function to detect circular dependencies in component graph
 ///
-/// Uses depth-first search with a recursion stack to detect cycles.
-/// Returns true if a cycle is detected.
-fn has_circular_dependency(
+/// Uses depth-first search with path tracking to detect cycles.
+/// Returns Some(path) with the circular path if a cycle is detected, None otherwise.
+fn detect_circular_components(
     object_id: usize,
     model: &Model,
     visited: &mut HashSet<usize>,
-    recursion_stack: &mut HashSet<usize>,
-) -> Result<bool> {
-    // If this object is already in the recursion stack, we have a cycle
-    if recursion_stack.contains(&object_id) {
-        return Ok(true);
+    path: &mut Vec<usize>,
+) -> Result<Option<Vec<usize>>> {
+    // If this object is already in the current path, we have a cycle
+    if let Some(cycle_start) = path.iter().position(|&id| id == object_id) {
+        // Return the circular portion of the path plus the repeated node
+        let mut cycle_path = path[cycle_start..].to_vec();
+        cycle_path.push(object_id);
+        return Ok(Some(cycle_path));
     }
 
     // If we've already fully processed this object, no cycle here
     if visited.contains(&object_id) {
-        return Ok(false);
+        return Ok(None);
     }
 
-    // Mark as being processed
+    // Mark as being processed and add to path
     visited.insert(object_id);
-    recursion_stack.insert(object_id);
+    path.push(object_id);
 
     // Find the object and check its components
     if let Some(object) = model.resources.objects.iter().find(|o| o.id == object_id) {
         for component in &object.components {
-            if has_circular_dependency(component.objectid, model, visited, recursion_stack)? {
-                return Ok(true);
+            if let Some(cycle) =
+                detect_circular_components(component.objectid, model, visited, path)?
+            {
+                return Ok(Some(cycle));
             }
         }
     }
 
-    // Done processing this object
-    recursion_stack.remove(&object_id);
-    Ok(false)
+    // Done processing this object, remove from path
+    path.pop();
+    Ok(None)
 }
 
 #[cfg(test)]
