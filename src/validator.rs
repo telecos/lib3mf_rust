@@ -97,23 +97,27 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
             let num_vertices = mesh.vertices.len();
 
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
+                // Pre-calculate the suggestion message to avoid repetition and handle edge cases
+                let max_valid_index = num_vertices.saturating_sub(1);
+                let suggestion = format!("Vertex indices must be in range 0-{}. Check the attribute", max_valid_index);
+                
                 // Validate vertex indices are within bounds
                 if triangle.v1 >= num_vertices {
                     return Err(Error::validation_error(
                         format!("Object {}: Triangle {} vertex v1={} is out of bounds (have {} vertices)", object.id, tri_idx, triangle.v1, num_vertices),
-                        Some(&format!("Vertex indices must be in range 0-{}. Check the v1 attribute", num_vertices - 1))
+                        Some(&format!("{} v1", suggestion))
                     ));
                 }
                 if triangle.v2 >= num_vertices {
                     return Err(Error::validation_error(
                         format!("Object {}: Triangle {} vertex v2={} is out of bounds (have {} vertices)", object.id, tri_idx, triangle.v2, num_vertices),
-                        Some(&format!("Vertex indices must be in range 0-{}. Check the v2 attribute", num_vertices - 1))
+                        Some(&format!("{} v2", suggestion))
                     ));
                 }
                 if triangle.v3 >= num_vertices {
                     return Err(Error::validation_error(
                         format!("Object {}: Triangle {} vertex v3={} is out of bounds (have {} vertices)", object.id, tri_idx, triangle.v3, num_vertices),
-                        Some(&format!("Vertex indices must be in range 0-{}. Check the v3 attribute", num_vertices - 1))
+                        Some(&format!("{} v3", suggestion))
                     ));
                 }
 
