@@ -38,15 +38,17 @@ pub fn validate_model(model: &Model) -> Result<()> {
 fn validate_required_structure(model: &Model) -> Result<()> {
     // Model must contain at least one object
     if model.resources.objects.is_empty() {
-        return Err(Error::InvalidModel(
-            "Model must contain at least one object in resources".to_string(),
+        return Err(Error::validation_error(
+            "Model must contain at least one object in resources",
+            Some("Add at least one <object> element within the <resources> section")
         ));
     }
 
     // Build section must contain at least one item
     if model.build.items.is_empty() {
-        return Err(Error::InvalidModel(
-            "Build section must contain at least one item".to_string(),
+        return Err(Error::validation_error(
+            "Build section must contain at least one item",
+            Some("Add at least one <item> element within the <build> section to specify what objects to print")
         ));
     }
 
@@ -60,17 +62,18 @@ fn validate_object_ids(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         // Object IDs must be positive (non-zero)
         if object.id == 0 {
-            return Err(Error::InvalidModel(
-                "Object ID must be a positive integer".to_string(),
+            return Err(Error::validation_error(
+                "Object ID must be a positive integer",
+                Some("Object IDs must start from 1. Use id=\"1\", id=\"2\", etc.")
             ));
         }
 
         // Check for duplicate IDs
         if !seen_ids.insert(object.id) {
-            return Err(Error::InvalidModel(format!(
-                "Duplicate object ID found: {}",
-                object.id
-            )));
+            return Err(Error::validation_error(
+                format!("Duplicate object ID found: {}", object.id),
+                Some("Each object must have a unique ID. Check for duplicate id attributes in <object> elements")
+            ));
         }
     }
 
@@ -85,10 +88,10 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
             // Note: Meshes with vertices but no triangles can be valid for extensions
             // like beam lattice, so we don't require triangles to be present
             if !mesh.triangles.is_empty() && mesh.vertices.is_empty() {
-                return Err(Error::InvalidModel(format!(
-                    "Object {}: Mesh has triangles but no vertices",
-                    object.id
-                )));
+                return Err(Error::validation_error(
+                    format!("Object {}: Mesh has triangles but no vertices", object.id),
+                    Some("Add <vertices> elements to define the mesh geometry before referencing them in triangles")
+                ));
             }
 
             let num_vertices = mesh.vertices.len();
@@ -96,22 +99,22 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
                 // Validate vertex indices are within bounds
                 if triangle.v1 >= num_vertices {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} vertex v1={} is out of bounds (have {} vertices)",
-                        object.id, tri_idx, triangle.v1, num_vertices
-                    )));
+                    return Err(Error::validation_error(
+                        format!("Object {}: Triangle {} vertex v1={} is out of bounds (have {} vertices)", object.id, tri_idx, triangle.v1, num_vertices),
+                        Some(&format!("Vertex indices must be in range 0-{}. Check the v1 attribute", num_vertices - 1))
+                    ));
                 }
                 if triangle.v2 >= num_vertices {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} vertex v2={} is out of bounds (have {} vertices)",
-                        object.id, tri_idx, triangle.v2, num_vertices
-                    )));
+                    return Err(Error::validation_error(
+                        format!("Object {}: Triangle {} vertex v2={} is out of bounds (have {} vertices)", object.id, tri_idx, triangle.v2, num_vertices),
+                        Some(&format!("Vertex indices must be in range 0-{}. Check the v2 attribute", num_vertices - 1))
+                    ));
                 }
                 if triangle.v3 >= num_vertices {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} vertex v3={} is out of bounds (have {} vertices)",
-                        object.id, tri_idx, triangle.v3, num_vertices
-                    )));
+                    return Err(Error::validation_error(
+                        format!("Object {}: Triangle {} vertex v3={} is out of bounds (have {} vertices)", object.id, tri_idx, triangle.v3, num_vertices),
+                        Some(&format!("Vertex indices must be in range 0-{}. Check the v3 attribute", num_vertices - 1))
+                    ));
                 }
 
                 // Check for degenerate triangles (two or more vertices are the same)
@@ -119,10 +122,10 @@ fn validate_mesh_geometry(model: &Model) -> Result<()> {
                     || triangle.v2 == triangle.v3
                     || triangle.v1 == triangle.v3
                 {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} is degenerate (v1={}, v2={}, v3={})",
-                        object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3
-                    )));
+                    return Err(Error::validation_error(
+                        format!("Object {}: Triangle {} is degenerate (v1={}, v2={}, v3={})", object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3),
+                        Some("All three vertex indices (v1, v2, v3) must be different to form a valid triangle")
+                    ));
                 }
             }
 
@@ -161,10 +164,10 @@ fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result
     // Check if any edge is shared by more than 2 triangles (non-manifold)
     for (edge, count) in edge_count {
         if count > 2 {
-            return Err(Error::InvalidModel(format!(
-                "Object {}: Non-manifold edge ({}, {}) is shared by {} triangles (max 2 allowed)",
-                object_id, edge.0, edge.1, count
-            )));
+            return Err(Error::validation_error(
+                format!("Object {}: Non-manifold edge ({}, {}) is shared by {} triangles (max 2 allowed)", object_id, edge.0, edge.1, count),
+                Some("Non-manifold geometry has edges shared by more than 2 triangles. Check for duplicate or overlapping triangles and ensure the mesh forms a valid surface")
+            ));
         }
     }
 
@@ -180,10 +183,10 @@ fn validate_build_references(model: &Model) -> Result<()> {
     // Check each build item references a valid object
     for (item_idx, item) in model.build.items.iter().enumerate() {
         if !valid_object_ids.contains(&item.objectid) {
-            return Err(Error::InvalidModel(format!(
-                "Build item {} references non-existent object ID: {}",
-                item_idx, item.objectid
-            )));
+            return Err(Error::validation_error(
+                format!("Build item {} references non-existent object ID: {}", item_idx, item.objectid),
+                Some(&format!("Ensure the objectid attribute references an existing object. Available object IDs: {:?}", valid_object_ids.iter().collect::<Vec<_>>()))
+            ));
         }
     }
 
@@ -211,10 +214,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
             if !valid_colorgroup_ids.is_empty() && !valid_colorgroup_ids.contains(&pid) {
                 // Only validate if there are color groups defined
                 // Empty color groups means we might be using basematerials instead
-                return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent color group ID: {}",
-                    object.id, pid
-                )));
+                return Err(Error::validation_error(
+                    format!("Object {} references non-existent color group ID: {}", object.id, pid),
+                    None
+                ));
             }
         }
 
@@ -229,13 +232,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 // Validate object-level pindex
                 if let Some(pindex) = object.pindex {
                     if pindex >= colorgroup.colors.len() {
-                        return Err(Error::InvalidModel(format!(
-                            "Object {}: pindex {} is out of bounds (color group {} has {} colors)",
-                            object.id,
-                            pindex,
-                            obj_pid,
-                            colorgroup.colors.len()
-                        )));
+                        return Err(Error::validation_error(
+                            format!("Object {}: pindex {} is out of bounds (color group {} has {} colors)", object.id, pindex, obj_pid, colorgroup.colors.len()),
+                            None
+                        ));
                     }
                 }
             }
@@ -256,38 +256,38 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         // Validate triangle-level pindex
                         if let Some(pindex) = triangle.pindex {
                             if pindex >= num_colors {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} pindex {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, pindex, pid, num_colors
-                                )));
+                                return Err(Error::validation_error(
+                                    format!("Object {}: Triangle {} pindex {} is out of bounds (color group {} has {} colors)", object.id, tri_idx, pindex, pid, num_colors),
+                                    None
+                                ));
                             }
                         }
 
                         // Validate per-vertex property indices (p1, p2, p3)
                         if let Some(p1) = triangle.p1 {
                             if p1 >= num_colors {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p1 {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, p1, pid, num_colors
-                                )));
+                                return Err(Error::validation_error(
+                                    format!("Object {}: Triangle {} p1 {} is out of bounds (color group {} has {} colors)", object.id, tri_idx, p1, pid, num_colors),
+                                    None
+                                ));
                             }
                         }
 
                         if let Some(p2) = triangle.p2 {
                             if p2 >= num_colors {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p2 {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, p2, pid, num_colors
-                                )));
+                                return Err(Error::validation_error(
+                                    format!("Object {}: Triangle {} p2 {} is out of bounds (color group {} has {} colors)", object.id, tri_idx, p2, pid, num_colors),
+                                    None
+                                ));
                             }
                         }
 
                         if let Some(p3) = triangle.p3 {
                             if p3 >= num_colors {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p3 {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, p3, pid, num_colors
-                                )));
+                                return Err(Error::validation_error(
+                                    format!("Object {}: Triangle {} p3 {} is out of bounds (color group {} has {} colors)", object.id, tri_idx, p3, pid, num_colors),
+                                    None
+                                ));
                             }
                         }
                     }

@@ -77,7 +77,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
-                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                 let local_name = get_local_name(name_str);
 
@@ -94,9 +94,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         for attr in e.attributes() {
                             let attr = attr?;
                             let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
                             let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                             all_attrs.insert(key.to_string(), value.to_string());
 
@@ -108,10 +108,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                             model.unit = value.to_string()
                                         }
                                         _ => {
-                                            return Err(Error::InvalidXml(format!(
-                                                "Invalid unit '{}'. Must be one of: micron, millimeter, centimeter, inch, foot, meter",
-                                                value
-                                            )))
+                                            return Err(Error::xml_error(
+                                                format!("Invalid unit '{}'. Must be one of: micron, millimeter, centimeter, inch, foot, meter", value),
+                                                None
+                                            ))
                                         }
                                     }
                                 }
@@ -161,10 +161,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                         && !declared_namespaces.contains_key(namespace_prefix)
                                     {
                                         // Undeclared custom namespace prefix - reject
-                                        return Err(Error::InvalidXml(format!(
-                                            "Metadata name '{}' uses undeclared namespace prefix '{}'",
-                                            name, namespace_prefix
-                                        )));
+                                        return Err(Error::xml_error(
+                                            format!("Metadata name '{}' uses undeclared namespace prefix '{}'", name, namespace_prefix),
+                                            None
+                                        ));
                                     }
                                 }
                             }
@@ -172,7 +172,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             // Read the text content
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
-                                    t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                    t.unescape().map_err(|e| Error::xml_error(e.to_string(), None))?;
                                 model.metadata.insert(name.clone(), value.to_string());
                             }
                         }
@@ -180,8 +180,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "resources" => {
                         resources_count += 1;
                         if resources_count > 1 {
-                            return Err(Error::InvalidXml(
-                                "Model must contain exactly one <resources> element".to_string(),
+                            return Err(Error::xml_error(
+                                "Model must contain exactly one <resources> element",
+                                None
                             ));
                         }
                         in_resources = true;
@@ -189,8 +190,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "build" => {
                         build_count += 1;
                         if build_count > 1 {
-                            return Err(Error::InvalidXml(
-                                "Model must contain exactly one <build> element".to_string(),
+                            return Err(Error::xml_error(
+                                "Model must contain exactly one <build> element",
+                                None
                             ));
                         }
                         in_build = true;
@@ -241,7 +243,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
-                                Error::InvalidXml("ColorGroup missing id attribute".to_string())
+                                Error::xml_error("ColorGroup missing id attribute", None)
                             })?
                             .parse::<usize>()?;
                         current_colorgroup = Some(ColorGroup::new(id));
@@ -262,7 +264,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
             Ok(Event::End(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
-                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                 let local_name = get_local_name(name_str);
 
@@ -297,7 +299,7 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(Error::Xml(e)),
+            Err(e) => return Err(e.into()),
             _ => {}
         }
         buf.clear();
@@ -305,13 +307,15 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
     // Validate required elements exist
     if resources_count == 0 {
-        return Err(Error::InvalidXml(
-            "Model must contain a <resources> element".to_string(),
+        return Err(Error::xml_error(
+            "Model must contain a <resources> element",
+            None
         ));
     }
     if build_count == 0 {
-        return Err(Error::InvalidXml(
-            "Model must contain a <build> element".to_string(),
+        return Err(Error::xml_error(
+            "Model must contain a <build> element",
+            None
         ));
     }
 
@@ -348,7 +352,7 @@ fn parse_object<R: std::io::BufRead>(
 
     let id = attrs
         .get("id")
-        .ok_or_else(|| Error::InvalidXml("Object missing id attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Object missing id attribute", None))?
         .parse::<usize>()?;
 
     let mut object = Object::new(id);
@@ -364,10 +368,10 @@ fn parse_object<R: std::io::BufRead>(
             "surface" => ObjectType::Surface,
             "other" => ObjectType::Other,
             _ => {
-                return Err(Error::InvalidXml(format!(
-                    "Invalid object type '{}'. Must be one of: model, support, solidsupport, surface, other",
-                    type_str
-                )))
+                return Err(Error::xml_error(
+                    format!("Invalid object type '{}'. Must be one of: model, support, solidsupport, surface, other", type_str),
+                    None
+                ))
             }
         };
     }
@@ -396,37 +400,37 @@ fn parse_vertex<R: std::io::BufRead>(
 
     let x = attrs
         .get("x")
-        .ok_or_else(|| Error::InvalidXml("Vertex missing x attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Vertex missing x attribute", None))?
         .parse::<f64>()?;
 
     let y = attrs
         .get("y")
-        .ok_or_else(|| Error::InvalidXml("Vertex missing y attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Vertex missing y attribute", None))?
         .parse::<f64>()?;
 
     let z = attrs
         .get("z")
-        .ok_or_else(|| Error::InvalidXml("Vertex missing z attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Vertex missing z attribute", None))?
         .parse::<f64>()?;
 
     // Validate numeric values - reject NaN and Infinity
     if !x.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex x coordinate must be finite (got {})",
-            x
-        )));
+        return Err(Error::xml_error(
+            format!("Vertex x coordinate must be finite (got {})", x),
+            None
+        ));
     }
     if !y.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex y coordinate must be finite (got {})",
-            y
-        )));
+        return Err(Error::xml_error(
+            format!("Vertex y coordinate must be finite (got {})", y),
+            None
+        ));
     }
     if !z.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex z coordinate must be finite (got {})",
-            z
-        )));
+        return Err(Error::xml_error(
+            format!("Vertex z coordinate must be finite (got {})", z),
+            None
+        ));
     }
 
     Ok(Vertex::new(x, y, z))
@@ -450,17 +454,17 @@ fn parse_triangle<R: std::io::BufRead>(
 
     let v1 = attrs
         .get("v1")
-        .ok_or_else(|| Error::InvalidXml("Triangle missing v1 attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Triangle missing v1 attribute", None))?
         .parse::<usize>()?;
 
     let v2 = attrs
         .get("v2")
-        .ok_or_else(|| Error::InvalidXml("Triangle missing v2 attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Triangle missing v2 attribute", None))?
         .parse::<usize>()?;
 
     let v3 = attrs
         .get("v3")
-        .ok_or_else(|| Error::InvalidXml("Triangle missing v3 attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Triangle missing v3 attribute", None))?
         .parse::<usize>()?;
 
     let mut triangle = Triangle::new(v1, v2, v3);
@@ -501,7 +505,7 @@ fn parse_build_item<R: std::io::BufRead>(
 
     let objectid = attrs
         .get("objectid")
-        .ok_or_else(|| Error::InvalidXml("Build item missing objectid attribute".to_string()))?
+        .ok_or_else(|| Error::xml_error("Build item missing objectid attribute", None))?
         .parse::<usize>()?;
 
     let mut item = BuildItem::new(objectid);
@@ -517,19 +521,19 @@ fn parse_build_item<R: std::io::BufRead>(
 
         // Transform must have exactly 12 values
         if values.len() != 12 {
-            return Err(Error::InvalidXml(format!(
-                "Transform matrix must have exactly 12 values (got {})",
-                values.len()
-            )));
+            return Err(Error::xml_error(
+                format!("Transform matrix must have exactly 12 values (got {})", values.len()),
+                None
+            ));
         }
 
         // Validate all values are finite (no NaN or Infinity)
         for (idx, &val) in values.iter().enumerate() {
             if !val.is_finite() {
-                return Err(Error::InvalidXml(format!(
-                    "Transform matrix value at index {} must be finite (got {})",
-                    idx, val
-                )));
+                return Err(Error::xml_error(
+                    format!("Transform matrix value at index {} must be finite (got {})", idx, val),
+                    None
+                ));
             }
         }
 
@@ -624,11 +628,11 @@ fn parse_required_extensions_with_namespaces(
 fn validate_extensions(required: &[Extension], config: &ParserConfig) -> Result<()> {
     for ext in required {
         if !config.supports(ext) {
-            return Err(Error::UnsupportedExtension(format!(
-                "Extension '{}' (namespace: {}) is required but not supported",
-                ext.name(),
-                ext.namespace()
-            )));
+            return Err(Error::UnsupportedExtension {
+                code: crate::error::ErrorCode::UnsupportedExtension,
+                extension: format!("Extension '{}' (namespace: {}) is required but not supported", ext.name(), ext.namespace()),
+                suggestion: String::new(),
+            });
         }
     }
     Ok(())
@@ -644,9 +648,9 @@ fn parse_attributes<R: std::io::BufRead>(
     for attr in e.attributes() {
         let attr = attr?;
         let key =
-            std::str::from_utf8(attr.key.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+            std::str::from_utf8(attr.key.as_ref()).map_err(|e| Error::xml_error(e.to_string(), None))?;
         let value =
-            std::str::from_utf8(&attr.value).map_err(|e| Error::InvalidXml(e.to_string()))?;
+            std::str::from_utf8(&attr.value).map_err(|e| Error::xml_error(e.to_string(), None))?;
 
         attrs.insert(key.to_string(), value.to_string());
     }
@@ -712,10 +716,10 @@ fn validate_attributes(
         }
 
         if !allowed_set.contains(key.as_str()) {
-            return Err(Error::InvalidXml(format!(
-                "Unknown attribute '{}' on <{}>",
-                key, element_name
-            )));
+            return Err(Error::xml_error(
+                format!("Unknown attribute '{}' on <{}>", key, element_name),
+                None
+            ));
         }
     }
     Ok(())

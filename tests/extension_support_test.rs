@@ -153,7 +153,7 @@ fn test_reject_unsupported_extension() {
     assert!(result.is_err());
 
     match result.unwrap_err() {
-        Error::UnsupportedExtension(msg) => {
+        Error::UnsupportedExtension { extension: msg, .. } => {
             assert!(msg.contains("Material"));
             assert!(msg.contains("not supported"));
         }
@@ -193,7 +193,7 @@ fn test_reject_multiple_unsupported_extensions() {
     assert!(result.is_err());
 
     match result.unwrap_err() {
-        Error::UnsupportedExtension(msg) => {
+        Error::UnsupportedExtension { extension: msg, .. } => {
             assert!(msg.contains("Slice"));
         }
         _ => panic!("Expected UnsupportedExtension error"),

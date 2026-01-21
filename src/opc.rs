@@ -45,17 +45,21 @@ impl<R: Read + std::io::Seek> Package<R> {
     fn validate_opc_structure(&mut self) -> Result<()> {
         // Validate required files exist
         if !self.has_file(CONTENT_TYPES_PATH) {
-            return Err(Error::InvalidFormat(format!(
-                "Missing required file: {}",
-                CONTENT_TYPES_PATH
-            )));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: format!("Missing required file: {}", CONTENT_TYPES_PATH),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         if !self.has_file(RELS_PATH) {
-            return Err(Error::InvalidFormat(format!(
-                "Missing required file: {}",
-                RELS_PATH
-            )));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: format!("Missing required file: {}", RELS_PATH),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         // Validate Content Types
@@ -85,7 +89,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
                     let name_str = std::str::from_utf8(name.as_ref())
-                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                     if name_str.ends_with("Default") {
                         let mut extension = None;
@@ -94,9 +98,9 @@ impl<R: Read + std::io::Seek> Package<R> {
                         for attr in e.attributes() {
                             let attr = attr?;
                             let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
                             let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                             match key {
                                 "Extension" => extension = Some(value.to_string()),
@@ -116,10 +120,12 @@ impl<R: Read + std::io::Seek> Package<R> {
                             if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
                                 // Per 3MF spec, the extension for 3D model files must be "model"
                                 if !ext.eq_ignore_ascii_case("model") {
-                                    return Err(Error::InvalidFormat(format!(
-                                        "Content type '{}' must use Extension='model', not Extension='{}'",
-                                        ct, ext
-                                    )));
+                                    return Err(Error::InvalidFormat {
+                                        code: crate::error::ErrorCode::InvalidFormat,
+                                        message: format!("Content type '{}' must use Extension='model', not Extension='{}'", ct, ext),
+                                        context: String::new(),
+                                        suggestion: String::new(),
+                                    });
                                 }
                                 found_model = true;
                             }
@@ -131,9 +137,9 @@ impl<R: Read + std::io::Seek> Package<R> {
                         for attr in e.attributes() {
                             let attr = attr?;
                             let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
                             let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                             if key == "ContentType" {
                                 content_type = Some(value.to_string());
@@ -148,23 +154,28 @@ impl<R: Read + std::io::Seek> Package<R> {
                     }
                 }
                 Ok(Event::Eof) => break,
-                Err(e) => return Err(Error::Xml(e)),
+                Err(e) => return Err(e.into()),
                 _ => {}
             }
             buf.clear();
         }
 
         if !found_rels {
-            return Err(Error::InvalidFormat(
-                "Content Types missing required 'rels' extension definition".to_string(),
-            ));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: "Content Types missing required 'rels' extension definition".to_string(),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         if !found_model {
-            return Err(Error::InvalidFormat(
-                "Content Types missing required model content type (Default or Override)"
-                    .to_string(),
-            ));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: "Content Types missing required model content type (Default or Override)".to_string(),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         Ok(())
@@ -176,10 +187,12 @@ impl<R: Read + std::io::Seek> Package<R> {
 
         // Verify the model file actually exists
         if !self.has_file(&model_path) {
-            return Err(Error::InvalidFormat(format!(
-                "Model relationship points to non-existent file: {}",
-                model_path
-            )));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: format!("Model relationship points to non-existent file: {}", model_path),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         Ok(())
@@ -197,7 +210,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
                     let name_str = std::str::from_utf8(name.as_ref())
-                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                     if name_str.ends_with("Relationship") {
                         let mut target = None;
@@ -206,9 +219,9 @@ impl<R: Read + std::io::Seek> Package<R> {
                         for attr in e.attributes() {
                             let attr = attr?;
                             let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
                             let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                             if key == "Target" {
                                 target = Some(value.to_string());
@@ -220,16 +233,20 @@ impl<R: Read + std::io::Seek> Package<R> {
                         // Validate relationship Type - must not contain query strings or fragments
                         if let Some(t) = &rel_type {
                             if t.contains('?') {
-                                return Err(Error::InvalidFormat(format!(
-                                    "Relationship Type cannot contain query string: {}",
-                                    t
-                                )));
+                                return Err(Error::InvalidFormat {
+                                    code: crate::error::ErrorCode::InvalidFormat,
+                                    message: format!("Relationship Type cannot contain query string: {}", t),
+                                    context: String::new(),
+                                    suggestion: String::new(),
+                                });
                             }
                             if t.contains('#') {
-                                return Err(Error::InvalidFormat(format!(
-                                    "Relationship Type cannot contain fragment identifier: {}",
-                                    t
-                                )));
+                                return Err(Error::InvalidFormat {
+                                    code: crate::error::ErrorCode::InvalidFormat,
+                                    message: format!("Relationship Type cannot contain fragment identifier: {}", t),
+                                    context: String::new(),
+                                    suggestion: String::new(),
+                                });
                             }
                         }
 
@@ -246,16 +263,18 @@ impl<R: Read + std::io::Seek> Package<R> {
 
                             // Verify the target file exists
                             if !self.has_file(&path) {
-                                return Err(Error::InvalidFormat(format!(
-                                    "Relationship points to non-existent file: {}",
-                                    path
-                                )));
+                                return Err(Error::InvalidFormat {
+                                    code: crate::error::ErrorCode::InvalidFormat,
+                                    message: format!("Relationship points to non-existent file: {}", path),
+                                    context: String::new(),
+                                    suggestion: String::new(),
+                                });
                             }
                         }
                     }
                 }
                 Ok(Event::Eof) => break,
-                Err(e) => return Err(Error::Xml(e)),
+                Err(e) => return Err(e.into()),
                 _ => {}
             }
             buf.clear();
@@ -275,18 +294,22 @@ impl<R: Read + std::io::Seek> Package<R> {
     fn validate_opc_part_name(part_name: &str) -> Result<()> {
         // Check for fragment identifiers
         if part_name.contains('#') {
-            return Err(Error::InvalidFormat(format!(
-                "Part name cannot contain fragment identifier: {}",
-                part_name
-            )));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: format!("Part name cannot contain fragment identifier: {}", part_name),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         // Check for query strings
         if part_name.contains('?') {
-            return Err(Error::InvalidFormat(format!(
-                "Part name cannot contain query string: {}",
-                part_name
-            )));
+            return Err(Error::InvalidFormat {
+                code: crate::error::ErrorCode::InvalidFormat,
+                message: format!("Part name cannot contain query string: {}", part_name),
+                context: String::new(),
+                suggestion: String::new(),
+            });
         }
 
         // Split into path segments and validate each
@@ -299,26 +322,32 @@ impl<R: Read + std::io::Seek> Package<R> {
                 if idx == 0 && part_name.starts_with('/') {
                     continue;
                 }
-                return Err(Error::InvalidFormat(format!(
-                    "Part name cannot contain empty path segments (consecutive slashes): {}",
-                    part_name
-                )));
+                return Err(Error::InvalidFormat {
+                    code: crate::error::ErrorCode::InvalidFormat,
+                    message: format!("Part name cannot contain empty path segments (consecutive slashes): {}", part_name),
+                    context: String::new(),
+                    suggestion: String::new(),
+                });
             }
 
             // Check for "." or ".." segments
             if *segment == "." || *segment == ".." {
-                return Err(Error::InvalidFormat(format!(
-                    "Part name cannot contain '.' or '..' segments: {}",
-                    part_name
-                )));
+                return Err(Error::InvalidFormat {
+                    code: crate::error::ErrorCode::InvalidFormat,
+                    message: format!("Part name cannot contain '.' or '..' segments: {}", part_name),
+                    context: String::new(),
+                    suggestion: String::new(),
+                });
             }
 
             // Check for segments ending with "."
             if segment.ends_with('.') {
-                return Err(Error::InvalidFormat(format!(
-                    "Part name segments cannot end with '.': {}",
-                    part_name
-                )));
+                return Err(Error::InvalidFormat {
+                    code: crate::error::ErrorCode::InvalidFormat,
+                    message: format!("Part name segments cannot end with '.': {}", part_name),
+                    context: String::new(),
+                    suggestion: String::new(),
+                });
             }
         }
 
@@ -334,7 +363,11 @@ impl<R: Read + std::io::Seek> Package<R> {
         let mut file = self
             .archive
             .by_name(&model_path)
-            .map_err(|_| Error::MissingFile(model_path.clone()))?;
+            .map_err(|_| Error::MissingFile {
+                code: crate::error::ErrorCode::MissingFile,
+                file: model_path.clone(),
+                suggestion: String::new(),
+            })?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
@@ -356,7 +389,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
                     let name_str = std::str::from_utf8(name.as_ref())
-                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                     if name_str.ends_with("Relationship") {
                         let mut target = None;
@@ -365,9 +398,9 @@ impl<R: Read + std::io::Seek> Package<R> {
                         for attr in e.attributes() {
                             let attr = attr?;
                             let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
                             let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                .map_err(|e| Error::xml_error(e.to_string(), None))?;
 
                             match key {
                                 "Target" => target = Some(value.to_string()),
@@ -391,15 +424,17 @@ impl<R: Read + std::io::Seek> Package<R> {
                     }
                 }
                 Ok(Event::Eof) => break,
-                Err(e) => return Err(Error::InvalidXml(e.to_string())),
+                Err(e) => return Err(Error::xml_error(e.to_string(), None)),
                 _ => {}
             }
             buf.clear();
         }
 
-        Err(Error::MissingFile(
-            "3D model relationship not found".to_string(),
-        ))
+        Err(Error::MissingFile {
+            code: crate::error::ErrorCode::MissingFile,
+            file: "3D model relationship not found".to_string(),
+            suggestion: String::new(),
+        })
     }
 
     /// Get a file by name from the archive
@@ -407,7 +442,11 @@ impl<R: Read + std::io::Seek> Package<R> {
         let mut file = self
             .archive
             .by_name(name)
-            .map_err(|_| Error::MissingFile(name.to_string()))?;
+            .map_err(|_| Error::MissingFile {
+                code: crate::error::ErrorCode::MissingFile,
+                file: name.to_string(),
+                suggestion: String::new(),
+            })?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
         Ok(content)
