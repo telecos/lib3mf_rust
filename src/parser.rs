@@ -532,7 +532,7 @@ fn parse_object<R: std::io::BufRead>(
     {
         object.slicestackid = Some(slicestackid.parse::<usize>()?);
     }
-  
+
     // Extract Production extension attributes (p:UUID, p:path)
     let p_uuid = attrs.get("p:UUID");
     let p_path = attrs.get("p:path");
@@ -542,6 +542,7 @@ fn parse_object<R: std::io::BufRead>(
         prod_info.uuid = p_uuid.cloned();
         prod_info.path = p_path.cloned();
         object.production = Some(prod_info);
+    }
 
     Ok(object)
 }

@@ -420,6 +420,9 @@ impl SliceStack {
             slices: Vec::new(),
             slice_refs: Vec::new(),
         }
+    }
+}
+
 impl ProductionInfo {
     /// Create a new empty ProductionInfo
     pub fn new() -> Self {
