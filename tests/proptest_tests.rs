@@ -247,8 +247,8 @@ fn generate_model_xml(model: &Model) -> String {
     ));
 
     // Add metadata
-    for (key, value) in &model.metadata {
-        xml.push_str(&format!(r#"<metadata name="{}">{}</metadata>"#, key, value));
+    for entry in &model.metadata {
+        xml.push_str(&format!(r#"<metadata name="{}">{}</metadata>"#, entry.name, entry.value));
     }
 
     // Add resources

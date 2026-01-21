@@ -238,42 +238,76 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "metadata" => {
                         let attrs = parse_attributes(&reader, e)?;
-                        if let Some(name) = attrs.get("name") {
-                            // Validate metadata name - allow namespaced metadata if namespace is declared
-                            // Per 3MF spec, metadata names with ':' indicate namespaced metadata
-                            if name.contains(':') {
-                                // Extract the namespace prefix (part before the colon)
-                                if let Some(namespace_prefix) = name.split(':').next() {
-                                    // Check if this is a known XML prefix (xml, xmlns) or a declared namespace
-                                    if namespace_prefix != "xml"
-                                        && namespace_prefix != "xmlns"
-                                        && !declared_namespaces.contains_key(namespace_prefix)
-                                    {
-                                        // Undeclared custom namespace prefix - reject
-                                        return Err(Error::InvalidXml(format!(
-                                            "Metadata name '{}' uses undeclared namespace prefix '{}'",
-                                            name, namespace_prefix
-                                        )));
-                                    }
-                                }
-                            }
+                        
+                        // Validate that name attribute exists (required by 3MF Core spec)
+                        let name = attrs.get("name").ok_or_else(|| {
+                            Error::InvalidXml(
+                                "Metadata element must have a 'name' attribute".to_string()
+                            )
+                        })?;
 
-                            // Read the text content
-                            if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                                let value =
-                                    t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
-
-                                // Check for duplicate metadata names
-                                // Per 3MF Core spec: metadata element names must be unique
-                                if model.metadata.contains_key(name) {
+                        // Validate metadata name - allow namespaced metadata if namespace is declared
+                        // Per 3MF spec, metadata names with ':' indicate namespaced metadata
+                        if name.contains(':') {
+                            // Extract the namespace prefix (part before the colon)
+                            if let Some(namespace_prefix) = name.split(':').next() {
+                                // Check if this is a known XML prefix (xml, xmlns) or a declared namespace
+                                if namespace_prefix != "xml"
+                                    && namespace_prefix != "xmlns"
+                                    && !declared_namespaces.contains_key(namespace_prefix)
+                                {
+                                    // Undeclared custom namespace prefix - reject
                                     return Err(Error::InvalidXml(format!(
-                                        "Duplicate metadata name '{}'. Each metadata element must have a unique name attribute",
-                                        name
+                                        "Metadata name '{}' uses undeclared namespace prefix '{}'",
+                                        name, namespace_prefix
                                     )));
                                 }
-
-                                model.metadata.insert(name.clone(), value.to_string());
                             }
+                        }
+
+                        // Parse optional preserve attribute
+                        let preserve = if let Some(preserve_str) = attrs.get("preserve") {
+                            // Validate preserve attribute value
+                            match preserve_str.as_str() {
+                                "0" | "false" => Some(false),
+                                "1" | "true" => Some(true),
+                                _ => {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Invalid preserve attribute value '{}'. Must be '0', '1', 'false', or 'true'",
+                                        preserve_str
+                                    )));
+                                }
+                            }
+                        } else {
+                            None
+                        };
+
+                        // Read the text content
+                        if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
+                            let value =
+                                t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            // Check for duplicate metadata names
+                            // Per 3MF Core spec: metadata element names must be unique
+                            if model.has_metadata(name) {
+                                return Err(Error::InvalidXml(format!(
+                                    "Duplicate metadata name '{}'. Each metadata element must have a unique name attribute",
+                                    name
+                                )));
+                            }
+
+                            // Create metadata entry with preserve flag if present
+                            let entry = if let Some(preserve_val) = preserve {
+                                crate::model::MetadataEntry::new_with_preserve(
+                                    name.clone(),
+                                    value.to_string(),
+                                    preserve_val,
+                                )
+                            } else {
+                                crate::model::MetadataEntry::new(name.clone(), value.to_string())
+                            };
+
+                            model.metadata.push(entry);
                         }
                     }
                     "resources" => {
