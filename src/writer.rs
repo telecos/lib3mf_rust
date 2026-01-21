@@ -640,12 +640,7 @@ fn write_beamset<W: IoWrite>(writer: &mut Writer<W>, beamset: &BeamSet) -> Resul
 
     elem.push_attribute(("radius", beamset.radius.to_string().as_str()));
     elem.push_attribute(("minlength", beamset.min_length.to_string().as_str()));
-
-    let cap_mode = match beamset.cap_mode {
-        BeamCapMode::Sphere => "sphere",
-        BeamCapMode::Butt => "butt",
-    };
-    elem.push_attribute(("capmode", cap_mode));
+    elem.push_attribute(("capmode", beamset.cap_mode.to_string().as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -662,6 +657,14 @@ fn write_beamset<W: IoWrite>(writer: &mut Writer<W>, beamset: &BeamSet) -> Resul
 
         if let Some(r2) = beam.r2 {
             beam_elem.push_attribute(("r2", r2.to_string().as_str()));
+        }
+
+        if let Some(cap1) = beam.cap1 {
+            beam_elem.push_attribute(("cap1", cap1.to_string().as_str()));
+        }
+
+        if let Some(cap2) = beam.cap2 {
+            beam_elem.push_attribute(("cap2", cap2.to_string().as_str()));
         }
 
         writer

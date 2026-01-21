@@ -509,6 +509,34 @@ pub enum BeamCapMode {
     Sphere,
     /// Butt cap (flat ends)
     Butt,
+    /// Hemisphere cap (half sphere at end)
+    Hemisphere,
+}
+
+impl std::fmt::Display for BeamCapMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BeamCapMode::Sphere => write!(f, "sphere"),
+            BeamCapMode::Butt => write!(f, "butt"),
+            BeamCapMode::Hemisphere => write!(f, "hemisphere"),
+        }
+    }
+}
+
+impl std::str::FromStr for BeamCapMode {
+    type Err = crate::error::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "sphere" => Ok(BeamCapMode::Sphere),
+            "butt" => Ok(BeamCapMode::Butt),
+            "hemisphere" => Ok(BeamCapMode::Hemisphere),
+            _ => Err(crate::error::Error::InvalidXml(format!(
+                "Invalid cap mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
+                s
+            ))),
+        }
+    }
 }
 
 /// A single beam in a beam lattice structure
@@ -525,6 +553,10 @@ pub struct Beam {
     pub r1: Option<f64>,
     /// Radius at second vertex (optional, defaults to r1 or beamset radius)
     pub r2: Option<f64>,
+    /// Cap mode at first vertex (optional, defaults to beamset cap mode)
+    pub cap1: Option<BeamCapMode>,
+    /// Cap mode at second vertex (optional, defaults to beamset cap mode)
+    pub cap2: Option<BeamCapMode>,
 }
 
 impl Beam {
@@ -535,6 +567,8 @@ impl Beam {
             v2,
             r1: None,
             r2: None,
+            cap1: None,
+            cap2: None,
         }
     }
 
@@ -545,6 +579,8 @@ impl Beam {
             v2,
             r1: Some(r1),
             r2: None,
+            cap1: None,
+            cap2: None,
         }
     }
 
@@ -555,6 +591,8 @@ impl Beam {
             v2,
             r1: Some(r1),
             r2: Some(r2),
+            cap1: None,
+            cap2: None,
         }
     }
 }
