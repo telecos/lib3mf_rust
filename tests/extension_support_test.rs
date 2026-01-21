@@ -47,8 +47,7 @@ fn create_test_3mf(required_extensions: &str) -> Vec<u8> {
     .unwrap();
 
     let model_xml = if required_extensions.is_empty() {
-        format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <resources>
     <object id="1" type="model">
@@ -67,8 +66,7 @@ fn create_test_3mf(required_extensions: &str) -> Vec<u8> {
   <build>
     <item objectid="1"/>
   </build>
-</model>"#
-        )
+</model>"#.to_string()
     } else {
         format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>

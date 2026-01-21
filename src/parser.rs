@@ -502,7 +502,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Operation defaults to "union" if not specified
                         let operation = attrs
                             .get("operation")
-                            .and_then(|s| BooleanOpType::from_str(s))
+                            .and_then(|s| BooleanOpType::parse(s))
                             .unwrap_or(BooleanOpType::Union);
                         let mut shape = BooleanShape::new(objectid, operation);
                         // Extract optional path attribute for external object reference

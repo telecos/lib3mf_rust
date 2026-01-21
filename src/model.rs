@@ -367,7 +367,7 @@ pub enum BooleanOpType {
 
 impl BooleanOpType {
     /// Parse operation type from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "union" => Some(BooleanOpType::Union),
             "intersection" => Some(BooleanOpType::Intersection),
