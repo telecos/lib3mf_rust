@@ -43,7 +43,7 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_model(model)?;
     
     // Custom extension validation
-    for (_namespace, ext_info) in config.custom_extensions() {
+    for ext_info in config.custom_extensions().values() {
         if let Some(validator) = &ext_info.validation_handler {
             validator(model).map_err(|e| {
                 Error::InvalidModel(format!("Custom validation failed: {}", e))
