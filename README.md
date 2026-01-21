@@ -100,6 +100,75 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  Coordinates: {} entries", d2dgroup.coords.len());
     }
 
+    // Access advanced materials (Materials Extension)
+    // Texture2D resources
+    for texture in &model.resources.texture2d_resources {
+        println!("Texture2D {}: path={}, type={}", 
+            texture.id, texture.path, texture.contenttype);
+    }
+
+    // Texture2D groups with UV coordinates
+    for tex_group in &model.resources.texture2d_groups {
+        println!("Texture2DGroup {} references texture {}, {} coordinates",
+            tex_group.id, tex_group.texid, tex_group.tex2coords.len());
+    }
+
+    // Composite materials
+    for comp in &model.resources.composite_materials {
+        println!("CompositeMaterials {} mixes base materials: {:?}",
+            comp.id, comp.matindices);
+    }
+
+    // Multi-properties for layered material effects
+    for multi in &model.resources.multi_properties {
+        println!("MultiProperties {} layers property groups: {:?}",
+            multi.id, multi.pids);
+    }
+
+    Ok(())
+}
+```
+
+### Advanced Materials
+
+The Materials Extension now supports advanced features for full-color 3D printing:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let model = Model::from_reader(File::open("model.3mf")?)?;
+
+    // Access Texture2D resources for applying images to models
+    for texture in &model.resources.texture2d_resources {
+        println!("Texture: {} ({})", texture.path, texture.contenttype);
+        println!("  Tile: u={:?}, v={:?}", texture.tilestyleu, texture.tilestylev);
+        println!("  Filter: {:?}", texture.filter);
+    }
+
+    // Access texture coordinate mappings
+    for tex_group in &model.resources.texture2d_groups {
+        for (i, coord) in tex_group.tex2coords.iter().enumerate() {
+            println!("  Coord[{}]: u={}, v={}", i, coord.u, coord.v);
+        }
+    }
+
+    // Access composite materials (mixing base materials)
+    for comp in &model.resources.composite_materials {
+        for composite in &comp.composites {
+            println!("  Mix ratios: {:?}", composite.values);
+        }
+    }
+
+    // Access multi-properties (layered materials)
+    for multi in &model.resources.multi_properties {
+        println!("  Blend methods: {:?}", multi.blendmethods);
+        for m in &multi.multis {
+            println!("    Indices: {:?}", m.pindices);
+        }
+    }
+
     Ok(())
 }
 ```
@@ -171,9 +240,13 @@ This implementation currently supports:
   - Basic materials and colors
 
 - **Materials Extension**
-  - Color groups (m:colorgroup)
-  - Per-triangle material references (pid attributes)
-  - Base materials with display colors
+  - ✅ Color groups (m:colorgroup)
+  - ✅ Per-triangle material references (pid attributes)
+  - ✅ Base materials with display colors
+  - ✅ Texture2D resources with image paths and content types
+  - ✅ Texture2DGroup with UV texture coordinates
+  - ✅ Composite materials mixing base materials in defined ratios
+  - ✅ Multi-properties for layering and blending property groups
 
 - **Displacement Extension**
   - Displacement2D resources (displacement maps with PNG textures)

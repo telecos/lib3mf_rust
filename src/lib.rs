@@ -40,10 +40,12 @@ mod validator;
 
 pub use error::{Error, Result};
 pub use model::{
-    BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BooleanOpType, BooleanRef,
-    BooleanShape, Build, BuildItem, Channel, ColorGroup, Disp2DCoords, Disp2DGroup, Displacement2D,
-    Extension, FilterMode, Material, Mesh, Model, NormVector, NormVectorGroup, Object,
-    ParserConfig, Resources, SecureContentInfo, TileStyle, Triangle, Vertex,
+    BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod, BooleanOpType,
+    BooleanRef, BooleanShape, Build, BuildItem, Channel, ColorGroup, Composite,
+    CompositeMaterials, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
+    Material, Mesh, Model, Multi, MultiProperties, NormVector, NormVectorGroup, Object,
+    ParserConfig, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup, TileStyle,
+    Triangle, Vertex,
 };
 
 use std::io::Read;

@@ -821,6 +821,162 @@ impl BaseMaterial {
     }
 }
 
+/// Texture2D resource from materials extension
+#[derive(Debug, Clone)]
+pub struct Texture2D {
+    /// Texture ID
+    pub id: usize,
+    /// Path to the texture file within the 3MF package
+    pub path: String,
+    /// Content type (image/jpeg or image/png)
+    pub contenttype: String,
+    /// Tile style for u axis
+    pub tilestyleu: TileStyle,
+    /// Tile style for v axis
+    pub tilestylev: TileStyle,
+    /// Texture filter mode
+    pub filter: FilterMode,
+}
+
+impl Texture2D {
+    /// Create a new Texture2D resource
+    pub fn new(id: usize, path: String, contenttype: String) -> Self {
+        Self {
+            id,
+            path,
+            contenttype,
+            tilestyleu: TileStyle::Wrap,
+            tilestylev: TileStyle::Wrap,
+            filter: FilterMode::Auto,
+        }
+    }
+}
+
+/// Texture 2D coordinate
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tex2Coord {
+    /// U coordinate (horizontal, from left)
+    pub u: f32,
+    /// V coordinate (vertical, from bottom)
+    pub v: f32,
+}
+
+impl Tex2Coord {
+    /// Create a new texture coordinate
+    pub fn new(u: f32, v: f32) -> Self {
+        Self { u, v }
+    }
+}
+
+/// Texture2D group from materials extension
+#[derive(Debug, Clone)]
+pub struct Texture2DGroup {
+    /// Texture2D group ID
+    pub id: usize,
+    /// Reference to texture2d resource
+    pub texid: usize,
+    /// List of texture coordinates
+    pub tex2coords: Vec<Tex2Coord>,
+}
+
+impl Texture2DGroup {
+    /// Create a new texture2d group
+    pub fn new(id: usize, texid: usize) -> Self {
+        Self {
+            id,
+            texid,
+            tex2coords: Vec::new(),
+        }
+    }
+}
+
+/// Composite material mixing multiple base materials
+#[derive(Debug, Clone)]
+pub struct Composite {
+    /// Proportions of each base material (values between 0 and 1)
+    pub values: Vec<f32>,
+}
+
+impl Composite {
+    /// Create a new composite material
+    pub fn new(values: Vec<f32>) -> Self {
+        Self { values }
+    }
+}
+
+/// Composite materials group from materials extension
+#[derive(Debug, Clone)]
+pub struct CompositeMaterials {
+    /// Composite materials group ID
+    pub id: usize,
+    /// Reference to base material group
+    pub matid: usize,
+    /// Indices of materials used in composites
+    pub matindices: Vec<usize>,
+    /// List of composite materials
+    pub composites: Vec<Composite>,
+}
+
+impl CompositeMaterials {
+    /// Create a new composite materials group
+    pub fn new(id: usize, matid: usize, matindices: Vec<usize>) -> Self {
+        Self {
+            id,
+            matid,
+            matindices,
+            composites: Vec::new(),
+        }
+    }
+}
+
+/// Blend method for multi-properties
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlendMethod {
+    /// Linear mix interpolation
+    Mix,
+    /// Multiplicative blending
+    Multiply,
+}
+
+/// Multi element combining multiple property indices
+#[derive(Debug, Clone)]
+pub struct Multi {
+    /// Property indices corresponding to pids in parent group
+    pub pindices: Vec<usize>,
+}
+
+impl Multi {
+    /// Create a new multi element
+    pub fn new(pindices: Vec<usize>) -> Self {
+        Self { pindices }
+    }
+}
+
+/// Multi-properties group from materials extension
+#[derive(Debug, Clone)]
+pub struct MultiProperties {
+    /// Multi-properties group ID
+    pub id: usize,
+    /// Property group IDs to layer and blend
+    pub pids: Vec<usize>,
+    /// Blend methods for each layer (length = pids.len() - 1)
+    pub blendmethods: Vec<BlendMethod>,
+    /// List of multi elements
+    pub multis: Vec<Multi>,
+}
+
+impl MultiProperties {
+    /// Create a new multi-properties group
+    pub fn new(id: usize, pids: Vec<usize>) -> Self {
+        Self {
+            id,
+            pids,
+            blendmethods: Vec::new(),
+            multis: Vec::new(),
+        }
+    }
+}
+
 impl ProductionInfo {
     /// Create a new empty ProductionInfo
     pub fn new() -> Self {
@@ -919,6 +1075,14 @@ pub struct Resources {
     pub slice_stacks: Vec<SliceStack>,
     /// List of base material groups (materials extension)
     pub base_material_groups: Vec<BaseMaterialGroup>,
+    /// List of texture2d resources (materials extension)
+    pub texture2d_resources: Vec<Texture2D>,
+    /// List of texture2d groups (materials extension)
+    pub texture2d_groups: Vec<Texture2DGroup>,
+    /// List of composite materials groups (materials extension)
+    pub composite_materials: Vec<CompositeMaterials>,
+    /// List of multi-properties groups (materials extension)
+    pub multi_properties: Vec<MultiProperties>,
 }
 
 impl Resources {
@@ -933,6 +1097,10 @@ impl Resources {
             disp2d_groups: Vec::new(),
             slice_stacks: Vec::new(),
             base_material_groups: Vec::new(),
+            texture2d_resources: Vec::new(),
+            texture2d_groups: Vec::new(),
+            composite_materials: Vec::new(),
+            multi_properties: Vec::new(),
         }
     }
 }
