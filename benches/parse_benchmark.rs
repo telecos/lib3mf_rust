@@ -61,11 +61,14 @@ fn generate_3mf(vertices: usize, triangles: usize) -> NamedTempFile {
 "#,
     );
 
-    // Generate triangles (use modulo to wrap around if needed)
+    // Generate triangles with valid topology
+    // Each triangle uses 3 consecutive vertices when possible
+    // For excess triangles beyond vertices/3, we reuse vertices in a valid way
     for i in 0..triangles {
-        let v1 = (i * 3) % vertices;
-        let v2 = (i * 3 + 1) % vertices;
-        let v3 = (i * 3 + 2) % vertices;
+        let base = (i * 3) % (vertices.saturating_sub(2));
+        let v1 = base;
+        let v2 = base + 1;
+        let v3 = base + 2;
         model_xml.push_str(&format!(
             "                    <triangle v1=\"{}\" v2=\"{}\" v3=\"{}\"/>\n",
             v1, v2, v3

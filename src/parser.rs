@@ -412,20 +412,19 @@ fn parse_vertex<R: std::io::BufRead>(
         .parse::<f64>()?;
 
     // Validate numeric values - reject NaN and Infinity
-    // Combined check for better branch prediction
-    if !x.is_finite() || !y.is_finite() || !z.is_finite() {
-        if !x.is_finite() {
-            return Err(Error::InvalidXml(format!(
-                "Vertex x coordinate must be finite (got {})",
-                x
-            )));
-        }
-        if !y.is_finite() {
-            return Err(Error::InvalidXml(format!(
-                "Vertex y coordinate must be finite (got {})",
-                y
-            )));
-        }
+    if !x.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex x coordinate must be finite (got {})",
+            x
+        )));
+    }
+    if !y.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex y coordinate must be finite (got {})",
+            y
+        )));
+    }
+    if !z.is_finite() {
         return Err(Error::InvalidXml(format!(
             "Vertex z coordinate must be finite (got {})",
             z
