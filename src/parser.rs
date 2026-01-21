@@ -229,6 +229,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "requiredextensions" => {
                                     required_ext_value = Some(value.to_string());
                                 }
+                                "recommendedextensions" => {
+                                    // Per 3MF spec, recommendedextensions are optional and may be ignored
+                                    // They suggest extensions that enhance user experience but are not required
+                                    // We allow the attribute for spec compliance but don't store it
+                                }
                                 _ => {
                                     // Check if it's a namespace declaration (xmlns:prefix)
                                     if let Some(prefix) = key.strip_prefix("xmlns:") {
