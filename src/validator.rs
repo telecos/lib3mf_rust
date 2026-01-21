@@ -143,9 +143,11 @@ fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result
 
     // Count how many times each edge appears
     // Edge is represented as (min_vertex, max_vertex) to be direction-independent
-    // Pre-allocate capacity based on triangle count (each triangle has 3 edges)
+    // Pre-allocate capacity: each triangle has 3 edges, but adjacent triangles share edges.
+    // For typical manifold meshes, we expect roughly 1.5 edges per triangle.
+    // We use a conservative estimate of 2 edges per triangle to avoid reallocation.
     let mut edge_count: HashMap<(usize, usize), usize> = 
-        HashMap::with_capacity(mesh.triangles.len() * 3);
+        HashMap::with_capacity(mesh.triangles.len() * 2);
 
     for triangle in &mesh.triangles {
         // Add the three edges of this triangle
