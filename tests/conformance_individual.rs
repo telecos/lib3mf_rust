@@ -6,8 +6,13 @@
 //!
 //! Run with: cargo test --test conformance_individual
 //! Run specific suite: cargo test --test conformance_individual suite3
+//!
+//! Each suite runs with the appropriate extension support enabled to ensure
+//! proper validation of extension-specific features.
 
-use lib3mf::Model;
+mod common;
+
+use lib3mf::{Model, ParserConfig};
 use libtest_mimic::{Arguments, Failed, Trial};
 use std::fs::File;
 use std::path::PathBuf;
@@ -32,19 +37,19 @@ fn get_test_files(suite: &str, test_dir: &str) -> Vec<PathBuf> {
 }
 
 /// Test that a positive test case parses successfully
-fn test_positive_file(path: PathBuf) -> Result<(), Failed> {
+fn test_positive_file(path: PathBuf, config: ParserConfig) -> Result<(), Failed> {
     let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
 
-    Model::from_reader(file).map_err(|e| format!("Failed to parse: {}", e))?;
+    Model::from_reader_with_config(file, config).map_err(|e| format!("Failed to parse: {}", e))?;
 
     Ok(())
 }
 
 /// Test that a negative test case fails to parse
-fn test_negative_file(path: PathBuf) -> Result<(), Failed> {
+fn test_negative_file(path: PathBuf, config: ParserConfig) -> Result<(), Failed> {
     let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
 
-    match Model::from_reader(file) {
+    match Model::from_reader_with_config(file, config) {
         Ok(_) => Err("Expected parsing to fail, but it succeeded".into()),
         Err(_) => Ok(()), // Expected to fail
     }
@@ -58,6 +63,7 @@ fn create_suite_tests(
     negative_dir: &str,
 ) -> Vec<Trial> {
     let mut trials = Vec::new();
+    let config = common::get_suite_config(suite_dir);
 
     // Positive tests
     let positive_files = get_test_files(suite_dir, positive_dir);
@@ -69,9 +75,10 @@ fn create_suite_tests(
             .to_string();
 
         let test_name = format!("{}::positive::{}", suite_name, file_name);
+        let config_clone = config.clone();
 
         trials.push(Trial::test(test_name, move || {
-            test_positive_file(path.clone())
+            test_positive_file(path.clone(), config_clone)
         }));
     }
 
@@ -85,9 +92,10 @@ fn create_suite_tests(
             .to_string();
 
         let test_name = format!("{}::negative::{}", suite_name, file_name);
+        let config_clone = config.clone();
 
         trials.push(Trial::test(test_name, move || {
-            test_negative_file(path.clone())
+            test_negative_file(path.clone(), config_clone)
         }));
     }
 
