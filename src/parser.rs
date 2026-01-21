@@ -21,8 +21,17 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     config: ParserConfig,
 ) -> Result<Model> {
     let mut package = Package::open(reader)?;
+    
+    // Extract thumbnail metadata
+    let thumbnail = package.get_thumbnail_metadata()?;
+    
     let model_xml = package.get_model()?;
-    parse_model_xml_with_config(&model_xml, config)
+    let mut model = parse_model_xml_with_config(&model_xml, config)?;
+    
+    // Add thumbnail metadata to model
+    model.thumbnail = thumbnail;
+    
+    Ok(model)
 }
 
 /// Extract local name from potentially namespaced XML element name

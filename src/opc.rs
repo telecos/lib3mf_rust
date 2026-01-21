@@ -24,6 +24,10 @@ pub const RELS_PATH: &str = "_rels/.rels";
 /// 3D model relationship type
 pub const MODEL_REL_TYPE: &str = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel";
 
+/// Thumbnail relationship type (OPC standard)
+pub const THUMBNAIL_REL_TYPE: &str =
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
+
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {
     archive: ZipArchive<R>,
@@ -433,6 +437,216 @@ impl<R: Read + std::io::Seek> Package<R> {
         (0..self.archive.len())
             .filter_map(|i| self.archive.by_index(i).ok().map(|f| f.name().to_string()))
             .collect()
+    }
+
+    /// Get a file as binary data from the archive
+    pub fn get_file_binary(&mut self, name: &str) -> Result<Vec<u8>> {
+        let mut file = self
+            .archive
+            .by_name(name)
+            .map_err(|_| Error::MissingFile(name.to_string()))?;
+        let mut content = Vec::new();
+        file.read_to_end(&mut content)?;
+        Ok(content)
+    }
+
+    /// Extract thumbnail metadata from package relationships
+    ///
+    /// Returns thumbnail path and content type if a thumbnail relationship exists.
+    /// The thumbnail is validated to exist in the package and have a valid content type.
+    pub fn get_thumbnail_metadata(&mut self) -> Result<Option<crate::model::Thumbnail>> {
+        // Check if relationships file exists
+        if !self.has_file(RELS_PATH) {
+            return Ok(None);
+        }
+
+        // Parse relationships to find thumbnail
+        let rels_content = self.get_file(RELS_PATH)?;
+        let mut reader = Reader::from_str(&rels_content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+
+        let mut thumbnail_path: Option<String> = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                    if name_str.ends_with("Relationship") {
+                        let mut target = None;
+                        let mut rel_type = None;
+
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            match key {
+                                "Target" => target = Some(value.to_string()),
+                                "Type" => rel_type = Some(value.to_string()),
+                                _ => {}
+                            }
+                        }
+
+                        // Check if this is a thumbnail relationship
+                        if let (Some(t), Some(rt)) = (target, rel_type) {
+                            if rt == THUMBNAIL_REL_TYPE {
+                                // Remove leading slash if present
+                                let path = if let Some(stripped) = t.strip_prefix('/') {
+                                    stripped.to_string()
+                                } else {
+                                    t
+                                };
+                                thumbnail_path = Some(path);
+                                break;
+                            }
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // If no thumbnail relationship found, return None
+        let thumb_path = match thumbnail_path {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        // Validate thumbnail file exists
+        if !self.has_file(&thumb_path) {
+            return Err(Error::InvalidFormat(format!(
+                "Thumbnail relationship points to non-existent file: {}",
+                thumb_path
+            )));
+        }
+
+        // Get content type from [Content_Types].xml
+        let content_type = self.get_content_type(&thumb_path)?;
+
+        // Validate it's an image content type
+        if !content_type.starts_with("image/") {
+            return Err(Error::InvalidFormat(format!(
+                "Thumbnail has invalid content type: {} (expected image/*)",
+                content_type
+            )));
+        }
+
+        Ok(Some(crate::model::Thumbnail::new(
+            thumb_path,
+            content_type,
+        )))
+    }
+
+    /// Get content type for a file from [Content_Types].xml
+    fn get_content_type(&mut self, path: &str) -> Result<String> {
+        let content = self.get_file(CONTENT_TYPES_PATH)?;
+        let mut reader = Reader::from_str(&content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+
+        // First check for Override elements (specific path matches)
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                    if name_str.ends_with("Override") {
+                        let mut part_name = None;
+                        let mut content_type = None;
+
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            match key {
+                                "PartName" => part_name = Some(value.to_string()),
+                                "ContentType" => content_type = Some(value.to_string()),
+                                _ => {}
+                            }
+                        }
+
+                        if let (Some(pn), Some(ct)) = (part_name, content_type) {
+                            // Match with or without leading slash
+                            let pn_normalized = pn.strip_prefix('/').unwrap_or(&pn);
+                            let path_normalized = path.strip_prefix('/').unwrap_or(path);
+                            if pn_normalized == path_normalized {
+                                return Ok(ct);
+                            }
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // If no Override found, check Default elements based on extension
+        if let Some(extension) = path.rsplit('.').next() {
+            let content = self.get_file(CONTENT_TYPES_PATH)?;
+            let mut reader = Reader::from_str(&content);
+            reader.config_mut().trim_text(true);
+            let mut buf = Vec::new();
+
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                        let name = e.name();
+                        let name_str = std::str::from_utf8(name.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                        if name_str.ends_with("Default") {
+                            let mut ext = None;
+                            let mut content_type = None;
+
+                            for attr in e.attributes() {
+                                let attr = attr?;
+                                let key = std::str::from_utf8(attr.key.as_ref())
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                let value = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                match key {
+                                    "Extension" => ext = Some(value.to_string()),
+                                    "ContentType" => content_type = Some(value.to_string()),
+                                    _ => {}
+                                }
+                            }
+
+                            if let (Some(e), Some(ct)) = (ext, content_type) {
+                                if e.eq_ignore_ascii_case(extension) {
+                                    return Ok(ct);
+                                }
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => return Err(Error::Xml(e)),
+                    _ => {}
+                }
+                buf.clear();
+            }
+        }
+
+        Err(Error::InvalidFormat(format!(
+            "No content type found for file: {}",
+            path
+        )))
     }
 }
 
