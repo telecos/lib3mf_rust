@@ -88,7 +88,7 @@ Updated documentation:
 | Core Specification | ✅ Fully Supported | All features implemented and tested |
 | Materials Extension | ✅ Fully Supported | Color groups and base materials |
 | Production Extension | ✅ Fully Supported | UUID extraction, file parsing |
-| Slice Extension | ⚠️ Partially Supported | Files parse, slice data not yet extracted |
+| Slice Extension | ✅ Fully Supported | Slice stacks, slices, polygons, and segments extracted from external files |
 | Beam Lattice Extension | ⚠️ Partially Supported | Files parse, beam data not yet extracted |
 | Secure Content | ⚠️ Read-Only Validation | Extension recognized, basic metadata extraction, NO cryptography |
 | Boolean Operations | ❌ Not Tested | No test files available |
@@ -129,12 +129,50 @@ pub struct Build {
 }
 ```
 
+**Slice Extension:**
+```rust
+pub struct SliceStack {
+    pub id: usize,
+    pub zbottom: f64,
+    pub slices: Vec<Slice>,
+    pub slice_refs: Vec<SliceRef>,
+}
+
+pub struct Slice {
+    pub ztop: f64,
+    pub vertices: Vec<Vertex2D>,
+    pub polygons: Vec<SlicePolygon>,
+}
+
+pub struct SlicePolygon {
+    pub startv: usize,
+    pub segments: Vec<SliceSegment>,
+}
+
+pub struct SliceSegment {
+    pub v2: usize,
+}
+
+pub struct SliceRef {
+    pub slicestackid: usize,
+    pub slicepath: String,
+}
+
+// Added to Object structure
+pub struct Object {
+    // ... existing fields
+    pub slicestackid: Option<usize>,
+}
+```
+
 ### Parser Enhancements
 - Namespace-aware element matching
 - Support for namespaced attributes
 - Color parsing in #RRGGBB and #RRGGBBAA formats
 - Production extension p:UUID attribute extraction from objects, build items, and build elements
 - Production extension p:path attribute extraction from objects
+- Slice extension external file loading and parsing
+- Slice polygon and segment extraction from referenced files
 
 ### Test Coverage
 - Unit tests: 4
@@ -168,8 +206,6 @@ All quality checks pass:
 ## Future Work
 
 While the implementation successfully parses all extension files, some extension-specific data is not yet extracted:
-- Production extension: UUID attributes, thumbnail paths
-- Slice extension: Slice stack definitions, slice references
 - Beam lattice extension: Beam definitions, beam properties
 
 These can be added in future iterations as needed, since the parser infrastructure now properly handles namespaced extensions.
