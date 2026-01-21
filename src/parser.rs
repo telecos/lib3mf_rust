@@ -1236,12 +1236,16 @@ fn load_slice_references<R: Read + std::io::Seek>(
             };
 
             // Skip loading encrypted slice files (Secure Content extension)
-            // Encrypted files are marked with "_encrypted" in the filename and cannot be
-            // decrypted by this library. This is expected behavior per the Secure Content spec.
-            if normalized_path.contains("_encrypted") {
-                // For encrypted slice files, we acknowledge they exist but can't load them
-                // The file structure is valid even if we can't decrypt the content
-                continue;
+            // Encrypted files follow the pattern: *_encrypted.model (or other extension)
+            // They cannot be decrypted by this library per the Secure Content spec.
+            // Check if the filename (without directory path) contains "_encrypted"
+            // followed by a file extension (e.g., "_encrypted.model")
+            if let Some(filename) = normalized_path.rsplit('/').next() {
+                if filename.contains("_encrypted.") {
+                    // For encrypted slice files, we acknowledge they exist but can't load them
+                    // The file structure is valid even if we can't decrypt the content
+                    continue;
+                }
             }
 
             // Load the slice file from the package
