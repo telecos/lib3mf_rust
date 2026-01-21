@@ -275,7 +275,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         let zbottom = attrs
                             .get("zbottom")
                             .ok_or_else(|| {
-                                Error::InvalidXml("SliceStack missing zbottom attribute".to_string())
+                                Error::InvalidXml(
+                                    "SliceStack missing zbottom attribute".to_string(),
+                                )
                             })?
                             .parse::<f64>()?;
                         current_slicestack = Some(SliceStack::new(id, zbottom));
@@ -296,17 +298,23 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         let slicestackid = attrs
                             .get("slicestackid")
                             .ok_or_else(|| {
-                                Error::InvalidXml("SliceRef missing slicestackid attribute".to_string())
+                                Error::InvalidXml(
+                                    "SliceRef missing slicestackid attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
                         let slicepath = attrs
                             .get("slicepath")
                             .ok_or_else(|| {
-                                Error::InvalidXml("SliceRef missing slicepath attribute".to_string())
+                                Error::InvalidXml(
+                                    "SliceRef missing slicepath attribute".to_string(),
+                                )
                             })?
                             .to_string();
                         if let Some(ref mut slicestack) = current_slicestack {
-                            slicestack.slice_refs.push(SliceRef::new(slicestackid, slicepath));
+                            slicestack
+                                .slice_refs
+                                .push(SliceRef::new(slicestackid, slicepath));
                         }
                     }
                     "vertices" if in_slice => {
@@ -336,7 +344,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         let startv = attrs
                             .get("startv")
                             .ok_or_else(|| {
-                                Error::InvalidXml("Slice polygon missing startv attribute".to_string())
+                                Error::InvalidXml(
+                                    "Slice polygon missing startv attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
                         current_slice_polygon = Some(SlicePolygon::new(startv));
@@ -506,7 +516,10 @@ fn parse_object<R: std::io::BufRead>(
 
     // Check for both namespaced and non-namespaced slicestackid
     // The attribute may appear as "s:slicestackid" in the XML
-    if let Some(slicestackid) = attrs.get("slicestackid").or_else(|| attrs.get("s:slicestackid")) {
+    if let Some(slicestackid) = attrs
+        .get("slicestackid")
+        .or_else(|| attrs.get("s:slicestackid"))
+    {
         object.slicestackid = Some(slicestackid.parse::<usize>()?);
     }
 
