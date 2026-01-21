@@ -1013,6 +1013,50 @@ impl Default for ProductionInfo {
     }
 }
 
+/// A component that references another object with optional transformation
+///
+/// Components allow objects to reference other objects to create assemblies.
+/// The referenced object can be transformed using a 4x3 affine transformation matrix.
+#[derive(Debug, Clone)]
+pub struct Component {
+    /// ID of the referenced object
+    pub objectid: usize,
+    /// Optional 4x3 transformation matrix (12 floats in row-major order)
+    ///
+    /// Format: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
+    ///
+    /// The first 9 values form a 3x3 rotation/scale matrix:
+    /// ```text
+    /// | m00 m01 m02 |
+    /// | m10 m11 m12 |
+    /// | m20 m21 m22 |
+    /// ```
+    ///
+    /// The last 3 values are translation components:
+    /// - tx (index 9): translation along X axis
+    /// - ty (index 10): translation along Y axis  
+    /// - tz (index 11): translation along Z axis
+    pub transform: Option<[f64; 12]>,
+}
+
+impl Component {
+    /// Create a new component with the given object reference
+    pub fn new(objectid: usize) -> Self {
+        Self {
+            objectid,
+            transform: None,
+        }
+    }
+
+    /// Create a new component with a transformation matrix
+    pub fn with_transform(objectid: usize, transform: [f64; 12]) -> Self {
+        Self {
+            objectid,
+            transform: Some(transform),
+        }
+    }
+}
+
 /// A 3D object that can be a mesh or reference other objects
 #[derive(Debug, Clone)]
 pub struct Object {
@@ -1034,6 +1078,8 @@ pub struct Object {
     pub production: Option<ProductionInfo>,
     /// Boolean shape definition (Boolean Operations extension)
     pub boolean_shape: Option<BooleanShape>,
+    /// Components that reference other objects (assemblies)
+    pub components: Vec<Component>,
 }
 
 /// Type of 3D object
@@ -1064,6 +1110,7 @@ impl Object {
             slicestackid: None,
             production: None,
             boolean_shape: None,
+            components: Vec::new(),
         }
     }
 }

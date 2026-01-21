@@ -535,10 +535,7 @@ impl<R: Read + std::io::Seek> Package<R> {
             )));
         }
 
-        Ok(Some(crate::model::Thumbnail::new(
-            thumb_path,
-            content_type,
-        )))
+        Ok(Some(crate::model::Thumbnail::new(thumb_path, content_type)))
     }
 
     /// Get content type for a file from [Content_Types].xml

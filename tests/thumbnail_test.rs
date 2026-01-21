@@ -66,13 +66,10 @@ fn create_3mf_with_thumbnail() -> Vec<u8> {
     let png_data: Vec<u8> = vec![
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
         0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-        0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
-        0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0xF0,
-        0x1F, 0x00, 0x05, 0x05, 0x02, 0x00, 0x5F, 0xC8,
-        0xF1, 0xD2, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
-        0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77,
+        0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF,
+        0xC0, 0xF0, 0x1F, 0x00, 0x05, 0x05, 0x02, 0x00, 0x5F, 0xC8, 0xF1, 0xD2, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
     zip.start_file("Metadata/thumbnail.png", options).unwrap();
     zip.write_all(&png_data).unwrap();
@@ -167,8 +164,11 @@ fn test_parse_real_file_with_thumbnail() {
     let file = File::open("test_files/test_thumbnail.3mf");
     if let Ok(f) = file {
         let model = parse_3mf(f).expect("Failed to parse test_thumbnail.3mf");
-        
-        assert!(model.thumbnail.is_some(), "Thumbnail should be present in test file");
+
+        assert!(
+            model.thumbnail.is_some(),
+            "Thumbnail should be present in test file"
+        );
         let thumbnail = model.thumbnail.unwrap();
         assert_eq!(thumbnail.path, "Metadata/thumbnail.png");
         assert_eq!(thumbnail.content_type, "image/png");
@@ -238,7 +238,10 @@ fn test_thumbnail_validation_missing_file() {
     let result = parse_3mf(cursor);
 
     // Should fail because thumbnail file is missing
-    assert!(result.is_err(), "Should fail when thumbnail file is missing");
+    assert!(
+        result.is_err(),
+        "Should fail when thumbnail file is missing"
+    );
     let err = result.unwrap_err();
     assert!(
         err.to_string().contains("non-existent file"),
@@ -251,15 +254,18 @@ fn test_read_thumbnail_data() {
     // Test reading thumbnail binary data
     let data = create_3mf_with_thumbnail();
     let cursor = Cursor::new(&data);
-    
+
     let thumbnail_data = Model::read_thumbnail(cursor).expect("Failed to read thumbnail");
     assert!(thumbnail_data.is_some(), "Thumbnail data should be present");
-    
+
     let thumb = thumbnail_data.unwrap();
     assert!(!thumb.is_empty(), "Thumbnail data should not be empty");
-    
+
     // Verify it's a valid PNG by checking signature
-    assert_eq!(&thumb[0..8], &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    assert_eq!(
+        &thumb[0..8],
+        &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    );
 }
 
 #[test]
@@ -267,7 +273,10 @@ fn test_read_thumbnail_data_none() {
     // Test reading thumbnail when none exists
     let data = create_3mf_without_thumbnail();
     let cursor = Cursor::new(data);
-    
+
     let thumbnail_data = Model::read_thumbnail(cursor).expect("Failed to read thumbnail");
-    assert!(thumbnail_data.is_none(), "Thumbnail data should not be present");
+    assert!(
+        thumbnail_data.is_none(),
+        "Thumbnail data should not be present"
+    );
 }
