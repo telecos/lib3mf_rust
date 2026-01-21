@@ -70,7 +70,8 @@ Successfully implemented comprehensive 3MF file parsing driven by real test file
 
 Created demonstration examples:
 - `test_materials.rs` - Shows color group extraction
-- `test_capabilities.rs` - Comprehensive report of parsing capabilities
+- `test_capabilities.rs` - Comprehensive report of parsing capabilities including beam lattice data
+- `beam_lattice_demo.rs` - Demonstrates Beam Lattice Extension features with detailed analysis
 - `parse_3mf.rs` - Basic usage example (already existed)
 
 ### 5. Documentation
@@ -129,12 +130,46 @@ pub struct Build {
 }
 ```
 
+**Beam Lattice Extension:**
+```rust
+pub enum BeamCapMode {
+    Sphere,  // Rounded ends (default)
+    Butt,    // Flat ends
+}
+
+pub struct Beam {
+    pub v1: usize,              // First vertex index
+    pub v2: usize,              // Second vertex index
+    pub r1: Option<f64>,        // Radius at v1
+    pub r2: Option<f64>,        // Radius at v2
+}
+
+pub struct BeamSet {
+    pub radius: f64,            // Default radius
+    pub min_length: f64,        // Minimum beam length
+    pub cap_mode: BeamCapMode,  // End cap mode
+    pub beams: Vec<Beam>,       // List of beams
+}
+
+// Added to Mesh structure
+pub struct Mesh {
+    pub vertices: Vec<Vertex>,
+    pub triangles: Vec<Triangle>,
+    pub beamset: Option<BeamSet>,  // Beam lattice data
+}
+```
+
 ### Parser Enhancements
 - Namespace-aware element matching
 - Support for namespaced attributes
 - Color parsing in #RRGGBB and #RRGGBBAA formats
 - Production extension p:UUID attribute extraction from objects, build items, and build elements
 - Production extension p:path attribute extraction from objects
+- Beam Lattice extension parsing:
+  - BeamSet extraction with radius, minlength, and cap mode attributes
+  - Individual beam parsing with v1, v2, r1, r2 attributes
+  - Support for both Sphere and Butt cap modes
+  - Per-beam radius overrides (r1, r2)
 
 ### Test Coverage
 - Unit tests: 4
