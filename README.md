@@ -293,6 +293,59 @@ The parser supports the following extensions:
 - `Extension::BooleanOperations` - Volumetric design
 - `Extension::Displacement` - Surface displacement maps
 
+### Custom Extension Support
+
+You can register and handle custom/proprietary 3MF extensions with callback handlers:
+
+```rust
+use lib3mf::{Model, ParserConfig, CustomExtensionContext, CustomElementResult};
+use std::sync::Arc;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("model_with_custom_ext.3mf")?;
+    
+    // Register a custom extension with element and validation handlers
+    let config = ParserConfig::new()
+        .with_custom_extension_handlers(
+            "http://example.com/myextension/2024/01",  // Namespace URI
+            "MyExtension",                              // Human-readable name
+            // Element handler - called when custom elements are encountered
+            Arc::new(|ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
+                println!("Custom element: {}", ctx.element_name);
+                println!("Attributes: {:?}", ctx.attributes);
+                // Process the custom element here
+                Ok(CustomElementResult::Handled)
+            }),
+            // Validation handler - called during model validation
+            Arc::new(|model| -> Result<(), String> {
+                // Add custom validation rules here
+                if model.resources.objects.is_empty() {
+                    return Err("Custom validation failed".to_string());
+                }
+                Ok(())
+            })
+        );
+    
+    let model = Model::from_reader_with_config(file, config)?;
+    
+    // Check custom extensions required by the file
+    for namespace in &model.required_custom_extensions {
+        println!("Custom extension: {}", namespace);
+    }
+    
+    Ok(())
+}
+```
+
+Custom extension features:
+- **Element handlers** - Process custom XML elements from your extension
+- **Validation callbacks** - Add custom validation rules for your extension data
+- **Multiple extensions** - Register multiple custom extensions simultaneously
+- **Error handling** - Custom handlers can return errors for invalid data
+
+See `examples/custom_extension.rs` for a complete working example.
+
 ### Running Examples
 
 The repository includes several comprehensive examples demonstrating different features:

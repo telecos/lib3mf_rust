@@ -215,8 +215,88 @@ The implementation maintains full backward compatibility:
 The implementation provides a foundation for:
 
 1. **Extension-specific data extraction**: Extension-specific data structures (slices, beams) can be added incrementally
-2. **Custom extensions**: The parser silently ignores unknown extensions, allowing for future or custom extension support
+2. ~~**Custom extensions**: The parser silently ignores unknown extensions, allowing for future or custom extension support~~ ✅ **Implemented** - Custom extension API with callbacks
 3. **Extension capabilities**: The Extension enum can be extended with capability queries (e.g., "does this extension support textures?")
+
+## Custom Extension Support (New)
+
+As of the latest update, the library now supports custom/proprietary 3MF extensions through a comprehensive API:
+
+### Features
+
+1. **Extension Registration**: Register custom extensions with namespace URIs
+2. **Element Handlers**: Callback mechanism for processing custom XML elements
+3. **Validation Handlers**: Custom validation rules for extension data
+4. **Error Handling**: Graceful error handling for invalid custom extension data
+
+### API Components
+
+#### New Types
+- `CustomExtensionContext` - Context information passed to element handlers
+- `CustomElementResult` - Result type for element handlers (Handled/NotHandled)
+- `CustomExtensionInfo` - Information about a registered custom extension
+- `CustomElementHandler` - Type alias for element handler callbacks
+- `CustomValidationHandler` - Type alias for validation handler callbacks
+
+#### New Methods on ParserConfig
+- `with_custom_extension()` - Register a custom extension without handlers
+- `with_custom_extension_handler()` - Register with element handler
+- `with_custom_extension_handlers()` - Register with both element and validation handlers
+- `has_custom_extension()` - Check if a custom extension is registered
+- `get_custom_extension()` - Get information about a registered extension
+- `custom_extensions()` - Get all registered custom extensions
+
+#### New Fields on Model
+- `required_custom_extensions: Vec<String>` - List of custom extension namespaces required by the file
+
+### Example Usage
+
+```rust
+use lib3mf::{Model, ParserConfig, CustomExtensionContext, CustomElementResult};
+use std::sync::Arc;
+
+let config = ParserConfig::new()
+    .with_custom_extension_handlers(
+        "http://example.com/myextension/2024/01",
+        "MyExtension",
+        Arc::new(|ctx: &CustomExtensionContext| {
+            println!("Element: {}", ctx.element_name);
+            Ok(CustomElementResult::Handled)
+        }),
+        Arc::new(|model| {
+            // Custom validation
+            Ok(())
+        })
+    );
+
+let model = Model::from_reader_with_config(reader, config)?;
+```
+
+### Implementation Details
+
+- Custom extensions are tracked separately from standard 3MF extensions
+- Element handlers receive context including element name, namespace, and attributes
+- Validation handlers are invoked after standard validation passes
+- Unknown custom extensions in `requiredextensions` cause parse errors if not registered
+- Multiple custom extensions can be registered simultaneously
+
+### Testing
+
+New test file `tests/custom_extension_test.rs` with 12 comprehensive tests:
+- Extension registration
+- Handler invocation
+- Error handling
+- Multiple extensions
+- Parse validation
+
+### Example
+
+New example `examples/custom_extension.rs` demonstrates:
+- Registering custom extensions
+- Implementing element handlers
+- Implementing validation handlers
+- Parsing files with custom extensions
+- Collecting custom extension data
 
 ## Files Changed
 
