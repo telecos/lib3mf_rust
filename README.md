@@ -105,10 +105,49 @@ The parser supports the following extensions:
 
 ### Running Examples
 
-The repository includes a complete example demonstrating parsing:
+The repository includes several comprehensive examples demonstrating different features:
 
+#### Basic Parsing
 ```bash
 cargo run --example parse_3mf
+```
+
+#### Extension Support
+```bash
+cargo run --example extension_support test_files/material/kinect_scan.3mf all
+cargo run --example extension_support test_files/material/kinect_scan.3mf core-only
+```
+
+#### Export to Other Formats
+Convert 3MF files to STL (for 3D printing):
+```bash
+cargo run --example export_to_stl test_files/core/box.3mf output.stl
+```
+
+Convert 3MF files to OBJ (for 3D modeling):
+```bash
+cargo run --example export_to_obj test_files/core/box.3mf output.obj
+```
+
+#### Validation and Error Handling
+```bash
+cargo run --example validation_errors test_files/core/box.3mf permissive
+cargo run --example validation_errors test_files/core/box.3mf strict
+```
+
+#### Working with Build Items and Transformations
+```bash
+cargo run --example build_transformations test_files/core/box.3mf
+```
+
+#### Extracting Color Information
+```bash
+cargo run --example extract_colors test_files/material/kinect_scan.3mf
+```
+
+#### Testing Materials
+```bash
+cargo run --example test_materials
 ```
 
 ## Architecture
