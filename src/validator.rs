@@ -525,9 +525,32 @@ fn validate_component_references(model: &Model) -> Result<()> {
     // Build a set of valid object IDs for quick lookup
     let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
 
+    // Get list of encrypted file paths from SecureContent metadata
+    let encrypted_paths: HashSet<&str> = if let Some(ref sc_info) = model.secure_content {
+        sc_info.encrypted_files.iter().map(|s| s.as_str()).collect()
+    } else {
+        HashSet::new()
+    };
+
     // Validate that all component object references exist
     for object in &model.resources.objects {
         for component in &object.components {
+            // Skip validation for components referencing encrypted files
+            // These files cannot be loaded/parsed, so their objects won't exist in resources
+            // Only skip if BOTH conditions are true:
+            // 1. Component has a path (references external file)
+            // 2. That path is in the encrypted files list
+            let is_encrypted_reference = if let Some(ref path) = component.path {
+                encrypted_paths.contains(path.as_str())
+            } else {
+                false
+            };
+
+            if is_encrypted_reference {
+                // This component references an encrypted file - skip validation
+                continue;
+            }
+
             // Skip validation for components that reference external files (Production extension)
             // When a component has a p:path attribute, the referenced object is in an external
             // file (potentially encrypted in Secure Content scenarios) and doesn't need to exist

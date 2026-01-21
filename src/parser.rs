@@ -37,8 +37,17 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Add thumbnail metadata to model
     model.thumbnail = thumbnail;
 
+    // Load keystore to identify encrypted files (SecureContent extension)
+    // This MUST happen before validation so that component validation can
+    // skip components referencing encrypted files
+    load_keystore(&mut package, &mut model)?;
+
     // Load external slice files if any slice stacks have references
     load_slice_references(&mut package, &mut model)?;
+
+    // Validate the model AFTER loading keystore and slices
+    // This ensures validation can check encrypted file references correctly
+    validator::validate_model(&model)?;
 
     Ok(model)
 }
@@ -1207,10 +1216,101 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
         ));
     }
 
-    // Validate the model before returning
-    validator::validate_model(&model)?;
-
+    // Note: Model validation is performed in parse_3mf_with_config after
+    // keystore and slice files are loaded
     Ok(model)
+}
+
+/// Load and parse Secure/keystore.xml to identify encrypted files
+///
+/// Extracts the keystore UUID and list of encrypted file paths from the
+/// SecureContent keystore.xml file. If the file doesn't exist, this is not
+/// an error (not all packages have encrypted content).
+fn load_keystore<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    model: &mut Model,
+) -> Result<()> {
+    // Try to load the keystore file - it's OK if it doesn't exist
+    let keystore_xml = match package.get_file("Secure/keystore.xml") {
+        Ok(xml) => xml,
+        Err(_) => return Ok(()), // No keystore file, not an error
+    };
+
+    // Initialize secure_content if not already present
+    if model.secure_content.is_none() {
+        model.secure_content = Some(SecureContentInfo::default());
+    }
+
+    let mut reader = Reader::from_str(&keystore_xml);
+    reader.config_mut().trim_text(true);
+
+    let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                let local_name = get_local_name(name_str);
+
+                match local_name {
+                    "keystore" => {
+                        // Extract UUID attribute from keystore element
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| {
+                                Error::InvalidXml(format!("Invalid attribute in keystore: {}", e))
+                            })?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            if attr_name == "UUID" {
+                                let uuid = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                    .to_string();
+                                if let Some(ref mut sc) = model.secure_content {
+                                    sc.keystore_uuid = Some(uuid);
+                                }
+                            }
+                        }
+                    }
+                    "resourcedata" => {
+                        // Extract path attribute from resourcedata element
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| {
+                                Error::InvalidXml(format!(
+                                    "Invalid attribute in resourcedata: {}",
+                                    e
+                                ))
+                            })?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            if attr_name == "path" {
+                                let path = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                    .to_string();
+                                if let Some(ref mut sc) = model.secure_content {
+                                    sc.encrypted_files.push(path);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                return Err(Error::InvalidXml(format!(
+                    "Error parsing keystore.xml: {}",
+                    e
+                )))
+            }
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(())
 }
 
 /// Load and parse external slice files referenced in slice stacks
@@ -1630,6 +1730,11 @@ fn parse_component<R: std::io::BufRead>(
         component.transform = Some(transform);
     }
 
+    // Extract p:path attribute (Production extension)
+    // This indicates the component references an object in an external model file
+    if let Some(path_str) = attrs.get("p:path") {
+        component.path = Some(path_str.clone());
+    }
     // Extract Production extension attributes (p:UUID, p:path)
     let p_uuid = attrs.get("p:UUID");
     let p_path = attrs.get("p:path");

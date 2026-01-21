@@ -943,10 +943,9 @@ impl Disp2DGroup {
 /// without implementing actual cryptographic operations. It tracks which
 /// files are encrypted and keystore metadata.
 ///
-/// **Note**: These fields are currently unused placeholders reserved for
-/// future implementation. Parsing logic to populate these fields has not
-/// been implemented yet. The extension is recognized for validation purposes
-/// only.
+/// **Implementation Status**: The keystore is parsed to extract encrypted file
+/// paths and keystore UUID. This allows the parser to handle components that
+/// reference encrypted files without attempting to load or decrypt them.
 ///
 /// **Security Warning**: This does NOT decrypt content or verify signatures.
 /// See SECURE_CONTENT_SUPPORT.md for security considerations.
@@ -1312,6 +1311,12 @@ pub struct Component {
     /// - ty (index 10): translation along Y axis  
     /// - tz (index 11): translation along Z axis
     pub transform: Option<[f64; 12]>,
+    /// Optional path to external model file (Production extension: p:path attribute)
+    ///
+    /// When set, indicates the component references an object in an external model file
+    /// rather than in the current file's resources. Used with Production extension
+    /// to reference objects from separate model streams.
+    pub path: Option<String>,
     /// Production extension information (UUID, path)
     pub production: Option<ProductionInfo>,
 }
@@ -1322,6 +1327,7 @@ impl Component {
         Self {
             objectid,
             transform: None,
+            path: None,
             production: None,
         }
     }
@@ -1331,6 +1337,7 @@ impl Component {
         Self {
             objectid,
             transform: Some(transform),
+            path: None,
             production: None,
         }
     }
