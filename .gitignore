@@ -33,3 +33,5 @@ test_suites/
 
 # Criterion benchmark artifacts
 target/criterion/
+
+extracted_thumbnail.png

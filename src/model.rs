@@ -43,7 +43,7 @@ impl Extension {
                 "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07"
             }
             Extension::BooleanOperations => {
-                "http://schemas.microsoft.com/3dmanufacturing/volumetric/2021/08"
+                "http://schemas.3mf.io/3dmanufacturing/booleanoperations/2023/07"
             }
             Extension::Displacement => {
                 "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07"
@@ -68,7 +68,7 @@ impl Extension {
             "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" => {
                 Some(Extension::SecureContent)
             }
-            "http://schemas.microsoft.com/3dmanufacturing/volumetric/2021/08" => {
+            "http://schemas.3mf.io/3dmanufacturing/booleanoperations/2023/07" => {
                 Some(Extension::BooleanOperations)
             }
             "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" => {
@@ -231,6 +231,8 @@ pub struct Mesh {
     pub vertices: Vec<Vertex>,
     /// List of triangles
     pub triangles: Vec<Triangle>,
+    /// Optional beam lattice structure (Beam Lattice Extension)
+    pub beamset: Option<BeamSet>,
 }
 
 impl Mesh {
@@ -239,6 +241,7 @@ impl Mesh {
         Self {
             vertices: Vec::new(),
             triangles: Vec::new(),
+            beamset: None,
         }
     }
 
@@ -257,6 +260,184 @@ impl Mesh {
 impl Default for Mesh {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Cap mode for beam lattice ends
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BeamCapMode {
+    /// Sphere cap (rounded ends)
+    #[default]
+    Sphere,
+    /// Butt cap (flat ends)
+    Butt,
+}
+
+/// A single beam in a beam lattice structure
+///
+/// Beams connect two vertices with optional varying radii along the beam.
+/// Part of the Beam Lattice Extension specification.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Beam {
+    /// Index of first vertex
+    pub v1: usize,
+    /// Index of second vertex
+    pub v2: usize,
+    /// Radius at first vertex (optional, defaults to beamset radius)
+    pub r1: Option<f64>,
+    /// Radius at second vertex (optional, defaults to r1 or beamset radius)
+    pub r2: Option<f64>,
+}
+
+impl Beam {
+    /// Create a new beam between two vertices
+    pub fn new(v1: usize, v2: usize) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: None,
+            r2: None,
+        }
+    }
+
+    /// Create a new beam with a specific radius at v1
+    pub fn with_radius(v1: usize, v2: usize, r1: f64) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: Some(r1),
+            r2: None,
+        }
+    }
+
+    /// Create a new beam with different radii at both ends
+    pub fn with_radii(v1: usize, v2: usize, r1: f64, r2: f64) -> Self {
+        Self {
+            v1,
+            v2,
+            r1: Some(r1),
+            r2: Some(r2),
+        }
+    }
+}
+
+/// A beam lattice structure containing beams and lattice properties
+///
+/// Part of the Beam Lattice Extension specification.
+/// Defines a lattice structure made of beams connecting vertices.
+#[derive(Debug, Clone)]
+pub struct BeamSet {
+    /// Default radius for beams (when not specified per-beam)
+    pub radius: f64,
+    /// Minimum length for beams
+    pub min_length: f64,
+    /// Cap mode for beam ends
+    pub cap_mode: BeamCapMode,
+    /// List of beams in the lattice
+    pub beams: Vec<Beam>,
+}
+
+impl BeamSet {
+    /// Create a new beam set with default values
+    pub fn new() -> Self {
+        Self {
+            radius: 1.0,
+            min_length: 0.0001,
+            cap_mode: BeamCapMode::Sphere,
+            beams: Vec::new(),
+        }
+    }
+
+    /// Create a new beam set with a specific radius
+    pub fn with_radius(radius: f64) -> Self {
+        Self {
+            radius,
+            min_length: 0.0001,
+            cap_mode: BeamCapMode::Sphere,
+            beams: Vec::new(),
+        }
+    }
+}
+
+impl Default for BeamSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Boolean operation type for volumetric modeling
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BooleanOpType {
+    /// Union - combine two volumes
+    Union,
+    /// Intersection - keep only overlapping volume
+    Intersection,
+    /// Difference - subtract second volume from first
+    Difference,
+}
+
+impl BooleanOpType {
+    /// Parse operation type from string
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "union" => Some(BooleanOpType::Union),
+            "intersection" => Some(BooleanOpType::Intersection),
+            "difference" => Some(BooleanOpType::Difference),
+            _ => None,
+        }
+    }
+
+    /// Convert operation type to string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BooleanOpType::Union => "union",
+            BooleanOpType::Intersection => "intersection",
+            BooleanOpType::Difference => "difference",
+        }
+    }
+}
+
+/// A single boolean operation reference
+#[derive(Debug, Clone)]
+pub struct BooleanRef {
+    /// ID of the object to use in the operation
+    pub objectid: usize,
+    /// Optional path to external file (Production extension)
+    pub path: Option<String>,
+}
+
+impl BooleanRef {
+    /// Create a new boolean reference
+    pub fn new(objectid: usize) -> Self {
+        Self {
+            objectid,
+            path: None,
+        }
+    }
+}
+
+/// Boolean shape definition
+#[derive(Debug, Clone)]
+pub struct BooleanShape {
+    /// The base object ID
+    pub objectid: usize,
+    /// The boolean operation to perform
+    pub operation: BooleanOpType,
+    /// Optional path to external file for base object (Production extension)
+    pub path: Option<String>,
+    /// List of operand objects
+    pub operands: Vec<BooleanRef>,
+}
+
+impl BooleanShape {
+    /// Create a new boolean shape
+    pub fn new(objectid: usize, operation: BooleanOpType) -> Self {
+        Self {
+            objectid,
+            operation,
+            path: None,
+            operands: Vec::new(),
+        }
     }
 }
 
@@ -300,6 +481,15 @@ pub struct ColorGroup {
     pub colors: Vec<(u8, u8, u8, u8)>,
 }
 
+/// Production extension information
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProductionInfo {
+    /// UUID identifier (p:UUID attribute)
+    pub uuid: Option<String>,
+    /// Production path (p:path attribute)
+    pub path: Option<String>,
+}
+
 impl ColorGroup {
     /// Create a new color group
     pub fn new(id: usize) -> Self {
@@ -307,6 +497,518 @@ impl ColorGroup {
             id,
             colors: Vec::new(),
         }
+    }
+}
+
+/// Tile style for displacement texture mapping
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileStyle {
+    /// Repeat the texture
+    Wrap,
+    /// Mirror the texture
+    Mirror,
+    /// Clamp to edge pixels
+    Clamp,
+    /// No displacement outside [0,1]
+    None,
+}
+
+/// Texture filter mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterMode {
+    /// Auto select best quality
+    Auto,
+    /// Bilinear interpolation
+    Linear,
+    /// Nearest neighbor
+    Nearest,
+}
+
+/// Displacement texture channel
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Channel {
+    /// Red channel
+    R,
+    /// Green channel
+    G,
+    /// Blue channel
+    B,
+    /// Alpha channel
+    A,
+}
+
+/// 2D displacement map resource from displacement extension
+#[derive(Debug, Clone)]
+pub struct Displacement2D {
+    /// Displacement map ID
+    pub id: usize,
+    /// Path to the PNG file
+    pub path: String,
+    /// Channel to use (R, G, B, or A)
+    pub channel: Channel,
+    /// Tile style for u axis
+    pub tilestyleu: TileStyle,
+    /// Tile style for v axis
+    pub tilestylev: TileStyle,
+    /// Texture filter mode
+    pub filter: FilterMode,
+}
+
+impl Displacement2D {
+    /// Create a new displacement map
+    ///
+    /// Default values match the 3MF Displacement Extension specification:
+    /// - channel: G (Green channel, as per spec default)
+    /// - tilestyleu/tilestylev: Wrap
+    /// - filter: Auto
+    pub fn new(id: usize, path: String) -> Self {
+        Self {
+            id,
+            path,
+            channel: Channel::G, // Spec default is 'G'
+            tilestyleu: TileStyle::Wrap,
+            tilestylev: TileStyle::Wrap,
+            filter: FilterMode::Auto,
+        }
+    }
+}
+
+/// Normalized displacement vector
+#[derive(Debug, Clone, Copy)]
+pub struct NormVector {
+    /// X component
+    pub x: f64,
+    /// Y component
+    pub y: f64,
+    /// Z component
+    pub z: f64,
+}
+
+impl NormVector {
+    /// Create a new normalized vector
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+}
+
+/// Group of normalized displacement vectors
+#[derive(Debug, Clone)]
+pub struct NormVectorGroup {
+    /// Vector group ID
+    pub id: usize,
+    /// List of normalized vectors
+    pub vectors: Vec<NormVector>,
+}
+
+impl NormVectorGroup {
+    /// Create a new normalized vector group
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            vectors: Vec::new(),
+        }
+    }
+}
+
+/// 2D displacement coordinates
+#[derive(Debug, Clone, Copy)]
+pub struct Disp2DCoords {
+    /// U coordinate
+    pub u: f64,
+    /// V coordinate
+    pub v: f64,
+    /// Index to normalized vector
+    pub n: usize,
+    /// Displacement factor (default 1.0)
+    pub f: f64,
+}
+
+impl Disp2DCoords {
+    /// Create new displacement coordinates
+    pub fn new(u: f64, v: f64, n: usize) -> Self {
+        Self { u, v, n, f: 1.0 }
+    }
+}
+
+/// Group of 2D displacement coordinates
+#[derive(Debug, Clone)]
+pub struct Disp2DGroup {
+    /// Group ID
+    pub id: usize,
+    /// Reference to Displacement2D resource
+    pub dispid: usize,
+    /// Reference to NormVectorGroup resource
+    pub nid: usize,
+    /// Height (amplitude) of displacement
+    pub height: f64,
+    /// Offset to displacement map
+    pub offset: f64,
+    /// List of displacement coordinates
+    pub coords: Vec<Disp2DCoords>,
+}
+
+impl Disp2DGroup {
+    /// Create a new displacement coordinate group
+    pub fn new(id: usize, dispid: usize, nid: usize, height: f64) -> Self {
+        Self {
+            id,
+            dispid,
+            nid,
+            height,
+            offset: 0.0,
+            coords: Vec::new(),
+        }
+    }
+}
+
+/// Secure content metadata (read-only awareness)
+///
+/// This structure provides minimal awareness of secure content elements
+/// without implementing actual cryptographic operations. It tracks which
+/// files are encrypted and keystore metadata.
+///
+/// **Note**: These fields are currently unused placeholders reserved for
+/// future implementation. Parsing logic to populate these fields has not
+/// been implemented yet. The extension is recognized for validation purposes
+/// only.
+///
+/// **Security Warning**: This does NOT decrypt content or verify signatures.
+/// See SECURE_CONTENT_SUPPORT.md for security considerations.
+#[derive(Debug, Clone, Default)]
+pub struct SecureContentInfo {
+    /// UUID of the keystore (if present)
+    pub keystore_uuid: Option<String>,
+    /// Paths to encrypted files in the package
+    pub encrypted_files: Vec<String>,
+}
+
+/// A 2D vertex with x, y coordinates (used in slice extension)
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vertex2D {
+    /// X coordinate
+    pub x: f64,
+    /// Y coordinate
+    pub y: f64,
+}
+
+impl Vertex2D {
+    /// Create a new 2D vertex
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+}
+
+/// A segment in a slice polygon (slice extension)
+#[derive(Debug, Clone, PartialEq)]
+pub struct SliceSegment {
+    /// Second vertex index (first is implied by startv or previous segment)
+    pub v2: usize,
+}
+
+impl SliceSegment {
+    /// Create a new slice segment
+    pub fn new(v2: usize) -> Self {
+        Self { v2 }
+    }
+}
+
+/// A polygon in a slice (slice extension)
+#[derive(Debug, Clone)]
+pub struct SlicePolygon {
+    /// Starting vertex index
+    pub startv: usize,
+    /// List of segments forming the polygon
+    pub segments: Vec<SliceSegment>,
+}
+
+impl SlicePolygon {
+    /// Create a new slice polygon
+    pub fn new(startv: usize) -> Self {
+        Self {
+            startv,
+            segments: Vec::new(),
+        }
+    }
+}
+
+/// A single slice at a specific Z height (slice extension)
+#[derive(Debug, Clone)]
+pub struct Slice {
+    /// Z coordinate of the top of this slice
+    pub ztop: f64,
+    /// List of 2D vertices for this slice
+    pub vertices: Vec<Vertex2D>,
+    /// List of polygons for this slice
+    pub polygons: Vec<SlicePolygon>,
+}
+
+impl Slice {
+    /// Create a new slice
+    pub fn new(ztop: f64) -> Self {
+        Self {
+            ztop,
+            vertices: Vec::new(),
+            polygons: Vec::new(),
+        }
+    }
+}
+
+/// Reference to an external slice file (slice extension)
+#[derive(Debug, Clone)]
+pub struct SliceRef {
+    /// Referenced slice stack ID
+    pub slicestackid: usize,
+    /// Path to the slice model file
+    pub slicepath: String,
+}
+
+impl SliceRef {
+    /// Create a new slice reference
+    pub fn new(slicestackid: usize, slicepath: String) -> Self {
+        Self {
+            slicestackid,
+            slicepath,
+        }
+    }
+}
+
+/// A stack of slices (slice extension)
+#[derive(Debug, Clone)]
+pub struct SliceStack {
+    /// SliceStack ID
+    pub id: usize,
+    /// Z coordinate of the bottom of the slice stack
+    pub zbottom: f64,
+    /// List of slices in this stack
+    pub slices: Vec<Slice>,
+    /// List of references to external slice files
+    pub slice_refs: Vec<SliceRef>,
+}
+
+impl SliceStack {
+    /// Create a new slice stack
+    pub fn new(id: usize, zbottom: f64) -> Self {
+        Self {
+            id,
+            zbottom,
+            slices: Vec::new(),
+            slice_refs: Vec::new(),
+        }
+    }
+}
+
+/// Base material group from materials extension
+#[derive(Debug, Clone)]
+pub struct BaseMaterialGroup {
+    /// Base material group ID
+    pub id: usize,
+    /// List of base materials in this group
+    pub materials: Vec<BaseMaterial>,
+}
+
+impl BaseMaterialGroup {
+    /// Create a new base material group
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            materials: Vec::new(),
+        }
+    }
+}
+
+/// Individual base material within a base material group
+#[derive(Debug, Clone)]
+pub struct BaseMaterial {
+    /// Material name
+    pub name: String,
+    /// Display color in RGBA format (red, green, blue, alpha)
+    pub displaycolor: (u8, u8, u8, u8),
+}
+
+impl BaseMaterial {
+    /// Create a new base material
+    pub fn new(name: String, displaycolor: (u8, u8, u8, u8)) -> Self {
+        Self { name, displaycolor }
+    }
+}
+
+/// Texture2D resource from materials extension
+#[derive(Debug, Clone)]
+pub struct Texture2D {
+    /// Texture ID
+    pub id: usize,
+    /// Path to the texture file within the 3MF package
+    pub path: String,
+    /// Content type (image/jpeg or image/png)
+    pub contenttype: String,
+    /// Tile style for u axis
+    pub tilestyleu: TileStyle,
+    /// Tile style for v axis
+    pub tilestylev: TileStyle,
+    /// Texture filter mode
+    pub filter: FilterMode,
+}
+
+impl Texture2D {
+    /// Create a new Texture2D resource
+    pub fn new(id: usize, path: String, contenttype: String) -> Self {
+        Self {
+            id,
+            path,
+            contenttype,
+            tilestyleu: TileStyle::Wrap,
+            tilestylev: TileStyle::Wrap,
+            filter: FilterMode::Auto,
+        }
+    }
+}
+
+/// Texture 2D coordinate
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tex2Coord {
+    /// U coordinate (horizontal, from left)
+    pub u: f32,
+    /// V coordinate (vertical, from bottom)
+    pub v: f32,
+}
+
+impl Tex2Coord {
+    /// Create a new texture coordinate
+    pub fn new(u: f32, v: f32) -> Self {
+        Self { u, v }
+    }
+}
+
+/// Texture2D group from materials extension
+#[derive(Debug, Clone)]
+pub struct Texture2DGroup {
+    /// Texture2D group ID
+    pub id: usize,
+    /// Reference to texture2d resource
+    pub texid: usize,
+    /// List of texture coordinates
+    pub tex2coords: Vec<Tex2Coord>,
+}
+
+impl Texture2DGroup {
+    /// Create a new texture2d group
+    pub fn new(id: usize, texid: usize) -> Self {
+        Self {
+            id,
+            texid,
+            tex2coords: Vec::new(),
+        }
+    }
+}
+
+/// Composite material mixing multiple base materials
+#[derive(Debug, Clone)]
+pub struct Composite {
+    /// Proportions of each base material (values between 0 and 1)
+    pub values: Vec<f32>,
+}
+
+impl Composite {
+    /// Create a new composite material
+    pub fn new(values: Vec<f32>) -> Self {
+        Self { values }
+    }
+}
+
+/// Composite materials group from materials extension
+#[derive(Debug, Clone)]
+pub struct CompositeMaterials {
+    /// Composite materials group ID
+    pub id: usize,
+    /// Reference to base material group
+    pub matid: usize,
+    /// Indices of materials used in composites
+    pub matindices: Vec<usize>,
+    /// List of composite materials
+    pub composites: Vec<Composite>,
+}
+
+impl CompositeMaterials {
+    /// Create a new composite materials group
+    pub fn new(id: usize, matid: usize, matindices: Vec<usize>) -> Self {
+        Self {
+            id,
+            matid,
+            matindices,
+            composites: Vec::new(),
+        }
+    }
+}
+
+/// Blend method for multi-properties
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlendMethod {
+    /// Linear mix interpolation
+    Mix,
+    /// Multiplicative blending
+    Multiply,
+}
+
+/// Multi element combining multiple property indices
+#[derive(Debug, Clone)]
+pub struct Multi {
+    /// Property indices corresponding to pids in parent group
+    pub pindices: Vec<usize>,
+}
+
+impl Multi {
+    /// Create a new multi element
+    pub fn new(pindices: Vec<usize>) -> Self {
+        Self { pindices }
+    }
+}
+
+/// Multi-properties group from materials extension
+#[derive(Debug, Clone)]
+pub struct MultiProperties {
+    /// Multi-properties group ID
+    pub id: usize,
+    /// Property group IDs to layer and blend
+    pub pids: Vec<usize>,
+    /// Blend methods for each layer (length = pids.len() - 1)
+    pub blendmethods: Vec<BlendMethod>,
+    /// List of multi elements
+    pub multis: Vec<Multi>,
+}
+
+impl MultiProperties {
+    /// Create a new multi-properties group
+    pub fn new(id: usize, pids: Vec<usize>) -> Self {
+        Self {
+            id,
+            pids,
+            blendmethods: Vec::new(),
+            multis: Vec::new(),
+        }
+    }
+}
+
+impl ProductionInfo {
+    /// Create a new empty ProductionInfo
+    pub fn new() -> Self {
+        Self {
+            uuid: None,
+            path: None,
+        }
+    }
+
+    /// Create a ProductionInfo with just a UUID
+    pub fn with_uuid(uuid: String) -> Self {
+        Self {
+            uuid: Some(uuid),
+            path: None,
+        }
+    }
+}
+
+impl Default for ProductionInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -325,6 +1027,12 @@ pub struct Object {
     pub pid: Option<usize>,
     /// Optional material index (property index) - used with pid to select from color groups
     pub pindex: Option<usize>,
+    /// Optional slice stack ID (slice extension)
+    pub slicestackid: Option<usize>,
+    /// Production extension information (UUID, path)
+    pub production: Option<ProductionInfo>,
+    /// Boolean shape definition (Boolean Operations extension)
+    pub boolean_shape: Option<BooleanShape>,
 }
 
 /// Type of 3D object
@@ -352,6 +1060,9 @@ impl Object {
             mesh: None,
             pid: None,
             pindex: None,
+            slicestackid: None,
+            production: None,
+            boolean_shape: None,
         }
     }
 }
@@ -365,6 +1076,24 @@ pub struct Resources {
     pub materials: Vec<Material>,
     /// List of color groups (materials extension)
     pub color_groups: Vec<ColorGroup>,
+    /// List of displacement maps (displacement extension)
+    pub displacement_maps: Vec<Displacement2D>,
+    /// List of normalized vector groups (displacement extension)
+    pub norm_vector_groups: Vec<NormVectorGroup>,
+    /// List of displacement coordinate groups (displacement extension)
+    pub disp2d_groups: Vec<Disp2DGroup>,
+    /// List of slice stacks (slice extension)
+    pub slice_stacks: Vec<SliceStack>,
+    /// List of base material groups (materials extension)
+    pub base_material_groups: Vec<BaseMaterialGroup>,
+    /// List of texture2d resources (materials extension)
+    pub texture2d_resources: Vec<Texture2D>,
+    /// List of texture2d groups (materials extension)
+    pub texture2d_groups: Vec<Texture2DGroup>,
+    /// List of composite materials groups (materials extension)
+    pub composite_materials: Vec<CompositeMaterials>,
+    /// List of multi-properties groups (materials extension)
+    pub multi_properties: Vec<MultiProperties>,
 }
 
 impl Resources {
@@ -374,6 +1103,15 @@ impl Resources {
             objects: Vec::new(),
             materials: Vec::new(),
             color_groups: Vec::new(),
+            displacement_maps: Vec::new(),
+            norm_vector_groups: Vec::new(),
+            disp2d_groups: Vec::new(),
+            slice_stacks: Vec::new(),
+            base_material_groups: Vec::new(),
+            texture2d_resources: Vec::new(),
+            texture2d_groups: Vec::new(),
+            composite_materials: Vec::new(),
+            multi_properties: Vec::new(),
         }
     }
 }
@@ -392,6 +1130,8 @@ pub struct BuildItem {
     /// Optional transformation matrix (4x3 affine transformation stored as 12 values)
     /// Represents a 3x4 matrix in row-major order for affine transformations
     pub transform: Option<[f64; 12]>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
 }
 
 impl BuildItem {
@@ -400,6 +1140,7 @@ impl BuildItem {
         Self {
             objectid,
             transform: None,
+            production_uuid: None,
         }
     }
 }
@@ -409,18 +1150,42 @@ impl BuildItem {
 pub struct Build {
     /// List of items to build
     pub items: Vec<BuildItem>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
 }
 
 impl Build {
     /// Create a new empty build section
     pub fn new() -> Self {
-        Self { items: Vec::new() }
+        Self {
+            items: Vec::new(),
+            production_uuid: None,
+        }
     }
 }
 
 impl Default for Build {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Thumbnail metadata for 3MF package
+///
+/// Represents a thumbnail image referenced in the package relationships.
+/// Thumbnails are typically stored in `/Metadata/thumbnail.png` or similar paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Thumbnail {
+    /// Path to the thumbnail file within the package
+    pub path: String,
+    /// Content type (e.g., "image/png", "image/jpeg")
+    pub content_type: String,
+}
+
+impl Thumbnail {
+    /// Create a new thumbnail metadata
+    pub fn new(path: String, content_type: String) -> Self {
+        Self { path, content_type }
     }
 }
 
@@ -436,10 +1201,14 @@ pub struct Model {
     pub required_extensions: Vec<Extension>,
     /// Metadata key-value pairs
     pub metadata: HashMap<String, String>,
+    /// Thumbnail metadata (if present in the package)
+    pub thumbnail: Option<Thumbnail>,
     /// Resources (objects, materials)
     pub resources: Resources,
     /// Build specification
     pub build: Build,
+    /// Secure content information (if secure content extension is used)
+    pub secure_content: Option<SecureContentInfo>,
 }
 
 impl Model {
@@ -450,8 +1219,10 @@ impl Model {
             xmlns: "http://schemas.microsoft.com/3dmanufacturing/core/2015/02".to_string(),
             required_extensions: Vec::new(),
             metadata: HashMap::new(),
+            thumbnail: None,
             resources: Resources::new(),
             build: Build::new(),
+            secure_content: None,
         }
     }
 }

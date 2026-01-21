@@ -85,6 +85,108 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 object.id, mesh.vertices.len());
         }
         // Object is dropped here, freeing memory
+### Accessing Displacement Data
+
+The library parses displacement extension data into accessible structures:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("displaced_model.3mf")?;
+    let model = Model::from_reader(file)?;
+
+    // Access displacement maps
+    for disp_map in &model.resources.displacement_maps {
+        println!("Displacement map {} at path: {}", disp_map.id, disp_map.path);
+        println!("  Channel: {:?}, Filter: {:?}", disp_map.channel, disp_map.filter);
+        println!("  Tile U: {:?}, Tile V: {:?}", disp_map.tilestyleu, disp_map.tilestylev);
+    }
+
+    // Access normalized vector groups
+    for nvgroup in &model.resources.norm_vector_groups {
+        println!("NormVectorGroup {} with {} vectors", nvgroup.id, nvgroup.vectors.len());
+        for (i, vec) in nvgroup.vectors.iter().enumerate() {
+            println!("  Vector {}: ({}, {}, {})", i, vec.x, vec.y, vec.z);
+        }
+    }
+
+    // Access displacement coordinate groups
+    for d2dgroup in &model.resources.disp2d_groups {
+        println!("Disp2DGroup {} using displacement map {} and vectors {}",
+            d2dgroup.id, d2dgroup.dispid, d2dgroup.nid);
+        println!("  Height: {}, Offset: {}", d2dgroup.height, d2dgroup.offset);
+        println!("  Coordinates: {} entries", d2dgroup.coords.len());
+    }
+
+    // Access advanced materials (Materials Extension)
+    // Texture2D resources
+    for texture in &model.resources.texture2d_resources {
+        println!("Texture2D {}: path={}, type={}", 
+            texture.id, texture.path, texture.contenttype);
+    }
+
+    // Texture2D groups with UV coordinates
+    for tex_group in &model.resources.texture2d_groups {
+        println!("Texture2DGroup {} references texture {}, {} coordinates",
+            tex_group.id, tex_group.texid, tex_group.tex2coords.len());
+    }
+
+    // Composite materials
+    for comp in &model.resources.composite_materials {
+        println!("CompositeMaterials {} mixes base materials: {:?}",
+            comp.id, comp.matindices);
+    }
+
+    // Multi-properties for layered material effects
+    for multi in &model.resources.multi_properties {
+        println!("MultiProperties {} layers property groups: {:?}",
+            multi.id, multi.pids);
+    }
+
+    Ok(())
+}
+```
+
+### Advanced Materials
+
+The Materials Extension now supports advanced features for full-color 3D printing:
+
+```rust
+use lib3mf::Model;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let model = Model::from_reader(File::open("model.3mf")?)?;
+
+    // Access Texture2D resources for applying images to models
+    for texture in &model.resources.texture2d_resources {
+        println!("Texture: {} ({})", texture.path, texture.contenttype);
+        println!("  Tile: u={:?}, v={:?}", texture.tilestyleu, texture.tilestylev);
+        println!("  Filter: {:?}", texture.filter);
+    }
+
+    // Access texture coordinate mappings
+    for tex_group in &model.resources.texture2d_groups {
+        for (i, coord) in tex_group.tex2coords.iter().enumerate() {
+            println!("  Coord[{}]: u={}, v={}", i, coord.u, coord.v);
+        }
+    }
+
+    // Access composite materials (mixing base materials)
+    for comp in &model.resources.composite_materials {
+        for composite in &comp.composites {
+            println!("  Mix ratios: {:?}", composite.values);
+        }
+    }
+
+    // Access multi-properties (layered materials)
+    for multi in &model.resources.multi_properties {
+        println!("  Blend methods: {:?}", multi.blendmethods);
+        for m in &multi.multis {
+            println!("    Indices: {:?}", m.pindices);
+        }
     }
 
     Ok(())
@@ -158,9 +260,21 @@ This implementation currently supports:
   - Basic materials and colors
 
 - **Materials Extension**
-  - Color groups (m:colorgroup)
-  - Per-triangle material references (pid attributes)
-  - Base materials with display colors
+  - ✅ Color groups (m:colorgroup)
+  - ✅ Per-triangle material references (pid attributes)
+  - ✅ Base materials with display colors
+  - ✅ Texture2D resources with image paths and content types
+  - ✅ Texture2DGroup with UV texture coordinates
+  - ✅ Composite materials mixing base materials in defined ratios
+  - ✅ Multi-properties for layering and blending property groups
+
+- **Displacement Extension**
+  - Displacement2D resources (displacement maps with PNG textures)
+  - NormVectorGroup (normalized displacement vectors)
+  - Disp2DGroup (displacement coordinate groups)
+  - Displacement coordinates (u, v, n, f values)
+  - Texture filtering and tiling modes
+  - Surface displacement data structures
 
 ### Extension Support and Validation
 
@@ -197,7 +311,6 @@ let config = ParserConfig::with_all_extensions();
 ### Future Enhancements
 
 Potential future additions could include:
-- Full production extension support (UUID extraction, path references)
 - Slice extension support (slice stacks and slice data)
 - Beam lattice extension support (beam definitions and properties)
 - Advanced material properties (textures, composite materials)
@@ -220,7 +333,31 @@ cargo clippy -- -D warnings
 
 # Run official 3MF conformance tests
 cargo test --test conformance_tests summary -- --ignored --nocapture
+
+# Run a specific conformance suite
+cargo test --test conformance_tests suite3_core -- --nocapture
 ```
+
+### Continuous Integration
+
+The repository uses GitHub Actions for continuous integration with optimized parallel execution:
+
+- **Basic Tests Job**: Runs standard library and integration tests as a fast preliminary check
+- **Conformance Test Matrix**: Runs all 11 conformance test suites in parallel for faster feedback
+  - suite1_core_slice_prod
+  - suite2_core_prod_matl
+  - suite3_core
+  - suite4_core_slice
+  - suite5_core_prod
+  - suite6_core_matl
+  - suite7_beam
+  - suite8_secure
+  - suite9_core_ext
+  - suite10_boolean
+  - suite11_displacement
+- **Conformance Summary Job**: Generates an overall conformance report after all suites complete
+
+This parallel approach significantly reduces CI execution time compared to running suites sequentially.
 
 ### Conformance Testing
 
@@ -228,7 +365,15 @@ This library has been validated against the official [3MF Consortium test suites
 
 **Current Conformance Results:**
 - ✅ **100% Positive Test Compliance**: All 1,698 valid 3MF files parse successfully
-- ⚠️ **1.7% Negative Test Compliance**: 9 out of 543 invalid files are correctly rejected
+- ✅ **33.8% Negative Test Compliance**: 160 out of 473 invalid files are correctly rejected
+- 📊 **77.4% Overall Conformance**: 1,858 out of 2,400 total tests pass
+
+**Negative Test Improvements:**
+- ✅ Duplicate metadata names - ensures metadata uniqueness
+- ✅ Duplicate resource IDs - validates color group ID uniqueness
+- ✅ Invalid XML structure - rejects malformed models
+- ⚠️ Component validation - requires component support implementation
+- ⚠️ Extension-specific validation - requires extension resource parsing
 
 The parser successfully handles files using all 3MF extensions including:
 - Core Specification (1.4.0)
@@ -236,9 +381,11 @@ The parser successfully handles files using all 3MF extensions including:
 - Production Extension (1.2.0)
 - Slice Extension (1.0.2)
 - Beam Lattice Extension (1.2.0)
-- Secure Content Extension (1.0.2)
+- Secure Content Extension (1.0.2) - ⚠️ **Read-only validation** (no cryptographic operations)
 - Boolean Operations Extension (1.1.1)
 - Displacement Extension (1.0.0)
+
+**Important Security Note**: The Secure Content extension is recognized for validation purposes only. This library does NOT implement cryptographic operations (encryption, decryption, or signature verification). See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed security considerations and integration guidance.
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
@@ -302,6 +449,7 @@ at your option.
 - [3MF Specification](https://3mf.io/specification/)
 - [3MF Consortium](https://3mf.io/)
 - [lib3mf (Official C++ implementation)](https://github.com/3MFConsortium/lib3mf)
+- [Migration Guide from C++ lib3mf](MIGRATION.md) - Comprehensive guide for migrating from the C++ implementation
 
 ## Acknowledgments
 

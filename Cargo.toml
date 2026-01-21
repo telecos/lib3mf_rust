@@ -20,6 +20,7 @@ zip = "2.3"
 walkdir = "2.5"
 libtest-mimic = "0.8"
 criterion = "0.5"
+proptest = "1.5"
 
 [[test]]
 name = "conformance_individual"
