@@ -7,6 +7,10 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:  # Allow manual triggering
 
+# Set minimal permissions for GITHUB_TOKEN
+permissions:
+  contents: read
+
 jobs:
   # Run standard library and integration tests first (fast, basic checks)
   basic-tests:
