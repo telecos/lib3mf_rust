@@ -271,15 +271,15 @@ fn test_parse_3mf_with_basematerial_pid_reference() {
 
     let cursor = Cursor::new(buffer);
     let result = Model::from_reader(cursor);
-    
+
     // Should succeed because pid=5 references a valid base material group
     assert!(result.is_ok());
     let model = result.unwrap();
-    
+
     // Verify the base material group was parsed
     assert_eq!(model.resources.base_material_groups.len(), 1);
     assert_eq!(model.resources.base_material_groups[0].id, 5);
-    
+
     // Verify the object references the correct pid
     assert_eq!(model.resources.objects.len(), 1);
     assert_eq!(model.resources.objects[0].pid, Some(5));

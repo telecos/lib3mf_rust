@@ -419,6 +419,10 @@ impl SliceStack {
             zbottom,
             slices: Vec::new(),
             slice_refs: Vec::new(),
+        }
+    }
+}
+
 /// Base material group from materials extension
 #[derive(Debug, Clone)]
 pub struct BaseMaterialGroup {
@@ -450,10 +454,7 @@ pub struct BaseMaterial {
 impl BaseMaterial {
     /// Create a new base material
     pub fn new(name: String, displaycolor: (u8, u8, u8, u8)) -> Self {
-        Self {
-            name,
-            displaycolor,
-        }
+        Self { name, displaycolor }
     }
 }
 

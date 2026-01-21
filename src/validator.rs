@@ -211,13 +211,13 @@ fn validate_material_references(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
             // If object has a pid, it should reference a valid color group or base material group
-            let is_valid = valid_colorgroup_ids.contains(&pid) 
-                || valid_basematerial_ids.contains(&pid);
-            
+            let is_valid =
+                valid_colorgroup_ids.contains(&pid) || valid_basematerial_ids.contains(&pid);
+
             // Only validate if there are material groups defined, otherwise pid might be unused
-            let has_materials = !valid_colorgroup_ids.is_empty() 
-                || !valid_basematerial_ids.is_empty();
-            
+            let has_materials =
+                !valid_colorgroup_ids.is_empty() || !valid_basematerial_ids.is_empty();
+
             if has_materials && !is_valid {
                 return Err(Error::InvalidModel(format!(
                     "Object {} references non-existent color group or base material ID: {}",
@@ -321,8 +321,11 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         }
                     }
                     // Check if it's a base material group
-                    else if let Some(basematerialgroup) =
-                        model.resources.base_material_groups.iter().find(|bg| bg.id == pid)
+                    else if let Some(basematerialgroup) = model
+                        .resources
+                        .base_material_groups
+                        .iter()
+                        .find(|bg| bg.id == pid)
                     {
                         let num_materials = basematerialgroup.materials.len();
 
@@ -507,36 +510,34 @@ mod tests {
     #[test]
     fn test_validate_base_material_reference() {
         use crate::model::{BaseMaterial, BaseMaterialGroup};
-        
+
         let mut model = Model::new();
-        
+
         // Add a base material group with id=5
         let mut base_group = BaseMaterialGroup::new(5);
-        base_group.materials.push(BaseMaterial::new(
-            "Red".to_string(),
-            (255, 0, 0, 255)
-        ));
-        base_group.materials.push(BaseMaterial::new(
-            "Blue".to_string(),
-            (0, 0, 255, 255)
-        ));
+        base_group
+            .materials
+            .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
+        base_group
+            .materials
+            .push(BaseMaterial::new("Blue".to_string(), (0, 0, 255, 255)));
         model.resources.base_material_groups.push(base_group);
-        
+
         // Create an object that references the base material group
         let mut object = Object::new(1);
         object.pid = Some(5);
         object.pindex = Some(0);
-        
+
         let mut mesh = Mesh::new();
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
         mesh.triangles.push(Triangle::new(0, 1, 2));
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
         model.build.items.push(BuildItem::new(1));
-        
+
         // Should pass validation
         let result = validate_model(&model);
         assert!(result.is_ok());
@@ -545,31 +546,30 @@ mod tests {
     #[test]
     fn test_validate_invalid_base_material_reference() {
         use crate::model::{BaseMaterial, BaseMaterialGroup};
-        
+
         let mut model = Model::new();
-        
+
         // Add a base material group with id=5
         let mut base_group = BaseMaterialGroup::new(5);
-        base_group.materials.push(BaseMaterial::new(
-            "Red".to_string(),
-            (255, 0, 0, 255)
-        ));
+        base_group
+            .materials
+            .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(base_group);
-        
+
         // Create an object that references a non-existent material group id=99
         let mut object = Object::new(1);
         object.pid = Some(99); // Invalid reference!
-        
+
         let mut mesh = Mesh::new();
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
         mesh.triangles.push(Triangle::new(0, 1, 2));
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
         model.build.items.push(BuildItem::new(1));
-        
+
         // Should fail validation
         let result = validate_material_references(&model);
         assert!(result.is_err());
@@ -579,32 +579,31 @@ mod tests {
     #[test]
     fn test_validate_base_material_pindex_out_of_bounds() {
         use crate::model::{BaseMaterial, BaseMaterialGroup};
-        
+
         let mut model = Model::new();
-        
+
         // Add a base material group with only 1 material
         let mut base_group = BaseMaterialGroup::new(5);
-        base_group.materials.push(BaseMaterial::new(
-            "Red".to_string(),
-            (255, 0, 0, 255)
-        ));
+        base_group
+            .materials
+            .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(base_group);
-        
+
         // Create an object with pindex=5 (out of bounds)
         let mut object = Object::new(1);
         object.pid = Some(5);
         object.pindex = Some(5); // Out of bounds! Only index 0 is valid
-        
+
         let mut mesh = Mesh::new();
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
         mesh.triangles.push(Triangle::new(0, 1, 2));
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
         model.build.items.push(BuildItem::new(1));
-        
+
         // Should fail validation
         let result = validate_material_references(&model);
         assert!(result.is_err());

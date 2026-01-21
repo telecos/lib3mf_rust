@@ -258,13 +258,13 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         // Materials within basematerials group
                         if let Some(ref mut group) = current_basematerialgroup {
                             let attrs = parse_attributes(&reader, e)?;
-                            
+
                             // Validate only allowed attributes are present
                             // Per 3MF Materials & Properties Extension spec: name, displaycolor
                             validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
-                            
+
                             let name = attrs.get("name").cloned().unwrap_or_default();
-                            
+
                             // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
                             // If displaycolor is missing or invalid, use white as default
                             let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
@@ -272,10 +272,10 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             } else {
                                 (255, 255, 255, 255)
                             };
-                            
+
                             group.materials.push(BaseMaterial::new(name, displaycolor));
                         }
-                        
+
                         // Still parse to materials list for backward compatibility
                         let material = parse_base_material(&reader, e, material_index)?;
                         model.resources.materials.push(material);
