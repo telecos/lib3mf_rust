@@ -333,7 +333,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_beamset = true;
                         let attrs = parse_attributes(&reader, e)?;
                         let mut beamset = BeamSet::new();
-                        
+
                         // Parse radius attribute (default 1.0)
                         if let Some(radius_str) = attrs.get("radius") {
                             let radius = radius_str.parse::<f64>()?;
@@ -346,7 +346,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                             beamset.radius = radius;
                         }
-                        
+
                         // Parse minlength attribute (default 0.0001)
                         if let Some(minlength_str) = attrs.get("minlength") {
                             let minlength = minlength_str.parse::<f64>()?;
@@ -359,7 +359,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                             beamset.min_length = minlength;
                         }
-                        
+
                         // Parse cap mode attribute (default sphere)
                         if let Some(cap_str) = attrs.get("cap") {
                             beamset.cap_mode = match cap_str.as_str() {
@@ -373,7 +373,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 }
                             };
                         }
-                        
+
                         current_beamset = Some(beamset);
                     }
                     "beams" if in_beamset => {
@@ -496,7 +496,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let objectid = attrs
                             .get("objectid")
                             .ok_or_else(|| {
-                                Error::InvalidXml("Boolean shape missing objectid attribute".to_string())
+                                Error::InvalidXml(
+                                    "Boolean shape missing objectid attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
                         // Operation defaults to "union" if not specified
@@ -515,7 +517,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let objectid = attrs
                             .get("objectid")
                             .ok_or_else(|| {
-                                Error::InvalidXml("Boolean operand missing objectid attribute".to_string())
+                                Error::InvalidXml(
+                                    "Boolean operand missing objectid attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
                         if let Some(ref mut shape) = current_boolean_shape {

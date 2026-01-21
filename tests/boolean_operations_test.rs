@@ -41,18 +41,18 @@ mod boolean_operations_test {
         <item objectid="3"/>
     </build>
 </model>"#;
-        
+
         let model = lib3mf::parser::parse_model_xml(xml).expect("Failed to parse model");
-        
+
         // Verify the model was parsed
         assert_eq!(model.resources.objects.len(), 3);
-        
+
         // Find the boolean object
         let boolean_obj = model.resources.objects.iter().find(|o| o.id == 3).unwrap();
-        
+
         // Verify boolean shape exists
         assert!(boolean_obj.boolean_shape.is_some());
-        
+
         let shape = boolean_obj.boolean_shape.as_ref().unwrap();
         assert_eq!(shape.objectid, 1);
         assert_eq!(shape.operation, BooleanOpType::Union);
@@ -99,12 +99,12 @@ mod boolean_operations_test {
         <item objectid="3"/>
     </build>
 </model>"#;
-        
+
         let model = lib3mf::parser::parse_model_xml(xml).expect("Failed to parse model");
-        
+
         let boolean_obj = model.resources.objects.iter().find(|o| o.id == 3).unwrap();
         let shape = boolean_obj.boolean_shape.as_ref().unwrap();
-        
+
         assert_eq!(shape.operation, BooleanOpType::Difference);
     }
 
@@ -147,12 +147,12 @@ mod boolean_operations_test {
         <item objectid="3"/>
     </build>
 </model>"#;
-        
+
         let model = lib3mf::parser::parse_model_xml(xml).expect("Failed to parse model");
-        
+
         let boolean_obj = model.resources.objects.iter().find(|o| o.id == 3).unwrap();
         let shape = boolean_obj.boolean_shape.as_ref().unwrap();
-        
+
         assert_eq!(shape.operation, BooleanOpType::Intersection);
     }
 
@@ -196,12 +196,12 @@ mod boolean_operations_test {
         <item objectid="3"/>
     </build>
 </model>"#;
-        
+
         let model = lib3mf::parser::parse_model_xml(xml).expect("Failed to parse model");
-        
+
         let boolean_obj = model.resources.objects.iter().find(|o| o.id == 3).unwrap();
         let shape = boolean_obj.boolean_shape.as_ref().unwrap();
-        
+
         // Should default to union
         assert_eq!(shape.operation, BooleanOpType::Union);
     }

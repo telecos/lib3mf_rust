@@ -66,7 +66,8 @@ fn create_test_3mf(required_extensions: &str) -> Vec<u8> {
   <build>
     <item objectid="1"/>
   </build>
-</model>"#.to_string()
+</model>"#
+            .to_string()
     } else {
         format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>

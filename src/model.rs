@@ -398,7 +398,10 @@ pub struct BooleanRef {
 impl BooleanRef {
     /// Create a new boolean reference
     pub fn new(objectid: usize) -> Self {
-        Self { objectid, path: None }
+        Self {
+            objectid,
+            path: None,
+        }
     }
 }
 
