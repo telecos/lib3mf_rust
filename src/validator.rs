@@ -56,11 +56,12 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
 /// Validate that the model has required structure
 ///
 /// Per 3MF Core spec, a valid model must have:
-/// - At least one object in resources
-/// - At least one build item
+/// - At least one object in resources OR at least one slice stack (for external slice files)  
+/// - At least one build item (unless it's an external slice/resource file)
 fn validate_required_structure(model: &Model) -> Result<()> {
-    // Model must contain at least one object
-    if model.resources.objects.is_empty() {
+    // Model must contain at least one object OR at least one slice stack
+    // External slice files may contain only slice stacks and no mesh objects
+    if model.resources.objects.is_empty() && model.resources.slice_stacks.is_empty() {
         return Err(Error::InvalidModel(
             "Model must contain at least one object in resources. \
              A valid 3MF file requires at least one <object> element within the <resources> section. \
@@ -68,13 +69,17 @@ fn validate_required_structure(model: &Model) -> Result<()> {
         ));
     }
 
-    // Build section must contain at least one item
-    if model.build.items.is_empty() {
+    // Build section must contain at least one item for main model files
+    // However, external slice/resource files may have empty build sections
+    // We identify these by: having slice stacks but either no objects or empty build
+    let is_external_file = !model.resources.slice_stacks.is_empty() && 
+                           (model.resources.objects.is_empty() || model.build.items.is_empty());
+    
+    if model.build.items.is_empty() && !is_external_file {
         return Err(Error::InvalidModel(
             "Build section must contain at least one item. \
              A valid 3MF file requires at least one <item> element within the <build> section. \
-             The build section specifies which objects should be printed."
-                .to_string(),
+             The build section specifies which objects should be printed.".to_string()
         ));
     }
 

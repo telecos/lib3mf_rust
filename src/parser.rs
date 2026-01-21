@@ -1217,15 +1217,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 ///
 /// Iterates through all slice stacks in the model and loads any external slice files
 /// referenced via sliceref elements. The slices from the external files are merged
-/// into the appropriate slice stacks.
+/// into the appropriate slice stacks. Additionally, any objects defined in the external
+/// slice files are also merged into the main model's resources.
 fn load_slice_references<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
     // Process each slice stack independently
     for slice_stack in &mut model.resources.slice_stacks {
-        let stack_id = slice_stack.id;
-
         // Load slices from each referenced file
         for slice_ref in &slice_stack.slice_refs {
             // Normalize the path (remove leading slash if present)
@@ -1243,11 +1242,15 @@ fn load_slice_references<R: Read + std::io::Seek>(
                 ))
             })?;
 
-            // Parse the slice file to extract slices
-            let slices = parse_slice_file(&slice_xml, stack_id)?;
+            // Parse the slice file to extract slices and objects
+            // Use the slicestackid from the sliceref, which identifies the stack ID in the external file
+            let (slices, objects) = parse_slice_file_with_objects(&slice_xml, slice_ref.slicestackid)?;
 
             // Add the slices to this slice stack
             slice_stack.slices.extend(slices);
+            
+            // Merge objects from the external file into the main model
+            model.resources.objects.extend(objects);
         }
     }
 
@@ -1409,6 +1412,32 @@ fn parse_slice_file(xml: &str, expected_stack_id: usize) -> Result<Vec<Slice>> {
 
     Ok(slices)
 }
+
+/// Parse a slice model file and extract both slices and objects
+///
+/// This parses a referenced slice file (typically in the 2D/ directory) and
+/// extracts all slice data including vertices, polygons, and segments, as well as
+/// any object definitions that may be present in the file.
+///
+/// Note: External slice files may have empty or incomplete structures (e.g., empty
+/// build sections), so we parse them and skip validation.
+fn parse_slice_file_with_objects(xml: &str, expected_stack_id: usize) -> Result<(Vec<Slice>, Vec<Object>)> {
+    // Parse the entire model XML
+    let mut external_model = parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())?;
+    
+    // Find the slice stack with the expected ID and extract its slices
+    let slices = external_model.resources.slice_stacks
+        .iter()
+        .find(|stack| stack.id == expected_stack_id)
+        .map(|stack| stack.slices.clone())
+        .unwrap_or_else(Vec::new);
+    
+    // Extract all objects from the external model
+    let objects = std::mem::take(&mut external_model.resources.objects);
+    
+    Ok((slices, objects))
+}
+
 
 /// Parse object element attributes
 pub(crate) fn parse_object<R: std::io::BufRead>(
