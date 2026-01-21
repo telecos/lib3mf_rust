@@ -800,9 +800,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.cap_mode = match cap_str.as_str() {
                                 "sphere" => BeamCapMode::Sphere,
                                 "butt" => BeamCapMode::Butt,
+                                "hemisphere" => BeamCapMode::Hemisphere,
                                 _ => {
                                     return Err(Error::InvalidXml(format!(
-                                        "Invalid cap mode '{}'. Must be 'sphere' or 'butt'",
+                                        "Invalid cap mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
                                         cap_str
                                     )));
                                 }
@@ -1760,8 +1761,8 @@ fn parse_beam<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
 
     // Validate only allowed attributes are present
-    // Per Beam Lattice Extension spec: v1, v2, r1, r2
-    validate_attributes(&attrs, &["v1", "v2", "r1", "r2"], "beam")?;
+    // Per Beam Lattice Extension spec: v1, v2, r1, r2, cap1, cap2, p1, p2, pid
+    validate_attributes(&attrs, &["v1", "v2", "r1", "r2", "cap1", "cap2", "p1", "p2", "pid"], "beam")?;
 
     let v1 = attrs
         .get("v1")
@@ -1797,6 +1798,36 @@ fn parse_beam<R: std::io::BufRead>(
             )));
         }
         beam.r2 = Some(r2_val);
+    }
+
+    // Parse cap1 attribute (optional, defaults to beamset cap mode)
+    if let Some(cap1_str) = attrs.get("cap1") {
+        beam.cap1 = Some(match cap1_str.as_str() {
+            "sphere" => BeamCapMode::Sphere,
+            "butt" => BeamCapMode::Butt,
+            "hemisphere" => BeamCapMode::Hemisphere,
+            _ => {
+                return Err(Error::InvalidXml(format!(
+                    "Invalid cap1 mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
+                    cap1_str
+                )));
+            }
+        });
+    }
+
+    // Parse cap2 attribute (optional, defaults to beamset cap mode)
+    if let Some(cap2_str) = attrs.get("cap2") {
+        beam.cap2 = Some(match cap2_str.as_str() {
+            "sphere" => BeamCapMode::Sphere,
+            "butt" => BeamCapMode::Butt,
+            "hemisphere" => BeamCapMode::Hemisphere,
+            _ => {
+                return Err(Error::InvalidXml(format!(
+                    "Invalid cap2 mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
+                    cap2_str
+                )));
+            }
+        });
     }
 
     Ok(beam)

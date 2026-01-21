@@ -509,6 +509,8 @@ pub enum BeamCapMode {
     Sphere,
     /// Butt cap (flat ends)
     Butt,
+    /// Hemisphere cap (half sphere at end)
+    Hemisphere,
 }
 
 /// A single beam in a beam lattice structure
@@ -525,6 +527,10 @@ pub struct Beam {
     pub r1: Option<f64>,
     /// Radius at second vertex (optional, defaults to r1 or beamset radius)
     pub r2: Option<f64>,
+    /// Cap mode at first vertex (optional, defaults to beamset cap mode)
+    pub cap1: Option<BeamCapMode>,
+    /// Cap mode at second vertex (optional, defaults to beamset cap mode)
+    pub cap2: Option<BeamCapMode>,
 }
 
 impl Beam {
@@ -535,6 +541,8 @@ impl Beam {
             v2,
             r1: None,
             r2: None,
+            cap1: None,
+            cap2: None,
         }
     }
 
@@ -545,6 +553,8 @@ impl Beam {
             v2,
             r1: Some(r1),
             r2: None,
+            cap1: None,
+            cap2: None,
         }
     }
 
@@ -555,6 +565,8 @@ impl Beam {
             v2,
             r1: Some(r1),
             r2: Some(r2),
+            cap1: None,
+            cap2: None,
         }
     }
 }
