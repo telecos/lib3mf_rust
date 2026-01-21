@@ -62,10 +62,18 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut current_mesh: Option<Mesh> = None;
     let mut in_basematerials = false;
     let mut material_index: usize = 0;
+    let mut current_basematerialgroup: Option<BaseMaterialGroup> = None;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
     let mut current_beamset: Option<BeamSet> = None;
     let mut in_beamset = false;
+    let mut current_slicestack: Option<SliceStack> = None;
+    let mut in_slicestack = false;
+    let mut current_slice: Option<Slice> = None;
+    let mut in_slice = false;
+    let mut current_slice_polygon: Option<SlicePolygon> = None;
+    let mut in_slice_polygon = false;
+    let mut in_slice_vertices = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -175,6 +183,16 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
                                     t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                // Check for duplicate metadata names
+                                // Per 3MF Core spec: metadata element names must be unique
+                                if model.metadata.contains_key(name) {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Duplicate metadata name '{}'. Each metadata element must have a unique name attribute",
+                                        name
+                                    )));
+                                }
+
                                 model.metadata.insert(name.clone(), value.to_string());
                             }
                         }
@@ -196,6 +214,17 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             ));
                         }
                         in_build = true;
+
+                        // Extract and validate build element attributes
+                        let attrs = parse_attributes(&reader, e)?;
+                        // Per 3MF Core spec: build element has no standard attributes
+                        // Only extension attributes (like p:UUID) are allowed
+                        validate_attributes(&attrs, &[], "build")?;
+
+                        // Extract Production extension UUID (p:UUID) from build element
+                        if let Some(p_uuid) = attrs.get("p:UUID") {
+                            model.build.production_uuid = Some(p_uuid.clone());
+                        }
                     }
                     "object" if in_resources => {
                         current_object = Some(parse_object(&reader, e)?);
@@ -228,11 +257,38 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "basematerials" if in_resources => {
                         in_basematerials = true;
                         material_index = 0;
-                        // basematerials can have an ID attribute, but we use sequential indices
-                        // for individual materials within the group
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("BaseMaterials missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        current_basematerialgroup = Some(BaseMaterialGroup::new(id));
                     }
                     "base" if in_basematerials => {
-                        // Materials within basematerials use sequential indices
+                        // Materials within basematerials group
+                        if let Some(ref mut group) = current_basematerialgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+
+                            // Validate only allowed attributes are present
+                            // Per 3MF Materials & Properties Extension spec: name, displaycolor
+                            validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
+
+                            let name = attrs.get("name").cloned().unwrap_or_default();
+
+                            // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
+                            // If displaycolor is missing or invalid, use white as default
+                            let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
+                                parse_color(color_str).unwrap_or((255, 255, 255, 255))
+                            } else {
+                                (255, 255, 255, 255)
+                            };
+
+                            group.materials.push(BaseMaterial::new(name, displaycolor));
+                        }
+
+                        // Still parse to materials list for backward compatibility
                         let material = parse_base_material(&reader, e, material_index)?;
                         model.resources.materials.push(material);
                         material_index += 1;
@@ -291,6 +347,104 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         if let Some(ref mut beamset) = current_beamset {
                             let beam = parse_beam(&reader, e)?;
                             beamset.beams.push(beam);
+                    "slicestack" if in_resources => {
+                        in_slicestack = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("SliceStack missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let zbottom = attrs
+                            .get("zbottom")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "SliceStack missing zbottom attribute".to_string(),
+                                )
+                            })?
+                            .parse::<f64>()?;
+                        current_slicestack = Some(SliceStack::new(id, zbottom));
+                    }
+                    "slice" if in_slicestack => {
+                        in_slice = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let ztop = attrs
+                            .get("ztop")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice missing ztop attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        current_slice = Some(Slice::new(ztop));
+                    }
+                    "sliceref" if in_slicestack => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let slicestackid = attrs
+                            .get("slicestackid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "SliceRef missing slicestackid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let slicepath = attrs
+                            .get("slicepath")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "SliceRef missing slicepath attribute".to_string(),
+                                )
+                            })?
+                            .to_string();
+                        if let Some(ref mut slicestack) = current_slicestack {
+                            slicestack
+                                .slice_refs
+                                .push(SliceRef::new(slicestackid, slicepath));
+                        }
+                    }
+                    "vertices" if in_slice => {
+                        in_slice_vertices = true;
+                    }
+                    "vertex" if in_slice_vertices => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let x = attrs
+                            .get("x")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing x attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        let y = attrs
+                            .get("y")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing y attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        if let Some(ref mut slice) = current_slice {
+                            slice.vertices.push(Vertex2D::new(x, y));
+                        }
+                    }
+                    "polygon" if in_slice => {
+                        in_slice_polygon = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let startv = attrs
+                            .get("startv")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Slice polygon missing startv attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_slice_polygon = Some(SlicePolygon::new(startv));
+                    }
+                    "segment" if in_slice_polygon => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let v2 = attrs
+                            .get("v2")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice segment missing v2 attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        if let Some(ref mut polygon) = current_slice_polygon {
+                            polygon.segments.push(SliceSegment::new(v2));
                         }
                     }
                     _ => {}
@@ -322,6 +476,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         // Mesh parsing complete
                     }
                     "basematerials" => {
+                        if let Some(group) = current_basematerialgroup.take() {
+                            model.resources.base_material_groups.push(group);
+                        }
                         in_basematerials = false;
                     }
                     "colorgroup" => {
@@ -337,6 +494,30 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             }
                         }
                         in_beamset = false;
+                    "slicestack" => {
+                        if let Some(slicestack) = current_slicestack.take() {
+                            model.resources.slice_stacks.push(slicestack);
+                        }
+                        in_slicestack = false;
+                    }
+                    "slice" => {
+                        if let Some(slice) = current_slice.take() {
+                            if let Some(ref mut slicestack) = current_slicestack {
+                                slicestack.slices.push(slice);
+                            }
+                        }
+                        in_slice = false;
+                    }
+                    "vertices" => {
+                        in_slice_vertices = false;
+                    }
+                    "polygon" => {
+                        if let Some(polygon) = current_slice_polygon.take() {
+                            if let Some(ref mut slice) = current_slice {
+                                slice.polygons.push(polygon);
+                            }
+                        }
+                        in_slice_polygon = false;
                     }
                     _ => {}
                 }
@@ -376,6 +557,7 @@ fn parse_object<R: std::io::BufRead>(
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
     // Per Materials Extension: pindex can be used with pid
+    // Per Slice Extension: s:slicestackid (handled via extension attribute skipping)
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
@@ -423,6 +605,26 @@ fn parse_object<R: std::io::BufRead>(
 
     if let Some(pindex) = attrs.get("pindex") {
         object.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    // Check for both namespaced and non-namespaced slicestackid
+    // The attribute may appear as "s:slicestackid" in the XML
+    if let Some(slicestackid) = attrs
+        .get("slicestackid")
+        .or_else(|| attrs.get("s:slicestackid"))
+    {
+        object.slicestackid = Some(slicestackid.parse::<usize>()?);
+    }
+
+    // Extract Production extension attributes (p:UUID, p:path)
+    let p_uuid = attrs.get("p:UUID");
+    let p_path = attrs.get("p:path");
+
+    if p_uuid.is_some() || p_path.is_some() {
+        let mut prod_info = ProductionInfo::new();
+        prod_info.uuid = p_uuid.cloned();
+        prod_info.path = p_path.cloned();
+        object.production = Some(prod_info);
     }
 
     Ok(object)
@@ -581,6 +783,11 @@ fn parse_build_item<R: std::io::BufRead>(
         let mut transform = [0.0; 12];
         transform.copy_from_slice(&values);
         item.transform = Some(transform);
+    }
+
+    // Extract Production extension UUID (p:UUID)
+    if let Some(p_uuid) = attrs.get("p:UUID") {
+        item.production_uuid = Some(p_uuid.clone());
     }
 
     Ok(item)

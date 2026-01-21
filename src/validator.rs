@@ -6,7 +6,7 @@
 //! - Triangle vertex indices reference valid vertices
 //! - Triangles are not degenerate (all three vertices must be distinct)
 //! - Build items reference existing objects
-//! - Material and color group references are valid
+//! - Material, color group, and base material references are valid
 
 use crate::error::{Error, Result};
 use crate::model::Model;
@@ -19,7 +19,7 @@ use std::collections::HashSet;
 /// - Object ID uniqueness
 /// - Triangle vertex bounds and degeneracy checks
 /// - Build item object references
-/// - Material and color group references
+/// - Material, color group, and base material references
 /// - Mesh requirements (must have vertices)
 pub fn validate_model(model: &Model) -> Result<()> {
     validate_required_structure(model)?;
@@ -190,8 +190,19 @@ fn validate_build_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// Validate material and color group references
+/// Validate material, color group, and base material references
 fn validate_material_references(model: &Model) -> Result<()> {
+    // Validate that color group IDs are unique
+    let mut seen_colorgroup_ids = HashSet::new();
+    for colorgroup in &model.resources.color_groups {
+        if !seen_colorgroup_ids.insert(colorgroup.id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate color group ID: {}. Each color group must have a unique id attribute",
+                colorgroup.id
+            )));
+        }
+    }
+
     // For now, just validate that pid references point to existing color groups or materials
     // Full validation would require checking basematerialid attributes on objects
 
@@ -203,16 +214,27 @@ fn validate_material_references(model: &Model) -> Result<()> {
         .map(|cg| cg.id)
         .collect();
 
+    // Collect valid base material group IDs
+    let valid_basematerial_ids: HashSet<usize> = model
+        .resources
+        .base_material_groups
+        .iter()
+        .map(|bg| bg.id)
+        .collect();
+
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
-            // If object has a pid, it should reference a valid color group or material
-            // For now we just check color groups
-            // TODO: Also validate basematerials references
-            if !valid_colorgroup_ids.is_empty() && !valid_colorgroup_ids.contains(&pid) {
-                // Only validate if there are color groups defined
-                // Empty color groups means we might be using basematerials instead
+            // If object has a pid, it should reference a valid color group or base material group
+            let is_valid =
+                valid_colorgroup_ids.contains(&pid) || valid_basematerial_ids.contains(&pid);
+
+            // Only validate if there are material groups defined, otherwise pid might be unused
+            let has_materials =
+                !valid_colorgroup_ids.is_empty() || !valid_basematerial_ids.is_empty();
+
+            if has_materials && !is_valid {
                 return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent color group ID: {}",
+                    "Object {} references non-existent color group or base material ID: {}",
                     object.id, pid
                 )));
             }
@@ -239,15 +261,36 @@ fn validate_material_references(model: &Model) -> Result<()> {
                     }
                 }
             }
+            // Validate object pindex references for base material groups
+            else if let Some(basematerialgroup) = model
+                .resources
+                .base_material_groups
+                .iter()
+                .find(|bg| bg.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= basematerialgroup.materials.len() {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds (base material group {} has {} materials)",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            basematerialgroup.materials.len()
+                        )));
+                    }
+                }
+            }
         }
 
-        // Validate triangle property index references for color groups
+        // Validate triangle property index references for color groups and base materials
         if let Some(ref mesh) = object.mesh {
             for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
-                // Determine which color group to use for validation
+                // Determine which color group or base material to use for validation
                 let pid_to_check = triangle.pid.or(object.pid);
 
                 if let Some(pid) = pid_to_check {
+                    // Check if it's a color group
                     if let Some(colorgroup) =
                         model.resources.color_groups.iter().find(|cg| cg.id == pid)
                     {
@@ -287,6 +330,53 @@ fn validate_material_references(model: &Model) -> Result<()> {
                                 return Err(Error::InvalidModel(format!(
                                     "Object {}: Triangle {} p3 {} is out of bounds (color group {} has {} colors)",
                                     object.id, tri_idx, p3, pid, num_colors
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a base material group
+                    else if let Some(basematerialgroup) = model
+                        .resources
+                        .base_material_groups
+                        .iter()
+                        .find(|bg| bg.id == pid)
+                    {
+                        let num_materials = basematerialgroup.materials.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_materials {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds (base material group {} has {} materials)",
+                                    object.id, tri_idx, pindex, pid, num_materials
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_materials {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds (base material group {} has {} materials)",
+                                    object.id, tri_idx, p1, pid, num_materials
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_materials {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds (base material group {} has {} materials)",
+                                    object.id, tri_idx, p2, pid, num_materials
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_materials {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds (base material group {} has {} materials)",
+                                    object.id, tri_idx, p3, pid, num_materials
                                 )));
                             }
                         }
@@ -429,5 +519,108 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("has triangles but no vertices"));
+    }
+
+    #[test]
+    fn test_validate_base_material_reference() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup};
+
+        let mut model = Model::new();
+
+        // Add a base material group with id=5
+        let mut base_group = BaseMaterialGroup::new(5);
+        base_group
+            .materials
+            .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
+        base_group
+            .materials
+            .push(BaseMaterial::new("Blue".to_string(), (0, 0, 255, 255)));
+        model.resources.base_material_groups.push(base_group);
+
+        // Create an object that references the base material group
+        let mut object = Object::new(1);
+        object.pid = Some(5);
+        object.pindex = Some(0);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation
+        let result = validate_model(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_invalid_base_material_reference() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup};
+
+        let mut model = Model::new();
+
+        // Add a base material group with id=5
+        let mut base_group = BaseMaterialGroup::new(5);
+        base_group
+            .materials
+            .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(base_group);
+
+        // Create an object that references a non-existent material group id=99
+        let mut object = Object::new(1);
+        object.pid = Some(99); // Invalid reference!
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("non-existent"));
+    }
+
+    #[test]
+    fn test_validate_base_material_pindex_out_of_bounds() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup};
+
+        let mut model = Model::new();
+
+        // Add a base material group with only 1 material
+        let mut base_group = BaseMaterialGroup::new(5);
+        base_group
+            .materials
+            .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(base_group);
+
+        // Create an object with pindex=5 (out of bounds)
+        let mut object = Object::new(1);
+        object.pid = Some(5);
+        object.pindex = Some(5); // Out of bounds! Only index 0 is valid
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
     }
 }
