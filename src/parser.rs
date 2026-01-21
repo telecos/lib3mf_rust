@@ -467,6 +467,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .split_whitespace()
                             .filter_map(|s| s.parse::<usize>().ok())
                             .collect();
+                        
+                        // Validate we parsed at least one index
+                        if matindices.is_empty() {
+                            return Err(Error::InvalidXml(
+                                "compositematerials matindices must contain at least one valid index"
+                                    .to_string(),
+                            ));
+                        }
+                        
                         current_compositematerials =
                             Some(CompositeMaterials::new(id, matid, matindices));
                     }
@@ -482,6 +491,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 .split_whitespace()
                                 .filter_map(|s| s.parse::<f32>().ok())
                                 .collect();
+                            
+                            // Validate we parsed at least one value
+                            if values.is_empty() {
+                                return Err(Error::InvalidXml(
+                                    "composite values must contain at least one valid number"
+                                        .to_string(),
+                                ));
+                            }
+                            
                             group.composites.push(Composite::new(values));
                         }
                     }
@@ -505,6 +523,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .split_whitespace()
                             .filter_map(|s| s.parse::<usize>().ok())
                             .collect();
+                        
+                        // Validate we parsed at least one property ID
+                        if pids.is_empty() {
+                            return Err(Error::InvalidXml(
+                                "multiproperties pids must contain at least one valid ID"
+                                    .to_string(),
+                            ));
+                        }
                         
                         let mut multi = MultiProperties::new(id, pids);
                         
@@ -534,6 +560,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 .split_whitespace()
                                 .filter_map(|s| s.parse::<usize>().ok())
                                 .collect();
+                            
+                            // Note: Empty pindices is allowed per spec - defaults to 0
+                            // But if there's text that all failed to parse, that's an error
+                            if !pindices_str.trim().is_empty() && pindices.is_empty() {
+                                return Err(Error::InvalidXml(
+                                    "multi pindices contains invalid values that could not be parsed"
+                                        .to_string(),
+                                ));
+                            }
+                            
                             group.multis.push(Multi::new(pindices));
                         }
                     }
