@@ -329,9 +329,13 @@ fn validate_material_references(model: &Model) -> Result<()> {
             // If object has a pid, it should reference a valid property group
             // Only validate if there are property groups defined, otherwise pid might be unused
             if !valid_property_group_ids.is_empty() && !valid_property_group_ids.contains(&pid) {
+                let mut available_ids: Vec<usize> = valid_property_group_ids.iter().copied().collect();
+                available_ids.sort();
                 return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent property group ID: {}",
-                    object.id, pid
+                    "Object {} references non-existent property group ID: {}.\n\
+                     Available property group IDs: {:?}\n\
+                     Hint: Check that all referenced property groups are defined in the <resources> section.",
+                    object.id, pid, available_ids
                 )));
             }
         }
@@ -340,10 +344,13 @@ fn validate_material_references(model: &Model) -> Result<()> {
         if let Some(basematerialid) = object.basematerialid {
             // basematerialid should reference a valid base material group
             if !valid_basematerial_ids.contains(&basematerialid) {
+                let mut available_ids: Vec<usize> = valid_basematerial_ids.iter().copied().collect();
+                available_ids.sort();
                 return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent base material group ID: {}. \
-                     Check that a basematerials group with this ID exists in the resources section.",
-                    object.id, basematerialid
+                    "Object {} references non-existent base material group ID: {}.\n\
+                     Available base material group IDs: {:?}\n\
+                     Hint: Check that a basematerials group with this ID exists in the <resources> section.",
+                    object.id, basematerialid, available_ids
                 )));
             }
         }
@@ -360,11 +367,14 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 if let Some(pindex) = object.pindex {
                     if pindex >= colorgroup.colors.len() {
                         return Err(Error::InvalidModel(format!(
-                            "Object {}: pindex {} is out of bounds (color group {} has {} colors)",
+                            "Object {}: pindex {} is out of bounds.\n\
+                             Color group {} has {} colors (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of colors in the color group.",
                             object.id,
                             pindex,
                             obj_pid,
-                            colorgroup.colors.len()
+                            colorgroup.colors.len(),
+                            colorgroup.colors.len() - 1
                         )));
                     }
                 }
@@ -380,11 +390,14 @@ fn validate_material_references(model: &Model) -> Result<()> {
                 if let Some(pindex) = object.pindex {
                     if pindex >= basematerialgroup.materials.len() {
                         return Err(Error::InvalidModel(format!(
-                            "Object {}: pindex {} is out of bounds (base material group {} has {} materials)",
+                            "Object {}: pindex {} is out of bounds.\n\
+                             Base material group {} has {} materials (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of materials in the base material group.",
                             object.id,
                             pindex,
                             obj_pid,
-                            basematerialgroup.materials.len()
+                            basematerialgroup.materials.len(),
+                            basematerialgroup.materials.len() - 1
                         )));
                     }
                 }
@@ -408,8 +421,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(pindex) = triangle.pindex {
                             if pindex >= num_colors {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} pindex {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, pindex, pid, num_colors
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     Color group {} has {} colors (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of colors in the color group.",
+                                    object.id, tri_idx, pindex, pid, num_colors, num_colors - 1
                                 )));
                             }
                         }
@@ -418,8 +433,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(p1) = triangle.p1 {
                             if p1 >= num_colors {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p1 {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, p1, pid, num_colors
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     Color group {} has {} colors (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of colors in the color group.",
+                                    object.id, tri_idx, p1, pid, num_colors, num_colors - 1
                                 )));
                             }
                         }
@@ -427,8 +444,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(p2) = triangle.p2 {
                             if p2 >= num_colors {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p2 {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, p2, pid, num_colors
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     Color group {} has {} colors (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of colors in the color group.",
+                                    object.id, tri_idx, p2, pid, num_colors, num_colors - 1
                                 )));
                             }
                         }
@@ -436,8 +455,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(p3) = triangle.p3 {
                             if p3 >= num_colors {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p3 {} is out of bounds (color group {} has {} colors)",
-                                    object.id, tri_idx, p3, pid, num_colors
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     Color group {} has {} colors (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of colors in the color group.",
+                                    object.id, tri_idx, p3, pid, num_colors, num_colors - 1
                                 )));
                             }
                         }
@@ -455,8 +476,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(pindex) = triangle.pindex {
                             if pindex >= num_materials {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} pindex {} is out of bounds (base material group {} has {} materials)",
-                                    object.id, tri_idx, pindex, pid, num_materials
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     Base material group {} has {} materials (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of materials in the base material group.",
+                                    object.id, tri_idx, pindex, pid, num_materials, num_materials - 1
                                 )));
                             }
                         }
@@ -465,8 +488,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(p1) = triangle.p1 {
                             if p1 >= num_materials {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p1 {} is out of bounds (base material group {} has {} materials)",
-                                    object.id, tri_idx, p1, pid, num_materials
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     Base material group {} has {} materials (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of materials in the base material group.",
+                                    object.id, tri_idx, p1, pid, num_materials, num_materials - 1
                                 )));
                             }
                         }
@@ -474,8 +499,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(p2) = triangle.p2 {
                             if p2 >= num_materials {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p2 {} is out of bounds (base material group {} has {} materials)",
-                                    object.id, tri_idx, p2, pid, num_materials
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     Base material group {} has {} materials (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of materials in the base material group.",
+                                    object.id, tri_idx, p2, pid, num_materials, num_materials - 1
                                 )));
                             }
                         }
@@ -483,8 +510,10 @@ fn validate_material_references(model: &Model) -> Result<()> {
                         if let Some(p3) = triangle.p3 {
                             if p3 >= num_materials {
                                 return Err(Error::InvalidModel(format!(
-                                    "Object {}: Triangle {} p3 {} is out of bounds (base material group {} has {} materials)",
-                                    object.id, tri_idx, p3, pid, num_materials
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     Base material group {} has {} materials (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of materials in the base material group.",
+                                    object.id, tri_idx, p3, pid, num_materials, num_materials - 1
                                 )));
                             }
                         }
@@ -511,18 +540,26 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
         if let Some(ref boolean_shape) = object.boolean_shape {
             // Validate the base object ID exists (skip if it has a path to an external file)
             if boolean_shape.path.is_none() && !valid_object_ids.contains(&boolean_shape.objectid) {
+                let mut available_ids: Vec<usize> = valid_object_ids.iter().copied().collect();
+                available_ids.sort();
                 return Err(Error::InvalidModel(format!(
-                    "Object {}: Boolean shape references non-existent object ID {}",
-                    object.id, boolean_shape.objectid
+                    "Object {}: Boolean shape references non-existent object ID {}.\n\
+                     Available object IDs: {:?}\n\
+                     Hint: Ensure the referenced object exists in the <resources> section.",
+                    object.id, boolean_shape.objectid, available_ids
                 )));
             }
 
             // Validate all operand object IDs exist (skip external references)
             for operand in &boolean_shape.operands {
                 if operand.path.is_none() && !valid_object_ids.contains(&operand.objectid) {
+                    let mut available_ids: Vec<usize> = valid_object_ids.iter().copied().collect();
+                    available_ids.sort();
                     return Err(Error::InvalidModel(format!(
-                        "Object {}: Boolean operand references non-existent object ID {}",
-                        object.id, operand.objectid
+                        "Object {}: Boolean operand references non-existent object ID {}.\n\
+                         Available object IDs: {:?}\n\
+                         Hint: Ensure the referenced object exists in the <resources> section.",
+                        object.id, operand.objectid, available_ids
                     )));
                 }
             }
@@ -580,9 +617,13 @@ fn validate_component_references(model: &Model) -> Result<()> {
             }
 
             if !valid_object_ids.contains(&component.objectid) {
+                let mut available_ids: Vec<usize> = valid_object_ids.iter().copied().collect();
+                available_ids.sort();
                 return Err(Error::InvalidModel(format!(
-                    "Object {}: Component references non-existent object ID {}",
-                    object.id, component.objectid
+                    "Object {}: Component references non-existent object ID {}.\n\
+                     Available object IDs: {:?}\n\
+                     Hint: Ensure the referenced object exists in the <resources> section.",
+                    object.id, component.objectid, available_ids
                 )));
             }
         }

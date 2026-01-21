@@ -34,6 +34,105 @@ use thiserror::Error;
 /// Result type for 3MF operations
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Additional context for errors
+///
+/// Provides optional supplementary information to help with debugging:
+/// - File location information (when available from XML parsing)
+/// - Line and column numbers (when available from XML parsing)
+/// - Helpful hints for resolving common issues
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorContext {
+    /// The file where the error occurred (typically a path within the 3MF archive)
+    pub file: Option<String>,
+    
+    /// Line number where the error occurred (when available from XML parsing)
+    pub line: Option<usize>,
+    
+    /// Column number where the error occurred (when available from XML parsing)
+    pub column: Option<usize>,
+    
+    /// A helpful hint for resolving the error
+    pub hint: Option<String>,
+}
+
+impl ErrorContext {
+    /// Create a new empty error context
+    pub fn new() -> Self {
+        Self {
+            file: None,
+            line: None,
+            column: None,
+            hint: None,
+        }
+    }
+    
+    /// Create an error context with just a hint
+    pub fn with_hint(hint: impl Into<String>) -> Self {
+        Self {
+            file: None,
+            line: None,
+            column: None,
+            hint: Some(hint.into()),
+        }
+    }
+    
+    /// Set the file location
+    pub fn file(mut self, file: impl Into<String>) -> Self {
+        self.file = Some(file.into());
+        self
+    }
+    
+    /// Set the line number
+    pub fn line(mut self, line: usize) -> Self {
+        self.line = Some(line);
+        self
+    }
+    
+    /// Set the column number
+    pub fn column(mut self, column: usize) -> Self {
+        self.column = Some(column);
+        self
+    }
+    
+    /// Set the hint
+    pub fn hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
+    }
+}
+
+impl Default for ErrorContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for ErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut parts = Vec::new();
+        
+        if let Some(ref file) = self.file {
+            parts.push(format!("File: {}", file));
+        }
+        
+        if let (Some(line), Some(column)) = (self.line, self.column) {
+            parts.push(format!("Location: line {}, column {}", line, column));
+        } else if let Some(line) = self.line {
+            parts.push(format!("Line: {}", line));
+        }
+        
+        if let Some(ref hint) = self.hint {
+            parts.push(format!("Hint: {}", hint));
+        }
+        
+        if !parts.is_empty() {
+            write!(f, "\n{}", parts.join("\n"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// Errors that can occur when parsing 3MF files
 #[derive(Error, Debug)]
 pub enum Error {
@@ -370,5 +469,61 @@ mod tests {
         let err = Error::from(parse_err);
         assert!(err.to_string().contains("Failed to parse integer"));
         assert!(err.to_string().contains("[E3002]"));
+    }
+
+    #[test]
+    fn test_error_context_with_hint() {
+        let ctx = ErrorContext::with_hint("Check the 3MF specification");
+        assert_eq!(ctx.hint, Some("Check the 3MF specification".to_string()));
+        assert_eq!(ctx.file, None);
+        assert_eq!(ctx.line, None);
+        assert_eq!(ctx.column, None);
+    }
+
+    #[test]
+    fn test_error_context_builder() {
+        let ctx = ErrorContext::new()
+            .file("3D/3dmodel.model")
+            .line(42)
+            .column(15)
+            .hint("Check attribute syntax");
+
+        assert_eq!(ctx.file, Some("3D/3dmodel.model".to_string()));
+        assert_eq!(ctx.line, Some(42));
+        assert_eq!(ctx.column, Some(15));
+        assert_eq!(ctx.hint, Some("Check attribute syntax".to_string()));
+    }
+
+    #[test]
+    fn test_error_context_display() {
+        let ctx = ErrorContext::new()
+            .file("3D/3dmodel.model")
+            .line(42)
+            .column(15)
+            .hint("Check attribute syntax");
+
+        let display = ctx.to_string();
+        assert!(display.contains("File: 3D/3dmodel.model"));
+        assert!(display.contains("Location: line 42, column 15"));
+        assert!(display.contains("Hint: Check attribute syntax"));
+    }
+
+    #[test]
+    fn test_error_context_display_partial() {
+        let ctx = ErrorContext::new()
+            .file("3D/3dmodel.model")
+            .hint("Check the specification");
+
+        let display = ctx.to_string();
+        assert!(display.contains("File: 3D/3dmodel.model"));
+        assert!(display.contains("Hint: Check the specification"));
+        assert!(!display.contains("Location:"));
+    }
+
+    #[test]
+    fn test_error_context_display_empty() {
+        let ctx = ErrorContext::new();
+        let display = ctx.to_string();
+        assert_eq!(display, "");
     }
 }
