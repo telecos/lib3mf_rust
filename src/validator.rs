@@ -541,7 +541,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
 /// Validate component references
 ///
 /// Per 3MF Core spec:
-/// - Component objectid must reference an existing object in resources
+/// - Component objectid must reference an existing object in resources (unless referenced via p:path)
 /// - Components must not create circular dependencies (no cycles in the component graph)
 fn validate_component_references(model: &Model) -> Result<()> {
     // Build a set of valid object IDs for quick lookup
@@ -550,6 +550,12 @@ fn validate_component_references(model: &Model) -> Result<()> {
     // Validate that all component object references exist
     for object in &model.resources.objects {
         for component in &object.components {
+            // Skip validation for components that reference external objects via p:path
+            // In multi-part 3MF files, objects can be defined in separate model files
+            if component.production_path.is_some() {
+                continue;
+            }
+
             if !valid_object_ids.contains(&component.objectid) {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Component references non-existent object ID {}",
@@ -613,6 +619,12 @@ fn detect_circular_components(
     // Find the object and check its components
     if let Some(object) = model.resources.objects.iter().find(|o| o.id == object_id) {
         for component in &object.components {
+            // Skip components that reference external objects via p:path
+            // These don't contribute to circular dependencies within this model
+            if component.production_path.is_some() {
+                continue;
+            }
+
             if let Some(cycle) =
                 detect_circular_components(component.objectid, model, visited, path)?
             {

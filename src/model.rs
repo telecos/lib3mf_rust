@@ -1312,6 +1312,11 @@ pub struct Component {
     /// - ty (index 10): translation along Y axis  
     /// - tz (index 11): translation along Z axis
     pub transform: Option<[f64; 12]>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
+    /// Production extension path (p:path attribute) - references a separate model file
+    /// Used in multi-part 3MF files to reference objects defined in other model files
+    pub production_path: Option<String>,
 }
 
 impl Component {
@@ -1320,6 +1325,8 @@ impl Component {
         Self {
             objectid,
             transform: None,
+            production_uuid: None,
+            production_path: None,
         }
     }
 
@@ -1328,6 +1335,8 @@ impl Component {
         Self {
             objectid,
             transform: Some(transform),
+            production_uuid: None,
+            production_path: None,
         }
     }
 }

@@ -1680,7 +1680,8 @@ fn parse_component<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec: objectid, transform
-    validate_attributes(&attrs, &["objectid", "transform"], "component")?;
+    // Production extension: p:UUID, p:path
+    validate_attributes(&attrs, &["objectid", "transform", "p:UUID", "p:path"], "component")?;
 
     let objectid = attrs
         .get("objectid")
@@ -1720,6 +1721,14 @@ fn parse_component<R: std::io::BufRead>(
         let mut transform = [0.0; 12];
         transform.copy_from_slice(&values);
         component.transform = Some(transform);
+    }
+
+    // Extract Production extension attributes (p:UUID, p:path)
+    if let Some(p_uuid) = attrs.get("p:UUID") {
+        component.production_uuid = Some(p_uuid.clone());
+    }
+    if let Some(p_path) = attrs.get("p:path") {
+        component.production_path = Some(p_path.clone());
     }
 
     Ok(component)
