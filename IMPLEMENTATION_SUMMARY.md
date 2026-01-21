@@ -90,7 +90,7 @@ Updated documentation:
 | Production Extension | ⚠️ Partially Supported | Files parse, UUIDs not yet extracted |
 | Slice Extension | ⚠️ Partially Supported | Files parse, slice data not yet extracted |
 | Beam Lattice Extension | ⚠️ Partially Supported | Files parse, beam data not yet extracted |
-| Secure Content | ❌ Not Tested | No test files available |
+| Secure Content | ⚠️ Read-Only Validation | Extension recognized, basic metadata extraction, NO cryptography |
 | Boolean Operations | ❌ Not Tested | No test files available |
 
 ## Technical Details

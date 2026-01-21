@@ -299,6 +299,22 @@ impl ColorGroup {
     }
 }
 
+/// Secure content metadata (read-only awareness)
+///
+/// This structure provides minimal awareness of secure content elements
+/// without implementing actual cryptographic operations. It tracks which
+/// files are encrypted and keystore metadata.
+///
+/// **Security Warning**: This does NOT decrypt content or verify signatures.
+/// See SECURE_CONTENT_SUPPORT.md for security considerations.
+#[derive(Debug, Clone, Default)]
+pub struct SecureContentInfo {
+    /// UUID of the keystore (if present)
+    pub keystore_uuid: Option<String>,
+    /// Paths to encrypted files in the package
+    pub encrypted_files: Vec<String>,
+}
+
 /// A 3D object that can be a mesh or reference other objects
 #[derive(Debug, Clone)]
 pub struct Object {
@@ -429,6 +445,8 @@ pub struct Model {
     pub resources: Resources,
     /// Build specification
     pub build: Build,
+    /// Secure content information (if secure content extension is used)
+    pub secure_content: Option<SecureContentInfo>,
 }
 
 impl Model {
@@ -441,6 +459,7 @@ impl Model {
             metadata: HashMap::new(),
             resources: Resources::new(),
             build: Build::new(),
+            secure_content: None,
         }
     }
 }
