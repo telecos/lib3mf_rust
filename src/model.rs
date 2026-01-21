@@ -289,6 +289,15 @@ pub struct ColorGroup {
     pub colors: Vec<(u8, u8, u8, u8)>,
 }
 
+/// Production extension information
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProductionInfo {
+    /// UUID identifier (p:UUID attribute)
+    pub uuid: Option<String>,
+    /// Production path (p:path attribute)
+    pub path: Option<String>,
+}
+
 impl ColorGroup {
     /// Create a new color group
     pub fn new(id: usize) -> Self {
@@ -337,6 +346,30 @@ impl BaseMaterial {
     }
 }
 
+impl ProductionInfo {
+    /// Create a new empty ProductionInfo
+    pub fn new() -> Self {
+        Self {
+            uuid: None,
+            path: None,
+        }
+    }
+
+    /// Create a ProductionInfo with just a UUID
+    pub fn with_uuid(uuid: String) -> Self {
+        Self {
+            uuid: Some(uuid),
+            path: None,
+        }
+    }
+}
+
+impl Default for ProductionInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A 3D object that can be a mesh or reference other objects
 #[derive(Debug, Clone)]
 pub struct Object {
@@ -352,6 +385,8 @@ pub struct Object {
     pub pid: Option<usize>,
     /// Optional material index (property index) - used with pid to select from color groups
     pub pindex: Option<usize>,
+    /// Production extension information (UUID, path)
+    pub production: Option<ProductionInfo>,
 }
 
 /// Type of 3D object
@@ -379,6 +414,7 @@ impl Object {
             mesh: None,
             pid: None,
             pindex: None,
+            production: None,
         }
     }
 }
@@ -422,6 +458,8 @@ pub struct BuildItem {
     /// Optional transformation matrix (4x3 affine transformation stored as 12 values)
     /// Represents a 3x4 matrix in row-major order for affine transformations
     pub transform: Option<[f64; 12]>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
 }
 
 impl BuildItem {
@@ -430,6 +468,7 @@ impl BuildItem {
         Self {
             objectid,
             transform: None,
+            production_uuid: None,
         }
     }
 }
@@ -439,12 +478,17 @@ impl BuildItem {
 pub struct Build {
     /// List of items to build
     pub items: Vec<BuildItem>,
+    /// Production extension UUID (p:UUID attribute)
+    pub production_uuid: Option<String>,
 }
 
 impl Build {
     /// Create a new empty build section
     pub fn new() -> Self {
-        Self { items: Vec::new() }
+        Self {
+            items: Vec::new(),
+            production_uuid: None,
+        }
     }
 }
 
