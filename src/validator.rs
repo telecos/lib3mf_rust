@@ -284,17 +284,39 @@ fn validate_material_references(model: &Model) -> Result<()> {
         }
     }
 
-    // Validate that pid and basematerialid references point to existing color groups or base material groups
+    // Validate that pid and basematerialid references point to existing property groups
+    // Valid property groups include: color groups, base material groups, multiproperties,
+    // texture2d groups, and composite materials
 
-    // Collect valid color group IDs
-    let valid_colorgroup_ids: HashSet<usize> = model
-        .resources
-        .color_groups
-        .iter()
-        .map(|cg| cg.id)
-        .collect();
+    // Collect all valid property group IDs into a single HashSet for efficient lookup
+    let mut valid_property_group_ids: HashSet<usize> = HashSet::new();
 
-    // Collect valid base material group IDs
+    // Add color group IDs
+    for cg in &model.resources.color_groups {
+        valid_property_group_ids.insert(cg.id);
+    }
+
+    // Add base material group IDs
+    for bg in &model.resources.base_material_groups {
+        valid_property_group_ids.insert(bg.id);
+    }
+
+    // Add multiproperties IDs
+    for mp in &model.resources.multi_properties {
+        valid_property_group_ids.insert(mp.id);
+    }
+
+    // Add texture2d group IDs
+    for tg in &model.resources.texture2d_groups {
+        valid_property_group_ids.insert(tg.id);
+    }
+
+    // Add composite materials IDs
+    for cm in &model.resources.composite_materials {
+        valid_property_group_ids.insert(cm.id);
+    }
+
+    // Keep separate base material IDs set for basematerialid validation
     let valid_basematerial_ids: HashSet<usize> = model
         .resources
         .base_material_groups
@@ -304,17 +326,11 @@ fn validate_material_references(model: &Model) -> Result<()> {
 
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
-            // If object has a pid, it should reference a valid color group or base material group
-            let is_valid =
-                valid_colorgroup_ids.contains(&pid) || valid_basematerial_ids.contains(&pid);
-
-            // Only validate if there are material groups defined, otherwise pid might be unused
-            let has_materials =
-                !valid_colorgroup_ids.is_empty() || !valid_basematerial_ids.is_empty();
-
-            if has_materials && !is_valid {
+            // If object has a pid, it should reference a valid property group
+            // Only validate if there are property groups defined, otherwise pid might be unused
+            if !valid_property_group_ids.is_empty() && !valid_property_group_ids.contains(&pid) {
                 return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent color group or base material ID: {}",
+                    "Object {} references non-existent property group ID: {}",
                     object.id, pid
                 )));
             }
@@ -1080,6 +1096,75 @@ mod tests {
 
         // Should pass validation
         let result = validate_component_references(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_multiproperties_reference() {
+        use crate::model::{Multi, MultiProperties};
+
+        let mut model = Model::new();
+
+        // Add a multiproperties group with ID 12
+        let mut multi_props = MultiProperties {
+            id: 12,
+            pids: vec![6, 9],
+            blendmethods: vec![],
+            multis: vec![],
+        };
+        multi_props.multis.push(Multi {
+            pindices: vec![0, 0],
+        });
+        model.resources.multi_properties.push(multi_props);
+
+        // Create an object that references the multiproperties group
+        let mut object = Object::new(1);
+        object.pid = Some(12); // Should reference the multiproperties group
+        object.pindex = Some(0);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation (multiproperties is a valid property group)
+        let result = validate_material_references(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_texture2d_group_reference() {
+        use crate::model::{Tex2Coord, Texture2DGroup};
+
+        let mut model = Model::new();
+
+        // Add a texture2d group with ID 9
+        let mut tex_group = Texture2DGroup::new(9, 4);
+        tex_group.tex2coords.push(Tex2Coord { u: 0.0, v: 0.0 });
+        tex_group.tex2coords.push(Tex2Coord { u: 1.0, v: 1.0 });
+        model.resources.texture2d_groups.push(tex_group);
+
+        // Create an object that references the texture2d group
+        let mut object = Object::new(1);
+        object.pid = Some(9); // Should reference the texture2d group
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation (texture2d group is a valid property group)
+        let result = validate_material_references(&model);
         assert!(result.is_ok());
     }
 }
