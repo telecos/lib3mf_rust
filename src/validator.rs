@@ -319,8 +319,8 @@ fn validate_metadata(model: &Model) -> Result<()> {
         }
 
         // Metadata value should not be empty for well-known metadata
-        // This is a warning-level check, but we enforce it for important metadata
-        if entry.value.trim().is_empty() {
+        // Check both raw empty and whitespace-only values
+        if entry.value.is_empty() {
             // Check if it's a well-known metadata that should have a value
             match name.as_str() {
                 metadata_names::TITLE
@@ -334,6 +334,22 @@ fn validate_metadata(model: &Model) -> Result<()> {
                 }
                 _ => {
                     // For other metadata, empty values are allowed but not recommended
+                }
+            }
+        } else if entry.value.trim().is_empty() {
+            // Whitespace-only values for well-known metadata
+            match name.as_str() {
+                metadata_names::TITLE
+                | metadata_names::DESIGNER
+                | metadata_names::COPYRIGHT
+                | metadata_names::LICENSE_TERMS => {
+                    return Err(Error::InvalidModel(format!(
+                        "Well-known metadata '{}' should not have a whitespace-only value",
+                        name
+                    )));
+                }
+                _ => {
+                    // For other metadata, whitespace-only values are allowed but not recommended
                 }
             }
         }
@@ -601,5 +617,34 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Invalid namespaced metadata"));
+    }
+
+    #[test]
+    fn test_validate_metadata_whitespace_only_well_known_value() {
+        use crate::model::MetadataEntry;
+        
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Add Designer metadata with whitespace-only value - should fail
+        model.metadata.insert(
+            "Designer".to_string(),
+            MetadataEntry::new("   ".to_string()),
+        );
+
+        let result = validate_metadata(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("whitespace-only value"));
     }
 }

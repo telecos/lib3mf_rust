@@ -178,12 +178,23 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
 
                             // Read the text content
                             // Handle both empty elements and elements with text content
-                            let value = if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                                t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?
-                                    .to_string()
-                            } else {
-                                // Empty metadata element
-                                String::new()
+                            let value = match reader.read_event_into(&mut buf) {
+                                Ok(Event::Text(t)) => {
+                                    t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?
+                                        .to_string()
+                                }
+                                Ok(Event::End(_)) => {
+                                    // Empty metadata element (e.g., <metadata name="X"></metadata>)
+                                    String::new()
+                                }
+                                Ok(_) => {
+                                    // Unexpected event type - treat as empty
+                                    String::new()
+                                }
+                                Err(e) => {
+                                    // XML parsing error - propagate it
+                                    return Err(Error::InvalidXml(e.to_string()));
+                                }
                             };
 
                             model.metadata.insert(
