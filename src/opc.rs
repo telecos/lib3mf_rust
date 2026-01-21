@@ -496,12 +496,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                         // Check if this is a thumbnail relationship
                         if let (Some(t), Some(rt)) = (target, rel_type) {
                             if rt == THUMBNAIL_REL_TYPE {
-                                // Remove leading slash if present
-                                let path = if let Some(stripped) = t.strip_prefix('/') {
-                                    stripped.to_string()
-                                } else {
-                                    t
-                                };
+                                let path = Self::normalize_path(&t).to_string();
                                 thumbnail_path = Some(path);
                                 break;
                             }
@@ -553,7 +548,10 @@ impl<R: Read + std::io::Seek> Package<R> {
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
 
-        // First check for Override elements (specific path matches)
+        let path_normalized = Self::normalize_path(path);
+        let extension = path.rsplit('.').next();
+
+        // Parse content types file once, checking both Override and Default elements
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
@@ -561,6 +559,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                     let name_str = std::str::from_utf8(name.as_ref())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
+                    // Check for Override elements (specific path matches)
                     if name_str.ends_with("Override") {
                         let mut part_name = None;
                         let mut content_type = None;
@@ -580,11 +579,36 @@ impl<R: Read + std::io::Seek> Package<R> {
                         }
 
                         if let (Some(pn), Some(ct)) = (part_name, content_type) {
-                            // Match with or without leading slash
-                            let pn_normalized = pn.strip_prefix('/').unwrap_or(&pn);
-                            let path_normalized = path.strip_prefix('/').unwrap_or(path);
+                            let pn_normalized = Self::normalize_path(&pn);
                             if pn_normalized == path_normalized {
                                 return Ok(ct);
+                            }
+                        }
+                    }
+                    // Check for Default elements (extension-based matches)
+                    else if name_str.ends_with("Default") {
+                        if let Some(ext) = extension {
+                            let mut ext_attr = None;
+                            let mut content_type = None;
+
+                            for attr in e.attributes() {
+                                let attr = attr?;
+                                let key = std::str::from_utf8(attr.key.as_ref())
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                let value = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                match key {
+                                    "Extension" => ext_attr = Some(value.to_string()),
+                                    "ContentType" => content_type = Some(value.to_string()),
+                                    _ => {}
+                                }
+                            }
+
+                            if let (Some(e), Some(ct)) = (ext_attr, content_type) {
+                                if e.eq_ignore_ascii_case(ext) {
+                                    return Ok(ct);
+                                }
                             }
                         }
                     }
@@ -596,57 +620,15 @@ impl<R: Read + std::io::Seek> Package<R> {
             buf.clear();
         }
 
-        // If no Override found, check Default elements based on extension
-        if let Some(extension) = path.rsplit('.').next() {
-            let content = self.get_file(CONTENT_TYPES_PATH)?;
-            let mut reader = Reader::from_str(&content);
-            reader.config_mut().trim_text(true);
-            let mut buf = Vec::new();
-
-            loop {
-                match reader.read_event_into(&mut buf) {
-                    Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                        let name = e.name();
-                        let name_str = std::str::from_utf8(name.as_ref())
-                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
-
-                        if name_str.ends_with("Default") {
-                            let mut ext = None;
-                            let mut content_type = None;
-
-                            for attr in e.attributes() {
-                                let attr = attr?;
-                                let key = std::str::from_utf8(attr.key.as_ref())
-                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                                let value = std::str::from_utf8(&attr.value)
-                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
-
-                                match key {
-                                    "Extension" => ext = Some(value.to_string()),
-                                    "ContentType" => content_type = Some(value.to_string()),
-                                    _ => {}
-                                }
-                            }
-
-                            if let (Some(e), Some(ct)) = (ext, content_type) {
-                                if e.eq_ignore_ascii_case(extension) {
-                                    return Ok(ct);
-                                }
-                            }
-                        }
-                    }
-                    Ok(Event::Eof) => break,
-                    Err(e) => return Err(Error::Xml(e)),
-                    _ => {}
-                }
-                buf.clear();
-            }
-        }
-
         Err(Error::InvalidFormat(format!(
             "No content type found for file: {}",
             path
         )))
+    }
+
+    /// Normalize OPC path by removing leading slash
+    fn normalize_path(path: &str) -> &str {
+        path.strip_prefix('/').unwrap_or(path)
     }
 }
 

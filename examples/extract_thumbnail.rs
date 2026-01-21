@@ -9,9 +9,11 @@ use lib3mf::Model;
 use std::fs::File;
 use std::io::Write;
 
+const TEST_FILE: &str = "test_files/test_thumbnail.3mf";
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse a 3MF file
-    let file = File::open("test_files/test_thumbnail.3mf")?;
+    let file = File::open(TEST_FILE)?;
     let model = Model::from_reader(file)?;
 
     // Check if model has a thumbnail
@@ -21,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  Content Type: {}", thumbnail.content_type);
 
         // Read the thumbnail binary data
-        let file = File::open("test_files/test_thumbnail.3mf")?;
+        let file = File::open(TEST_FILE)?;
         if let Some(thumbnail_data) = Model::read_thumbnail(file)? {
             println!("  Size: {} bytes", thumbnail_data.len());
 
