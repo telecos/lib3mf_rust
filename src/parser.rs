@@ -12,6 +12,9 @@ use std::io::Read;
 /// Size of 3MF transformation matrix (4x3 affine transform in row-major order)
 const TRANSFORM_MATRIX_SIZE: usize = 12;
 
+/// Default buffer capacity for XML parsing (4KB)
+const XML_BUFFER_CAPACITY: usize = 4096;
+
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     // Use default config that supports all extensions for backward compatibility
@@ -124,7 +127,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
     let mut model = Model::new();
     // Pre-allocate buffer with reasonable capacity to reduce allocations
-    let mut buf = Vec::with_capacity(4096);
+    let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
     let mut in_resources = false;
     let mut in_build = false;
     let mut current_object: Option<Object> = None;
@@ -1221,46 +1224,33 @@ fn load_slice_references<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
-    // We need to iterate over slice stacks and load external files
-    // We can't modify while iterating, so collect the references first
-    let mut slice_data_to_load: Vec<(usize, String)> = Vec::new();
-
-    for slice_stack in &model.resources.slice_stacks {
+    // Process each slice stack independently
+    for slice_stack in &mut model.resources.slice_stacks {
+        let stack_id = slice_stack.id;
+        
+        // Load slices from each referenced file
         for slice_ref in &slice_stack.slice_refs {
-            // Store the slice stack ID and path for loading
-            slice_data_to_load.push((slice_stack.id, slice_ref.slicepath.clone()));
-        }
-    }
+            // Normalize the path (remove leading slash if present)
+            let normalized_path = if slice_ref.slicepath.starts_with('/') {
+                &slice_ref.slicepath[1..]
+            } else {
+                &slice_ref.slicepath
+            };
 
-    // Load each referenced slice file and parse it
-    for (stack_id, slice_path) in slice_data_to_load {
-        // Normalize the path (remove leading slash if present)
-        let normalized_path = if slice_path.starts_with('/') {
-            &slice_path[1..]
-        } else {
-            &slice_path
-        };
+            // Load the slice file from the package
+            let slice_xml = package
+                .get_file(normalized_path)
+                .map_err(|e| {
+                    Error::InvalidXml(format!(
+                        "Failed to load slice reference file '{}': {}",
+                        slice_ref.slicepath, e
+                    ))
+                })?;
 
-        // Load the slice file from the package
-        let slice_xml = package
-            .get_file(normalized_path)
-            .map_err(|e| {
-                Error::InvalidXml(format!(
-                    "Failed to load slice reference file '{}': {}",
-                    slice_path, e
-                ))
-            })?;
+            // Parse the slice file to extract slices
+            let slices = parse_slice_file(&slice_xml, stack_id)?;
 
-        // Parse the slice file to extract slices
-        let slices = parse_slice_file(&slice_xml, stack_id)?;
-
-        // Find the slice stack with the matching ID and add the slices
-        if let Some(slice_stack) = model
-            .resources
-            .slice_stacks
-            .iter_mut()
-            .find(|s| s.id == stack_id)
-        {
+            // Add the slices to this slice stack
             slice_stack.slices.extend(slices);
         }
     }
@@ -1277,7 +1267,7 @@ fn parse_slice_file(xml: &str, expected_stack_id: usize) -> Result<Vec<Slice>> {
     reader.config_mut().trim_text(true);
 
     let mut slices = Vec::new();
-    let mut buf = Vec::with_capacity(4096);
+    let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
     let mut in_resources = false;
     let mut in_slicestack = false;
     let mut current_slice: Option<Slice> = None;
