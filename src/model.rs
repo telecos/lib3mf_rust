@@ -255,7 +255,7 @@ pub struct Component {
     /// Reference to object ID
     pub objectid: usize,
     /// Optional transformation matrix (4x3 affine transformation stored as 12 values)
-    /// Represents a 3x4 matrix in row-major order for affine transformations
+    /// Represents a 4x3 matrix in row-major order for affine transformations
     pub transform: Option<[f64; 12]>,
 }
 

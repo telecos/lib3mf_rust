@@ -326,10 +326,16 @@ fn validate_component_references(model: &Model) -> Result<()> {
                 )));
             }
         }
+    }
 
-        // Check for circular references using depth-first search
-        let mut visited = HashSet::new();
-        let mut rec_stack = HashSet::new();
+    // Check for circular references using depth-first search
+    // Reuse HashSets across iterations for better performance
+    let mut visited = HashSet::new();
+    let mut rec_stack = HashSet::new();
+    
+    for object in &model.resources.objects {
+        visited.clear();
+        rec_stack.clear();
         if has_circular_reference(object.id, model, &mut visited, &mut rec_stack)? {
             return Err(Error::InvalidModel(format!(
                 "Object {}: Circular component reference detected",
