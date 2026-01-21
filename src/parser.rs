@@ -94,13 +94,26 @@ fn get_local_name(name_str: &str) -> &str {
 }
 
 /// Parse the 3D model XML content
-#[allow(dead_code)] // Used in tests
-fn parse_model_xml(xml: &str) -> Result<Model> {
+///
+/// This is primarily used for testing. For production use, use `Model::from_reader()`.
+///
+/// Note: This function is public to enable integration testing, but marked #[doc(hidden)]
+/// to discourage use in production code. We can't use #[cfg(test)] because integration
+/// tests in the tests/ directory are compiled separately and wouldn't have access.
+#[doc(hidden)]
+pub fn parse_model_xml(xml: &str) -> Result<Model> {
     parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
 }
 
 /// Parse the 3D model XML content with configuration
-fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
+///
+/// This is primarily used for testing. For production use, use `Model::from_reader_with_config()`.
+///
+/// Note: This function is public to enable integration testing, but marked #[doc(hidden)]
+/// to discourage use in production code. We can't use #[cfg(test)] because integration
+/// tests in the tests/ directory are compiled separately and wouldn't have access.
+#[doc(hidden)]
+pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -112,8 +125,34 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
     let mut current_mesh: Option<Mesh> = None;
     let mut in_basematerials = false;
     let mut material_index: usize = 0;
+    let mut current_basematerialgroup: Option<BaseMaterialGroup> = None;
     let mut current_colorgroup: Option<ColorGroup> = None;
     let mut in_colorgroup = false;
+    let mut current_beamset: Option<BeamSet> = None;
+    let mut in_beamset = false;
+    let mut current_slicestack: Option<SliceStack> = None;
+    let mut in_slicestack = false;
+    let mut current_slice: Option<Slice> = None;
+    let mut in_slice = false;
+    let mut current_slice_polygon: Option<SlicePolygon> = None;
+    let mut in_slice_polygon = false;
+    let mut in_slice_vertices = false;
+    let mut current_boolean_shape: Option<BooleanShape> = None;
+    let mut in_boolean_shape = false;
+
+    // Displacement extension state
+    let mut current_normvectorgroup: Option<NormVectorGroup> = None;
+    let mut in_normvectorgroup = false;
+    let mut current_disp2dgroup: Option<Disp2DGroup> = None;
+    let mut in_disp2dgroup = false;
+
+    // Materials extension state for advanced features
+    let mut current_texture2dgroup: Option<Texture2DGroup> = None;
+    let mut in_texture2dgroup = false;
+    let mut current_compositematerials: Option<CompositeMaterials> = None;
+    let mut in_compositematerials = false;
+    let mut current_multiproperties: Option<MultiProperties> = None;
+    let mut in_multiproperties = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -223,6 +262,16 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
                                     t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                // Check for duplicate metadata names
+                                // Per 3MF Core spec: metadata element names must be unique
+                                if model.metadata.contains_key(name) {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Duplicate metadata name '{}'. Each metadata element must have a unique name attribute",
+                                        name
+                                    )));
+                                }
+
                                 model.metadata.insert(name.clone(), value.to_string());
                             }
                         }
@@ -244,6 +293,17 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             ));
                         }
                         in_build = true;
+
+                        // Extract and validate build element attributes
+                        let attrs = parse_attributes(&reader, e)?;
+                        // Per 3MF Core spec: build element has no standard attributes
+                        // Only extension attributes (like p:UUID) are allowed
+                        validate_attributes(&attrs, &[], "build")?;
+
+                        // Extract Production extension UUID (p:UUID) from build element
+                        if let Some(p_uuid) = attrs.get("p:UUID") {
+                            model.build.production_uuid = Some(p_uuid.clone());
+                        }
                     }
                     "object" if in_resources => {
                         current_object = Some(parse_object(&reader, e)?);
@@ -276,11 +336,38 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                     "basematerials" if in_resources => {
                         in_basematerials = true;
                         material_index = 0;
-                        // basematerials can have an ID attribute, but we use sequential indices
-                        // for individual materials within the group
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("BaseMaterials missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        current_basematerialgroup = Some(BaseMaterialGroup::new(id));
                     }
                     "base" if in_basematerials => {
-                        // Materials within basematerials use sequential indices
+                        // Materials within basematerials group
+                        if let Some(ref mut group) = current_basematerialgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+
+                            // Validate only allowed attributes are present
+                            // Per 3MF Materials & Properties Extension spec: name, displaycolor
+                            validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
+
+                            let name = attrs.get("name").cloned().unwrap_or_default();
+
+                            // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
+                            // If displaycolor is missing or invalid, use white as default
+                            let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
+                                parse_color(color_str).unwrap_or((255, 255, 255, 255))
+                            } else {
+                                (255, 255, 255, 255)
+                            };
+
+                            group.materials.push(BaseMaterial::new(name, displaycolor));
+                        }
+
+                        // Still parse to materials list for backward compatibility
                         let material = parse_base_material(&reader, e, material_index)?;
                         model.resources.materials.push(material);
                         material_index += 1;
@@ -304,6 +391,651 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                     colorgroup.colors.push(color);
                                 }
                             }
+                        }
+                    }
+                    "texture2d" if in_resources => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("texture2d missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let path = attrs
+                            .get("path")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("texture2d missing path attribute".to_string())
+                            })?
+                            .to_string();
+                        let contenttype = attrs
+                            .get("contenttype")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "texture2d missing contenttype attribute".to_string(),
+                                )
+                            })?
+                            .to_string();
+
+                        let mut texture = Texture2D::new(id, path, contenttype);
+
+                        // Parse optional attributes with spec defaults
+                        if let Some(tileu_str) = attrs.get("tilestyleu") {
+                            texture.tilestyleu = match tileu_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap,
+                            };
+                        }
+
+                        if let Some(tilev_str) = attrs.get("tilestylev") {
+                            texture.tilestylev = match tilev_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap,
+                            };
+                        }
+
+                        if let Some(filter_str) = attrs.get("filter") {
+                            texture.filter = match filter_str.to_lowercase().as_str() {
+                                "auto" => FilterMode::Auto,
+                                "linear" => FilterMode::Linear,
+                                "nearest" => FilterMode::Nearest,
+                                _ => FilterMode::Auto,
+                            };
+                        }
+
+                        model.resources.texture2d_resources.push(texture);
+                    }
+                    "texture2dgroup" if in_resources => {
+                        in_texture2dgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("texture2dgroup missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let texid = attrs
+                            .get("texid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "texture2dgroup missing texid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_texture2dgroup = Some(Texture2DGroup::new(id, texid));
+                    }
+                    "tex2coord" if in_texture2dgroup => {
+                        if let Some(ref mut group) = current_texture2dgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let u = attrs
+                                .get("u")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("tex2coord missing u attribute".to_string())
+                                })?
+                                .parse::<f32>()?;
+                            let v = attrs
+                                .get("v")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("tex2coord missing v attribute".to_string())
+                                })?
+                                .parse::<f32>()?;
+                            group.tex2coords.push(Tex2Coord::new(u, v));
+                        }
+                    }
+                    "compositematerials" if in_resources => {
+                        in_compositematerials = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "compositematerials missing id attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let matid = attrs
+                            .get("matid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "compositematerials missing matid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let matindices_str = attrs
+                            .get("matindices")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "compositematerials missing matindices attribute".to_string(),
+                                )
+                            })?;
+                        let matindices: Vec<usize> = matindices_str
+                            .split_whitespace()
+                            .filter_map(|s| s.parse::<usize>().ok())
+                            .collect();
+                        
+                        // Validate we parsed at least one index
+                        if matindices.is_empty() {
+                            return Err(Error::InvalidXml(
+                                "compositematerials matindices must contain at least one valid index"
+                                    .to_string(),
+                            ));
+                        }
+                        
+                        current_compositematerials =
+                            Some(CompositeMaterials::new(id, matid, matindices));
+                    }
+                    "composite" if in_compositematerials => {
+                        if let Some(ref mut group) = current_compositematerials {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let values_str = attrs
+                                .get("values")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("composite missing values attribute".to_string())
+                                })?;
+                            let values: Vec<f32> = values_str
+                                .split_whitespace()
+                                .filter_map(|s| s.parse::<f32>().ok())
+                                .collect();
+                            
+                            // Validate we parsed at least one value
+                            if values.is_empty() {
+                                return Err(Error::InvalidXml(
+                                    "composite values must contain at least one valid number"
+                                        .to_string(),
+                                ));
+                            }
+                            
+                            group.composites.push(Composite::new(values));
+                        }
+                    }
+                    "multiproperties" if in_resources => {
+                        in_multiproperties = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("multiproperties missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let pids_str = attrs
+                            .get("pids")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "multiproperties missing pids attribute".to_string(),
+                                )
+                            })?;
+                        let pids: Vec<usize> = pids_str
+                            .split_whitespace()
+                            .filter_map(|s| s.parse::<usize>().ok())
+                            .collect();
+                        
+                        // Validate we parsed at least one property ID
+                        if pids.is_empty() {
+                            return Err(Error::InvalidXml(
+                                "multiproperties pids must contain at least one valid ID"
+                                    .to_string(),
+                            ));
+                        }
+                        
+                        let mut multi = MultiProperties::new(id, pids);
+                        
+                        // Parse optional blendmethods
+                        if let Some(blend_str) = attrs.get("blendmethods") {
+                            multi.blendmethods = blend_str
+                                .split_whitespace()
+                                .filter_map(|s| match s.to_lowercase().as_str() {
+                                    "mix" => Some(BlendMethod::Mix),
+                                    "multiply" => Some(BlendMethod::Multiply),
+                                    _ => None,
+                                })
+                                .collect();
+                        }
+                        
+                        current_multiproperties = Some(multi);
+                    }
+                    "multi" if in_multiproperties => {
+                        if let Some(ref mut group) = current_multiproperties {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let pindices_str = attrs
+                                .get("pindices")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("multi missing pindices attribute".to_string())
+                                })?;
+                            let pindices: Vec<usize> = pindices_str
+                                .split_whitespace()
+                                .filter_map(|s| s.parse::<usize>().ok())
+                                .collect();
+                            
+                            // Note: Empty pindices is allowed per spec - defaults to 0
+                            // But if there's text that all failed to parse, that's an error
+                            if !pindices_str.trim().is_empty() && pindices.is_empty() {
+                                return Err(Error::InvalidXml(
+                                    "multi pindices contains invalid values that could not be parsed"
+                                        .to_string(),
+                                ));
+                            }
+                            
+                            group.multis.push(Multi::new(pindices));
+                        }
+                    }
+                    "displacement2d" if in_resources => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("displacement2d missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let path = attrs
+                            .get("path")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "displacement2d missing path attribute".to_string(),
+                                )
+                            })?
+                            .to_string();
+
+                        let mut disp = Displacement2D::new(id, path);
+
+                        // Parse optional attributes with spec-defined defaults
+                        // If attribute value is invalid, fall back to spec default (lenient parsing)
+                        if let Some(channel_str) = attrs.get("channel") {
+                            disp.channel = match channel_str.to_uppercase().as_str() {
+                                "R" => Channel::R,
+                                "G" => Channel::G,
+                                "B" => Channel::B,
+                                "A" => Channel::A,
+                                _ => Channel::G, // Spec default is 'G', fall back on invalid value
+                            };
+                        }
+
+                        if let Some(tileu_str) = attrs.get("tilestyleu") {
+                            disp.tilestyleu = match tileu_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap, // Spec default is 'wrap', fall back on invalid value
+                            };
+                        }
+
+                        if let Some(tilev_str) = attrs.get("tilestylev") {
+                            disp.tilestylev = match tilev_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap, // Spec default is 'wrap', fall back on invalid value
+                            };
+                        }
+
+                        if let Some(filter_str) = attrs.get("filter") {
+                            disp.filter = match filter_str.to_lowercase().as_str() {
+                                "auto" => FilterMode::Auto,
+                                "linear" => FilterMode::Linear,
+                                "nearest" => FilterMode::Nearest,
+                                _ => FilterMode::Auto, // Spec default is 'auto', fall back on invalid value
+                            };
+                        }
+
+                        model.resources.displacement_maps.push(disp);
+                    }
+                    "normvectorgroup" if in_resources => {
+                        in_normvectorgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "normvectorgroup missing id attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_normvectorgroup = Some(NormVectorGroup::new(id));
+                    }
+                    "normvector" if in_normvectorgroup => {
+                        if let Some(ref mut nvgroup) = current_normvectorgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let x = attrs
+                                .get("x")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing x attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let y = attrs
+                                .get("y")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing y attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let z = attrs
+                                .get("z")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing z attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            nvgroup.vectors.push(NormVector::new(x, y, z));
+                        }
+                    }
+                    "beamlattice" if current_mesh.is_some() => {
+                        in_beamset = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let mut beamset = BeamSet::new();
+
+                        // Parse radius attribute (default 1.0)
+                        if let Some(radius_str) = attrs.get("radius") {
+                            let radius = radius_str.parse::<f64>()?;
+                            // Validate radius is finite and positive
+                            if !radius.is_finite() || radius <= 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice radius must be positive and finite (got {})",
+                                    radius
+                                )));
+                            }
+                            beamset.radius = radius;
+                        }
+
+                        // Parse minlength attribute (default 0.0001)
+                        if let Some(minlength_str) = attrs.get("minlength") {
+                            let minlength = minlength_str.parse::<f64>()?;
+                            // Validate minlength is finite and non-negative
+                            if !minlength.is_finite() || minlength < 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice minlength must be non-negative and finite (got {})",
+                                    minlength
+                                )));
+                            }
+                            beamset.min_length = minlength;
+                        }
+
+                        // Parse cap mode attribute (default sphere)
+                        if let Some(cap_str) = attrs.get("cap") {
+                            beamset.cap_mode = match cap_str.as_str() {
+                                "sphere" => BeamCapMode::Sphere,
+                                "butt" => BeamCapMode::Butt,
+                                _ => {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Invalid cap mode '{}'. Must be 'sphere' or 'butt'",
+                                        cap_str
+                                    )));
+                                }
+                            };
+                        }
+
+                        current_beamset = Some(beamset);
+                    }
+                    "beams" if in_beamset => {
+                        // Beams container element - beams will be parsed as individual beam elements
+                    }
+                    "beam" if in_beamset => {
+                        if let Some(ref mut beamset) = current_beamset {
+                            let beam = parse_beam(&reader, e)?;
+                            beamset.beams.push(beam);
+                        }
+                    }
+                    "slicestack" if in_resources => {
+                        in_slicestack = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "normvectorgroup missing id attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_normvectorgroup = Some(NormVectorGroup::new(id));
+                    }
+                    "normvector" if in_normvectorgroup => {
+                        if let Some(ref mut nvgroup) = current_normvectorgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let x = attrs
+                                .get("x")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing x attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let y = attrs
+                                .get("y")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing y attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            let z = attrs
+                                .get("z")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("normvector missing z attribute".to_string())
+                                })?
+                                .parse::<f64>()?;
+                            nvgroup.vectors.push(NormVector::new(x, y, z));
+                        }
+                    }
+                    "disp2dgroup" if in_resources => {
+                        in_disp2dgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("disp2dgroup missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let dispid = attrs
+                            .get("dispid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "disp2dgroup missing dispid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let nid = attrs
+                            .get("nid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("disp2dgroup missing nid attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let height = attrs
+                            .get("height")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "disp2dgroup missing height attribute".to_string(),
+                                )
+                            })?
+                            .parse::<f64>()?;
+
+                        let mut disp2dgroup = Disp2DGroup::new(id, dispid, nid, height);
+
+                        // Parse optional offset
+                        if let Some(offset_str) = attrs.get("offset") {
+                            disp2dgroup.offset = offset_str.parse::<f64>()?;
+                        }
+
+                        current_disp2dgroup = Some(disp2dgroup);
+                    }
+                    "disp2dcoords" if in_disp2dgroup => {
+                        if let Some(ref mut d2dgroup) = current_disp2dgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let u = attrs
+                                .get("u")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml(
+                                        "disp2dcoords missing u attribute".to_string(),
+                                    )
+                                })?
+                                .parse::<f64>()?;
+                            let v = attrs
+                                .get("v")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml(
+                                        "disp2dcoords missing v attribute".to_string(),
+                                    )
+                                })?
+                                .parse::<f64>()?;
+                            let n = attrs
+                                .get("n")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml(
+                                        "disp2dcoords missing n attribute".to_string(),
+                                    )
+                                })?
+                                .parse::<usize>()?;
+
+                            let mut coords = Disp2DCoords::new(u, v, n);
+
+                            // Parse optional f attribute
+                            if let Some(f_str) = attrs.get("f") {
+                                coords.f = f_str.parse::<f64>()?;
+                            }
+
+                            d2dgroup.coords.push(coords);
+                        }
+                    }
+                    "slicestack" if in_resources => {
+                        in_slicestack = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("SliceStack missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let zbottom = attrs
+                            .get("zbottom")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "SliceStack missing zbottom attribute".to_string(),
+                                )
+                            })?
+                            .parse::<f64>()?;
+                        current_slicestack = Some(SliceStack::new(id, zbottom));
+                    }
+                    "slice" if in_slicestack => {
+                        in_slice = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let ztop = attrs
+                            .get("ztop")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice missing ztop attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        current_slice = Some(Slice::new(ztop));
+                    }
+                    "sliceref" if in_slicestack => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let slicestackid = attrs
+                            .get("slicestackid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "SliceRef missing slicestackid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let slicepath = attrs
+                            .get("slicepath")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "SliceRef missing slicepath attribute".to_string(),
+                                )
+                            })?
+                            .to_string();
+                        if let Some(ref mut slicestack) = current_slicestack {
+                            slicestack
+                                .slice_refs
+                                .push(SliceRef::new(slicestackid, slicepath));
+                        }
+                    }
+                    "vertices" if in_slice => {
+                        in_slice_vertices = true;
+                    }
+                    "vertex" if in_slice_vertices => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let x = attrs
+                            .get("x")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing x attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        let y = attrs
+                            .get("y")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice vertex missing y attribute".to_string())
+                            })?
+                            .parse::<f64>()?;
+                        if let Some(ref mut slice) = current_slice {
+                            slice.vertices.push(Vertex2D::new(x, y));
+                        }
+                    }
+                    "polygon" if in_slice => {
+                        in_slice_polygon = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let startv = attrs
+                            .get("startv")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Slice polygon missing startv attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_slice_polygon = Some(SlicePolygon::new(startv));
+                    }
+                    "segment" if in_slice_polygon => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let v2 = attrs
+                            .get("v2")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Slice segment missing v2 attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        if let Some(ref mut polygon) = current_slice_polygon {
+                            polygon.segments.push(SliceSegment::new(v2));
+                        }
+                    }
+                    "booleanshape" if in_resources && current_object.is_some() => {
+                        // Check if object already has a booleanshape
+                        if in_boolean_shape {
+                            return Err(Error::InvalidXml(
+                                "Object can only have one booleanshape element".to_string(),
+                            ));
+                        }
+                        let attrs = parse_attributes(&reader, e)?;
+                        let objectid = attrs
+                            .get("objectid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Boolean shape missing objectid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        // Operation defaults to "union" if not specified
+                        let operation = attrs
+                            .get("operation")
+                            .and_then(|s| BooleanOpType::parse(s))
+                            .unwrap_or(BooleanOpType::Union);
+                        let mut shape = BooleanShape::new(objectid, operation);
+                        // Extract optional path attribute for external object reference
+                        shape.path = attrs.get("path").cloned();
+                        current_boolean_shape = Some(shape);
+                        in_boolean_shape = true;
+                    }
+                    "boolean" if in_boolean_shape => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let objectid = attrs
+                            .get("objectid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Boolean operand missing objectid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        if let Some(ref mut shape) = current_boolean_shape {
+                            let mut operand = BooleanRef::new(objectid);
+                            // Extract optional path attribute for external object reference
+                            operand.path = attrs.get("path").cloned();
+                            shape.operands.push(operand);
                         }
                     }
                     _ => {}
@@ -335,6 +1067,9 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                         // Mesh parsing complete
                     }
                     "basematerials" => {
+                        if let Some(group) = current_basematerialgroup.take() {
+                            model.resources.base_material_groups.push(group);
+                        }
                         in_basematerials = false;
                     }
                     "colorgroup" => {
@@ -342,6 +1077,77 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                             model.resources.color_groups.push(colorgroup);
                         }
                         in_colorgroup = false;
+                    }
+                    "texture2dgroup" => {
+                        if let Some(group) = current_texture2dgroup.take() {
+                            model.resources.texture2d_groups.push(group);
+                        }
+                        in_texture2dgroup = false;
+                    }
+                    "compositematerials" => {
+                        if let Some(group) = current_compositematerials.take() {
+                            model.resources.composite_materials.push(group);
+                        }
+                        in_compositematerials = false;
+                    }
+                    "multiproperties" => {
+                        if let Some(group) = current_multiproperties.take() {
+                            model.resources.multi_properties.push(group);
+                        }
+                        in_multiproperties = false;
+                    }
+                    "normvectorgroup" => {
+                        if let Some(nvgroup) = current_normvectorgroup.take() {
+                            model.resources.norm_vector_groups.push(nvgroup);
+                        }
+                        in_normvectorgroup = false;
+                    }
+                    "disp2dgroup" => {
+                        if let Some(d2dgroup) = current_disp2dgroup.take() {
+                            model.resources.disp2d_groups.push(d2dgroup);
+                        }
+                        in_disp2dgroup = false;
+                    }
+                    "beamlattice" => {
+                        if let Some(beamset) = current_beamset.take() {
+                            if let Some(ref mut mesh) = current_mesh {
+                                mesh.beamset = Some(beamset);
+                            }
+                        }
+                        in_beamset = false;
+                    }
+                    "slicestack" => {
+                        if let Some(slicestack) = current_slicestack.take() {
+                            model.resources.slice_stacks.push(slicestack);
+                        }
+                        in_slicestack = false;
+                    }
+                    "slice" => {
+                        if let Some(slice) = current_slice.take() {
+                            if let Some(ref mut slicestack) = current_slicestack {
+                                slicestack.slices.push(slice);
+                            }
+                        }
+                        in_slice = false;
+                    }
+                    "vertices" => {
+                        in_slice_vertices = false;
+                    }
+                    "polygon" => {
+                        if let Some(polygon) = current_slice_polygon.take() {
+                            if let Some(ref mut slice) = current_slice {
+                                slice.polygons.push(polygon);
+                            }
+                        }
+                        in_slice_polygon = false;
+                    }
+                    "booleanshape" => {
+                        if let Some(shape) = current_boolean_shape.take() {
+                            if let Some(ref mut obj) = current_object {
+                                obj.boolean_shape = Some(shape);
+                            }
+                        }
+                        in_boolean_shape = false;
                     }
                     _ => {}
                 }
@@ -381,6 +1187,7 @@ fn parse_object<R: std::io::BufRead>(
     // Validate only allowed attributes are present
     // Per 3MF Core spec v1.4.0, valid object attributes are: id, name, type, pid, partnumber, thumbnail
     // Per Materials Extension: pindex can be used with pid
+    // Per Slice Extension: s:slicestackid (handled via extension attribute skipping)
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
@@ -428,6 +1235,26 @@ fn parse_object<R: std::io::BufRead>(
 
     if let Some(pindex) = attrs.get("pindex") {
         object.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    // Check for both namespaced and non-namespaced slicestackid
+    // The attribute may appear as "s:slicestackid" in the XML
+    if let Some(slicestackid) = attrs
+        .get("slicestackid")
+        .or_else(|| attrs.get("s:slicestackid"))
+    {
+        object.slicestackid = Some(slicestackid.parse::<usize>()?);
+    }
+
+    // Extract Production extension attributes (p:UUID, p:path)
+    let p_uuid = attrs.get("p:UUID");
+    let p_path = attrs.get("p:path");
+
+    if p_uuid.is_some() || p_path.is_some() {
+        let mut prod_info = ProductionInfo::new();
+        prod_info.uuid = p_uuid.cloned();
+        prod_info.path = p_path.cloned();
+        object.production = Some(prod_info);
     }
 
     Ok(object)
@@ -588,6 +1415,11 @@ fn parse_build_item<R: std::io::BufRead>(
         item.transform = Some(transform);
     }
 
+    // Extract Production extension UUID (p:UUID)
+    if let Some(p_uuid) = attrs.get("p:UUID") {
+        item.production_uuid = Some(p_uuid.clone());
+    }
+
     Ok(item)
 }
 
@@ -616,6 +1448,56 @@ fn parse_base_material<R: std::io::BufRead>(
     }
 
     Ok(material)
+}
+
+/// Parse beam element attributes
+fn parse_beam<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<Beam> {
+    let attrs = parse_attributes(reader, e)?;
+
+    // Validate only allowed attributes are present
+    // Per Beam Lattice Extension spec: v1, v2, r1, r2
+    validate_attributes(&attrs, &["v1", "v2", "r1", "r2"], "beam")?;
+
+    let v1 = attrs
+        .get("v1")
+        .ok_or_else(|| Error::InvalidXml("Beam missing v1 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let v2 = attrs
+        .get("v2")
+        .ok_or_else(|| Error::InvalidXml("Beam missing v2 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let mut beam = Beam::new(v1, v2);
+
+    if let Some(r1) = attrs.get("r1") {
+        let r1_val = r1.parse::<f64>()?;
+        // Validate radius is finite and positive
+        if !r1_val.is_finite() || r1_val <= 0.0 {
+            return Err(Error::InvalidXml(format!(
+                "Beam r1 must be positive and finite (got {})",
+                r1_val
+            )));
+        }
+        beam.r1 = Some(r1_val);
+    }
+
+    if let Some(r2) = attrs.get("r2") {
+        let r2_val = r2.parse::<f64>()?;
+        // Validate radius is finite and positive
+        if !r2_val.is_finite() || r2_val <= 0.0 {
+            return Err(Error::InvalidXml(format!(
+                "Beam r2 must be positive and finite (got {})",
+                r2_val
+            )));
+        }
+        beam.r2 = Some(r2_val);
+    }
+
+    Ok(beam)
 }
 
 /// Parse color string in format #RRGGBBAA or #RRGGBB
