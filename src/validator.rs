@@ -56,11 +56,19 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
 /// Validate that the model has required structure
 ///
 /// Per 3MF Core spec, a valid model must have:
-/// - At least one object in resources
+/// - At least one object in resources (unless objects are in separate model files via p:path)
 /// - At least one build item
 fn validate_required_structure(model: &Model) -> Result<()> {
-    // Model must contain at least one object
-    if model.resources.objects.is_empty() {
+    // Check if any build items reference external objects via p:path (multi-part 3MF)
+    let has_external_objects = model
+        .build
+        .items
+        .iter()
+        .any(|item| item.production_path.is_some());
+
+    // Model must contain at least one object, unless it's a multi-part 3MF file
+    // where objects are defined in separate model files referenced via p:path
+    if model.resources.objects.is_empty() && !has_external_objects {
         return Err(Error::InvalidModel(
             "Model must contain at least one object in resources. \
              A valid 3MF file requires at least one <object> element within the <resources> section. \
@@ -230,6 +238,12 @@ fn validate_build_references(model: &Model) -> Result<()> {
 
     // Check each build item references a valid object
     for (item_idx, item) in model.build.items.iter().enumerate() {
+        // Skip validation for build items that reference external objects via p:path
+        // In multi-part 3MF files, objects can be defined in separate model files
+        if item.production_path.is_some() {
+            continue;
+        }
+
         if !valid_object_ids.contains(&item.objectid) {
             return Err(Error::InvalidModel(format!(
                 "Build item {} references non-existent object ID: {}. \
@@ -258,7 +272,9 @@ fn validate_material_references(model: &Model) -> Result<()> {
         }
     }
 
-    // Validate that pid and basematerialid references point to existing color groups or base material groups
+    // Validate that pid and basematerialid references point to existing property groups
+    // Property groups include: color groups, base material groups, texture2d groups,
+    // composite materials, and multi-properties (Materials Extension)
 
     // Collect valid color group IDs
     let valid_colorgroup_ids: HashSet<usize> = model
@@ -276,19 +292,51 @@ fn validate_material_references(model: &Model) -> Result<()> {
         .map(|bg| bg.id)
         .collect();
 
+    // Collect valid texture2d group IDs (Materials Extension)
+    let valid_texture2d_group_ids: HashSet<usize> = model
+        .resources
+        .texture2d_groups
+        .iter()
+        .map(|tg| tg.id)
+        .collect();
+
+    // Collect valid composite materials IDs (Materials Extension)
+    let valid_composite_materials_ids: HashSet<usize> = model
+        .resources
+        .composite_materials
+        .iter()
+        .map(|cm| cm.id)
+        .collect();
+
+    // Collect valid multi-properties IDs (Materials Extension)
+    let valid_multiproperties_ids: HashSet<usize> = model
+        .resources
+        .multi_properties
+        .iter()
+        .map(|mp| mp.id)
+        .collect();
+
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
-            // If object has a pid, it should reference a valid color group or base material group
-            let is_valid =
-                valid_colorgroup_ids.contains(&pid) || valid_basematerial_ids.contains(&pid);
+            // If object has a pid, it should reference a valid property group
+            let is_valid = valid_colorgroup_ids.contains(&pid)
+                || valid_basematerial_ids.contains(&pid)
+                || valid_texture2d_group_ids.contains(&pid)
+                || valid_composite_materials_ids.contains(&pid)
+                || valid_multiproperties_ids.contains(&pid);
 
-            // Only validate if there are material groups defined, otherwise pid might be unused
-            let has_materials =
-                !valid_colorgroup_ids.is_empty() || !valid_basematerial_ids.is_empty();
+            // Only validate if there are property groups defined, otherwise pid might be unused
+            let has_property_groups = !valid_colorgroup_ids.is_empty()
+                || !valid_basematerial_ids.is_empty()
+                || !valid_texture2d_group_ids.is_empty()
+                || !valid_composite_materials_ids.is_empty()
+                || !valid_multiproperties_ids.is_empty();
 
-            if has_materials && !is_valid {
+            if has_property_groups && !is_valid {
                 return Err(Error::InvalidModel(format!(
-                    "Object {} references non-existent color group or base material ID: {}",
+                    "Object {} references non-existent property group ID: {}. \
+                     Check that a color group, base material, texture2d group, composite materials, \
+                     or multi-properties group with this ID exists in the resources section.",
                     object.id, pid
                 )));
             }

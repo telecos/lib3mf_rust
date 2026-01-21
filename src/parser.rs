@@ -1612,10 +1612,11 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per 3MF Core spec: objectid, transform, partnumber, thumbnail
+    // Production extension: p:UUID, p:path
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["objectid", "transform", "partnumber", "thumbnail"],
+        &["objectid", "transform", "partnumber", "thumbnail", "p:UUID", "p:path"],
         "item",
     )?;
 
@@ -1659,9 +1660,12 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
         item.transform = Some(transform);
     }
 
-    // Extract Production extension UUID (p:UUID)
+    // Extract Production extension attributes (p:UUID, p:path)
     if let Some(p_uuid) = attrs.get("p:UUID") {
         item.production_uuid = Some(p_uuid.clone());
+    }
+    if let Some(p_path) = attrs.get("p:path") {
+        item.production_path = Some(p_path.clone());
     }
 
     Ok(item)

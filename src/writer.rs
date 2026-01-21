@@ -796,6 +796,9 @@ fn write_build_item<W: IoWrite>(writer: &mut Writer<W>, item: &BuildItem) -> Res
     if let Some(ref uuid) = item.production_uuid {
         elem.push_attribute(("p:UUID", uuid.as_str()));
     }
+    if let Some(ref path) = item.production_path {
+        elem.push_attribute(("p:path", path.as_str()));
+    }
 
     writer
         .write_event(Event::Empty(elem))
