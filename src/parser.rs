@@ -21,16 +21,16 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     config: ParserConfig,
 ) -> Result<Model> {
     let mut package = Package::open(reader)?;
-    
+
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
-    
+
     let model_xml = package.get_model()?;
     let mut model = parse_model_xml_with_config(&model_xml, config)?;
-    
+
     // Add thumbnail metadata to model
     model.thumbnail = thumbnail;
-    
+
     Ok(model)
 }
 
@@ -61,10 +61,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 /// ```
 pub fn read_thumbnail<R: Read + std::io::Seek>(reader: R) -> Result<Option<Vec<u8>>> {
     let mut package = Package::open(reader)?;
-    
+
     // Get thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
-    
+
     match thumbnail {
         Some(thumb) => {
             // Read the binary data
@@ -238,11 +238,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "metadata" => {
                         let attrs = parse_attributes(&reader, e)?;
-                        
+
                         // Validate that name attribute exists (required by 3MF Core spec)
                         let name = attrs.get("name").ok_or_else(|| {
                             Error::InvalidXml(
-                                "Metadata element must have a 'name' attribute".to_string()
+                                "Metadata element must have a 'name' attribute".to_string(),
                             )
                         })?;
 
@@ -540,18 +540,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 )
                             })?
                             .parse::<usize>()?;
-                        let matindices_str = attrs
-                            .get("matindices")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "compositematerials missing matindices attribute".to_string(),
-                                )
-                            })?;
+                        let matindices_str = attrs.get("matindices").ok_or_else(|| {
+                            Error::InvalidXml(
+                                "compositematerials missing matindices attribute".to_string(),
+                            )
+                        })?;
                         let matindices: Vec<usize> = matindices_str
                             .split_whitespace()
                             .filter_map(|s| s.parse::<usize>().ok())
                             .collect();
-                        
+
                         // Validate we parsed at least one index
                         if matindices.is_empty() {
                             return Err(Error::InvalidXml(
@@ -559,23 +557,21 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     .to_string(),
                             ));
                         }
-                        
+
                         current_compositematerials =
                             Some(CompositeMaterials::new(id, matid, matindices));
                     }
                     "composite" if in_compositematerials => {
                         if let Some(ref mut group) = current_compositematerials {
                             let attrs = parse_attributes(&reader, e)?;
-                            let values_str = attrs
-                                .get("values")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("composite missing values attribute".to_string())
-                                })?;
+                            let values_str = attrs.get("values").ok_or_else(|| {
+                                Error::InvalidXml("composite missing values attribute".to_string())
+                            })?;
                             let values: Vec<f32> = values_str
                                 .split_whitespace()
                                 .filter_map(|s| s.parse::<f32>().ok())
                                 .collect();
-                            
+
                             // Validate we parsed at least one value
                             if values.is_empty() {
                                 return Err(Error::InvalidXml(
@@ -583,7 +579,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                         .to_string(),
                                 ));
                             }
-                            
+
                             group.composites.push(Composite::new(values));
                         }
                     }
@@ -593,21 +589,19 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
-                                Error::InvalidXml("multiproperties missing id attribute".to_string())
+                                Error::InvalidXml(
+                                    "multiproperties missing id attribute".to_string(),
+                                )
                             })?
                             .parse::<usize>()?;
-                        let pids_str = attrs
-                            .get("pids")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "multiproperties missing pids attribute".to_string(),
-                                )
-                            })?;
+                        let pids_str = attrs.get("pids").ok_or_else(|| {
+                            Error::InvalidXml("multiproperties missing pids attribute".to_string())
+                        })?;
                         let pids: Vec<usize> = pids_str
                             .split_whitespace()
                             .filter_map(|s| s.parse::<usize>().ok())
                             .collect();
-                        
+
                         // Validate we parsed at least one property ID
                         if pids.is_empty() {
                             return Err(Error::InvalidXml(
@@ -615,9 +609,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     .to_string(),
                             ));
                         }
-                        
+
                         let mut multi = MultiProperties::new(id, pids);
-                        
+
                         // Parse optional blendmethods
                         if let Some(blend_str) = attrs.get("blendmethods") {
                             multi.blendmethods = blend_str
@@ -629,22 +623,20 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 })
                                 .collect();
                         }
-                        
+
                         current_multiproperties = Some(multi);
                     }
                     "multi" if in_multiproperties => {
                         if let Some(ref mut group) = current_multiproperties {
                             let attrs = parse_attributes(&reader, e)?;
-                            let pindices_str = attrs
-                                .get("pindices")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("multi missing pindices attribute".to_string())
-                                })?;
+                            let pindices_str = attrs.get("pindices").ok_or_else(|| {
+                                Error::InvalidXml("multi missing pindices attribute".to_string())
+                            })?;
                             let pindices: Vec<usize> = pindices_str
                                 .split_whitespace()
                                 .filter_map(|s| s.parse::<usize>().ok())
                                 .collect();
-                            
+
                             // Note: Empty pindices is allowed per spec - defaults to 0
                             // But if there's text that all failed to parse, that's an error
                             if !pindices_str.trim().is_empty() && pindices.is_empty() {
@@ -653,7 +645,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                         .to_string(),
                                 ));
                             }
-                            
+
                             group.multis.push(Multi::new(pindices));
                         }
                     }
