@@ -87,6 +87,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut current_slice_polygon: Option<SlicePolygon> = None;
     let mut in_slice_polygon = false;
     let mut in_slice_vertices = false;
+    let mut current_boolean_shape: Option<BooleanShape> = None;
+    let mut in_boolean_shape = false;
 
     // Track required elements for validation
     let mut resources_count = 0;
@@ -483,6 +485,34 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             polygon.segments.push(SliceSegment::new(v2));
                         }
                     }
+                    "booleanshape" if in_resources && current_object.is_some() => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let objectid = attrs
+                            .get("objectid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Boolean shape missing objectid attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        // Operation defaults to "union" if not specified
+                        let operation = attrs
+                            .get("operation")
+                            .and_then(|s| BooleanOpType::from_str(s))
+                            .unwrap_or(BooleanOpType::Union);
+                        current_boolean_shape = Some(BooleanShape::new(objectid, operation));
+                        in_boolean_shape = true;
+                    }
+                    "boolean" if in_boolean_shape => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let objectid = attrs
+                            .get("objectid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("Boolean operand missing objectid attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        if let Some(ref mut shape) = current_boolean_shape {
+                            shape.operands.push(BooleanRef::new(objectid));
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -555,6 +585,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                         in_slice_polygon = false;
+                    }
+                    "booleanshape" => {
+                        if let Some(shape) = current_boolean_shape.take() {
+                            if let Some(ref mut obj) = current_object {
+                                obj.boolean_shape = Some(shape);
+                            }
+                        }
+                        in_boolean_shape = false;
                     }
                     _ => {}
                 }
