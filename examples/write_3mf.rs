@@ -7,10 +7,8 @@
 //! 4. Adding metadata
 //! 5. Writing the model to a file
 
-use lib3mf::{
-    BaseMaterial, BaseMaterialGroup, BuildItem, Mesh, MetadataEntry, Model, Object, Triangle,
-    Vertex,
-};
+use lib3mf::model::MetadataEntry;
+use lib3mf::{BaseMaterial, BaseMaterialGroup, BuildItem, Mesh, Model, Object, Triangle, Vertex};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating a 3MF file with materials and colors...\n");

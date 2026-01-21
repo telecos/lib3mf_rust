@@ -88,7 +88,7 @@ Updated documentation:
 |-----------|--------|-------|
 | Core Specification | ✅ Fully Supported | All features implemented and tested |
 | Materials Extension | ✅ Fully Supported | Color groups and base materials |
-| Production Extension | ✅ Fully Supported | UUID extraction, file parsing |
+| Production Extension | ✅ Fully Supported | UUID and path extraction from objects, build, and build items |
 | Slice Extension | ⚠️ Partially Supported | Files parse, slice data not yet extracted |
 | Beam Lattice Extension | ✅ Fully Supported | BeamSet, Beam structures, radii, cap modes fully extracted |
 | Secure Content | ⚠️ Read-Only Validation | Extension recognized, basic metadata extraction, NO cryptography |
@@ -208,6 +208,10 @@ While the implementation successfully parses all extension files, some extension
 The Beam Lattice extension is now fully supported with complete data extraction including BeamSet structures, individual Beam definitions with vertex references (v1, v2), radii (r1, r2), and cap modes.
 
 These remaining features can be added in future iterations as needed, since the parser infrastructure now properly handles namespaced extensions.
+
+The Production extension is fully supported with UUID and path extraction from objects, build, and build items.
+
+These remaining extensions can be added in future iterations as needed, since the parser infrastructure now properly handles namespaced extensions.
 
 ## Conclusion
 
