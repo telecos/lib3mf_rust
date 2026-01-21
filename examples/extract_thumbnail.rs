@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Read the thumbnail binary data
         let file = File::open("test_files/test_thumbnail.3mf")?;
-        if let Some(thumbnail_data) = lib3mf::parser::read_thumbnail(file)? {
+        if let Some(thumbnail_data) = Model::read_thumbnail(file)? {
             println!("  Size: {} bytes", thumbnail_data.len());
 
             // Save thumbnail to a file

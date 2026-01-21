@@ -1,6 +1,7 @@
 //! Tests for thumbnail validation and extraction
 
-use lib3mf::parser::{parse_3mf, read_thumbnail};
+use lib3mf::parser::parse_3mf;
+use lib3mf::Model;
 use std::fs::File;
 use std::io::{Cursor, Write};
 use zip::write::SimpleFileOptions;
@@ -251,7 +252,7 @@ fn test_read_thumbnail_data() {
     let data = create_3mf_with_thumbnail();
     let cursor = Cursor::new(&data);
     
-    let thumbnail_data = read_thumbnail(cursor).expect("Failed to read thumbnail");
+    let thumbnail_data = Model::read_thumbnail(cursor).expect("Failed to read thumbnail");
     assert!(thumbnail_data.is_some(), "Thumbnail data should be present");
     
     let thumb = thumbnail_data.unwrap();
@@ -267,6 +268,6 @@ fn test_read_thumbnail_data_none() {
     let data = create_3mf_without_thumbnail();
     let cursor = Cursor::new(data);
     
-    let thumbnail_data = read_thumbnail(cursor).expect("Failed to read thumbnail");
+    let thumbnail_data = Model::read_thumbnail(cursor).expect("Failed to read thumbnail");
     assert!(thumbnail_data.is_none(), "Thumbnail data should not be present");
 }
