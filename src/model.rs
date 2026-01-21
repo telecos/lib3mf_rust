@@ -513,6 +513,32 @@ pub enum BeamCapMode {
     Hemisphere,
 }
 
+impl std::fmt::Display for BeamCapMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BeamCapMode::Sphere => write!(f, "sphere"),
+            BeamCapMode::Butt => write!(f, "butt"),
+            BeamCapMode::Hemisphere => write!(f, "hemisphere"),
+        }
+    }
+}
+
+impl std::str::FromStr for BeamCapMode {
+    type Err = crate::error::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "sphere" => Ok(BeamCapMode::Sphere),
+            "butt" => Ok(BeamCapMode::Butt),
+            "hemisphere" => Ok(BeamCapMode::Hemisphere),
+            _ => Err(crate::error::Error::InvalidXml(format!(
+                "Invalid cap mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
+                s
+            ))),
+        }
+    }
+}
+
 /// A single beam in a beam lattice structure
 ///
 /// Beams connect two vertices with optional varying radii along the beam.

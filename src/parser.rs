@@ -797,17 +797,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         // Parse cap mode attribute (default sphere)
                         if let Some(cap_str) = attrs.get("cap") {
-                            beamset.cap_mode = match cap_str.as_str() {
-                                "sphere" => BeamCapMode::Sphere,
-                                "butt" => BeamCapMode::Butt,
-                                "hemisphere" => BeamCapMode::Hemisphere,
-                                _ => {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Invalid cap mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
-                                        cap_str
-                                    )));
-                                }
-                            };
+                            beamset.cap_mode = cap_str.parse()?;
                         }
 
                         current_beamset = Some(beamset);
@@ -1802,32 +1792,12 @@ fn parse_beam<R: std::io::BufRead>(
 
     // Parse cap1 attribute (optional, defaults to beamset cap mode)
     if let Some(cap1_str) = attrs.get("cap1") {
-        beam.cap1 = Some(match cap1_str.as_str() {
-            "sphere" => BeamCapMode::Sphere,
-            "butt" => BeamCapMode::Butt,
-            "hemisphere" => BeamCapMode::Hemisphere,
-            _ => {
-                return Err(Error::InvalidXml(format!(
-                    "Invalid cap1 mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
-                    cap1_str
-                )));
-            }
-        });
+        beam.cap1 = Some(cap1_str.parse()?);
     }
 
     // Parse cap2 attribute (optional, defaults to beamset cap mode)
     if let Some(cap2_str) = attrs.get("cap2") {
-        beam.cap2 = Some(match cap2_str.as_str() {
-            "sphere" => BeamCapMode::Sphere,
-            "butt" => BeamCapMode::Butt,
-            "hemisphere" => BeamCapMode::Hemisphere,
-            _ => {
-                return Err(Error::InvalidXml(format!(
-                    "Invalid cap2 mode '{}'. Must be 'sphere', 'butt', or 'hemisphere'",
-                    cap2_str
-                )));
-            }
-        });
+        beam.cap2 = Some(cap2_str.parse()?);
     }
 
     Ok(beam)
