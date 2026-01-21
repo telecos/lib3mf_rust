@@ -79,8 +79,9 @@ pub use model::{
     CompositeMaterials, CustomElementHandler, CustomElementResult, CustomExtensionContext,
     CustomExtensionInfo, CustomValidationHandler, Disp2DCoords, Disp2DGroup, Displacement2D,
     Extension, FilterMode, Material, Mesh, MetadataEntry, Model, Multi, MultiProperties,
-    NormVector, NormVectorGroup, Object, ObjectType, ParserConfig, Resources, SecureContentInfo,
-    Tex2Coord, Texture2D, Texture2DGroup, Thumbnail, TileStyle, Triangle, Vertex,
+    NormVector, NormVectorGroup, Object, ObjectType, ParserConfig, ProductionInfo, Resources, 
+    SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup, Thumbnail, TileStyle, Triangle, 
+    Vertex,
 };
 
 use std::io::Read;
