@@ -1257,11 +1257,12 @@ fn load_slice_references<R: Read + std::io::Seek>(
 
             // Parse the slice file to extract slices and objects
             // Use the slicestackid from the sliceref, which identifies the stack ID in the external file
-            let (slices, objects) = parse_slice_file_with_objects(&slice_xml, slice_ref.slicestackid)?;
+            let (slices, objects) =
+                parse_slice_file_with_objects(&slice_xml, slice_ref.slicestackid)?;
 
             // Add the slices to this slice stack
             slice_stack.slices.extend(slices);
-            
+
             // Merge objects from the external file into the main model
             model.resources.objects.extend(objects);
         }
@@ -1278,26 +1279,30 @@ fn load_slice_references<R: Read + std::io::Seek>(
 ///
 /// Note: External slice files may have empty or incomplete structures (e.g., empty
 /// build sections), so we parse them and skip validation.
-fn parse_slice_file_with_objects(xml: &str, expected_stack_id: usize) -> Result<(Vec<Slice>, Vec<Object>)> {
+fn parse_slice_file_with_objects(
+    xml: &str,
+    expected_stack_id: usize,
+) -> Result<(Vec<Slice>, Vec<Object>)> {
     // Parse the entire model XML
     // Note: We use all extensions here because external slice files are part of the same
     // 3MF package and should be parsed with the same extension support as the main model.
     // The 3MF spec requires that all files in a package share the same extension context.
     let mut external_model = parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())?;
-    
+
     // Find the slice stack with the expected ID and extract its slices
-    let slices = external_model.resources.slice_stacks
+    let slices = external_model
+        .resources
+        .slice_stacks
         .iter_mut()
         .find(|stack| stack.id == expected_stack_id)
         .map(|stack| std::mem::take(&mut stack.slices))
         .unwrap_or_else(Vec::new);
-    
+
     // Extract all objects from the external model
     let objects = std::mem::take(&mut external_model.resources.objects);
-    
+
     Ok((slices, objects))
 }
-
 
 /// Parse object element attributes
 pub(crate) fn parse_object<R: std::io::BufRead>(
