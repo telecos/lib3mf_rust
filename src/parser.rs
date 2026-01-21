@@ -96,6 +96,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut current_disp2dgroup: Option<Disp2DGroup> = None;
     let mut in_disp2dgroup = false;
 
+    // Materials extension state for advanced features
+    let mut current_texture2dgroup: Option<Texture2DGroup> = None;
+    let mut in_texture2dgroup = false;
+    let mut current_compositematerials: Option<CompositeMaterials> = None;
+    let mut in_compositematerials = false;
+    let mut current_multiproperties: Option<MultiProperties> = None;
+    let mut in_multiproperties = false;
+
     // Track required elements for validation
     let mut resources_count = 0;
     let mut build_count = 0;
@@ -333,6 +341,200 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     colorgroup.colors.push(color);
                                 }
                             }
+                        }
+                    }
+                    "texture2d" if in_resources => {
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("texture2d missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let path = attrs
+                            .get("path")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("texture2d missing path attribute".to_string())
+                            })?
+                            .to_string();
+                        let contenttype = attrs
+                            .get("contenttype")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "texture2d missing contenttype attribute".to_string(),
+                                )
+                            })?
+                            .to_string();
+
+                        let mut texture = Texture2D::new(id, path, contenttype);
+
+                        // Parse optional attributes with spec defaults
+                        if let Some(tileu_str) = attrs.get("tilestyleu") {
+                            texture.tilestyleu = match tileu_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap,
+                            };
+                        }
+
+                        if let Some(tilev_str) = attrs.get("tilestylev") {
+                            texture.tilestylev = match tilev_str.to_lowercase().as_str() {
+                                "wrap" => TileStyle::Wrap,
+                                "mirror" => TileStyle::Mirror,
+                                "clamp" => TileStyle::Clamp,
+                                "none" => TileStyle::None,
+                                _ => TileStyle::Wrap,
+                            };
+                        }
+
+                        if let Some(filter_str) = attrs.get("filter") {
+                            texture.filter = match filter_str.to_lowercase().as_str() {
+                                "auto" => FilterMode::Auto,
+                                "linear" => FilterMode::Linear,
+                                "nearest" => FilterMode::Nearest,
+                                _ => FilterMode::Auto,
+                            };
+                        }
+
+                        model.resources.texture2d_resources.push(texture);
+                    }
+                    "texture2dgroup" if in_resources => {
+                        in_texture2dgroup = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("texture2dgroup missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let texid = attrs
+                            .get("texid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "texture2dgroup missing texid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        current_texture2dgroup = Some(Texture2DGroup::new(id, texid));
+                    }
+                    "tex2coord" if in_texture2dgroup => {
+                        if let Some(ref mut group) = current_texture2dgroup {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let u = attrs
+                                .get("u")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("tex2coord missing u attribute".to_string())
+                                })?
+                                .parse::<f32>()?;
+                            let v = attrs
+                                .get("v")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("tex2coord missing v attribute".to_string())
+                                })?
+                                .parse::<f32>()?;
+                            group.tex2coords.push(Tex2Coord::new(u, v));
+                        }
+                    }
+                    "compositematerials" if in_resources => {
+                        in_compositematerials = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "compositematerials missing id attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let matid = attrs
+                            .get("matid")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "compositematerials missing matid attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+                        let matindices_str = attrs
+                            .get("matindices")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "compositematerials missing matindices attribute".to_string(),
+                                )
+                            })?;
+                        let matindices: Vec<usize> = matindices_str
+                            .split_whitespace()
+                            .filter_map(|s| s.parse::<usize>().ok())
+                            .collect();
+                        current_compositematerials =
+                            Some(CompositeMaterials::new(id, matid, matindices));
+                    }
+                    "composite" if in_compositematerials => {
+                        if let Some(ref mut group) = current_compositematerials {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let values_str = attrs
+                                .get("values")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("composite missing values attribute".to_string())
+                                })?;
+                            let values: Vec<f32> = values_str
+                                .split_whitespace()
+                                .filter_map(|s| s.parse::<f32>().ok())
+                                .collect();
+                            group.composites.push(Composite::new(values));
+                        }
+                    }
+                    "multiproperties" if in_resources => {
+                        in_multiproperties = true;
+                        let attrs = parse_attributes(&reader, e)?;
+                        let id = attrs
+                            .get("id")
+                            .ok_or_else(|| {
+                                Error::InvalidXml("multiproperties missing id attribute".to_string())
+                            })?
+                            .parse::<usize>()?;
+                        let pids_str = attrs
+                            .get("pids")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "multiproperties missing pids attribute".to_string(),
+                                )
+                            })?;
+                        let pids: Vec<usize> = pids_str
+                            .split_whitespace()
+                            .filter_map(|s| s.parse::<usize>().ok())
+                            .collect();
+                        
+                        let mut multi = MultiProperties::new(id, pids);
+                        
+                        // Parse optional blendmethods
+                        if let Some(blend_str) = attrs.get("blendmethods") {
+                            multi.blendmethods = blend_str
+                                .split_whitespace()
+                                .filter_map(|s| match s.to_lowercase().as_str() {
+                                    "mix" => Some(BlendMethod::Mix),
+                                    "multiply" => Some(BlendMethod::Multiply),
+                                    _ => None,
+                                })
+                                .collect();
+                        }
+                        
+                        current_multiproperties = Some(multi);
+                    }
+                    "multi" if in_multiproperties => {
+                        if let Some(ref mut group) = current_multiproperties {
+                            let attrs = parse_attributes(&reader, e)?;
+                            let pindices_str = attrs
+                                .get("pindices")
+                                .ok_or_else(|| {
+                                    Error::InvalidXml("multi missing pindices attribute".to_string())
+                                })?;
+                            let pindices: Vec<usize> = pindices_str
+                                .split_whitespace()
+                                .filter_map(|s| s.parse::<usize>().ok())
+                                .collect();
+                            group.multis.push(Multi::new(pindices));
                         }
                     }
                     "displacement2d" if in_resources => {
@@ -789,6 +991,24 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             model.resources.color_groups.push(colorgroup);
                         }
                         in_colorgroup = false;
+                    }
+                    "texture2dgroup" => {
+                        if let Some(group) = current_texture2dgroup.take() {
+                            model.resources.texture2d_groups.push(group);
+                        }
+                        in_texture2dgroup = false;
+                    }
+                    "compositematerials" => {
+                        if let Some(group) = current_compositematerials.take() {
+                            model.resources.composite_materials.push(group);
+                        }
+                        in_compositematerials = false;
+                    }
+                    "multiproperties" => {
+                        if let Some(group) = current_multiproperties.take() {
+                            model.resources.multi_properties.push(group);
+                        }
+                        in_multiproperties = false;
                     }
                     "normvectorgroup" => {
                         if let Some(nvgroup) = current_normvectorgroup.take() {
