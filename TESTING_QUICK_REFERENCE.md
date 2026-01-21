@@ -129,7 +129,7 @@ git clone https://github.com/3MFConsortium/test_suites.git
 ## Current Status
 
 ✅ 100% positive tests passing (1,698/1,698)
-⚠️ 1.7% negative tests passing (9/543)
-📊 76.2% overall conformance (1,707/2,241)
+✅ 33.8% negative tests passing (160/473)
+📊 77.4% overall conformance (1,858/2,400)
 
-Last updated: January 19, 2026
+Last updated: January 21, 2026
