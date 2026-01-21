@@ -1624,7 +1624,14 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
     // Note: thumbnail is deprecated in the spec but still commonly used in valid files
     validate_attributes(
         &attrs,
-        &["objectid", "transform", "partnumber", "thumbnail", "p:UUID", "p:path"],
+        &[
+            "objectid",
+            "transform",
+            "partnumber",
+            "thumbnail",
+            "p:UUID",
+            "p:path",
+        ],
         "item",
     )?;
 
@@ -1789,7 +1796,11 @@ fn parse_beam<R: std::io::BufRead>(
     // Per Beam Lattice Extension spec v1.2.0: v1, v2, r1, r2, cap1, cap2, p1, p2, pid
     // Currently implemented: v1, v2, r1, r2, cap1, cap2
     // TODO: Implement p1, p2, pid attributes for per-beam property overrides
-    validate_attributes(&attrs, &["v1", "v2", "r1", "r2", "cap1", "cap2", "p1", "p2", "pid"], "beam")?;
+    validate_attributes(
+        &attrs,
+        &["v1", "v2", "r1", "r2", "cap1", "cap2", "p1", "p2", "pid"],
+        "beam",
+    )?;
 
     let v1 = attrs
         .get("v1")

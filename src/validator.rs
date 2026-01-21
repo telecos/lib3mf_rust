@@ -66,7 +66,7 @@ fn validate_required_structure(model: &Model) -> Result<()> {
         .items
         .iter()
         .any(|item| item.production_path.is_some());
-    
+
     // Model must contain at least one object (either local or external)
     if !has_local_objects && !has_external_objects {
         return Err(Error::InvalidModel(
@@ -75,7 +75,8 @@ fn validate_required_structure(model: &Model) -> Result<()> {
              - At least one <object> element within the <resources> section, OR\n\
              - At least one build <item> with a p:path attribute (Production extension) \
              referencing an external file.\n\
-             Check that your 3MF file has proper model content.".to_string()
+             Check that your 3MF file has proper model content."
+                .to_string(),
         ));
     }
 
@@ -248,7 +249,7 @@ fn validate_build_references(model: &Model) -> Result<()> {
         if item.production_path.is_some() {
             continue;
         }
-        
+
         if !valid_object_ids.contains(&item.objectid) {
             return Err(Error::InvalidModel(format!(
                 "Build item {} references non-existent object ID: {}. \
@@ -514,10 +515,14 @@ fn validate_component_references(model: &Model) -> Result<()> {
             // When a component has a p:path attribute, the referenced object is in an external
             // file (potentially encrypted in Secure Content scenarios) and doesn't need to exist
             // in the current model's resources
-            if component.production.as_ref().is_some_and(|p| p.path.is_some()) {
+            if component
+                .production
+                .as_ref()
+                .is_some_and(|p| p.path.is_some())
+            {
                 continue;
             }
-            
+
             if !valid_object_ids.contains(&component.objectid) {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Component references non-existent object ID {}",
