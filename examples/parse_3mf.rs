@@ -87,8 +87,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     println!("Metadata:");
-    for (key, value) in &parsed_model.metadata {
-        println!("  {}: {}", key, value);
+    for (key, entry) in &parsed_model.metadata {
+        println!("  {}: {}", key, entry.value);
+        if entry.preserve {
+            println!("    (preserve: true)");
+        }
     }
     println!();
 

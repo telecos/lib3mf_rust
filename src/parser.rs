@@ -169,11 +169,21 @@ fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model>
                                 }
                             }
 
+                            // Check for preserve attribute
+                            // Per spec: preserve="1" means preserve, absence or "0" means don't preserve
+                            let preserve = attrs
+                                .get("preserve")
+                                .map(|v| v == "1")
+                                .unwrap_or(false);
+
                             // Read the text content
                             if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
                                 let value =
                                     t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
-                                model.metadata.insert(name.clone(), value.to_string());
+                                model.metadata.insert(
+                                    name.clone(),
+                                    MetadataEntry::with_preserve(value.to_string(), preserve),
+                                );
                             }
                         }
                     }

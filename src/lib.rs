@@ -40,8 +40,8 @@ mod validator;
 
 pub use error::{Error, Result};
 pub use model::{
-    Build, BuildItem, ColorGroup, Extension, Material, Mesh, Model, Object, ParserConfig,
-    Resources, Triangle, Vertex,
+    Build, BuildItem, ColorGroup, Extension, Material, Mesh, MetadataEntry, Model, Object,
+    ParserConfig, Resources, Triangle, Vertex,
 };
 
 use std::io::Read;

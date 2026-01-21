@@ -2,6 +2,62 @@
 
 use std::collections::{HashMap, HashSet};
 
+/// Metadata entry with value and optional preserve attribute
+///
+/// Per 3MF Core Specification Chapter 4, metadata elements can have:
+/// - A name attribute (the key in the parent HashMap)
+/// - Text content (stored in value)
+/// - An optional preserve attribute indicating if metadata should be preserved
+#[derive(Debug, Clone, PartialEq)]
+pub struct MetadataEntry {
+    /// The metadata value
+    pub value: String,
+    /// Whether this metadata should be preserved through processing
+    /// Per spec: preserve="1" means preserve, absence or "0" means don't preserve
+    pub preserve: bool,
+}
+
+impl MetadataEntry {
+    /// Create a new metadata entry
+    pub fn new(value: String) -> Self {
+        Self {
+            value,
+            preserve: false,
+        }
+    }
+
+    /// Create a new metadata entry with preserve attribute
+    pub fn with_preserve(value: String, preserve: bool) -> Self {
+        Self { value, preserve }
+    }
+}
+
+/// Well-known metadata names from the 3MF Core Specification
+///
+/// These are standardized metadata names that have special meaning in 3MF files.
+/// Per spec Chapter 4, producers and consumers should use these standard names
+/// when possible for interoperability.
+pub mod metadata_names {
+    /// Title of the 3D model
+    pub const TITLE: &str = "Title";
+    /// Designer or author of the model
+    pub const DESIGNER: &str = "Designer";
+    /// Description of the model
+    pub const DESCRIPTION: &str = "Description";
+    /// Copyright information
+    pub const COPYRIGHT: &str = "Copyright";
+    /// License terms for the model
+    pub const LICENSE_TERMS: &str = "LicenseTerms";
+    /// Rating of the model
+    pub const RATING: &str = "Rating";
+    /// Creation date
+    pub const CREATION_DATE: &str = "CreationDate";
+    /// Modification date
+    pub const MODIFICATION_DATE: &str = "ModificationDate";
+    /// Application that created the file
+    pub const APPLICATION: &str = "Application";
+}
+
 /// 3MF extension specification
 ///
 /// Represents the various official 3MF extensions that can be used in 3MF files.
@@ -423,8 +479,8 @@ pub struct Model {
     /// Required extensions for this model
     /// Extensions that the consumer must support to properly process this file
     pub required_extensions: Vec<Extension>,
-    /// Metadata key-value pairs
-    pub metadata: HashMap<String, String>,
+    /// Metadata entries with values and optional preserve attributes
+    pub metadata: HashMap<String, MetadataEntry>,
     /// Resources (objects, materials)
     pub resources: Resources,
     /// Build specification

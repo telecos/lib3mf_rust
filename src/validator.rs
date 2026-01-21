@@ -21,12 +21,14 @@ use std::collections::HashSet;
 /// - Build item object references
 /// - Material and color group references
 /// - Mesh requirements (must have vertices)
+/// - Metadata requirements and preservation attributes
 pub fn validate_model(model: &Model) -> Result<()> {
     validate_required_structure(model)?;
     validate_object_ids(model)?;
     validate_mesh_geometry(model)?;
     validate_build_references(model)?;
     validate_material_references(model)?;
+    validate_metadata(model)?;
     Ok(())
 }
 
@@ -299,6 +301,62 @@ fn validate_material_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Validate metadata according to 3MF Core Specification Chapter 4
+///
+/// Performs validation of metadata elements including:
+/// - Metadata name validation (no empty names)
+/// - Preservation attribute validation
+/// - Well-known metadata name checking
+fn validate_metadata(model: &Model) -> Result<()> {
+    use crate::model::metadata_names;
+
+    for (name, entry) in &model.metadata {
+        // Metadata name must not be empty
+        if name.is_empty() {
+            return Err(Error::InvalidModel(
+                "Metadata name cannot be empty".to_string(),
+            ));
+        }
+
+        // Metadata value should not be empty for well-known metadata
+        // This is a warning-level check, but we enforce it for important metadata
+        if entry.value.trim().is_empty() {
+            // Check if it's a well-known metadata that should have a value
+            match name.as_str() {
+                metadata_names::TITLE
+                | metadata_names::DESIGNER
+                | metadata_names::COPYRIGHT
+                | metadata_names::LICENSE_TERMS => {
+                    return Err(Error::InvalidModel(format!(
+                        "Well-known metadata '{}' should not have an empty value",
+                        name
+                    )));
+                }
+                _ => {
+                    // For other metadata, empty values are allowed but not recommended
+                }
+            }
+        }
+
+        // Validate that namespaced metadata uses proper format
+        // This was already checked during parsing, but we validate here too
+        if name.contains(':') {
+            let parts: Vec<&str> = name.split(':').collect();
+            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+                return Err(Error::InvalidModel(format!(
+                    "Invalid namespaced metadata name format: '{}'",
+                    name
+                )));
+            }
+        }
+
+        // Note: The preserve attribute is stored but doesn't require validation
+        // It's a boolean flag that consumers should respect when processing
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,5 +487,119 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("has triangles but no vertices"));
+    }
+
+    #[test]
+    fn test_validate_metadata_empty_name() {
+        use crate::model::MetadataEntry;
+        
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Add metadata with empty name - should fail
+        model
+            .metadata
+            .insert("".to_string(), MetadataEntry::new("value".to_string()));
+
+        let result = validate_metadata(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_metadata_empty_well_known_value() {
+        use crate::model::{metadata_names, MetadataEntry};
+        
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Add Title metadata with empty value - should fail
+        model.metadata.insert(
+            metadata_names::TITLE.to_string(),
+            MetadataEntry::new("".to_string()),
+        );
+
+        let result = validate_metadata(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("should not have an empty value"));
+    }
+
+    #[test]
+    fn test_validate_metadata_preserve_attribute() {
+        use crate::model::MetadataEntry;
+        
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Add metadata with preserve attribute - should succeed
+        model.metadata.insert(
+            "Title".to_string(),
+            MetadataEntry::with_preserve("Test Model".to_string(), true),
+        );
+
+        let result = validate_metadata(&model);
+        assert!(result.is_ok());
+
+        // Verify preserve flag is set
+        assert!(model.metadata.get("Title").unwrap().preserve);
+    }
+
+    #[test]
+    fn test_validate_metadata_invalid_namespaced_format() {
+        use crate::model::MetadataEntry;
+        
+        let mut model = Model::new();
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Add metadata with invalid namespaced format (empty after colon)
+        model.metadata.insert(
+            "custom:".to_string(),
+            MetadataEntry::new("value".to_string()),
+        );
+
+        let result = validate_metadata(&model);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid namespaced metadata"));
     }
 }

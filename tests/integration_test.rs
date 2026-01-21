@@ -103,9 +103,12 @@ fn test_parse_minimal_3mf() {
     assert_eq!(model.build.items[0].objectid, 1);
 
     // Check metadata
-    assert_eq!(model.metadata.get("Title"), Some(&"Test Model".to_string()));
     assert_eq!(
-        model.metadata.get("Designer"),
+        model.metadata.get("Title").map(|e| &e.value),
+        Some(&"Test Model".to_string())
+    );
+    assert_eq!(
+        model.metadata.get("Designer").map(|e| &e.value),
         Some(&"lib3mf_rust".to_string())
     );
 }
@@ -212,4 +215,104 @@ fn test_empty_model() {
     assert_eq!(model.unit, "millimeter");
     assert_eq!(model.resources.objects.len(), 0);
     assert_eq!(model.build.items.len(), 0);
+}
+
+#[test]
+fn test_metadata_with_preserve_attribute() {
+    use lib3mf::MetadataEntry;
+    
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    let mut zip = ZipWriter::new(cursor);
+
+    let options = SimpleFileOptions::default();
+
+    // Add [Content_Types].xml
+    let content_types = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"##;
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels
+    let rels = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"##;
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
+
+    // Add 3D/3dmodel.model with metadata including preserve attribute
+    let model = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title" preserve="1">Important Model</metadata>
+  <metadata name="Designer">John Doe</metadata>
+  <metadata name="Copyright" preserve="1">2026 Example Corp</metadata>
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0.0" y="0.0" z="0.0"/>
+          <vertex x="1.0" y="0.0" z="0.0"/>
+          <vertex x="0.5" y="1.0" z="0.0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"##;
+
+    zip.start_file("3D/3dmodel.model", options).unwrap();
+    zip.write_all(model.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let cursor = Cursor::new(buffer);
+    let parsed_model = lib3mf::Model::from_reader(cursor).unwrap();
+
+    // Check metadata values
+    assert_eq!(
+        parsed_model.metadata.get("Title"),
+        Some(&MetadataEntry::with_preserve(
+            "Important Model".to_string(),
+            true
+        ))
+    );
+    assert_eq!(
+        parsed_model.metadata.get("Designer"),
+        Some(&MetadataEntry::new("John Doe".to_string()))
+    );
+    assert_eq!(
+        parsed_model.metadata.get("Copyright"),
+        Some(&MetadataEntry::with_preserve(
+            "2026 Example Corp".to_string(),
+            true
+        ))
+    );
+
+    // Verify preserve flags
+    assert!(parsed_model
+        .metadata
+        .get("Title")
+        .unwrap()
+        .preserve);
+    assert!(!parsed_model
+        .metadata
+        .get("Designer")
+        .unwrap()
+        .preserve);
+    assert!(parsed_model
+        .metadata
+        .get("Copyright")
+        .unwrap()
+        .preserve);
 }

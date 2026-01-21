@@ -17,6 +17,7 @@ fn test_parse_core_box() {
         .metadata
         .get("Copyright")
         .unwrap()
+        .value
         .contains("3MF Consortium"));
 
     // Should have one object
