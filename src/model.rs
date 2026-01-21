@@ -163,7 +163,11 @@ impl ParserConfig {
     ///         "MyExtension"
     ///     );
     /// ```
-    pub fn with_custom_extension(mut self, namespace: impl Into<String>, name: impl Into<String>) -> Self {
+    pub fn with_custom_extension(
+        mut self,
+        namespace: impl Into<String>,
+        name: impl Into<String>,
+    ) -> Self {
         let namespace = namespace.into();
         let name = name.into();
         self.custom_extensions.insert(
@@ -357,7 +361,8 @@ pub enum CustomElementResult {
 /// * `Ok(CustomElementResult::Handled)` - The element was recognized and handled
 /// * `Ok(CustomElementResult::NotHandled)` - The element was not recognized
 /// * `Err(error_message)` - An error occurred while handling the element
-pub type CustomElementHandler = Arc<dyn Fn(&CustomExtensionContext) -> Result<CustomElementResult, String> + Send + Sync>;
+pub type CustomElementHandler =
+    Arc<dyn Fn(&CustomExtensionContext) -> Result<CustomElementResult, String> + Send + Sync>;
 
 /// Callback function for custom extension validation
 ///

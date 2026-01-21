@@ -1665,7 +1665,7 @@ fn validate_extensions(
             )));
         }
     }
-    
+
     // Validate custom extensions
     for namespace in required_custom {
         if !config.has_custom_extension(namespace) {
@@ -1675,7 +1675,7 @@ fn validate_extensions(
             )));
         }
     }
-    
+
     Ok(())
 }
 
@@ -1688,18 +1688,18 @@ fn try_handle_custom_element<R: std::io::BufRead>(
     config: &ParserConfig,
 ) -> Result<bool> {
     use crate::model::{CustomElementResult, CustomExtensionContext};
-    
+
     // Extract namespace from element name
     let name = e.name();
-    let name_str = std::str::from_utf8(name.as_ref())
-        .map_err(|e| Error::InvalidXml(e.to_string()))?;
-    
+    let name_str =
+        std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+
     // Try to get namespace prefix
     if let Some((_prefix, local_name)) = name_str.split_once(':') {
         // Look up the namespace URI for this prefix in reader's namespace map
         // For now, we'll check if any registered custom extension matches
         let attrs = parse_attributes(reader, e)?;
-        
+
         // Check if we have a handler for any custom extension
         for (namespace, ext_info) in config.custom_extensions() {
             if let Some(handler) = &ext_info.element_handler {
@@ -1708,7 +1708,7 @@ fn try_handle_custom_element<R: std::io::BufRead>(
                     namespace: namespace.clone(),
                     attributes: attrs.clone(),
                 };
-                
+
                 match handler(&context) {
                     Ok(CustomElementResult::Handled) => {
                         return Ok(true);
@@ -1726,7 +1726,7 @@ fn try_handle_custom_element<R: std::io::BufRead>(
             }
         }
     }
-    
+
     Ok(false)
 }
 

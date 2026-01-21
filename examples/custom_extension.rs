@@ -6,9 +6,7 @@
 //! - Implement custom validation rules
 //! - Parse 3MF files with custom extensions
 
-use lib3mf::{
-    CustomElementResult, CustomExtensionContext, Model, ParserConfig,
-};
+use lib3mf::{CustomElementResult, CustomExtensionContext, Model, ParserConfig};
 use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
@@ -120,12 +118,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("1. Registering custom extension: {}\n", custom_namespace);
 
     // Create a parser configuration with a custom extension handler
-    let config = ParserConfig::new()
-        .with_custom_extension_handlers(
-            custom_namespace,
-            "CustomExtension",
-            // Element handler - called when custom elements are encountered
-            Arc::new(move |ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
+    let config = ParserConfig::new().with_custom_extension_handlers(
+        custom_namespace,
+        "CustomExtension",
+        // Element handler - called when custom elements are encountered
+        Arc::new(
+            move |ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
                 println!("   Element handler called:");
                 println!("     - Element: {}", ctx.element_name);
                 println!("     - Namespace: {}", ctx.namespace);
@@ -138,22 +136,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 Ok(CustomElementResult::Handled)
-            }),
-            // Validation handler - called during model validation
-            Arc::new(|model: &Model| -> Result<(), String> {
-                println!("   Custom validation handler called:");
-                println!("     - Model has {} objects", model.resources.objects.len());
-                println!("     - Model has {} build items", model.build.items.len());
+            },
+        ),
+        // Validation handler - called during model validation
+        Arc::new(|model: &Model| -> Result<(), String> {
+            println!("   Custom validation handler called:");
+            println!("     - Model has {} objects", model.resources.objects.len());
+            println!("     - Model has {} build items", model.build.items.len());
 
-                // Example custom validation: ensure model has at least one object
-                if model.resources.objects.is_empty() {
-                    return Err("Custom validation: Model must have at least one object".to_string());
-                }
+            // Example custom validation: ensure model has at least one object
+            if model.resources.objects.is_empty() {
+                return Err("Custom validation: Model must have at least one object".to_string());
+            }
 
-                println!("     - Custom validation passed!\n");
-                Ok(())
-            }),
-        );
+            println!("     - Custom validation passed!\n");
+            Ok(())
+        }),
+    );
 
     println!("2. Creating sample 3MF file with custom extension...\n");
     let data = create_sample_3mf_with_custom_extension();
@@ -167,8 +166,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     - Unit: {}", model.unit);
     println!("     - Objects: {}", model.resources.objects.len());
     println!("     - Build items: {}", model.build.items.len());
-    println!("     - Required extensions: {:?}", model.required_extensions);
-    println!("     - Required custom extensions: {:?}", model.required_custom_extensions);
+    println!(
+        "     - Required extensions: {:?}",
+        model.required_extensions
+    );
+    println!(
+        "     - Required custom extensions: {:?}",
+        model.required_custom_extensions
+    );
 
     // Display collected custom extension data
     let data = custom_data.lock().unwrap();

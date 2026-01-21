@@ -268,16 +268,19 @@ fn test_unknown_extension_ignored() {
     // Use with_all_extensions which only supports known extensions
     let config = ParserConfig::with_all_extensions()
         .with_custom_extension("http://example.com/unknown/extension", "Unknown");
-    
+
     let model = Model::from_reader_with_config(cursor, config).unwrap();
-    
+
     // Material should be in required_extensions (known extension)
     assert_eq!(model.required_extensions.len(), 1);
     assert_eq!(model.required_extensions[0], Extension::Material);
-    
+
     // Unknown extension should be in required_custom_extensions
     assert_eq!(model.required_custom_extensions.len(), 1);
-    assert_eq!(model.required_custom_extensions[0], "http://example.com/unknown/extension");
+    assert_eq!(
+        model.required_custom_extensions[0],
+        "http://example.com/unknown/extension"
+    );
 }
 
 #[test]

@@ -1,8 +1,6 @@
 //! Tests for custom 3MF extension support
 
-use lib3mf::{
-    CustomElementResult, CustomExtensionContext, Error, Model, ParserConfig,
-};
+use lib3mf::{CustomElementResult, CustomExtensionContext, Error, Model, ParserConfig};
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 use zip::write::SimpleFileOptions;
@@ -85,10 +83,8 @@ fn create_3mf_with_custom_extension(namespace: &str, prefix: &str) -> Vec<u8> {
 
 #[test]
 fn test_custom_extension_registration() {
-    let config = ParserConfig::new().with_custom_extension(
-        "http://example.com/myextension/2024/01",
-        "MyExtension",
-    );
+    let config = ParserConfig::new()
+        .with_custom_extension("http://example.com/myextension/2024/01", "MyExtension");
 
     assert!(config.has_custom_extension("http://example.com/myextension/2024/01"));
     assert!(!config.has_custom_extension("http://example.com/other/2024/01"));
@@ -139,8 +135,7 @@ fn test_parse_with_registered_custom_extension() {
     let namespace = "http://example.com/myextension/2024/01";
     let data = create_3mf_with_custom_extension(namespace, "custom");
 
-    let config = ParserConfig::new()
-        .with_custom_extension(namespace, "MyExtension");
+    let config = ParserConfig::new().with_custom_extension(namespace, "MyExtension");
 
     let cursor = Cursor::new(data);
     let result = Model::from_reader_with_config(cursor, config);
@@ -148,7 +143,7 @@ fn test_parse_with_registered_custom_extension() {
     // Should succeed because custom extension is registered
     assert!(result.is_ok());
     let model = result.unwrap();
-    
+
     // Verify the custom extension is in required_custom_extensions
     assert_eq!(model.required_custom_extensions.len(), 1);
     assert_eq!(model.required_custom_extensions[0], namespace);
@@ -190,10 +185,8 @@ fn test_multiple_custom_extensions() {
 
 #[test]
 fn test_custom_extension_info() {
-    let config = ParserConfig::new().with_custom_extension(
-        "http://example.com/myextension/2024/01",
-        "MyExtension",
-    );
+    let config = ParserConfig::new()
+        .with_custom_extension("http://example.com/myextension/2024/01", "MyExtension");
 
     let ext_info = config
         .get_custom_extension("http://example.com/myextension/2024/01")
@@ -225,9 +218,11 @@ fn test_custom_extension_context() {
 #[test]
 fn test_custom_extension_handler_result() {
     // Test Handled result
-    let handler = Arc::new(|_ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
-        Ok(CustomElementResult::Handled)
-    });
+    let handler = Arc::new(
+        |_ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
+            Ok(CustomElementResult::Handled)
+        },
+    );
 
     let ctx = CustomExtensionContext {
         element_name: "test".to_string(),
@@ -243,9 +238,11 @@ fn test_custom_extension_handler_result() {
     }
 
     // Test NotHandled result
-    let handler2 = Arc::new(|_ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
-        Ok(CustomElementResult::NotHandled)
-    });
+    let handler2 = Arc::new(
+        |_ctx: &CustomExtensionContext| -> Result<CustomElementResult, String> {
+            Ok(CustomElementResult::NotHandled)
+        },
+    );
 
     let result2 = handler2(&ctx);
     assert!(result2.is_ok());
