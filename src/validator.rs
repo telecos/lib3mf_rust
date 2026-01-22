@@ -9,7 +9,7 @@
 //! - Material, color group, and base material references are valid
 
 use crate::error::{Error, Result};
-use crate::model::{Extension, Model, ParserConfig};
+use crate::model::{Extension, Model, ObjectType, ParserConfig};
 use std::collections::{HashMap, HashSet};
 
 /// Helper function to convert a HashSet of IDs to a sorted Vec for error messages
@@ -2140,7 +2140,6 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
             if let Some(ref beamset) = mesh.beamset {
                 // Validate object type
                 // Per spec: "A beamlattice MUST only be added to a mesh object of type 'model' or 'solidsupport'"
-                use crate::model::ObjectType;
                 if object.object_type != ObjectType::Model && object.object_type != ObjectType::SolidSupport {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: BeamLattice can only be added to objects of type 'model' or 'solidsupport'. \
