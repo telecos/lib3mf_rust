@@ -31,6 +31,8 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
 
+    // Clone config before moving it to parse_model_xml_with_config
+    let config_clone = config.clone();
     let model_xml = package.get_model()?;
     let mut model = parse_model_xml_with_config(&model_xml, config)?;
 
@@ -51,7 +53,7 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 
     // Validate the model AFTER loading keystore and slices
     // This ensures validation can check encrypted file references correctly
-    validator::validate_model(&model)?;
+    validator::validate_model_with_config(&model, &config_clone)?;
 
     Ok(model)
 }
@@ -233,6 +235,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "requiredextensions" => {
                                     required_ext_value = Some(value.to_string());
                                 }
+                                "recommendedextensions" => {
+                                    // Per 3MF spec, recommendedextensions are optional and may be ignored
+                                    // They suggest extensions that enhance user experience but are not required
+                                    // We allow the attribute for spec compliance but don't store it
+                                }
                                 _ => {
                                     // Check if it's a namespace declaration (xmlns:prefix)
                                     if let Some(prefix) = key.strip_prefix("xmlns:") {
@@ -246,7 +253,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         declared_namespaces = namespaces.clone();
 
                         // Validate model attributes - only allow specific attributes
-                        // Per 3MF Core spec: unit, xml:lang, requiredextensions, and xmlns declarations
+                        // Per 3MF Core spec: unit, xml:lang, requiredextensions, recommendedextensions, and xmlns declarations
                         // Note: thumbnail is deprecated in v1.4+ but still allowed for backward compatibility
                         validate_attributes(
                             &all_attrs,
@@ -254,6 +261,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "unit",
                                 "xml:lang",
                                 "requiredextensions",
+                                "recommendedextensions",
                                 "xmlns",
                                 "thumbnail",
                             ],
