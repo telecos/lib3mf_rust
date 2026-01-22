@@ -5,12 +5,18 @@ use walkdir::WalkDir;
 
 fn main() {
     let suites = vec![
-        ("suite3_core", "negative_test_cases"),
         ("suite1_core_slice_prod", "negative_test_cases"),
         ("suite2_core_prod_matl", "negative_test_cases"),
+        ("suite3_core", "negative_test_cases"),
         ("suite4_core_slice", "negative_test_cases"),
         ("suite5_core_prod", "negative_test_cases"),
+        ("suite5_core_prod", "negative_test_cases_prod_alt"),
         ("suite6_core_matl", "negative_test_cases"),
+        ("suite7_beam", "negative_test_cases"),
+        ("suite8_secure", "negative_test_cases"),
+        ("suite9_core_ext", "Negative Tests"),
+        ("suite10_boolean", "Negative Tests"),
+        ("suite11_Displacement", "Negative Tests"),
     ];
 
     let mut failures_by_code: HashMap<String, Vec<String>> = HashMap::new();
