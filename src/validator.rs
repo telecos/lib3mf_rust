@@ -1335,17 +1335,14 @@ fn validate_slice(
     slice_idx: usize,
     slice: &crate::model::Slice,
 ) -> Result<()> {
-    // Per 3MF Slice Extension spec:
-    // A slice MUST contain at least one polygon, and each polygon must have vertices
-    // Empty slices (no polygons or no vertices) are invalid
+    // Per 3MF Slice Extension spec and official test suite:
+    // Empty slices (no polygons) are allowed - they can represent empty layers
+    // or boundaries of the sliced object. However, if a slice has polygons,
+    // it must have vertices.
 
+    // If slice is empty (no polygons), it's valid - skip further validation
     if slice.polygons.is_empty() {
-        return Err(Error::InvalidModel(format!(
-            "SliceStack {}: Slice {} (ztop={}) is empty (no polygons). \
-             Per 3MF Slice Extension spec, a slice must contain at least one polygon. \
-             Remove the empty slice or add polygon data.",
-            slice_stack_id, slice_idx, slice.ztop
-        )));
+        return Ok(());
     }
 
     // If there are polygons, there must be vertices
