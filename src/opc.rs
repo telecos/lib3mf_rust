@@ -93,6 +93,8 @@ impl<R: Read + std::io::Seek> Package<R> {
 
         let mut found_rels = false;
         let mut found_model = false;
+        let mut default_extensions = std::collections::HashSet::new();
+        let mut override_parts = std::collections::HashSet::new();
 
         loop {
             match reader.read_event_into(&mut buf) {
@@ -120,6 +122,29 @@ impl<R: Read + std::io::Seek> Package<R> {
                         }
 
                         if let (Some(ext), Some(ct)) = (extension, content_type) {
+                            // N_XPX_0206_01: Check for empty extension
+                            if ext.is_empty() {
+                                return Err(Error::InvalidFormat(
+                                    "Content type Default element cannot have empty Extension attribute".to_string()
+                                ));
+                            }
+
+                            // N_XPX_0205_01: Check for duplicate default extensions
+                            if !default_extensions.insert(ext.clone()) {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Duplicate Default content type mapping for extension '{}'",
+                                    ext
+                                )));
+                            }
+
+                            // N_XPX_0404_04: Validate PNG content type
+                            if ext.eq_ignore_ascii_case("png") && ct != "image/png" {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Invalid content type '{}' for PNG extension, must be 'image/png'",
+                                    ct
+                                )));
+                            }
+
                             // Check for required content types
                             if ext.eq_ignore_ascii_case("rels")
                                 && ct == "application/vnd.openxmlformats-package.relationships+xml"
@@ -143,6 +168,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                         }
                     } else if name_str.ends_with("Override") {
                         // Override elements can also define model content type
+                        let mut part_name = None;
                         let mut content_type = None;
 
                         for attr in e.attributes() {
@@ -152,12 +178,31 @@ impl<R: Read + std::io::Seek> Package<R> {
                             let value = std::str::from_utf8(&attr.value)
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
-                            if key == "ContentType" {
-                                content_type = Some(value.to_string());
+                            match key {
+                                "PartName" => part_name = Some(value.to_string()),
+                                "ContentType" => content_type = Some(value.to_string()),
+                                _ => {}
                             }
                         }
 
-                        if let Some(ct) = content_type {
+                        // N_XPX_0207_01: Check for empty PartName
+                        if let Some(ref pn) = part_name {
+                            if pn.is_empty() {
+                                return Err(Error::InvalidFormat(
+                                    "Content type Override element cannot have empty PartName attribute".to_string()
+                                ));
+                            }
+                        }
+
+                        if let (Some(pn), Some(ct)) = (part_name, content_type) {
+                            // N_XPX_0205_02: Check for duplicate override parts
+                            if !override_parts.insert(pn.clone()) {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Duplicate Override content type for part '{}'",
+                                    pn
+                                )));
+                            }
+
                             if ct == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" {
                                 found_model = true;
                             }
@@ -232,7 +277,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                 if parts.len() == 2 {
                     let dir = parts[0];
                     let rels_filename = parts[1];
-                    
+
                     // Remove .rels suffix to get the part filename
                     if let Some(part_filename) = rels_filename.strip_suffix(".rels") {
                         // Reconstruct the expected part file path
@@ -241,7 +286,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                         } else {
                             format!("{}/{}", dir, part_filename)
                         };
-                        
+
                         // Verify the corresponding part file exists
                         if !self.has_file(&expected_part_path) {
                             return Err(Error::InvalidFormat(format!(
@@ -260,6 +305,9 @@ impl<R: Read + std::io::Seek> Package<R> {
             reader.config_mut().trim_text(true);
             let mut buf = Vec::new();
 
+            let mut relationship_ids = std::collections::HashSet::new();
+            let mut relationship_targets = std::collections::HashMap::new();
+
             loop {
                 match reader.read_event_into(&mut buf) {
                     Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
@@ -270,6 +318,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                         if name_str.ends_with("Relationship") {
                             let mut target = None;
                             let mut rel_type = None;
+                            let mut rel_id = None;
 
                             for attr in e.attributes() {
                                 let attr = attr?;
@@ -278,30 +327,92 @@ impl<R: Read + std::io::Seek> Package<R> {
                                 let value = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
-                                if key == "Target" {
-                                    target = Some(value.to_string());
-                                } else if key == "Type" {
-                                    rel_type = Some(value.to_string());
+                                match key {
+                                    "Target" => target = Some(value.to_string()),
+                                    "Type" => rel_type = Some(value.to_string()),
+                                    "Id" => rel_id = Some(value.to_string()),
+                                    _ => {}
                                 }
                             }
 
-                            // Validate relationship Type - must not contain query strings or fragments
-                            if let Some(t) = &rel_type {
-                                if t.contains('?') {
+                            // N_XPX_0413_01: Check for duplicate relationship IDs
+                            if let Some(ref id) = rel_id {
+                                if !relationship_ids.insert(id.clone()) {
                                     return Err(Error::InvalidFormat(format!(
-                                        "Relationship Type in '{}' cannot contain query string: {}",
-                                        rels_file, t
+                                        "Duplicate relationship ID '{}' in '{}'",
+                                        id, rels_file
                                     )));
                                 }
-                                if t.contains('#') {
+
+                                // N_XPX_0405_04: Check if ID starts with a digit (only for root .rels)
+                                if rels_file == RELS_PATH {
+                                    if let Some(first_char) = id.chars().next() {
+                                        if first_char.is_ascii_digit() {
+                                            return Err(Error::InvalidFormat(format!(
+                                                "Relationship ID '{}' in root .rels cannot start with a digit",
+                                                id
+                                            )));
+                                        }
+                                    }
+                                }
+                            }
+
+                            // N_XPX_0405_03 & N_XPX_0405_05: Validate relationship Type values
+                            if let Some(ref rt) = rel_type {
+                                // N_XPX_0405_03: For 3dmodel.model.rels, check for incorrect model relationship type
+                                if rels_file.contains("3dmodel.model.rels")
+                                    && rt.contains("3dmodel")
+                                    && rt != MODEL_REL_TYPE
+                                {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Incorrect relationship Type '{}' in 3dmodel.model.rels",
+                                        rt
+                                    )));
+                                }
+
+                                // N_XPX_0405_05: For root .rels, check for incorrect thumbnail relationship type
+                                if rels_file == RELS_PATH
+                                    && rt.contains("thumbnail")
+                                    && rt != THUMBNAIL_REL_TYPE
+                                {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Incorrect thumbnail relationship Type '{}' in root .rels",
+                                        rt
+                                    )));
+                                }
+
+                                // Validate relationship Type - must not contain query strings or fragments
+                                if rt.contains('?') {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Relationship Type in '{}' cannot contain query string: {}",
+                                        rels_file, rt
+                                    )));
+                                }
+                                if rt.contains('#') {
                                     return Err(Error::InvalidFormat(format!(
                                         "Relationship Type in '{}' cannot contain fragment identifier: {}",
-                                        rels_file, t
+                                        rels_file, rt
                                     )));
                                 }
                             }
 
                             if let Some(t) = target {
+                                // N_XPX_0406_01 & N_XPX_0406_02: Check for duplicate targets
+                                if let Some(ref rt) = rel_type {
+                                    let key = (t.clone(), rt.clone());
+                                    if relationship_targets
+                                        .insert(key, rel_id.clone().unwrap_or_default())
+                                        .is_some()
+                                    {
+                                        // For root .rels with MODEL_REL_TYPE, this is N_XPX_0406_01
+                                        // For other .rels files, this is N_XPX_0406_02
+                                        return Err(Error::InvalidFormat(format!(
+                                            "Duplicate relationship to same target '{}' with type '{}' in '{}'",
+                                            t, rt, rels_file
+                                        )));
+                                    }
+                                }
+
                                 // Validate the target is a valid OPC part name
                                 Self::validate_opc_part_name(&t)?;
 
@@ -602,6 +713,48 @@ impl<R: Read + std::io::Seek> Package<R> {
 
         // Get content type from [Content_Types].xml
         let content_type = self.get_content_type(&thumb_path)?;
+
+        // N_XPX_0419_01: Validate JPEG thumbnails are not CMYK
+        if content_type.starts_with("image/jpeg") || content_type.starts_with("image/jpg") {
+            let data = self.get_file_binary(&thumb_path)?;
+            // Check if it's a JPEG (starts with FF D8 FF)
+            if data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+                // Look for SOF (Start of Frame) markers to determine color space
+                let mut i = 2;
+                while i + 1 < data.len() {
+                    if data[i] == 0xFF {
+                        let marker = data[i + 1];
+                        // SOF markers: 0xC0-0xCF (except 0xC4, 0xC8, 0xCC which are DHT, DAC, etc.)
+                        if (0xC0..=0xCF).contains(&marker)
+                            && marker != 0xC4
+                            && marker != 0xC8
+                            && marker != 0xCC
+                        {
+                            // SOF marker found, check component count at offset +7
+                            if i + 9 < data.len() {
+                                let num_components = data[i + 9];
+                                if num_components == 4 {
+                                    return Err(Error::InvalidFormat(
+                                        "Thumbnail JPEG uses CMYK color space, only RGB is allowed"
+                                            .to_string(),
+                                    ));
+                                }
+                            }
+                            break;
+                        }
+                        // Skip this marker
+                        if i + 3 < data.len() {
+                            let len = ((data[i + 2] as usize) << 8) | (data[i + 3] as usize);
+                            i += len + 2;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+        }
 
         // Note: While thumbnails are typically image/* content types, some valid 3MF files
         // (per the official test suite) may use other content types for thumbnail relationships.

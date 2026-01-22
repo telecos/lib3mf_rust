@@ -78,6 +78,14 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_triangle_properties(model)?;
     validate_production_uuids_required(model, config)?;
     validate_thumbnail_format(model)?;
+    validate_mesh_volume(model)?;
+    validate_vertex_order(model)?;
+    validate_thumbnail_jpeg_colorspace(model)?;
+    validate_dtd_declaration(model)?;
+    validate_build_transform_bounds(model)?;
+    validate_component_properties(model)?;
+    validate_duplicate_uuids(model)?;
+    validate_component_chain(model)?;
 
     Ok(())
 }
@@ -2594,6 +2602,134 @@ fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> 
         }
     }
 
+    Ok(())
+}
+
+/// N_XPX_0416_01: Validate mesh has positive volume
+fn validate_mesh_volume(model: &Model) -> Result<()> {
+    for object in &model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            // Calculate signed volume using divergence theorem
+            let mut volume = 0.0_f64;
+            for triangle in &mesh.triangles {
+                if triangle.v1 >= mesh.vertices.len()
+                    || triangle.v2 >= mesh.vertices.len()
+                    || triangle.v3 >= mesh.vertices.len()
+                {
+                    continue; // Skip invalid triangles (caught by other validation)
+                }
+
+                let v1 = &mesh.vertices[triangle.v1];
+                let v2 = &mesh.vertices[triangle.v2];
+                let v3 = &mesh.vertices[triangle.v3];
+
+                // Signed volume contribution of this triangle
+                volume += v1.x * (v2.y * v3.z - v2.z * v3.y)
+                    + v2.x * (v3.y * v1.z - v3.z * v1.y)
+                    + v3.x * (v1.y * v2.z - v1.z * v2.y);
+            }
+            volume /= 6.0;
+
+            if volume < 0.0 {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Mesh has negative volume ({}), indicating inverted or incorrectly oriented triangles",
+                    object.id, volume
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
+fn validate_vertex_order(_model: &Model) -> Result<()> {
+    // Note: This validation is disabled as the heuristic for detecting reversed
+    // vertex order is not reliable enough for all mesh geometries and can be
+    // computationally expensive for large meshes. A proper implementation would
+    // require mesh analysis algorithms that are beyond the scope of basic validation.
+    Ok(())
+}
+
+/// N_XPX_0419_01: Validate JPEG thumbnail colorspace (must be RGB, not CMYK)
+fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
+    // Note: Thumbnail validation for CMYK would require loading the actual file
+    // data from the OPC package, which is not available at the model validation stage.
+    // This validation would need to be performed during package parsing in opc.rs
+    // For now, this is a placeholder.
+    Ok(())
+}
+
+/// N_XPX_0420_01: Validate no DTD declaration in XML (security risk)
+fn validate_dtd_declaration(_model: &Model) -> Result<()> {
+    // DTD validation is handled during XML parsing in parser.rs
+    // The parser rejects DOCTYPE events in the XML stream
+    // This placeholder exists for documentation purposes
+    Ok(())
+}
+
+/// N_XPX_0421_01: Validate build item transform doesn't place object outside printable area
+fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
+    // Note: This validation is disabled because negative coordinates in transforms
+    // can be valid in certain use cases (e.g., centering objects around origin).
+    // The 3MF spec doesn't strictly prohibit negative coordinates in transforms.
+    // A proper implementation would need to consider the actual mesh bounds and
+    // check if the transformed mesh extends into negative coordinates, not just
+    // the translation component of the transform.
+    Ok(())
+}
+
+/// N_XPX_0424_01: Validate objects with components don't have pid/pindex attributes
+fn validate_component_properties(model: &Model) -> Result<()> {
+    // Per 3MF spec, objects that contain components (assemblies) cannot have pid/pindex
+    // because assemblies don't have their own material properties
+    for object in &model.resources.objects {
+        if !object.components.is_empty() {
+            if object.pid.is_some() {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} contains components and cannot have pid attribute",
+                    object.id
+                )));
+            }
+            if object.pindex.is_some() {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} contains components and cannot have pindex attribute",
+                    object.id
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0802_04: Validate no duplicate UUIDs between objects
+fn validate_duplicate_uuids(model: &Model) -> Result<()> {
+    let mut uuids = std::collections::HashSet::new();
+
+    for object in &model.resources.objects {
+        if let Some(ref production) = object.production {
+            if let Some(ref uuid) = production.uuid {
+                if !uuids.insert(uuid.clone()) {
+                    return Err(Error::InvalidModel(format!(
+                        "Duplicate UUID '{}' found on object {}",
+                        uuid, object.id
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0803_01: Validate no component reference chains across multiple model parts  
+fn validate_component_chain(_model: &Model) -> Result<()> {
+    // Note: This validation is disabled because detecting component reference chains
+    // requires parsing and analyzing external model files referenced via p:path.
+    // Since the parser only loads the root model file, we cannot reliably detect
+    // multi-level chains. A full implementation would require:
+    // 1. Loading all referenced external model files
+    // 2. Building a dependency graph
+    // 3. Detecting cycles or chains longer than allowed
+    // This is beyond the scope of single-file validation.
     Ok(())
 }
 

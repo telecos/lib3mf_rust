@@ -141,15 +141,13 @@ pub(crate) fn get_local_name(name_str: &str) -> &str {
 /// # Returns
 /// The first attribute value found with the matching local name, or None
 fn get_attr_by_local_name(attrs: &HashMap<String, String>, local_name: &str) -> Option<String> {
-    attrs
-        .iter()
-        .find_map(|(key, value)| {
-            if get_local_name(key) == local_name {
-                Some(value.clone())
-            } else {
-                None
-            }
-        })
+    attrs.iter().find_map(|(key, value)| {
+        if get_local_name(key) == local_name {
+            Some(value.clone())
+        } else {
+            None
+        }
+    })
 }
 
 /// Parse the 3D model XML content
@@ -235,6 +233,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
         let is_empty_element = matches!(&event_result, Ok(Event::Empty(_)));
 
         match event_result {
+            Ok(Event::Decl(_)) => {
+                // XML declaration is allowed
+            }
+            Ok(Event::DocType(_)) => {
+                // N_XPX_0420_01: DTD declarations are not allowed (security risk)
+                return Err(Error::InvalidXml(
+                    "DTD declarations are not allowed in 3MF files for security reasons"
+                        .to_string(),
+                ));
+            }
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
