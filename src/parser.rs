@@ -1426,8 +1426,9 @@ fn load_keystore<R: Read + std::io::Seek>(
     model: &mut Model,
 ) -> Result<()> {
     // Try to load the keystore file - it's OK if it doesn't exist
-    let keystore_xml = match package.get_file("Secure/keystore.xml") {
-        Ok(xml) => xml,
+    // Use get_file_binary() to handle files that may contain encrypted/binary data
+    let keystore_bytes = match package.get_file_binary("Secure/keystore.xml") {
+        Ok(bytes) => bytes,
         Err(_) => return Ok(()), // No keystore file, not an error
     };
 
@@ -1435,6 +1436,10 @@ fn load_keystore<R: Read + std::io::Seek>(
     if model.secure_content.is_none() {
         model.secure_content = Some(SecureContentInfo::default());
     }
+
+    // Convert bytes to string, using lossy conversion to handle any non-UTF-8 sequences
+    // This allows parsing keystore files that may contain encrypted content
+    let keystore_xml = String::from_utf8_lossy(&keystore_bytes);
 
     let mut reader = Reader::from_str(&keystore_xml);
     reader.config_mut().trim_text(true);
