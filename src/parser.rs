@@ -241,7 +241,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     // Validate that the value is not empty if present
                                     if value.trim().is_empty() {
                                         return Err(Error::InvalidXml(
-                                            "recommendedextensions attribute cannot be empty".to_string()
+                                            "recommendedextensions attribute cannot be empty"
+                                                .to_string(),
                                         ));
                                     }
                                     recommended_ext_value = Some(value.to_string());
@@ -289,7 +290,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
 
                         // Validate that no extension appears in both required and recommended
-                        if let (Some(req_value), Some(rec_value)) = (&required_ext_value, &recommended_ext_value) {
+                        if let (Some(req_value), Some(rec_value)) =
+                            (&required_ext_value, &recommended_ext_value)
+                        {
                             validate_no_duplicate_extensions(req_value, rec_value, &namespaces)?;
                         }
                     }
@@ -1112,7 +1115,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if let Some(name) = attrs.get("name") {
                             if name.trim().is_empty() {
                                 return Err(Error::InvalidXml(
-                                    "triangleset name attribute cannot be empty".to_string()
+                                    "triangleset name attribute cannot be empty".to_string(),
                                 ));
                             }
                         }
@@ -1143,7 +1146,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 ))
                             })?;
                             let end_index = end_str.parse::<usize>().map_err(|_| {
-                                Error::InvalidXml(format!("Invalid triangle end index: {}", end_str))
+                                Error::InvalidXml(format!(
+                                    "Invalid triangle end index: {}",
+                                    end_str
+                                ))
                             })?;
 
                             // Validate that start_index <= end_index
