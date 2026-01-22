@@ -2214,7 +2214,7 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                 }
                 
-                // Validate that if beams have property assignments (pid, p1, p2),
+                // Validate that if beams or balls have property assignments,
                 // then beamlattice or object must have a default pid
                 // Per spec: "If this beam lattice contains any beam or ball with assigned properties,
                 // the beam lattice or object MUST specify pid and pindex"
@@ -2222,13 +2222,17 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     b.property_id.is_some() || b.p1.is_some() || b.p2.is_some()
                 });
                 
-                if beams_have_properties {
+                let balls_have_properties = beamset.balls.iter().any(|b| {
+                    b.property_id.is_some() || b.property_index.is_some()
+                });
+                
+                if beams_have_properties || balls_have_properties {
                     let has_default_pid = beamset.property_id.is_some() || object.pid.is_some();
                     if !has_default_pid {
                         return Err(Error::InvalidModel(format!(
-                            "Object {}: BeamLattice contains beams with property assignments (pid, p1, or p2) \
+                            "Object {}: BeamLattice contains beams or balls with property assignments \
                              but neither the beamlattice nor the object specifies a default pid. \
-                             Per the Beam Lattice spec, when beams have assigned properties, \
+                             Per the Beam Lattice spec, when beams or balls have assigned properties, \
                              the beamlattice or object MUST specify pid and pindex to act as default values.",
                             object.id
                         )));
