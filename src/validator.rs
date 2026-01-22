@@ -1156,7 +1156,7 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
                 // - p:path is only required when referencing external objects (not in current file)
                 // - A component with p:UUID but no p:path references a local object
                 // - When p:path is used (external reference), p:UUID is REQUIRED to identify the object
-                
+
                 // Validate that p:UUID is present when p:path is used
                 if prod_info.path.is_some() && prod_info.uuid.is_none() {
                     return Err(Error::InvalidModel(format!(
@@ -1221,7 +1221,7 @@ fn validate_slices(model: &Model) -> Result<()> {
 
     Ok(())
 }
-          
+
 /// Validate slice extension requirements
 ///
 /// Per 3MF Slice Extension spec v1.0.2:
@@ -1403,7 +1403,7 @@ fn validate_slice(
 
     Ok(())
 }
-      
+
 /// Validate that a transform is planar (no Z-axis rotation or shear)
 ///
 /// Per 3MF Slice Extension spec:
