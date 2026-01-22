@@ -141,9 +141,7 @@ fn validate_required_extensions(model: &Model) -> Result<()> {
     if uses_boolean_ops {
         // Check if Boolean Operations extension is in required extensions
         let has_bo_extension = model
-            .required_extensions
-            .iter()
-            .any(|ext| *ext == Extension::BooleanOperations);
+            .required_extensions.contains(&Extension::BooleanOperations);
 
         if !has_bo_extension {
             return Err(Error::InvalidModel(
@@ -780,14 +778,30 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                         }
 
                         // Check that operand doesn't have booleanshape or components
-                        // Actually the spec says "MUST be only a triangle mesh object" which means
-                        // it should have ONLY a mesh, not other shape types
-                        if operand_obj.boolean_shape.is_some() || !operand_obj.components.is_empty()
-                        {
+                        // Per spec: "MUST be only a triangle mesh object" and
+                        // "MUST NOT contain shapes defined in any other extension"
+                        if operand_obj.boolean_shape.is_some() {
                             return Err(Error::InvalidModel(format!(
-                                "Object {}: Boolean operand object {} must be a simple triangle mesh.\n\
-                                 Per 3MF Boolean Operations spec, operands must be mesh objects only, \
-                                 not objects with boolean shapes or components.",
+                                "Object {}: Boolean operand object {} has a boolean shape.\n\
+                                 Per 3MF Boolean Operations spec, operands must be simple triangle meshes only.",
+                                object.id, operand.objectid
+                            )));
+                        }
+
+                        if !operand_obj.components.is_empty() {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Boolean operand object {} has components.\n\
+                                 Per 3MF Boolean Operations spec, operands must be simple triangle meshes only.",
+                                object.id, operand.objectid
+                            )));
+                        }
+
+                        // Check for extension shape elements (beamlattice, displacement, etc.)
+                        if operand_obj.has_extension_shapes {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Boolean operand object {} contains extension shape elements (e.g., beamlattice).\n\
+                                 Per 3MF Boolean Operations spec, operands MUST be only triangle mesh objects \
+                                 and MUST NOT contain shapes defined in any other extension.",
                                 object.id, operand.objectid
                             )));
                         }

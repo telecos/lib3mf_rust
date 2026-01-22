@@ -787,6 +787,13 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "beamlattice" if current_mesh.is_some() => {
                         in_beamset = true;
+
+                        // Mark that this object has extension shape elements
+                        // This is used for validation - per Boolean Ops spec, operands must be simple meshes only
+                        if let Some(ref mut obj) = current_object {
+                            obj.has_extension_shapes = true;
+                        }
+
                         let attrs = parse_attributes(&reader, e)?;
                         let mut beamset = BeamSet::new();
 
@@ -2103,7 +2110,7 @@ pub(crate) fn validate_attributes(
 /// Per 3MF Boolean Operations Extension spec:
 /// - The path attribute references objects in non-root model files
 /// - Path is an absolute path from the root of the 3MF container
-/// - This validation ensures referenced files exist
+/// - This validation ensures referenced files exist and contain the referenced objects
 fn validate_boolean_external_paths<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &Model,
@@ -2126,6 +2133,15 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                         object.id, path
                     )));
                 }
+
+                // Validate that the referenced object ID exists in the external file
+                validate_external_object_id(
+                    package,
+                    normalized_path,
+                    boolean_shape.objectid,
+                    object.id,
+                    "booleanshape base",
+                )?;
             }
 
             // Check if boolean operands reference external files
@@ -2145,9 +2161,81 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                             object.id, path
                         )));
                     }
+
+                    // Validate that the referenced object ID exists in the external file
+                    validate_external_object_id(
+                        package,
+                        normalized_path,
+                        operand.objectid,
+                        object.id,
+                        "boolean operand",
+                    )?;
                 }
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Validate that an object ID exists in an external model file
+fn validate_external_object_id<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    file_path: &str,
+    object_id: usize,
+    referring_object_id: usize,
+    reference_type: &str,
+) -> Result<()> {
+    // Load the external model file
+    let external_xml = package.get_file(file_path)?;
+
+    // Parse just enough to extract object IDs
+    let mut reader = Reader::from_str(&external_xml);
+    reader.config_mut().trim_text(true);
+
+    let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
+    let mut object_ids = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let local_name = get_local_name(name_str);
+
+                if local_name == "object" {
+                    // Extract the id attribute
+                    for attr in e.attributes() {
+                        let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                        if attr_name == "id" {
+                            let id_str = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            if let Ok(id) = id_str.parse::<usize>() {
+                                object_ids.push(id);
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(Error::Xml(e)),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    // Check if the referenced object ID exists
+    if !object_ids.contains(&object_id) {
+        return Err(Error::InvalidModel(format!(
+            "Object {}: {} references object ID {} in external file '{}', but that object does not exist.\n\
+             Available object IDs in external file: {:?}\n\
+             Check that the referenced object ID is correct.",
+            referring_object_id, reference_type, object_id, file_path, object_ids
+        )));
     }
 
     Ok(())
