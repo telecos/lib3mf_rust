@@ -2292,7 +2292,7 @@ fn validate_production_paths(model: &Model) -> Result<()> {
         }
     }
 
-    // Check build items
+    // Check build items - validate p:path doesn't reference OPC internal files
     for (idx, item) in model.build.items.iter().enumerate() {
         if let Some(ref path) = item.production_path {
             validate_not_opc_internal(path, &format!("Build item {}", idx))?;
