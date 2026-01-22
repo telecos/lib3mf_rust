@@ -1038,12 +1038,23 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ballsets" if in_beamset => {
                         // ballsets container element for grouping balls into sets
-                        // Contains ballset children with ref elements
+                        // Contains ballset children with ref/ballref elements
                         in_ballsets = true;
                     }
                     "ballset" if in_beamset => {
-                        // ballset element within ballsets - contains ref elements
+                        // ballset element within ballsets - contains ref/ballref elements
                         // No attributes to parse
+                    }
+                    "ballref" if in_beamset => {
+                        // ballref element - explicit ball reference (alternative to generic ref in ballsets)
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(index_str) = attrs.get("index") {
+                            let index = index_str.parse::<usize>()?;
+                            // Store the ballref index for validation
+                            if let Some(ref mut beamset) = current_beamset {
+                                beamset.ball_set_refs.push(index);
+                            }
+                        }
                     }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
