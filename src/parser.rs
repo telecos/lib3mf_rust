@@ -6,7 +6,7 @@ use crate::opc::Package;
 use crate::validator;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 /// Size of 3MF transformation matrix (4x3 affine transform in row-major order)
@@ -1126,13 +1126,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             })?;
                             // Validate index is within bounds
                             if let Some(ref mesh) = current_mesh {
-                                if index >= mesh.triangles.len() {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Triangle index {} is out of bounds (mesh has {} triangles)",
-                                        index,
-                                        mesh.triangles.len()
-                                    )));
-                                }
+                                validate_triangle_index(mesh, index, "ref")?;
                             }
                         }
                     }
@@ -1151,22 +1145,19 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             let end_index = end_str.parse::<usize>().map_err(|_| {
                                 Error::InvalidXml(format!("Invalid triangle end index: {}", end_str))
                             })?;
+                            
+                            // Validate that start_index <= end_index
+                            if start_index > end_index {
+                                return Err(Error::InvalidXml(format!(
+                                    "refrange start index {} is greater than end index {}",
+                                    start_index, end_index
+                                )));
+                            }
+                            
                             // Validate indices are within bounds
                             if let Some(ref mesh) = current_mesh {
-                                if start_index >= mesh.triangles.len() {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Triangle start index {} is out of bounds (mesh has {} triangles)",
-                                        start_index,
-                                        mesh.triangles.len()
-                                    )));
-                                }
-                                if end_index >= mesh.triangles.len() {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Triangle end index {} is out of bounds (mesh has {} triangles)",
-                                        end_index,
-                                        mesh.triangles.len()
-                                    )));
-                                }
+                                validate_triangle_index(mesh, start_index, "refrange start")?;
+                                validate_triangle_index(mesh, end_index, "refrange end")?;
                             }
                         }
                     }
@@ -2047,7 +2038,7 @@ fn validate_no_duplicate_extensions(
     let recommended_items: Vec<&str> = recommended_str.split_whitespace().collect();
 
     // Resolve each item to its namespace URI
-    let mut required_namespaces = std::collections::HashSet::new();
+    let mut required_namespaces = HashSet::new();
     for item in required_items {
         // If it's a namespace prefix, resolve it
         if let Some(uri) = namespaces.get(item) {
@@ -2074,6 +2065,19 @@ fn validate_no_duplicate_extensions(
         }
     }
 
+    Ok(())
+}
+
+/// Validate that a triangle index is within bounds of the mesh
+fn validate_triangle_index(mesh: &Mesh, index: usize, context: &str) -> Result<()> {
+    if index >= mesh.triangles.len() {
+        return Err(Error::InvalidXml(format!(
+            "{} triangle index {} is out of bounds (mesh has {} triangles)",
+            context,
+            index,
+            mesh.triangles.len()
+        )));
+    }
     Ok(())
 }
 
