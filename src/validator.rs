@@ -1198,18 +1198,11 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
 /// Per 3MF Slice Extension spec v1.0.2:
 /// - SliceRef slicepath must point to /2D/ folder (not /3D/ or other directories)
 /// - When an object references a slicestack, transforms must be planar (no Z-axis rotation/shear)
-/// - Referenced slicestacks must not contain slicerefs (no nesting of slicerefs)
 /// - SliceStack must contain either slices OR slicerefs, not both
 fn validate_slice_extension(model: &Model) -> Result<()> {
     // Check if model uses slice extension
     if model.resources.slice_stacks.is_empty() {
         return Ok(());
-    }
-
-    // Build a map of slicestack IDs for validation
-    let mut slicestack_ids: HashMap<usize, &crate::model::SliceStack> = HashMap::new();
-    for stack in &model.resources.slice_stacks {
-        slicestack_ids.insert(stack.id, stack);
     }
 
     // Validate slicerefs in all slicestacks
@@ -1227,11 +1220,14 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
         // Validate each sliceref
         for sliceref in &stack.slice_refs {
             // Rule: SliceRef slicepath must be in /2D/ folder
+            // Per spec: "For package readability and organization, slice models SHOULD be stored 
+            // in the 2D folder UNLESS they are part of the root model part."
+            // We enforce this as a MUST for external slice files to catch common packaging errors.
             if !sliceref.slicepath.starts_with("/2D/") {
                 return Err(Error::InvalidModel(format!(
                     "SliceStack {}: SliceRef references invalid path '{}'.\n\
-                     Per 3MF Slice Extension spec, slice models SHOULD be stored in the /2D/ folder \
-                     UNLESS they are part of the root model part. Slicepath must start with '/2D/'.",
+                     Per 3MF Slice Extension spec, external slice models must be stored in the /2D/ folder. \
+                     Slicepath must start with '/2D/'.",
                     stack.id, sliceref.slicepath
                 )));
             }
