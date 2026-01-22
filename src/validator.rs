@@ -141,7 +141,8 @@ fn validate_required_extensions(model: &Model) -> Result<()> {
     if uses_boolean_ops {
         // Check if Boolean Operations extension is in required extensions
         let has_bo_extension = model
-            .required_extensions.contains(&Extension::BooleanOperations);
+            .required_extensions
+            .contains(&Extension::BooleanOperations);
 
         if !has_bo_extension {
             return Err(Error::InvalidModel(

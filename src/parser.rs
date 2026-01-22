@@ -2115,6 +2115,9 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &Model,
 ) -> Result<()> {
+    // Cache to avoid re-parsing the same external file multiple times
+    let mut external_file_cache: HashMap<String, Vec<usize>> = HashMap::new();
+
     for object in &model.resources.objects {
         if let Some(ref boolean_shape) = object.boolean_shape {
             // Check if booleanshape references an external file
@@ -2141,6 +2144,7 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                     boolean_shape.objectid,
                     object.id,
                     "booleanshape base",
+                    &mut external_file_cache,
                 )?;
             }
 
@@ -2169,6 +2173,7 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                         operand.objectid,
                         object.id,
                         "boolean operand",
+                        &mut external_file_cache,
                     )?;
                 }
             }
@@ -2179,62 +2184,82 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
 }
 
 /// Validate that an object ID exists in an external model file
+///
+/// Uses a cache to avoid re-parsing the same file multiple times
 fn validate_external_object_id<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     file_path: &str,
     object_id: usize,
     referring_object_id: usize,
     reference_type: &str,
+    cache: &mut HashMap<String, Vec<usize>>,
 ) -> Result<()> {
-    // Load the external model file
-    let external_xml = package.get_file(file_path)?;
+    // Check cache first
+    let object_ids = if let Some(ids) = cache.get(file_path) {
+        ids.clone()
+    } else {
+        // Load and parse the external model file
+        let external_xml = package.get_file(file_path)?;
 
-    // Parse just enough to extract object IDs
-    let mut reader = Reader::from_str(&external_xml);
-    reader.config_mut().trim_text(true);
+        // Parse just enough to extract object IDs
+        let mut reader = Reader::from_str(&external_xml);
+        reader.config_mut().trim_text(true);
 
-    let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
-    let mut object_ids = Vec::new();
+        let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
+        let mut ids = Vec::new();
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
-                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                let local_name = get_local_name(name_str);
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    let local_name = get_local_name(name_str);
 
-                if local_name == "object" {
-                    // Extract the id attribute
-                    for attr in e.attributes() {
-                        let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let attr_name = std::str::from_utf8(attr.key.as_ref())
-                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
-
-                        if attr_name == "id" {
-                            let id_str = std::str::from_utf8(&attr.value)
+                    if local_name == "object" {
+                        // Extract the id attribute
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            if let Ok(id) = id_str.parse::<usize>() {
-                                object_ids.push(id);
+
+                            if attr_name == "id" {
+                                let id_str = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                if let Ok(id) = id_str.parse::<usize>() {
+                                    ids.push(id);
+                                }
                             }
                         }
                     }
                 }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
             }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(Error::Xml(e)),
-            _ => {}
+            buf.clear();
         }
-        buf.clear();
-    }
+
+        // Cache the results for future use
+        cache.insert(file_path.to_string(), ids.clone());
+        ids
+    };
 
     // Check if the referenced object ID exists
     if !object_ids.contains(&object_id) {
+        // Limit displayed IDs to first 20 to avoid overwhelming error messages
+        let display_ids: Vec<usize> = object_ids.iter().take(20).copied().collect();
+        let id_display = if object_ids.len() > 20 {
+            format!("{:?} ... ({} total)", display_ids, object_ids.len())
+        } else {
+            format!("{:?}", display_ids)
+        };
+
         return Err(Error::InvalidModel(format!(
             "Object {}: {} references object ID {} in external file '{}', but that object does not exist.\n\
-             Available object IDs in external file: {:?}\n\
+             Available object IDs in external file: {}\n\
              Check that the referenced object ID is correct.",
-            referring_object_id, reference_type, object_id, file_path, object_ids
+            referring_object_id, reference_type, object_id, file_path, id_display
         )));
     }
 
