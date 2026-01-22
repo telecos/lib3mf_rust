@@ -1220,7 +1220,7 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
         // Validate each sliceref
         for sliceref in &stack.slice_refs {
             // Rule: SliceRef slicepath must be in /2D/ folder
-            // Per spec: "For package readability and organization, slice models SHOULD be stored 
+            // Per spec: "For package readability and organization, slice models SHOULD be stored
             // in the 2D folder UNLESS they are part of the root model part."
             // We enforce this as a MUST for external slice files to catch common packaging errors.
             if !sliceref.slicepath.starts_with("/2D/") {
@@ -1265,7 +1265,10 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
 
         // If object has slicestack, validate that transform is planar
         if let Some(ref transform) = item.transform {
-            validate_planar_transform(transform, &format!("Build Item referencing object {}", item.objectid))?;
+            validate_planar_transform(
+                transform,
+                &format!("Build Item referencing object {}", item.objectid),
+            )?;
         }
     }
 
@@ -1285,7 +1288,10 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
             if let Some(ref transform) = component.transform {
                 validate_planar_transform(
                     transform,
-                    &format!("Object {}, Component referencing object {}", object.id, component.objectid)
+                    &format!(
+                        "Object {}, Component referencing object {}",
+                        object.id, component.objectid
+                    ),
                 )?;
             }
         }
