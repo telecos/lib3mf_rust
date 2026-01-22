@@ -1145,7 +1145,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             let end_index = end_str.parse::<usize>().map_err(|_| {
                                 Error::InvalidXml(format!("Invalid triangle end index: {}", end_str))
                             })?;
-                            
+
                             // Validate that start_index <= end_index
                             if start_index > end_index {
                                 return Err(Error::InvalidXml(format!(
@@ -1153,7 +1153,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     start_index, end_index
                                 )));
                             }
-                            
+
                             // Validate indices are within bounds
                             if let Some(ref mesh) = current_mesh {
                                 validate_triangle_index(mesh, start_index, "refrange start")?;
