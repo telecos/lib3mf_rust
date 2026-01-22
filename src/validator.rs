@@ -29,16 +29,13 @@ fn sorted_ids_from_set(ids: &HashSet<usize>) -> Vec<usize> {
 /// - Material, color group, and base material references
 /// - Component references and circular dependency detection
 /// - Mesh requirements (must have vertices)
+///
+/// Note: This function uses a default parser config for backward compatibility.
+/// For more control, use `validate_model_with_config`.
+#[allow(dead_code)] // Public API but may not be used internally
 pub fn validate_model(model: &Model) -> Result<()> {
-    validate_required_structure(model)?;
-    validate_object_ids(model)?;
-    validate_mesh_geometry(model)?;
-    validate_build_references(model)?;
-    validate_material_references(model)?;
-    validate_boolean_operations(model)?;
-    validate_component_references(model)?;
-    validate_production_extension(model)?;
-    Ok(())
+    // Use default config that supports all extensions for backward compatibility
+    validate_model_with_config(model, &ParserConfig::with_all_extensions())
 }
 
 /// Validate a parsed 3MF model with custom extension validation
@@ -47,8 +44,15 @@ pub fn validate_model(model: &Model) -> Result<()> {
 /// invokes any custom validation handlers registered in the parser configuration.
 #[allow(dead_code)] // Currently called during parsing; may be exposed publicly in future
 pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
-    // Standard validation
-    validate_model(model)?;
+    // Standard validation (with config for production extension check)
+    validate_required_structure(model)?;
+    validate_object_ids(model)?;
+    validate_mesh_geometry(model)?;
+    validate_build_references(model)?;
+    validate_material_references(model)?;
+    validate_boolean_operations(model)?;
+    validate_component_references(model)?;
+    validate_production_extension_with_config(model, config)?;
 
     // Custom extension validation
     for ext_info in config.custom_extensions().values() {
@@ -717,6 +721,10 @@ fn detect_circular_components(
 /// - Components with p:UUID must also have p:path (when referencing external files)
 /// - Build items with p:UUID but used with p:path must have valid paths
 /// - Production attributes are only used when production extension is declared
+///
+/// Note: This is the legacy validation function that doesn't consider parser config.
+/// Prefer using `validate_production_extension_with_config` for more flexible validation.
+#[allow(dead_code)] // Kept for backward compatibility and testing
 fn validate_production_extension(model: &Model) -> Result<()> {
     // Check if production extension is required
     let has_production = model.required_extensions.contains(&Extension::Production);
@@ -816,6 +824,145 @@ fn validate_production_extension(model: &Model) -> Result<()> {
     // in namespaces (xmlns:p) without being in requiredextensions - they are then optional
     // extensions. The parser already validates that the production namespace is declared
     // when production attributes are used.
+
+    Ok(())
+}
+
+/// Validate production extension requirements with parser configuration
+///
+/// This is a variant of `validate_production_extension` that accepts a parser config.
+/// When the parser config explicitly supports the production extension, we allow
+/// production attributes to be used even if the file doesn't declare the production
+/// extension in requiredextensions. This is useful for backward compatibility and
+/// for files that use production attributes but were created before strict validation.
+fn validate_production_extension_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
+    // Check if production extension is required in the file
+    let has_production = model.required_extensions.contains(&Extension::Production);
+
+    // Check if the parser config explicitly supports production extension
+    let config_supports_production = config.supports(&Extension::Production);
+
+    // Track whether any production attributes are used (for validation later)
+    let mut has_production_attrs = false;
+
+    // Helper function to validate p:path format
+    let validate_path = |path: &str, context: &str| -> Result<()> {
+        // Per 3MF Production Extension spec:
+        // - Path MUST start with / (absolute path within the package)
+        // - Path MUST NOT contain .. (no parent directory references)
+        // - Path MUST NOT end with / (must reference a file, not a directory)
+        // - Filename MUST NOT start with . (hidden files not allowed)
+
+        if !path.starts_with('/') {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' must start with / (absolute path required)",
+                context, path
+            )));
+        }
+
+        if path.contains("..") {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' must not contain .. (parent directory traversal not allowed)",
+                context, path
+            )));
+        }
+
+        if path.ends_with('/') {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' must not end with / (must reference a file)",
+                context, path
+            )));
+        }
+
+        // Check for hidden files (filename starting with .)
+        if let Some(filename) = path.rsplit('/').next() {
+            if filename.starts_with('.') {
+                return Err(Error::InvalidModel(format!(
+                    "{}: Production path '{}' references a hidden file (filename cannot start with .)",
+                    context, path
+                )));
+            }
+        }
+
+        // Path should reference a .model file
+        if !path.ends_with(".model") {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' must reference a .model file",
+                context, path
+            )));
+        }
+
+        Ok(())
+    };
+
+    // Check all objects for invalid thumbnail attribute and validate production paths
+    for object in &model.resources.objects {
+        if object.has_thumbnail_attribute && has_production {
+            return Err(Error::InvalidModel(format!(
+                "Object {}: thumbnail attribute is not allowed when production extension is declared. The thumbnail attribute is deprecated in 3MF v1.4+",
+                object.id
+            )));
+        }
+
+        // Validate production extension usage and track attributes
+        if let Some(ref prod_info) = object.production {
+            has_production_attrs = true;
+
+            // If object has production path, validate it
+            if let Some(ref path) = prod_info.path {
+                validate_path(path, &format!("Object {}", object.id))?;
+            }
+        }
+
+        // Check components
+        for (idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                has_production_attrs = true;
+
+                // Per Production Extension spec and test suite validation:
+                // A component with p:UUID MUST also have p:path attribute
+                // (This validates external component references have both UUID and path)
+                if prod_info.uuid.is_some() && prod_info.path.is_none() && component.path.is_none()
+                {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}, Component {}: Production UUID (p:UUID) requires production path (p:path) attribute",
+                        object.id, idx
+                    )));
+                }
+
+                // Validate production path format if present
+                // Note: component.path is set from prod_info.path during parsing
+                if let Some(ref path) = prod_info.path {
+                    validate_path(path, &format!("Object {}, Component {}", object.id, idx))?;
+                }
+            }
+        }
+    }
+
+    // Check build items for production path validation
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if item.production_uuid.is_some() || item.production_path.is_some() {
+            has_production_attrs = true;
+        }
+
+        if let Some(ref path) = item.production_path {
+            validate_path(path, &format!("Build Item {}", idx))?;
+        }
+    }
+
+    // Check build production UUID
+    if model.build.production_uuid.is_some() {
+        has_production_attrs = true;
+    }
+
+    // Validate that production attributes are only used when production extension is declared
+    // UNLESS the parser config explicitly supports production extension (for backward compatibility)
+    if has_production_attrs && !has_production && !config_supports_production {
+        return Err(Error::InvalidModel(
+            "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
+                .to_string(),
+        ));
+    }
 
     Ok(())
 }
