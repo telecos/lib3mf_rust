@@ -972,7 +972,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         current_disp2dgroup = Some(disp2dgroup);
                     }
-                    "disp2dcoords" if in_disp2dgroup => {
+                    "disp2dcoord" if in_disp2dgroup => {
                         if let Some(ref mut d2dgroup) = current_disp2dgroup {
                             let attrs = parse_attributes(&reader, e)?;
                             let u = attrs
