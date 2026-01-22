@@ -192,7 +192,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut declared_namespaces: HashMap<String, String> = HashMap::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event_result = reader.read_event_into(&mut buf);
+        let is_empty_element = matches!(&event_result, Ok(Event::Empty(_)));
+        
+        match event_result {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
@@ -1002,6 +1005,17 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             })?
                             .parse::<f64>()?;
                         current_slice = Some(Slice::new(ztop));
+                        
+                        // For self-closing empty slice tags like <s:slice ztop="100.060"/>,
+                        // immediately push the slice since there won't be an End event
+                        if is_empty_element {
+                            if let Some(slice) = current_slice.take() {
+                                if let Some(ref mut slicestack) = current_slicestack {
+                                    slicestack.slices.push(slice);
+                                }
+                            }
+                            in_slice = false;
+                        }
                     }
                     "sliceref" if in_slicestack => {
                         let attrs = parse_attributes(&reader, e)?;

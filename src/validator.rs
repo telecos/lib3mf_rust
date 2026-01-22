@@ -54,6 +54,7 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_boolean_operations(model)?;
     validate_component_references(model)?;
     validate_production_extension_with_config(model, config)?;
+    validate_slices(model)?;
 
     // Custom extension validation
     for ext_info in config.custom_extensions().values() {
@@ -1187,6 +1188,80 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
             "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
                 .to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+/// Validate slice stacks and their slices
+///
+/// Per 3MF Slice Extension spec, validates that:
+/// - Slices must contain at least one polygon with vertices (non-empty slices)
+/// - Polygon vertex indices (startv and v2) must reference valid vertices in the slice
+fn validate_slices(model: &Model) -> Result<()> {
+    // Validate all slice stacks in resources
+    for slice_stack in &model.resources.slice_stacks {
+        // Validate inline slices within the slice stack
+        for (slice_idx, slice) in slice_stack.slices.iter().enumerate() {
+            validate_slice(slice_stack.id, slice_idx, slice)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate a single slice
+fn validate_slice(slice_stack_id: usize, slice_idx: usize, slice: &crate::model::Slice) -> Result<()> {
+    // Per 3MF Slice Extension spec:
+    // A slice MUST contain at least one polygon, and each polygon must have vertices
+    // Empty slices (no polygons or no vertices) are invalid
+    
+    if slice.polygons.is_empty() {
+        return Err(Error::InvalidModel(format!(
+            "SliceStack {}: Slice {} (ztop={}) is empty (no polygons). \
+             Per 3MF Slice Extension spec, a slice must contain at least one polygon. \
+             Remove the empty slice or add polygon data.",
+            slice_stack_id, slice_idx, slice.ztop
+        )));
+    }
+
+    // If there are polygons, there must be vertices
+    if !slice.polygons.is_empty() && slice.vertices.is_empty() {
+        return Err(Error::InvalidModel(format!(
+            "SliceStack {}: Slice {} (ztop={}) has {} polygon(s) but no vertices. \
+             Per 3MF Slice Extension spec, slices with polygons must have vertex data. \
+             Add vertices to the slice.",
+            slice_stack_id, slice_idx, slice.ztop, slice.polygons.len()
+        )));
+    }
+
+    let num_vertices = slice.vertices.len();
+
+    // Validate polygon vertex indices
+    for (poly_idx, polygon) in slice.polygons.iter().enumerate() {
+        // Validate startv index
+        if polygon.startv >= num_vertices {
+            return Err(Error::InvalidModel(format!(
+                "SliceStack {}: Slice {} (ztop={}), Polygon {} has invalid startv={} \
+                 (slice has {} vertices, valid indices: 0-{}). \
+                 Vertex indices must reference valid vertices in the slice.",
+                slice_stack_id, slice_idx, slice.ztop, poly_idx, polygon.startv, 
+                num_vertices, num_vertices - 1
+            )));
+        }
+
+        // Validate segment v2 indices
+        for (seg_idx, segment) in polygon.segments.iter().enumerate() {
+            if segment.v2 >= num_vertices {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: Slice {} (ztop={}), Polygon {}, Segment {} has invalid v2={} \
+                     (slice has {} vertices, valid indices: 0-{}). \
+                     Vertex indices must reference valid vertices in the slice.",
+                    slice_stack_id, slice_idx, slice.ztop, poly_idx, seg_idx, segment.v2,
+                    num_vertices, num_vertices - 1
+                )));
+            }
+        }
     }
 
     Ok(())
