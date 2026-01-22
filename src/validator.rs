@@ -2247,6 +2247,19 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                 }
                 
+                // Validate ball vertex indices (from balls sub-extension)
+                // Ball vindex must reference a valid vertex in the mesh
+                for ball_vindex in &beamset.ball_vertex_indices {
+                    if *ball_vindex >= vertex_count {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Ball references invalid vertex index {} \
+                             (mesh has {} vertices). Ball vertex indices must be less than \
+                             the number of vertices in the mesh.",
+                            object.id, ball_vindex, vertex_count
+                        )));
+                    }
+                }
+                
                 // Validate clipping mesh reference
                 if let Some(clip_id) = beamset.clipping_mesh_id {
                     if !valid_resource_ids.contains(&clip_id) {

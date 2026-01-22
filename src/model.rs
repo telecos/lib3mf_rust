@@ -716,6 +716,8 @@ pub struct BeamSet {
     pub property_index: Option<u32>,
     /// Beam set references (for metadata grouping) - indices into beams vec
     pub beam_set_refs: Vec<usize>,
+    /// Ball vertex indices (for validation) - from balls sub-extension
+    pub ball_vertex_indices: Vec<usize>,
 }
 
 impl BeamSet {
@@ -734,6 +736,7 @@ impl BeamSet {
             property_id: None,
             property_index: None,
             beam_set_refs: Vec::new(),
+            ball_vertex_indices: Vec::new(),
         }
     }
 
@@ -752,6 +755,7 @@ impl BeamSet {
             property_id: None,
             property_index: None,
             beam_set_refs: Vec::new(),
+            ball_vertex_indices: Vec::new(),
         }
     }
 }

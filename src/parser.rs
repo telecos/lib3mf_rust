@@ -982,6 +982,22 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                     }
+                    "balls" if in_beamset => {
+                        // balls container element from balls sub-extension
+                        // Contains ball elements
+                    }
+                    "ball" if in_beamset => {
+                        // ball element from balls sub-extension
+                        // References a vertex index
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(vindex_str) = attrs.get("vindex") {
+                            let vindex = vindex_str.parse::<usize>()?;
+                            // Store the ball vertex index for validation
+                            if let Some(ref mut beamset) = current_beamset {
+                                beamset.ball_vertex_indices.push(vindex);
+                            }
+                        }
+                    }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
