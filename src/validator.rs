@@ -2292,18 +2292,10 @@ fn validate_production_paths(model: &Model) -> Result<()> {
         }
     }
 
-    // Check build items - they should NOT have p:path
-    // Per 3MF Production Extension spec, p:path is only allowed on component elements
+    // Check build items
     for (idx, item) in model.build.items.iter().enumerate() {
         if let Some(ref path) = item.production_path {
-            return Err(Error::InvalidModel(format!(
-                "Build item {}: Has p:path attribute ('{}').\n\
-                 Per 3MF Production Extension specification, the p:path attribute is only allowed on \
-                 <component> elements, not on <item> elements in the build section.\n\
-                 To reference an external model part, use a component with p:path inside an object, \
-                 then reference that object in the build item.",
-                idx, path
-            )));
+            validate_not_opc_internal(path, &format!("Build item {}", idx))?;
         }
     }
 
