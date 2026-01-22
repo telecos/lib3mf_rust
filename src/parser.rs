@@ -194,7 +194,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     loop {
         let event_result = reader.read_event_into(&mut buf);
         let is_empty_element = matches!(&event_result, Ok(Event::Empty(_)));
-        
+
         match event_result {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
@@ -1005,7 +1005,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             })?
                             .parse::<f64>()?;
                         current_slice = Some(Slice::new(ztop));
-                        
+
                         // For self-closing empty slice tags like <s:slice ztop="100.060"/>,
                         // immediately push the slice since there won't be an End event
                         if is_empty_element {
