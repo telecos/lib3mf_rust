@@ -920,6 +920,20 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.ball_mode = Some(ball_mode.clone());
                         }
 
+                        // Parse ballradius attribute (optional) - from balls extension
+                        // This can be in default namespace or balls namespace (b2:ballradius)
+                        if let Some(ball_radius_str) = attrs.get("ballradius").or_else(|| attrs.get("b2:ballradius")) {
+                            let ball_radius = ball_radius_str.parse::<f64>()?;
+                            // Validate ball radius is finite and positive
+                            if !ball_radius.is_finite() || ball_radius <= 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice ballradius must be positive and finite (got {})",
+                                    ball_radius
+                                )));
+                            }
+                            beamset.ball_radius = Some(ball_radius);
+                        }
+
                         // Parse pid attribute (optional) - material/property group ID
                         if let Some(pid_str) = attrs.get("pid") {
                             beamset.property_id = Some(pid_str.parse::<u32>()?);
@@ -2325,6 +2339,13 @@ fn parse_beam<R: std::io::BufRead>(
             )));
         }
         beam.r2 = Some(r2_val);
+        
+        // If r2 is specified, r1 must also be specified (per 3MF Beam Lattice spec)
+        if beam.r1.is_none() {
+            return Err(Error::InvalidXml(
+                "Beam attribute r2 is specified but r1 is not. When specifying r2, r1 must also be provided.".to_string()
+            ));
+        }
     }
 
     // Parse cap1 attribute (optional, defaults to beamset cap mode)
@@ -2350,6 +2371,13 @@ fn parse_beam<R: std::io::BufRead>(
     // Parse p2 attribute (optional) - property index at v2
     if let Some(p2_str) = attrs.get("p2") {
         beam.p2 = Some(p2_str.parse::<u32>()?);
+        
+        // If p2 is specified, p1 must also be specified (per 3MF spec convention)
+        if beam.p1.is_none() {
+            return Err(Error::InvalidXml(
+                "Beam attribute p2 is specified but p1 is not. When specifying p2, p1 must also be provided.".to_string()
+            ));
+        }
     }
 
     Ok(beam)

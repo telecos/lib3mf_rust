@@ -708,6 +708,8 @@ pub struct BeamSet {
     pub clipping_mode: Option<String>,
     /// Ball mode for beam endpoints (from balls extension)
     pub ball_mode: Option<String>,
+    /// Ball radius for beam endpoints (from balls extension)
+    pub ball_radius: Option<f64>,
     /// Material/property group ID for beam lattice
     pub property_id: Option<u32>,
     /// Property index within the property group
@@ -726,6 +728,7 @@ impl BeamSet {
             representation_mesh_id: None,
             clipping_mode: None,
             ball_mode: None,
+            ball_radius: None,
             property_id: None,
             property_index: None,
         }
@@ -742,6 +745,7 @@ impl BeamSet {
             representation_mesh_id: None,
             clipping_mode: None,
             ball_mode: None,
+            ball_radius: None,
             property_id: None,
             property_index: None,
         }

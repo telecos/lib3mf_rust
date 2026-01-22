@@ -2299,6 +2299,16 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                             object.id, ball_mode
                         )));
                     }
+                    
+                    // If ballmode is 'all' or 'mixed', ballradius must be specified
+                    // Per Beam Lattice Balls sub-extension spec
+                    if (ball_mode == "all" || ball_mode == "mixed") && beamset.ball_radius.is_none() {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice has ballmode='{}' but no ballradius attribute. \
+                             When ballmode is 'all' or 'mixed', ballradius must be specified.",
+                            object.id, ball_mode
+                        )));
+                    }
                 }
                 
                 // Validate beamset material reference and property index
