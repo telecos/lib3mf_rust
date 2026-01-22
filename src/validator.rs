@@ -727,19 +727,13 @@ fn detect_circular_components(
 /// Validate production extension requirements
 ///
 /// Checks that:
-/// - thumbnail attribute is not used on objects when production extension is in use
 /// - p:path attributes have valid format (must start with /, cannot contain .., cannot end with /)
-/// - Components with p:UUID must also have p:path (when referencing external files)
-/// - Build items with p:UUID but used with p:path must have valid paths
-/// - Production attributes are only used when production extension is declared
+/// - Build items with p:path must have valid paths
 ///
 /// Note: This is the legacy validation function that doesn't consider parser config.
 /// Prefer using `validate_production_extension_with_config` for more flexible validation.
 #[allow(dead_code)] // Kept for backward compatibility and testing
 fn validate_production_extension(model: &Model) -> Result<()> {
-    // Check if production extension is required
-    let has_production = model.required_extensions.contains(&Extension::Production);
-
     // Helper function to validate p:path format
     let validate_path = |path: &str, context: &str| -> Result<()> {
         // Per 3MF Production Extension spec:
