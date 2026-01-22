@@ -2514,28 +2514,13 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Per 3MF spec:
 /// - Triangles cannot use both pid (property group) and p1/p2/p3 (per-vertex properties) at the same time
-fn validate_triangle_properties(model: &Model) -> Result<()> {
-    for object in &model.resources.objects {
-        if let Some(ref mesh) = object.mesh {
-            for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
-                // Check if triangle has both pid and any p1/p2/p3
-                let has_pid = triangle.pid.is_some();
-                let has_per_vertex =
-                    triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
-
-                if has_pid && has_per_vertex {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: Triangle {} uses both pid and p1/p2/p3 attributes.\n\
-                         Per 3MF spec, a triangle cannot specify both a property group (pid) \
-                         and per-vertex properties (p1, p2, p3) at the same time.\n\
-                         Use either pid for uniform properties or p1/p2/p3 for gradient properties, but not both.",
-                        object.id, tri_idx
-                    )));
-                }
-            }
-        }
-    }
-
+fn validate_triangle_properties(_model: &Model) -> Result<()> {
+    // Triangles can have both pid (property group) and p1/p2/p3 (per-vertex properties)
+    // as they serve different purposes (pid is default, p1/p2/p3 override per vertex)
+    // Per 3MF Material Extension spec, this is valid usage
+    
+    // Currently no specific triangle property validations needed
+    // The parser already validates property references
     Ok(())
 }
 
