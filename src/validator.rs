@@ -1149,11 +1149,11 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
             if let Some(ref prod_info) = component.production {
                 has_production_attrs = true;
 
-                // Per Production Extension spec:
+                // Per 3MF Production Extension spec:
                 // - p:UUID can be used on components to uniquely identify them
                 // - p:path is only required when referencing external objects (not in current file)
                 // - A component with p:UUID but no p:path references a local object
-                // Therefore, we do NOT require p:path when p:UUID is present.
+                // Therefore, we do NOT require p:path when p:UUID is present
 
                 // Validate production path format if present
                 // Note: component.path is set from prod_info.path during parsing
