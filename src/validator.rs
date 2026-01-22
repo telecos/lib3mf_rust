@@ -79,6 +79,14 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_triangle_properties(model)?;
     validate_production_uuids_required(model, config)?;
     validate_thumbnail_format(model)?;
+    validate_mesh_volume(model)?;
+    validate_vertex_order(model)?;
+    validate_thumbnail_jpeg_colorspace(model)?;
+    validate_dtd_declaration(model)?;
+    validate_build_transform_bounds(model)?;
+    validate_component_properties(model)?;
+    validate_duplicate_uuids(model)?;
+    validate_component_chain(model)?;
 
     Ok(())
 }
@@ -2871,7 +2879,7 @@ fn validate_production_paths(model: &Model) -> Result<()> {
         }
     }
 
-    // Check build items
+    // Check build items - validate p:path doesn't reference OPC internal files
     for (idx, item) in model.build.items.iter().enumerate() {
         if let Some(ref path) = item.production_path {
             validate_not_opc_internal(path, &format!("Build item {}", idx))?;
@@ -3112,7 +3120,7 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
 /// Note: This validation is lenient - we only enforce UUID requirements strictly when
 /// the production extension is explicitly in requiredextensions AND the parser config
 /// doesn't support production (which would indicate a lenient mode).
-fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> Result<()> {
+fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> Result<()> {
     let has_production = model.required_extensions.contains(&Extension::Production);
 
     // Only enforce UUID requirements if production extension is explicitly required
@@ -3120,11 +3128,11 @@ fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> R
         return Ok(());
     }
 
-    // Check if we're in lenient mode (config supports production)
-    let lenient_mode = config.supports(&Extension::Production);
+    // When production is required in the file, we always enforce strict validation
+    // The lenient mode only applies when production is NOT in requiredextensions
 
-    // Build must have UUID when production extension is required (strict mode only)
-    if model.build.production_uuid.is_none() && !lenient_mode {
+    // Build must have UUID when production extension is required
+    if model.build.production_uuid.is_none() {
         return Err(Error::InvalidModel(
             "Build element is missing required p:UUID attribute.\n\
              Per 3MF Production Extension spec, when production extension is in requiredextensions, \
@@ -3134,41 +3142,204 @@ fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> R
         ));
     }
 
-    // In strict mode, objects referenced in build items should have UUID
-    if !lenient_mode {
-        for (idx, item) in model.build.items.iter().enumerate() {
-            // Skip if the item has a production path (external reference)
-            if item.production_path.is_some() {
-                continue;
+    // Validate build items and their referenced objects
+    for (idx, item) in model.build.items.iter().enumerate() {
+        // Build items must have p:UUID when production extension is required
+        if item.production_uuid.is_none() {
+            return Err(Error::InvalidModel(format!(
+                "Build item {}: Missing required p:UUID attribute.\n\
+                 Per 3MF Production Extension spec, when production extension is in requiredextensions, \
+                 all <item> elements in the build section must have p:UUID attributes.\n\
+                 Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to this build item.",
+                idx
+            )));
+        }
+
+        // Find the object being referenced
+        if let Some(object) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            // Check if object has production UUID
+            let has_uuid = object
+                .production
+                .as_ref()
+                .and_then(|p| p.uuid.as_ref())
+                .is_some();
+
+            if !has_uuid {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: References object {} which is missing required p:UUID attribute.\n\
+                     Per 3MF Production Extension spec, when production extension is in requiredextensions, \
+                     objects referenced in build items must have p:UUID attributes.\n\
+                     Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to object {}.",
+                    idx, object.id, object.id
+                )));
             }
+        }
+    }
 
-            // Find the object being referenced
-            if let Some(object) = model
-                .resources
-                .objects
-                .iter()
-                .find(|o| o.id == item.objectid)
-            {
-                // Check if object has production UUID
-                let has_uuid = object
-                    .production
-                    .as_ref()
-                    .and_then(|p| p.uuid.as_ref())
-                    .is_some();
+    Ok(())
+}
 
-                if !has_uuid {
+/// N_XPX_0416_01: Validate mesh has positive volume
+fn validate_mesh_volume(model: &Model) -> Result<()> {
+    for object in &model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            // Calculate signed volume using divergence theorem
+            let mut volume = 0.0_f64;
+            for triangle in &mesh.triangles {
+                if triangle.v1 >= mesh.vertices.len()
+                    || triangle.v2 >= mesh.vertices.len()
+                    || triangle.v3 >= mesh.vertices.len()
+                {
+                    continue; // Skip invalid triangles (caught by other validation)
+                }
+
+                let v1 = &mesh.vertices[triangle.v1];
+                let v2 = &mesh.vertices[triangle.v2];
+                let v3 = &mesh.vertices[triangle.v3];
+
+                // Signed volume contribution of this triangle
+                volume += v1.x * (v2.y * v3.z - v2.z * v3.y)
+                    + v2.x * (v3.y * v1.z - v3.z * v1.y)
+                    + v3.x * (v1.y * v2.z - v1.z * v2.y);
+            }
+            volume /= 6.0;
+
+            // Use small epsilon for floating-point comparison
+            const EPSILON: f64 = 1e-10;
+            if volume < -EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Mesh has negative volume ({}), indicating inverted or incorrectly oriented triangles",
+                    object.id, volume
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting reversed vertex order reliably requires sophisticated mesh analysis
+/// algorithms that are computationally expensive and have reliability issues with
+/// certain mesh geometries (e.g., non-convex shapes, complex topology). The simple
+/// heuristic of checking if normals point away from the centroid fails for many
+/// valid meshes and can cause false positives.
+///
+/// A proper implementation would require:
+/// - Ray casting or winding number algorithms
+/// - Topological mesh analysis
+/// - Consideration of non-manifold geometries
+///
+/// For now, we rely on other validators like volume calculation to catch some
+/// cases of inverted meshes.
+fn validate_vertex_order(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// N_XPX_0419_01: Validate JPEG thumbnail colorspace (must be RGB, not CMYK)
+///
+/// **Note: Partial validation implemented in OPC layer.**
+///
+/// JPEG CMYK validation is performed in `opc::Package::get_thumbnail_metadata()`
+/// where the actual thumbnail file data is available. This placeholder exists
+/// for documentation and to maintain the validation function signature.
+fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// N_XPX_0420_01: Validate no DTD declaration in XML (security risk)
+///
+/// **Note: Validation implemented in parser.**
+///
+/// DTD validation is handled during XML parsing in `parser::parse_model_xml()`
+/// where the parser rejects `Event::DocType` to prevent XXE (XML External Entity)
+/// attacks. This placeholder exists for documentation and to maintain the
+/// validation function signature.
+fn validate_dtd_declaration(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// N_XPX_0421_01: Validate build item transform doesn't place object outside printable area
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// The test case appears to check for negative coordinates in the translation
+/// component of transforms. However, this is too strict:
+/// 1. Negative coordinates in transforms can be valid (e.g., centering around origin)
+/// 2. The transform translation doesn't directly indicate if the MESH is outside bounds
+/// 3. Proper validation would need to apply the transform to mesh vertices
+///
+/// Many valid 3MF files in the test suite use negative transform coordinates
+/// legitimately, so this validation causes false positives.
+fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// N_XPX_0424_01: Validate objects with components don't have pid/pindex attributes
+fn validate_component_properties(model: &Model) -> Result<()> {
+    // Per 3MF spec, objects that contain components (assemblies) cannot have pid/pindex
+    // because assemblies don't have their own material properties
+    for object in &model.resources.objects {
+        if !object.components.is_empty() {
+            if object.pid.is_some() {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} contains components and cannot have pid attribute",
+                    object.id
+                )));
+            }
+            if object.pindex.is_some() {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} contains components and cannot have pindex attribute",
+                    object.id
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0802_04: Validate no duplicate UUIDs between objects
+fn validate_duplicate_uuids(model: &Model) -> Result<()> {
+    let mut uuids = std::collections::HashSet::new();
+
+    for object in &model.resources.objects {
+        if let Some(ref production) = object.production {
+            if let Some(ref uuid) = production.uuid {
+                if !uuids.insert(uuid.clone()) {
                     return Err(Error::InvalidModel(format!(
-                        "Build item {}: References object {} which is missing required p:UUID attribute.\n\
-                         Per 3MF Production Extension spec, when production extension is in requiredextensions, \
-                         objects referenced in build items must have p:UUID attributes.\n\
-                         Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to object {}.",
-                        idx, object.id, object.id
+                        "Duplicate UUID '{}' found on object {}",
+                        uuid, object.id
                     )));
                 }
             }
         }
     }
+    Ok(())
+}
 
+/// N_XPX_0803_01: Validate no component reference chains across multiple model parts
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting component reference chains requires parsing and analyzing external
+/// model files referenced via `p:path`. Since the parser only loads the root model
+/// file, we cannot reliably detect multi-level chains.
+///
+/// A full implementation would require:
+/// 1. Loading all referenced external model files
+/// 2. Building a dependency graph across files
+/// 3. Detecting cycles or chains longer than allowed depth
+///
+/// This is beyond the scope of single-file validation and would require
+/// significant architectural changes to support multi-file analysis.
+fn validate_component_chain(_model: &Model) -> Result<()> {
     Ok(())
 }
 
