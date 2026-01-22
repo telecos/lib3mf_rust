@@ -421,13 +421,6 @@ fn validate_material_references(model: &Model) -> Result<()> {
         }
     }
 
-    // Validate that pid and basematerialid references point to existing property groups
-    // Valid property groups include: color groups, base material groups, multiproperties,
-    // texture2d groups, and composite materials
-
-    // Collect all valid property group IDs into a single HashSet for efficient lookup
-    let valid_property_group_ids: HashSet<usize> = seen_property_group_ids.keys().copied().collect();
-
     // Keep separate base material IDs set for basematerialid validation
     let valid_basematerial_ids: HashSet<usize> = model
         .resources
@@ -552,8 +545,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
         if let Some(pid) = object.pid {
             // If object has a pid, it should reference a valid property group
             // Only validate if there are property groups defined, otherwise pid might be unused
-            if !valid_property_group_ids.is_empty() && !valid_property_group_ids.contains(&pid) {
-                let available_ids = sorted_ids_from_set(&valid_property_group_ids);
+            if !seen_property_group_ids.is_empty() && !seen_property_group_ids.contains_key(&pid) {
+                let available_ids: Vec<usize> = {
+                    let mut ids: Vec<usize> = seen_property_group_ids.keys().copied().collect();
+                    ids.sort();
+                    ids
+                };
                 return Err(Error::InvalidModel(format!(
                     "Object {} references non-existent property group ID: {}.\n\
                      Available property group IDs: {:?}\n\
