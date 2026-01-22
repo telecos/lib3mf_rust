@@ -31,6 +31,8 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
 
+    // Clone config before moving it to parse_model_xml_with_config
+    let config_clone = config.clone();
     let model_xml = package.get_model()?;
     let mut model = parse_model_xml_with_config(&model_xml, config)?;
 
@@ -47,7 +49,7 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 
     // Validate the model AFTER loading keystore and slices
     // This ensures validation can check encrypted file references correctly
-    validator::validate_model(&model)?;
+    validator::validate_model_with_config(&model, &config_clone)?;
 
     Ok(model)
 }
