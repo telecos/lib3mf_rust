@@ -15,6 +15,12 @@ const TRANSFORM_MATRIX_SIZE: usize = 12;
 /// Default buffer capacity for XML parsing (4KB)
 const XML_BUFFER_CAPACITY: usize = 4096;
 
+/// Valid wrapping algorithm for SecureContent (2001 version)
+const VALID_WRAPPING_ALGORITHM_2001: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
+
+/// Valid wrapping algorithm for SecureContent (2009 version)  
+const VALID_WRAPPING_ALGORITHM_2009: &str = "http://www.w3.org/2009/xmlenc11#rsa-oaep";
+
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     // Use default config that supports all extensions for backward compatibility
@@ -1460,8 +1466,8 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 // Valid algorithms per 3MF spec (SecureContent extension):
                                 // - http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p (2001 version)
                                 // - http://www.w3.org/2009/xmlenc11#rsa-oaep (2009 version)
-                                let is_valid = algorithm == "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
-                                    || algorithm == "http://www.w3.org/2009/xmlenc11#rsa-oaep";
+                                let is_valid = algorithm == VALID_WRAPPING_ALGORITHM_2001
+                                    || algorithm == VALID_WRAPPING_ALGORITHM_2009;
                                 
                                 if !is_valid {
                                     return Err(Error::InvalidSecureContent(format!(
@@ -1493,7 +1499,9 @@ fn load_keystore<R: Read + std::io::Seek>(
                                     .to_string();
                                 
                                 // EPX-2605: Validate encrypted file paths are not OPC relationship files
-                                if path.contains("/_rels/") || path.ends_with(".rels") {
+                                // OPC relationship files (_rels/*.rels or *.rels) cannot be encrypted
+                                let path_lower = path.to_lowercase();
+                                if path_lower.contains("/_rels/") || path_lower.ends_with(".rels") {
                                     return Err(Error::InvalidSecureContent(format!(
                                         "Invalid encrypted file path '{}'. OPC relationship files cannot be encrypted (EPX-2605)",
                                         path
