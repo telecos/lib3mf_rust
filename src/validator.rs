@@ -1155,7 +1155,18 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
                 // - p:UUID can be used on components to uniquely identify them
                 // - p:path is only required when referencing external objects (not in current file)
                 // - A component with p:UUID but no p:path references a local object
-                // Therefore, we do NOT require p:path when p:UUID is present
+                // - When p:path is used (external reference), p:UUID is REQUIRED to identify the object
+                
+                // Validate that p:UUID is present when p:path is used
+                if prod_info.path.is_some() && prod_info.uuid.is_none() {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}, Component {}: Component has p:path but missing required p:UUID.\n\
+                         Per 3MF Production Extension spec, components with external references (p:path) \
+                         must have p:UUID to identify the referenced object.\n\
+                         Add p:UUID attribute to the component element.",
+                        object.id, idx
+                    )));
+                }
 
                 // Validate production path format if present
                 // Note: component.path is set from prod_info.path during parsing
