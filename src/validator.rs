@@ -2518,7 +2518,7 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
     // Triangles can have both pid (property group) and p1/p2/p3 (per-vertex properties)
     // as they serve different purposes (pid is default, p1/p2/p3 override per vertex)
     // Per 3MF Material Extension spec, this is valid usage
-    
+
     // Currently no specific triangle property validations needed
     // The parser already validates property references
     Ok(())
