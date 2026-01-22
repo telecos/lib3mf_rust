@@ -465,7 +465,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_displacement_triangles = true;
                         // Parse did attribute from triangles element
                         let attrs = parse_attributes(&reader, e)?;
-                        current_displacement_triangles_did = attrs.get("did").and_then(|s| s.parse::<usize>().ok());
+                        current_displacement_triangles_did =
+                            attrs.get("did").and_then(|s| s.parse::<usize>().ok());
                     }
                     "triangle" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
@@ -1794,7 +1795,9 @@ pub(crate) fn parse_displacement_triangle<R: std::io::BufRead>(
     // Per Displacement Extension spec: v1, v2, v3, pid, pindex, p1, p2, p3, did, d1, d2, d3
     validate_attributes(
         &attrs,
-        &["v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3", "did", "d1", "d2", "d3"],
+        &[
+            "v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3", "did", "d1", "d2", "d3",
+        ],
         "triangle",
     )?;
 

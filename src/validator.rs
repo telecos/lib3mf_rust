@@ -724,7 +724,10 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
 
                     // Check that base object has a shape (mesh, displacement_mesh, or booleanshape), not just components
                     // Per Boolean Operations spec, the base object "MUST NOT reference a components object"
-                    if base_obj.mesh.is_none() && base_obj.displacement_mesh.is_none() && base_obj.boolean_shape.is_none() {
+                    if base_obj.mesh.is_none()
+                        && base_obj.displacement_mesh.is_none()
+                        && base_obj.boolean_shape.is_none()
+                    {
                         return Err(Error::InvalidModel(format!(
                             "Object {}: Boolean shape base object {} does not define a shape.\n\
                              Per 3MF Boolean Operations spec, the base object must define a shape \
@@ -1223,20 +1226,16 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
         .iter()
         .map(|d| d.id)
         .collect();
-    
+
     let norm_vector_group_ids: HashSet<usize> = model
         .resources
         .norm_vector_groups
         .iter()
         .map(|n| n.id)
         .collect();
-    
-    let disp2d_group_ids: HashSet<usize> = model
-        .resources
-        .disp2d_groups
-        .iter()
-        .map(|d| d.id)
-        .collect();
+
+    let disp2d_group_ids: HashSet<usize> =
+        model.resources.disp2d_groups.iter().map(|d| d.id).collect();
 
     // Validate Disp2DGroup references
     for disp2d_group in &model.resources.disp2d_groups {
@@ -1263,11 +1262,15 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
         }
 
         // Validate displacement coordinate normvector indices
-        if let Some(norm_group) = model.resources.norm_vector_groups.iter()
-            .find(|n| n.id == disp2d_group.nid) {
+        if let Some(norm_group) = model
+            .resources
+            .norm_vector_groups
+            .iter()
+            .find(|n| n.id == disp2d_group.nid)
+        {
             for (coord_idx, coord) in disp2d_group.coords.iter().enumerate() {
                 if coord.n >= norm_group.vectors.len() {
-                    let max_index = if norm_group.vectors.len() > 0 {
+                    let max_index = if !norm_group.vectors.is_empty() {
                         norm_group.vectors.len() - 1
                     } else {
                         0
@@ -1294,7 +1297,7 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
     //     for (idx, norm_vec) in norm_group.vectors.iter().enumerate() {
     //         let length_squared = norm_vec.x * norm_vec.x + norm_vec.y * norm_vec.y + norm_vec.z * norm_vec.z;
     //         let length = length_squared.sqrt();
-    //         
+    //
     //         // Allow a small tolerance for floating point errors (0.01%)
     //         if (length - 1.0).abs() > 0.0001 {
     //             return Err(Error::InvalidModel(format!(
@@ -1317,21 +1320,30 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Displacement triangle {} has invalid vertex index v1={} \
                          (mesh only has {} vertices).",
-                        object.id, tri_idx, triangle.v1, disp_mesh.vertices.len()
+                        object.id,
+                        tri_idx,
+                        triangle.v1,
+                        disp_mesh.vertices.len()
                     )));
                 }
                 if triangle.v2 >= disp_mesh.vertices.len() {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Displacement triangle {} has invalid vertex index v2={} \
                          (mesh only has {} vertices).",
-                        object.id, tri_idx, triangle.v2, disp_mesh.vertices.len()
+                        object.id,
+                        tri_idx,
+                        triangle.v2,
+                        disp_mesh.vertices.len()
                     )));
                 }
                 if triangle.v3 >= disp_mesh.vertices.len() {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Displacement triangle {} has invalid vertex index v3={} \
                          (mesh only has {} vertices).",
-                        object.id, tri_idx, triangle.v3, disp_mesh.vertices.len()
+                        object.id,
+                        tri_idx,
+                        triangle.v3,
+                        disp_mesh.vertices.len()
                     )));
                 }
 
@@ -1348,10 +1360,10 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                     }
 
                     // Validate displacement coordinate indices (d1, d2, d3)
-                    if let Some(disp_group) = model.resources.disp2d_groups.iter()
-                        .find(|d| d.id == did) {
-                        
-                        let max_coord_index = if disp_group.coords.len() > 0 {
+                    if let Some(disp_group) =
+                        model.resources.disp2d_groups.iter().find(|d| d.id == did)
+                    {
+                        let max_coord_index = if !disp_group.coords.is_empty() {
                             disp_group.coords.len() - 1
                         } else {
                             0
@@ -1400,7 +1412,7 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
 
     Ok(())
 }
-              
+
 /// Validate slice stacks and their slices
 ///
 /// Per 3MF Slice Extension spec, validates that:
