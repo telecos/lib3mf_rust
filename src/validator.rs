@@ -398,6 +398,118 @@ fn validate_material_references(model: &Model) -> Result<()> {
         .map(|bg| bg.id)
         .collect();
 
+    // Validate multiproperties: each multi element's pindices must be valid for the referenced property groups
+    for multiprop in &model.resources.multi_properties {
+        for (multi_idx, multi) in multiprop.multis.iter().enumerate() {
+            // Check that pindices length matches pids length
+            if multi.pindices.len() != multiprop.pids.len() {
+                return Err(Error::InvalidModel(format!(
+                    "MultiProperties group {}: Multi element {} has {} pindices but {} pids.\n\
+                     Each multi element must have the same number of pindices as the parent multiproperties has pids.\n\
+                     Hint: Check that all <m:multi> elements have the correct number of pindices.",
+                    multiprop.id,
+                    multi_idx,
+                    multi.pindices.len(),
+                    multiprop.pids.len()
+                )));
+            }
+
+            // Validate each pindex against the corresponding property group
+            for (layer_idx, (&pid, &pindex)) in
+                multiprop.pids.iter().zip(multi.pindices.iter()).enumerate()
+            {
+                // Check if it's a color group
+                if let Some(colorgroup) =
+                    model.resources.color_groups.iter().find(|cg| cg.id == pid)
+                {
+                    if pindex >= colorgroup.colors.len() {
+                        let max_index = colorgroup.colors.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Color group {} has {} colors (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            colorgroup.colors.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // Check if it's a base material group
+                else if let Some(basematerialgroup) = model
+                    .resources
+                    .base_material_groups
+                    .iter()
+                    .find(|bg| bg.id == pid)
+                {
+                    if pindex >= basematerialgroup.materials.len() {
+                        let max_index = basematerialgroup.materials.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Base material group {} has {} materials (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            basematerialgroup.materials.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // Check if it's a texture2d group
+                else if let Some(tex2dgroup) =
+                    model.resources.texture2d_groups.iter().find(|tg| tg.id == pid)
+                {
+                    if pindex >= tex2dgroup.tex2coords.len() {
+                        let max_index = tex2dgroup.tex2coords.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            tex2dgroup.tex2coords.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // Check if it's a composite materials group
+                else if let Some(composite) = model
+                    .resources
+                    .composite_materials
+                    .iter()
+                    .find(|cm| cm.id == pid)
+                {
+                    if pindex >= composite.composites.len() {
+                        let max_index = composite.composites.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            composite.composites.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // If the pid is another multiproperties, we don't need to validate here
+                // as nested multiproperties would be validated separately
+            }
+        }
+    }
+
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
             // If object has a pid, it should reference a valid property group
@@ -471,6 +583,78 @@ fn validate_material_references(model: &Model) -> Result<()> {
                             pindex,
                             obj_pid,
                             basematerialgroup.materials.len(),
+                            max_index
+                        )));
+                    }
+                }
+            }
+            // Validate object pindex references for texture2d groups
+            else if let Some(tex2dgroup) = model
+                .resources
+                .texture2d_groups
+                .iter()
+                .find(|tg| tg.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= tex2dgroup.tex2coords.len() {
+                        let max_index = tex2dgroup.tex2coords.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds.\n\
+                             Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of texture coordinates in the texture2d group.",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            tex2dgroup.tex2coords.len(),
+                            max_index
+                        )));
+                    }
+                }
+            }
+            // Validate object pindex references for multiproperties
+            else if let Some(multiprop) = model
+                .resources
+                .multi_properties
+                .iter()
+                .find(|mp| mp.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= multiprop.multis.len() {
+                        let max_index = multiprop.multis.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds.\n\
+                             MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of multi elements in the multiproperties group.",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            multiprop.multis.len(),
+                            max_index
+                        )));
+                    }
+                }
+            }
+            // Validate object pindex references for composite materials
+            else if let Some(composite) = model
+                .resources
+                .composite_materials
+                .iter()
+                .find(|cm| cm.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= composite.composites.len() {
+                        let max_index = composite.composites.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds.\n\
+                             Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of composite elements in the composite materials group.",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            composite.composites.len(),
                             max_index
                         )));
                     }
@@ -596,6 +780,183 @@ fn validate_material_references(model: &Model) -> Result<()> {
                                      Base material group {} has {} materials (valid indices: 0-{}).\n\
                                      Hint: p3 must be less than the number of materials in the base material group.",
                                     object.id, tri_idx, p3, pid, num_materials, max_index
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a texture2d group
+                    else if let Some(tex2dgroup) = model
+                        .resources
+                        .texture2d_groups
+                        .iter()
+                        .find(|tg| tg.id == pid)
+                    {
+                        let num_coords = tex2dgroup.tex2coords.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, pindex, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, p1, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, p2, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, p3, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a multiproperties group
+                    else if let Some(multiprop) = model
+                        .resources
+                        .multi_properties
+                        .iter()
+                        .find(|mp| mp.id == pid)
+                    {
+                        let num_multis = multiprop.multis.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, pindex, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, p1, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, p2, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, p3, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a composite materials group
+                    else if let Some(composite) = model
+                        .resources
+                        .composite_materials
+                        .iter()
+                        .find(|cm| cm.id == pid)
+                    {
+                        let num_composites = composite.composites.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, pindex, pid, num_composites, max_index
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, p1, pid, num_composites, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, p2, pid, num_composites, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, p3, pid, num_composites, max_index
                                 )));
                             }
                         }
