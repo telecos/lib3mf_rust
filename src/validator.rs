@@ -700,6 +700,17 @@ fn detect_circular_components(
     // Find the object and check its components
     if let Some(object) = model.resources.objects.iter().find(|o| o.id == object_id) {
         for component in &object.components {
+            // Skip circular reference check for components with external production paths
+            // When a component has p:path, it references an object in an external file,
+            // so it doesn't create a circular reference within the current model
+            if component
+                .production
+                .as_ref()
+                .is_some_and(|p| p.path.is_some())
+            {
+                continue;
+            }
+
             if let Some(cycle) =
                 detect_circular_components(component.objectid, model, visited, path)?
             {
@@ -779,14 +790,12 @@ fn validate_production_extension(model: &Model) -> Result<()> {
         Ok(())
     };
 
-    // Check all objects for invalid thumbnail attribute and validate production paths
+    // Check all objects for validate production paths
     for object in &model.resources.objects {
-        if object.has_thumbnail_attribute && has_production {
-            return Err(Error::InvalidModel(format!(
-                "Object {}: thumbnail attribute is not allowed when production extension is declared. The thumbnail attribute is deprecated in 3MF v1.4+",
-                object.id
-            )));
-        }
+        // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
+        // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
+        // thumbnail attributes and production extension should still parse successfully.
+        // Therefore, we do not reject files with thumbnail attributes.
 
         // Validate production extension usage
         if let Some(ref prod_info) = object.production {
@@ -895,14 +904,12 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
         Ok(())
     };
 
-    // Check all objects for invalid thumbnail attribute and validate production paths
+    // Check all objects for validate production paths
     for object in &model.resources.objects {
-        if object.has_thumbnail_attribute && has_production {
-            return Err(Error::InvalidModel(format!(
-                "Object {}: thumbnail attribute is not allowed when production extension is declared. The thumbnail attribute is deprecated in 3MF v1.4+",
-                object.id
-            )));
-        }
+        // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
+        // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
+        // thumbnail attributes and production extension should still parse successfully.
+        // Therefore, we do not reject files with thumbnail attributes.
 
         // Validate production extension usage and track attributes
         if let Some(ref prod_info) = object.production {
@@ -919,16 +926,11 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
             if let Some(ref prod_info) = component.production {
                 has_production_attrs = true;
 
-                // Per Production Extension spec and test suite validation:
-                // A component with p:UUID MUST also have p:path attribute
-                // (This validates external component references have both UUID and path)
-                if prod_info.uuid.is_some() && prod_info.path.is_none() && component.path.is_none()
-                {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}, Component {}: Production UUID (p:UUID) requires production path (p:path) attribute",
-                        object.id, idx
-                    )));
-                }
+                // Per Production Extension spec:
+                // - p:UUID can be used on components to uniquely identify them
+                // - p:path is only required when referencing external objects (not in current file)
+                // - A component with p:UUID but no p:path references a local object
+                // Therefore, we do NOT require p:path when p:UUID is present.
 
                 // Validate production path format if present
                 // Note: component.path is set from prod_info.path during parsing
