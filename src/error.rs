@@ -295,6 +295,26 @@ pub enum Error {
     #[error("[E4002] Required extension not supported: {0}")]
     UnsupportedExtension(String),
 
+    /// Invalid SecureContent keystore
+    ///
+    /// **Error Code**: E4003
+    ///
+    /// **Common Causes**:
+    /// - Invalid consumer index reference (EPX-2601)
+    /// - Missing consumer element when accessright is defined (EPX-2602)
+    /// - Invalid encryption algorithm (EPX-2603)
+    /// - Duplicate consumer IDs (EPX-2604)
+    /// - Invalid encrypted file path (EPX-2605)
+    /// - Missing required keystore elements (EPX-2606)
+    /// - Referenced file doesn't exist in package (EPX-2607)
+    ///
+    /// **Suggestions**:
+    /// - Verify the keystore.xml follows the 3MF SecureContent specification
+    /// - Check consumer definitions and accessright references
+    /// - Ensure all referenced files exist in the package
+    #[error("[E4003] Invalid SecureContent: {0}")]
+    InvalidSecureContent(String),
+
     /// XML writing error
     ///
     /// **Error Code**: E2005

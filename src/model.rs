@@ -955,6 +955,12 @@ pub struct SecureContentInfo {
     pub keystore_uuid: Option<String>,
     /// Paths to encrypted files in the package
     pub encrypted_files: Vec<String>,
+    /// Consumer IDs (for validation)
+    pub(crate) consumer_ids: Vec<String>,
+    /// Number of consumers (for consumer index validation)
+    pub(crate) consumer_count: usize,
+    /// Encryption algorithms used (for validation)
+    pub(crate) wrapping_algorithms: Vec<String>,
 }
 
 /// A 2D vertex with x, y coordinates (used in slice extension)
