@@ -15,6 +15,9 @@ const TRANSFORM_MATRIX_SIZE: usize = 12;
 /// Default buffer capacity for XML parsing (4KB)
 const XML_BUFFER_CAPACITY: usize = 4096;
 
+/// Maximum number of object IDs to display in error messages
+const MAX_DISPLAYED_OBJECT_IDS: usize = 20;
+
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     // Use default config that supports all extensions for backward compatibility
@@ -50,6 +53,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Validate boolean operation external paths before general validation
     // This requires access to the package to check if referenced files exist
     validate_boolean_external_paths(&mut package, &model)?;
+
+    // Validate production extension external paths
+    // This checks that external files exist and referenced objects/UUIDs are valid
+    validate_production_external_paths(&mut package, &model)?;
 
     // Validate the model AFTER loading keystore and slices
     // This ensures validation can check encrypted file references correctly
@@ -192,7 +199,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut declared_namespaces: HashMap<String, String> = HashMap::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event_result = reader.read_event_into(&mut buf);
+        let is_empty_element = matches!(&event_result, Ok(Event::Empty(_)));
+
+        match event_result {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
@@ -1002,6 +1012,17 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             })?
                             .parse::<f64>()?;
                         current_slice = Some(Slice::new(ztop));
+
+                        // For self-closing empty slice tags like <s:slice ztop="100.060"/>,
+                        // immediately push the slice since there won't be an End event
+                        if is_empty_element {
+                            if let Some(slice) = current_slice.take() {
+                                if let Some(ref mut slicestack) = current_slicestack {
+                                    slicestack.slices.push(slice);
+                                }
+                            }
+                            in_slice = false;
+                        }
                     }
                     "sliceref" if in_slicestack => {
                         let attrs = parse_attributes(&reader, e)?;
@@ -2375,10 +2396,8 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
     reference_type: &str,
     cache: &mut HashMap<String, Vec<usize>>,
 ) -> Result<()> {
-    // Check cache first
-    let object_ids = if let Some(ids) = cache.get(file_path) {
-        ids.clone()
-    } else {
+    // Check cache first and load if needed
+    if !cache.contains_key(file_path) {
         // Load and parse the external model file
         let external_xml = package.get_file(file_path)?;
 
@@ -2422,15 +2441,21 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
         }
 
         // Cache the results for future use
-        cache.insert(file_path.to_string(), ids.clone());
-        ids
-    };
+        cache.insert(file_path.to_string(), ids);
+    }
+
+    // Get the cached object IDs
+    let object_ids = cache.get(file_path).unwrap();
 
     // Check if the referenced object ID exists
     if !object_ids.contains(&object_id) {
-        // Limit displayed IDs to first 20 to avoid overwhelming error messages
-        let display_ids: Vec<usize> = object_ids.iter().take(20).copied().collect();
-        let id_display = if object_ids.len() > 20 {
+        // Limit displayed IDs to avoid overwhelming error messages
+        let display_ids: Vec<usize> = object_ids
+            .iter()
+            .take(MAX_DISPLAYED_OBJECT_IDS)
+            .copied()
+            .collect();
+        let id_display = if object_ids.len() > MAX_DISPLAYED_OBJECT_IDS {
             format!("{:?} ... ({} total)", display_ids, object_ids.len())
         } else {
             format!("{:?}", display_ids)
@@ -2442,6 +2467,205 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
              Check that the referenced object ID is correct.",
             referring_object_id, reference_type, object_id, file_path, id_display
         )));
+    }
+
+    Ok(())
+}
+
+/// Validate production extension external file references
+///
+/// Per 3MF Production Extension spec:
+/// - Components and build items with p:path must reference existing files
+/// - Referenced object IDs must exist in those files
+/// - UUIDs should match when specified
+fn validate_production_external_paths<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    model: &Model,
+) -> Result<()> {
+    // Cache to avoid re-parsing the same external file multiple times
+    let mut external_file_cache: HashMap<String, Vec<(usize, Option<String>)>> = HashMap::new();
+
+    // Validate build item external references
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref path) = item.production_path {
+            // Normalize path: remove leading slash if present
+            let normalized_path = path.trim_start_matches('/');
+
+            // Check if file exists
+            if !package.has_file(normalized_path) {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: References non-existent external file: {}\n\
+                     The p:path attribute must reference a valid model file in the 3MF package.\n\
+                     Check that:\n\
+                     - The file exists in the package\n\
+                     - The path is correct (case-sensitive)\n\
+                     - The path format follows 3MF conventions (e.g., /3D/filename.model)",
+                    idx, path
+                )));
+            }
+
+            // Validate that the referenced object ID exists in the external file
+            validate_external_object_reference(
+                package,
+                normalized_path,
+                item.objectid,
+                &item.production_uuid,
+                &format!("Build item {}", idx),
+                &mut external_file_cache,
+            )?;
+        }
+    }
+
+    // Validate component external references
+    for object in &model.resources.objects {
+        for (comp_idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                if let Some(ref path) = prod_info.path {
+                    // Normalize path: remove leading slash if present
+                    let normalized_path = path.trim_start_matches('/');
+
+                    // Check if file exists
+                    if !package.has_file(normalized_path) {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}, Component {}: References non-existent external file: {}\n\
+                             The p:path attribute must reference a valid model file in the 3MF package.\n\
+                             Check that:\n\
+                             - The file exists in the package\n\
+                             - The path is correct (case-sensitive)\n\
+                             - The path format follows 3MF conventions (e.g., /3D/filename.model)",
+                            object.id, comp_idx, path
+                        )));
+                    }
+
+                    // Validate that the referenced object ID exists in the external file
+                    validate_external_object_reference(
+                        package,
+                        normalized_path,
+                        component.objectid,
+                        &prod_info.uuid,
+                        &format!("Object {}, Component {}", object.id, comp_idx),
+                        &mut external_file_cache,
+                    )?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that an object ID (and optionally UUID) exists in an external model file
+///
+/// Uses a cache to avoid re-parsing the same file multiple times
+/// Cache stores: (object_id, optional_uuid)
+fn validate_external_object_reference<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    file_path: &str,
+    object_id: usize,
+    expected_uuid: &Option<String>,
+    reference_context: &str,
+    cache: &mut HashMap<String, Vec<(usize, Option<String>)>>,
+) -> Result<()> {
+    // Check cache first and get object info
+    if !cache.contains_key(file_path) {
+        // Load and parse the external model file
+        let external_xml = package.get_file(file_path)?;
+
+        // Parse to extract object IDs and UUIDs
+        let mut reader = Reader::from_str(&external_xml);
+        reader.config_mut().trim_text(true);
+
+        let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
+        let mut info = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    let local_name = get_local_name(name_str);
+
+                    if local_name == "object" {
+                        let mut obj_id = None;
+                        let mut obj_uuid = None;
+
+                        // Extract id and p:UUID attributes
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            match attr_name {
+                                "id" => {
+                                    let id_str = std::str::from_utf8(&attr.value)
+                                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                    obj_id = id_str.parse::<usize>().ok();
+                                }
+                                "p:UUID" => {
+                                    let uuid_str = std::str::from_utf8(&attr.value)
+                                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                    obj_uuid = Some(uuid_str.to_string());
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if let Some(id) = obj_id {
+                            info.push((id, obj_uuid));
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // Cache the results for future use
+        cache.insert(file_path.to_string(), info);
+    }
+
+    // Get the cached info
+    let object_info = cache.get(file_path).unwrap();
+
+    // Check if the referenced object ID exists
+    let found_obj = object_info.iter().find(|(id, _)| *id == object_id);
+
+    if found_obj.is_none() {
+        // Object ID not found
+        let available_ids: Vec<usize> = object_info
+            .iter()
+            .map(|(id, _)| *id)
+            .take(MAX_DISPLAYED_OBJECT_IDS)
+            .collect();
+        let id_display = if object_info.len() > MAX_DISPLAYED_OBJECT_IDS {
+            format!("{:?} ... ({} total)", available_ids, object_info.len())
+        } else {
+            format!("{:?}", available_ids)
+        };
+
+        return Err(Error::InvalidModel(format!(
+            "{}: References object ID {} in external file '{}', but that object does not exist.\n\
+             Available object IDs in external file: {}\n\
+             Check that the referenced object ID is correct.",
+            reference_context, object_id, file_path, id_display
+        )));
+    }
+
+    // If we have an expected UUID, validate it matches
+    if let Some(ref expected) = expected_uuid {
+        if let Some((_, Some(ref actual_uuid))) = found_obj {
+            if expected != actual_uuid {
+                return Err(Error::InvalidModel(format!(
+                    "{}: UUID mismatch for object {} in external file '{}'.\n\
+                     Expected p:UUID='{}' but found p:UUID='{}'.\n\
+                     UUIDs must match when referencing external objects.",
+                    reference_context, object_id, file_path, expected, actual_uuid
+                )));
+            }
+        }
     }
 
     Ok(())
