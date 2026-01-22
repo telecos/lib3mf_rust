@@ -34,16 +34,7 @@ fn sorted_ids_from_set(ids: &HashSet<usize>) -> Vec<usize> {
 /// For more control, use `validate_model_with_config`.
 #[allow(dead_code)] // Public API but may not be used internally
 pub fn validate_model(model: &Model) -> Result<()> {
-    validate_required_structure(model)?;
-    validate_object_ids(model)?;
-    validate_mesh_geometry(model)?;
-    validate_build_references(model)?;
-    validate_material_references(model)?;
-    validate_required_extensions(model)?;
-    validate_boolean_operations(model)?;
-    validate_component_references(model)?;
-    validate_production_extension(model)?;
-    // Use default config that supports all extensions for backward compatibility
+    // Delegate to validate_model_with_config with default config
     validate_model_with_config(model, &ParserConfig::with_all_extensions())
 }
 
@@ -53,12 +44,13 @@ pub fn validate_model(model: &Model) -> Result<()> {
 /// invokes any custom validation handlers registered in the parser configuration.
 #[allow(dead_code)] // Currently called during parsing; may be exposed publicly in future
 pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
-    // Standard validation (with config for production extension check)
+    // Standard validation
     validate_required_structure(model)?;
     validate_object_ids(model)?;
     validate_mesh_geometry(model)?;
     validate_build_references(model)?;
     validate_material_references(model)?;
+    validate_required_extensions(model)?;
     validate_boolean_operations(model)?;
     validate_component_references(model)?;
     validate_production_extension_with_config(model, config)?;
@@ -658,9 +650,9 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                 )));
             }
             
-            // Per 3MF Boolean Operations Extension spec (XSD), an object can have
+            // Per 3MF Boolean Operations Extension spec, an object can have
             // EITHER a mesh, components, OR booleanshape, but not multiple
-            // Check that object with booleanshape doesn't also have components
+            // Check that object with booleanshape doesn't also have components or mesh
             if !object.components.is_empty() {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Contains both <booleanshape> and <components>.\n\
@@ -671,8 +663,6 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                 )));
             }
             
-            // Also check that object doesn't have both booleanshape and mesh
-            // Actually, per the XSD, this should be checked during parsing, but we can verify here too
             if object.mesh.is_some() {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Contains both <booleanshape> and <mesh>.\n\
@@ -730,17 +720,14 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                     }
                     
                     // Check that base object has a shape (mesh or booleanshape), not just components
+                    // Per Boolean Operations spec, the base object "MUST NOT reference a components object"
                     if base_obj.mesh.is_none() && base_obj.boolean_shape.is_none() {
-                        // It's OK if it has components AND a mesh/booleanshape, but not components alone
-                        // Actually, per spec, base object MUST NOT be a components object
-                        if !base_obj.components.is_empty() {
-                            return Err(Error::InvalidModel(format!(
-                                "Object {}: Boolean shape base object {} contains only components.\n\
-                                 Per 3MF Boolean Operations spec, the base object must define a shape \
-                                 (mesh, booleanshape, or shapes from other extensions), not an assembly of components.",
-                                object.id, boolean_shape.objectid
-                            )));
-                        }
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Boolean shape base object {} does not define a shape.\n\
+                             Per 3MF Boolean Operations spec, the base object must define a shape \
+                             (mesh, booleanshape, or shapes from other extensions), not just an assembly of components.",
+                            object.id, boolean_shape.objectid
+                        )));
                     }
                 }
             }

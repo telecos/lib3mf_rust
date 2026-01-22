@@ -1371,9 +1371,6 @@ pub struct Object {
     /// Thumbnail attribute (deprecated, should not be used with production extension)
     /// This is stored only for validation purposes - the attribute is accepted but not functional
     pub(crate) has_thumbnail_attribute: bool,
-    /// Flag to track if object has extension-specific shape elements (beamlattice, displacement, etc.)
-    /// Used for validation - per Boolean Operations spec, operands must be simple meshes only
-    pub(crate) has_extension_shapes: bool,
 }
 
 /// Type of 3D object
@@ -1407,7 +1404,6 @@ impl Object {
             boolean_shape: None,
             components: Vec::new(),
             has_thumbnail_attribute: false,
-            has_extension_shapes: false,
         }
     }
 }
