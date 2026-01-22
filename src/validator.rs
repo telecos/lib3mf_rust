@@ -2541,7 +2541,7 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
 /// Note: This validation is lenient - we only enforce UUID requirements strictly when
 /// the production extension is explicitly in requiredextensions AND the parser config
 /// doesn't support production (which would indicate a lenient mode).
-fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> Result<()> {
+fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> Result<()> {
     let has_production = model.required_extensions.contains(&Extension::Production);
 
     // Only enforce UUID requirements if production extension is explicitly required

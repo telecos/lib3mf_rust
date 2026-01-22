@@ -210,78 +210,124 @@ impl<R: Read + std::io::Seek> Package<R> {
 
     /// Validate all relationships point to existing files
     fn validate_all_relationships(&mut self) -> Result<()> {
-        let rels_content = self.get_file(RELS_PATH)?;
-        let mut reader = Reader::from_str(&rels_content);
-        reader.config_mut().trim_text(true);
-        let mut buf = Vec::new();
+        // Collect all .rels files in the archive
+        let mut rels_files = Vec::new();
+        for i in 0..self.archive.len() {
+            if let Ok(file) = self.archive.by_index(i) {
+                let name = file.name().to_string();
+                if name.ends_with(".rels") {
+                    rels_files.push(name);
+                }
+            }
+        }
 
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                    let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
-                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
-
-                    if name_str.ends_with("Relationship") {
-                        let mut target = None;
-                        let mut rel_type = None;
-
-                        for attr in e.attributes() {
-                            let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
-
-                            if key == "Target" {
-                                target = Some(value.to_string());
-                            } else if key == "Type" {
-                                rel_type = Some(value.to_string());
-                            }
-                        }
-
-                        // Validate relationship Type - must not contain query strings or fragments
-                        if let Some(t) = &rel_type {
-                            if t.contains('?') {
-                                return Err(Error::InvalidFormat(format!(
-                                    "Relationship Type cannot contain query string: {}",
-                                    t
-                                )));
-                            }
-                            if t.contains('#') {
-                                return Err(Error::InvalidFormat(format!(
-                                    "Relationship Type cannot contain fragment identifier: {}",
-                                    t
-                                )));
-                            }
-                        }
-
-                        if let Some(t) = target {
-                            // Validate the target is a valid OPC part name
-                            Self::validate_opc_part_name(&t)?;
-
-                            // Remove leading slash if present
-                            let path = if let Some(stripped) = t.strip_prefix('/') {
-                                stripped.to_string()
-                            } else {
-                                t
-                            };
-
-                            // Verify the target file exists
-                            if !self.has_file(&path) {
-                                return Err(Error::InvalidFormat(format!(
-                                    "Relationship points to non-existent file: {}",
-                                    path
-                                )));
-                            }
+        // Validate each .rels file
+        for rels_file in &rels_files {
+            // For part-specific .rels files (e.g., 3D/_rels/3dmodel.model.rels),
+            // verify the .rels file name matches the part file it references
+            if rels_file.contains("/_rels/") && rels_file != RELS_PATH {
+                // Extract the part name from the .rels file path
+                // Format is: <dir>/_rels/<partname>.<ext>.rels
+                let parts: Vec<&str> = rels_file.split("/_rels/").collect();
+                if parts.len() == 2 {
+                    let dir = parts[0];
+                    let rels_filename = parts[1];
+                    
+                    // Remove .rels suffix to get the part filename
+                    if let Some(part_filename) = rels_filename.strip_suffix(".rels") {
+                        // Reconstruct the expected part file path
+                        let expected_part_path = if dir.is_empty() {
+                            part_filename.to_string()
+                        } else {
+                            format!("{}/{}", dir, part_filename)
+                        };
+                        
+                        // Verify the corresponding part file exists
+                        if !self.has_file(&expected_part_path) {
+                            return Err(Error::InvalidFormat(format!(
+                                "Relationship file '{}' references part '{}' which does not exist in the package.\n\
+                                 Per OPC specification, part-specific relationship files must have names matching their associated parts.",
+                                rels_file, expected_part_path
+                            )));
                         }
                     }
                 }
-                Ok(Event::Eof) => break,
-                Err(e) => return Err(Error::Xml(e)),
-                _ => {}
             }
-            buf.clear();
+
+            // Now validate the content of this .rels file
+            let rels_content = self.get_file(rels_file)?;
+            let mut reader = Reader::from_str(&rels_content);
+            reader.config_mut().trim_text(true);
+            let mut buf = Vec::new();
+
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                        let name = e.name();
+                        let name_str = std::str::from_utf8(name.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                        if name_str.ends_with("Relationship") {
+                            let mut target = None;
+                            let mut rel_type = None;
+
+                            for attr in e.attributes() {
+                                let attr = attr?;
+                                let key = std::str::from_utf8(attr.key.as_ref())
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                let value = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                if key == "Target" {
+                                    target = Some(value.to_string());
+                                } else if key == "Type" {
+                                    rel_type = Some(value.to_string());
+                                }
+                            }
+
+                            // Validate relationship Type - must not contain query strings or fragments
+                            if let Some(t) = &rel_type {
+                                if t.contains('?') {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Relationship Type in '{}' cannot contain query string: {}",
+                                        rels_file, t
+                                    )));
+                                }
+                                if t.contains('#') {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Relationship Type in '{}' cannot contain fragment identifier: {}",
+                                        rels_file, t
+                                    )));
+                                }
+                            }
+
+                            if let Some(t) = target {
+                                // Validate the target is a valid OPC part name
+                                Self::validate_opc_part_name(&t)?;
+
+                                // Remove leading slash if present
+                                let path = if let Some(stripped) = t.strip_prefix('/') {
+                                    stripped.to_string()
+                                } else {
+                                    t.clone()
+                                };
+
+                                // Verify the target file exists
+                                if !self.has_file(&path) {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Relationship in '{}' points to non-existent file: {}",
+                                        rels_file, path
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => return Err(Error::Xml(e)),
+                    _ => {}
+                }
+                buf.clear();
+            }
         }
 
         Ok(())
