@@ -1051,14 +1051,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "booleanshape" if in_resources && current_object.is_some() => {
                         // Check if object already has a booleanshape
                         // Per 3MF Boolean Operations spec, an object can only have one booleanshape
-                        if let Some(ref obj) = current_object {
-                            if obj.boolean_shape.is_some() {
-                                return Err(Error::InvalidXml(
-                                    "Object can only have one booleanshape element".to_string(),
-                                ));
-                            }
-                        }
-                        if in_boolean_shape {
+                        // We check both the object's boolean_shape field (for closed booleanshape elements)
+                        // and the in_boolean_shape flag (for currently open booleanshape elements)
+                        if in_boolean_shape
+                            || current_object
+                                .as_ref()
+                                .map(|obj| obj.boolean_shape.is_some())
+                                .unwrap_or(false)
+                        {
                             return Err(Error::InvalidXml(
                                 "Object can only have one booleanshape element".to_string(),
                             ));
