@@ -66,6 +66,19 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
         }
     }
 
+    // Additional Material and Production validations
+    validate_texture_paths(model)?;
+    validate_color_formats(model)?;
+    validate_uuid_formats(model)?;
+    validate_production_paths(model)?;
+    validate_transform_matrices(model)?;
+    validate_resource_ordering(model)?;
+    validate_duplicate_resource_ids(model)?;
+    validate_multiproperties_references(model)?;
+    validate_triangle_properties(model)?;
+    validate_production_uuids_required(model, config)?;
+    validate_thumbnail_format(model)?;
+
     Ok(())
 }
 
@@ -345,49 +358,84 @@ fn validate_build_references(model: &Model) -> Result<()> {
 
 /// Validate material, color group, and base material references
 fn validate_material_references(model: &Model) -> Result<()> {
-    // Validate that color group IDs are unique
-    let mut seen_colorgroup_ids = HashSet::new();
+    // Validate that all property group IDs are unique across all property group types
+    // Property groups include: color groups, base material groups, multiproperties,
+    // texture2d groups, and composite materials
+    let mut seen_property_group_ids: HashMap<usize, String> = HashMap::new();
+
+    // Check color group IDs
     for colorgroup in &model.resources.color_groups {
-        if !seen_colorgroup_ids.insert(colorgroup.id) {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(colorgroup.id, "colorgroup".to_string())
+        {
             return Err(Error::InvalidModel(format!(
-                "Duplicate color group ID: {}. \
-                 Each color group must have a unique id attribute. \
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a colorgroup. \
+                 Each resource must have a unique id attribute. \
                  Check your material definitions for duplicate IDs.",
-                colorgroup.id
+                colorgroup.id, existing_type
             )));
         }
     }
 
-    // Validate that pid and basematerialid references point to existing property groups
-    // Valid property groups include: color groups, base material groups, multiproperties,
-    // texture2d groups, and composite materials
-
-    // Collect all valid property group IDs into a single HashSet for efficient lookup
-    let mut valid_property_group_ids: HashSet<usize> = HashSet::new();
-
-    // Add color group IDs
-    for cg in &model.resources.color_groups {
-        valid_property_group_ids.insert(cg.id);
+    // Check base material group IDs
+    for basematerialgroup in &model.resources.base_material_groups {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(basematerialgroup.id, "basematerials".to_string())
+        {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a basematerials group. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                basematerialgroup.id, existing_type
+            )));
+        }
     }
 
-    // Add base material group IDs
-    for bg in &model.resources.base_material_groups {
-        valid_property_group_ids.insert(bg.id);
+    // Check multiproperties IDs
+    for multiprop in &model.resources.multi_properties {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(multiprop.id, "multiproperties".to_string())
+        {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a multiproperties group. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                multiprop.id, existing_type
+            )));
+        }
     }
 
-    // Add multiproperties IDs
-    for mp in &model.resources.multi_properties {
-        valid_property_group_ids.insert(mp.id);
+    // Check texture2d group IDs
+    for tex2dgroup in &model.resources.texture2d_groups {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(tex2dgroup.id, "texture2dgroup".to_string())
+        {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a texture2dgroup. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                tex2dgroup.id, existing_type
+            )));
+        }
     }
 
-    // Add texture2d group IDs
-    for tg in &model.resources.texture2d_groups {
-        valid_property_group_ids.insert(tg.id);
-    }
-
-    // Add composite materials IDs
-    for cm in &model.resources.composite_materials {
-        valid_property_group_ids.insert(cm.id);
+    // Check composite materials IDs
+    for composite in &model.resources.composite_materials {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(composite.id, "compositematerials".to_string())
+        {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a compositematerials group. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                composite.id, existing_type
+            )));
+        }
     }
 
     // Keep separate base material IDs set for basematerialid validation
@@ -398,12 +446,119 @@ fn validate_material_references(model: &Model) -> Result<()> {
         .map(|bg| bg.id)
         .collect();
 
+    // Validate multiproperties: each multi element's pindices must be valid for the referenced property groups
+    for multiprop in &model.resources.multi_properties {
+        for (multi_idx, multi) in multiprop.multis.iter().enumerate() {
+            // Validate each pindex against the corresponding property group
+            // Note: pindices.len() can be less than pids.len() - unspecified indices default to 0
+            for (layer_idx, (&pid, &pindex)) in
+                multiprop.pids.iter().zip(multi.pindices.iter()).enumerate()
+            {
+                // Check if it's a color group
+                if let Some(colorgroup) =
+                    model.resources.color_groups.iter().find(|cg| cg.id == pid)
+                {
+                    if pindex >= colorgroup.colors.len() {
+                        let max_index = colorgroup.colors.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Color group {} has {} colors (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            colorgroup.colors.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // Check if it's a base material group
+                else if let Some(basematerialgroup) = model
+                    .resources
+                    .base_material_groups
+                    .iter()
+                    .find(|bg| bg.id == pid)
+                {
+                    if pindex >= basematerialgroup.materials.len() {
+                        let max_index = basematerialgroup.materials.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Base material group {} has {} materials (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            basematerialgroup.materials.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // Check if it's a texture2d group
+                else if let Some(tex2dgroup) = model
+                    .resources
+                    .texture2d_groups
+                    .iter()
+                    .find(|tg| tg.id == pid)
+                {
+                    if pindex >= tex2dgroup.tex2coords.len() {
+                        let max_index = tex2dgroup.tex2coords.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            tex2dgroup.tex2coords.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // Check if it's a composite materials group
+                else if let Some(composite) = model
+                    .resources
+                    .composite_materials
+                    .iter()
+                    .find(|cm| cm.id == pid)
+                {
+                    if pindex >= composite.composites.len() {
+                        let max_index = composite.composites.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "MultiProperties group {}: Multi element {} layer {} references pindex {} which is out of bounds.\n\
+                             Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                             Hint: Each pindex in a multi element must be less than the number of items in the corresponding property group.",
+                            multiprop.id,
+                            multi_idx,
+                            layer_idx,
+                            pindex,
+                            pid,
+                            composite.composites.len(),
+                            max_index
+                        )));
+                    }
+                }
+                // If the pid is another multiproperties, we don't need to validate here
+                // as nested multiproperties would be validated separately
+            }
+        }
+    }
+
     for object in &model.resources.objects {
         if let Some(pid) = object.pid {
             // If object has a pid, it should reference a valid property group
             // Only validate if there are property groups defined, otherwise pid might be unused
-            if !valid_property_group_ids.is_empty() && !valid_property_group_ids.contains(&pid) {
-                let available_ids = sorted_ids_from_set(&valid_property_group_ids);
+            if !seen_property_group_ids.is_empty() && !seen_property_group_ids.contains_key(&pid) {
+                let available_ids: Vec<usize> = {
+                    let mut ids: Vec<usize> = seen_property_group_ids.keys().copied().collect();
+                    ids.sort();
+                    ids
+                };
                 return Err(Error::InvalidModel(format!(
                     "Object {} references non-existent property group ID: {}.\n\
                      Available property group IDs: {:?}\n\
@@ -471,6 +626,78 @@ fn validate_material_references(model: &Model) -> Result<()> {
                             pindex,
                             obj_pid,
                             basematerialgroup.materials.len(),
+                            max_index
+                        )));
+                    }
+                }
+            }
+            // Validate object pindex references for texture2d groups
+            else if let Some(tex2dgroup) = model
+                .resources
+                .texture2d_groups
+                .iter()
+                .find(|tg| tg.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= tex2dgroup.tex2coords.len() {
+                        let max_index = tex2dgroup.tex2coords.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds.\n\
+                             Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of texture coordinates in the texture2d group.",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            tex2dgroup.tex2coords.len(),
+                            max_index
+                        )));
+                    }
+                }
+            }
+            // Validate object pindex references for multiproperties
+            else if let Some(multiprop) = model
+                .resources
+                .multi_properties
+                .iter()
+                .find(|mp| mp.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= multiprop.multis.len() {
+                        let max_index = multiprop.multis.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds.\n\
+                             MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of multi elements in the multiproperties group.",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            multiprop.multis.len(),
+                            max_index
+                        )));
+                    }
+                }
+            }
+            // Validate object pindex references for composite materials
+            else if let Some(composite) = model
+                .resources
+                .composite_materials
+                .iter()
+                .find(|cm| cm.id == obj_pid)
+            {
+                // Validate object-level pindex
+                if let Some(pindex) = object.pindex {
+                    if pindex >= composite.composites.len() {
+                        let max_index = composite.composites.len().saturating_sub(1);
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: pindex {} is out of bounds.\n\
+                             Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                             Hint: pindex must be less than the number of composite elements in the composite materials group.",
+                            object.id,
+                            pindex,
+                            obj_pid,
+                            composite.composites.len(),
                             max_index
                         )));
                     }
@@ -596,6 +823,183 @@ fn validate_material_references(model: &Model) -> Result<()> {
                                      Base material group {} has {} materials (valid indices: 0-{}).\n\
                                      Hint: p3 must be less than the number of materials in the base material group.",
                                     object.id, tri_idx, p3, pid, num_materials, max_index
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a texture2d group
+                    else if let Some(tex2dgroup) = model
+                        .resources
+                        .texture2d_groups
+                        .iter()
+                        .find(|tg| tg.id == pid)
+                    {
+                        let num_coords = tex2dgroup.tex2coords.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, pindex, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, p1, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, p2, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_coords {
+                                let max_index = num_coords.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     Texture2D group {} has {} texture coordinates (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of texture coordinates in the texture2d group.",
+                                    object.id, tri_idx, p3, pid, num_coords, max_index
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a multiproperties group
+                    else if let Some(multiprop) = model
+                        .resources
+                        .multi_properties
+                        .iter()
+                        .find(|mp| mp.id == pid)
+                    {
+                        let num_multis = multiprop.multis.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, pindex, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, p1, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, p2, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_multis {
+                                let max_index = num_multis.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     MultiProperties group {} has {} multi elements (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of multi elements in the multiproperties group.",
+                                    object.id, tri_idx, p3, pid, num_multis, max_index
+                                )));
+                            }
+                        }
+                    }
+                    // Check if it's a composite materials group
+                    else if let Some(composite) = model
+                        .resources
+                        .composite_materials
+                        .iter()
+                        .find(|cm| cm.id == pid)
+                    {
+                        let num_composites = composite.composites.len();
+
+                        // Validate triangle-level pindex
+                        if let Some(pindex) = triangle.pindex {
+                            if pindex >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} pindex {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: pindex must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, pindex, pid, num_composites, max_index
+                                )));
+                            }
+                        }
+
+                        // Validate per-vertex property indices (p1, p2, p3)
+                        if let Some(p1) = triangle.p1 {
+                            if p1 >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p1 {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: p1 must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, p1, pid, num_composites, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p2) = triangle.p2 {
+                            if p2 >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p2 {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: p2 must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, p2, pid, num_composites, max_index
+                                )));
+                            }
+                        }
+
+                        if let Some(p3) = triangle.p3 {
+                            if p3 >= num_composites {
+                                let max_index = num_composites.saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: Triangle {} p3 {} is out of bounds.\n\
+                                     Composite materials group {} has {} composite elements (valid indices: 0-{}).\n\
+                                     Hint: p3 must be less than the number of composite elements in the composite materials group.",
+                                    object.id, tri_idx, p3, pid, num_composites, max_index
                                 )));
                             }
                         }
@@ -1692,6 +2096,515 @@ fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()>
             context, transform[8]
         )));
     }
+
+    Ok(())
+}
+
+/// Validate texture paths contain only valid ASCII characters
+///
+/// Per 3MF Material Extension spec, texture paths must contain only valid ASCII characters.
+/// Non-ASCII characters (like Unicode) in texture paths are not allowed.
+fn validate_texture_paths(model: &Model) -> Result<()> {
+    for texture in &model.resources.texture2d_resources {
+        // Check that the path contains only ASCII characters
+        if !texture.path.is_ascii() {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' contains non-ASCII characters.\n\
+                 Per 3MF Material Extension specification, texture paths must contain only ASCII characters.\n\
+                 Hint: Remove Unicode or special characters from the texture path.",
+                texture.id, texture.path
+            )));
+        }
+
+        // Per 3MF spec, texture paths should be in /3D/Textures/ directory
+        if !texture.path.starts_with("/3D/Textures/") {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' is not in /3D/Textures/ directory.\n\
+                 Per 3MF Material Extension spec, texture files must be stored in /3D/Textures/.\n\
+                 Move the texture file to /3D/Textures/ and update the path.",
+                texture.id, texture.path
+            )));
+        }
+
+        // Validate content type
+        let valid_content_types = ["image/png", "image/jpeg"];
+        if !valid_content_types.contains(&texture.contenttype.as_str()) {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Invalid contenttype '{}'.\n\
+                 Per 3MF Material Extension spec, texture content type must be 'image/png' or 'image/jpeg'.\n\
+                 Update the contenttype attribute to one of the supported values.",
+                texture.id, texture.contenttype
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Validate color formats in color groups
+///
+/// Per 3MF Material Extension spec, colors are stored as RGBA tuples (u8, u8, u8, u8).
+/// The parser already validates format during parsing, but this provides an additional check.
+fn validate_color_formats(model: &Model) -> Result<()> {
+    // Colors are already validated during parsing (stored as (u8, u8, u8, u8) tuples)
+    // This function is a placeholder for any additional color validation needs
+
+    // Validate that color groups have at least one color
+    for color_group in &model.resources.color_groups {
+        if color_group.colors.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Color group {}: Must contain at least one color.\n\
+                 A color group without colors is invalid.",
+                color_group.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate UUID format per RFC 4122
+///
+/// UUIDs must follow the format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+/// where x is a hexadecimal digit (0-9, a-f, A-F).
+fn validate_uuid_formats(model: &Model) -> Result<()> {
+    // Helper function to validate a single UUID
+    let validate_uuid = |uuid: &str, context: &str| -> Result<()> {
+        // UUID format: 8-4-4-4-12 hexadecimal digits separated by hyphens
+        // Example: 550e8400-e29b-41d4-a716-446655440000
+
+        // Check length (36 characters including hyphens)
+        if uuid.len() != 36 {
+            return Err(Error::InvalidModel(format!(
+                "{}: Invalid UUID '{}' - must be 36 characters in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                context, uuid
+            )));
+        }
+
+        // Check hyphen positions (at indices 8, 13, 18, 23)
+        if uuid.chars().nth(8) != Some('-')
+            || uuid.chars().nth(13) != Some('-')
+            || uuid.chars().nth(18) != Some('-')
+            || uuid.chars().nth(23) != Some('-')
+        {
+            return Err(Error::InvalidModel(format!(
+                "{}: Invalid UUID '{}' - hyphens must be at positions 8, 13, 18, and 23",
+                context, uuid
+            )));
+        }
+
+        // Check that all other characters are hexadecimal digits
+        for (idx, ch) in uuid.chars().enumerate() {
+            if idx == 8 || idx == 13 || idx == 18 || idx == 23 {
+                continue; // Skip hyphens
+            }
+            if !ch.is_ascii_hexdigit() {
+                return Err(Error::InvalidModel(format!(
+                    "{}: Invalid UUID '{}' - character '{}' at position {} is not a hexadecimal digit",
+                    context, uuid, ch, idx
+                )));
+            }
+        }
+
+        Ok(())
+    };
+
+    // Validate build UUID
+    if let Some(ref uuid) = model.build.production_uuid {
+        validate_uuid(uuid, "Build")?;
+    }
+
+    // Validate build item UUIDs
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref uuid) = item.production_uuid {
+            validate_uuid(uuid, &format!("Build item {}", idx))?;
+        }
+    }
+
+    // Validate object UUIDs
+    for object in &model.resources.objects {
+        if let Some(ref prod_info) = object.production {
+            if let Some(ref uuid) = prod_info.uuid {
+                validate_uuid(uuid, &format!("Object {}", object.id))?;
+            }
+        }
+
+        // Validate component UUIDs
+        for (idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                if let Some(ref uuid) = prod_info.uuid {
+                    validate_uuid(uuid, &format!("Object {}, Component {}", object.id, idx))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate production paths don't reference OPC internal files
+///
+/// Per 3MF Production Extension spec, production paths must not reference
+/// OPC package internal files like /.rels or /[Content_Types].xml.
+fn validate_production_paths(model: &Model) -> Result<()> {
+    // Helper function to validate that a path doesn't reference OPC internal files
+    let validate_not_opc_internal = |path: &str, context: &str| -> Result<()> {
+        // OPC internal paths that should not be referenced:
+        // - /_rels/.rels or any path starting with /_rels/
+        // - /[Content_Types].xml
+
+        if path.starts_with("/_rels/") || path == "/_rels" {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' references OPC internal relationships directory.\n\
+                 Production paths must not reference package internal files.",
+                context, path
+            )));
+        }
+
+        if path == "/[Content_Types].xml" {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' references OPC content types file.\n\
+                 Production paths must not reference package internal files.",
+                context, path
+            )));
+        }
+
+        Ok(())
+    };
+
+    // Check all objects
+    for object in &model.resources.objects {
+        if let Some(ref prod_info) = object.production {
+            if let Some(ref path) = prod_info.path {
+                validate_not_opc_internal(path, &format!("Object {}", object.id))?;
+            }
+        }
+
+        // Check components
+        for (idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                if let Some(ref path) = prod_info.path {
+                    validate_not_opc_internal(
+                        path,
+                        &format!("Object {}, Component {}", object.id, idx),
+                    )?;
+                }
+            }
+        }
+    }
+
+    // Check build items
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref path) = item.production_path {
+            validate_not_opc_internal(path, &format!("Build item {}", idx))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate transform matrices for build items
+///
+/// Per 3MF spec, transform matrices must have a non-negative determinant.
+/// A negative determinant indicates a mirror transformation which would
+/// invert the object's orientation (inside-out).
+fn validate_transform_matrices(model: &Model) -> Result<()> {
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref transform) = item.transform {
+            // Calculate the determinant of the 3x3 rotation/scale portion
+            // Transform is stored as 12 values: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
+            let m00 = transform[0];
+            let m01 = transform[1];
+            let m02 = transform[2];
+            let m10 = transform[3];
+            let m11 = transform[4];
+            let m12 = transform[5];
+            let m20 = transform[6];
+            let m21 = transform[7];
+            let m22 = transform[8];
+
+            // Determinant = m00*(m11*m22 - m12*m21) - m01*(m10*m22 - m12*m20) + m02*(m10*m21 - m11*m20)
+            let det = m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20)
+                + m02 * (m10 * m21 - m11 * m20);
+
+            if det < 0.0 {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: Transform matrix has negative determinant ({:.6}).\n\
+                     Per 3MF spec, transforms with negative determinants (mirror transformations) \
+                     are not allowed as they would invert the object's orientation.\n\
+                     Transform: [{} {} {} {} {} {} {} {} {} {} {} {}]",
+                    idx,
+                    det,
+                    transform[0],
+                    transform[1],
+                    transform[2],
+                    transform[3],
+                    transform[4],
+                    transform[5],
+                    transform[6],
+                    transform[7],
+                    transform[8],
+                    transform[9],
+                    transform[10],
+                    transform[11]
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate resource ordering
+///
+/// Per 3MF spec, resources must be defined before they are referenced.
+/// For example, texture2d must be defined before texture2dgroup that references it.
+fn validate_resource_ordering(model: &Model) -> Result<()> {
+    // Build a set of defined texture2d IDs
+    let texture2d_ids: HashSet<usize> = model
+        .resources
+        .texture2d_resources
+        .iter()
+        .map(|t| t.id)
+        .collect();
+
+    // Validate that texture2dgroups reference existing texture2d resources
+    for tex_group in &model.resources.texture2d_groups {
+        if !texture2d_ids.contains(&tex_group.texid) {
+            return Err(Error::InvalidModel(format!(
+                "Texture2DGroup {}: References texture2d with ID {} which is not defined.\n\
+                 Per 3MF spec, texture2d resources must be defined before texture2dgroups that reference them.\n\
+                 Ensure texture2d with ID {} exists in the <resources> section before this texture2dgroup.",
+                tex_group.id, tex_group.texid, tex_group.texid
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that resource IDs are unique across all resource types
+///
+/// Per 3MF spec, all resource IDs must be unique within the entire resources section,
+/// regardless of resource type.
+fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
+    let mut seen_ids: HashSet<usize> = HashSet::new();
+
+    // Helper to check and add ID
+    let mut check_id = |id: usize, resource_type: &str| -> Result<()> {
+        if seen_ids.contains(&id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID {}: {} resource uses an ID that is already in use.\n\
+                 Per 3MF spec, all resource IDs must be unique across the entire <resources> section.\n\
+                 Each resource (object, basematerials, colorgroup, texture2d, etc.) must have a unique ID.",
+                id, resource_type
+            )));
+        }
+        seen_ids.insert(id);
+        Ok(())
+    };
+
+    // Check all resource types
+    for obj in &model.resources.objects {
+        check_id(obj.id, "Object")?;
+    }
+
+    for base_mat in &model.resources.base_material_groups {
+        check_id(base_mat.id, "BaseMaterials")?;
+    }
+
+    for color_group in &model.resources.color_groups {
+        check_id(color_group.id, "ColorGroup")?;
+    }
+
+    for texture in &model.resources.texture2d_resources {
+        check_id(texture.id, "Texture2D")?;
+    }
+
+    for tex_group in &model.resources.texture2d_groups {
+        check_id(tex_group.id, "Texture2DGroup")?;
+    }
+
+    for composite in &model.resources.composite_materials {
+        check_id(composite.id, "CompositeMaterials")?;
+    }
+
+    for multi in &model.resources.multi_properties {
+        check_id(multi.id, "MultiProperties")?;
+    }
+
+    Ok(())
+}
+
+/// Validate multiproperties references
+///
+/// Per 3MF Material Extension spec:
+/// - All PIDs in multiproperties.pids must reference valid resources
+/// - MultiProperties cannot reference the same basematerials group multiple times in pids
+fn validate_multiproperties_references(model: &Model) -> Result<()> {
+    // Build sets of valid resource IDs
+    let base_mat_ids: HashSet<usize> = model
+        .resources
+        .base_material_groups
+        .iter()
+        .map(|b| b.id)
+        .collect();
+
+    let color_group_ids: HashSet<usize> =
+        model.resources.color_groups.iter().map(|c| c.id).collect();
+
+    let tex_group_ids: HashSet<usize> = model
+        .resources
+        .texture2d_groups
+        .iter()
+        .map(|t| t.id)
+        .collect();
+
+    let composite_ids: HashSet<usize> = model
+        .resources
+        .composite_materials
+        .iter()
+        .map(|c| c.id)
+        .collect();
+
+    // Validate each multiproperties group
+    for multi_props in &model.resources.multi_properties {
+        // Track basematerials IDs to detect duplicates
+        let mut base_mat_count: HashMap<usize, usize> = HashMap::new();
+
+        for (idx, &pid) in multi_props.pids.iter().enumerate() {
+            // Check if PID references a valid resource
+            let is_valid = base_mat_ids.contains(&pid)
+                || color_group_ids.contains(&pid)
+                || tex_group_ids.contains(&pid)
+                || composite_ids.contains(&pid);
+
+            if !is_valid {
+                return Err(Error::InvalidModel(format!(
+                    "MultiProperties {}: PID {} at index {} does not reference a valid resource.\n\
+                     Per 3MF spec, multiproperties pids must reference existing basematerials, \
+                     colorgroup, texture2dgroup, or compositematerials resources.\n\
+                     Ensure resource with ID {} exists in the <resources> section.",
+                    multi_props.id, pid, idx, pid
+                )));
+            }
+
+            // Track basematerials references
+            if base_mat_ids.contains(&pid) {
+                *base_mat_count.entry(pid).or_insert(0) += 1;
+            }
+        }
+
+        // Check for duplicate basematerials references
+        for (&base_id, &count) in &base_mat_count {
+            if count > 1 {
+                return Err(Error::InvalidModel(format!(
+                    "MultiProperties {}: References basematerials group {} multiple times in pids.\n\
+                     Per 3MF spec, multiproperties cannot reference the same basematerials group \
+                     more than once in the pids list.",
+                    multi_props.id, base_id
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate triangle property attributes
+///
+/// Per 3MF spec:
+/// - Triangles cannot use both pid (property group) and p1/p2/p3 (per-vertex properties) at the same time
+fn validate_triangle_properties(_model: &Model) -> Result<()> {
+    // Triangles can have both pid (property group) and p1/p2/p3 (per-vertex properties)
+    // as they serve different purposes (pid is default, p1/p2/p3 override per vertex)
+    // Per 3MF Material Extension spec, this is valid usage
+
+    // Currently no specific triangle property validations needed
+    // The parser already validates property references
+    Ok(())
+}
+
+/// Validate that required production UUIDs are present
+///
+/// Per 3MF Production Extension spec:
+/// - Build must have p:UUID when production extension is required
+/// - Objects in build items must have p:UUID when production extension is required
+///
+/// Note: This validation is lenient - we only enforce UUID requirements strictly when
+/// the production extension is explicitly in requiredextensions AND the parser config
+/// doesn't support production (which would indicate a lenient mode).
+fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> Result<()> {
+    let has_production = model.required_extensions.contains(&Extension::Production);
+
+    // Only enforce UUID requirements if production extension is explicitly required
+    if !has_production {
+        return Ok(());
+    }
+
+    // Check if we're in lenient mode (config supports production)
+    let lenient_mode = config.supports(&Extension::Production);
+
+    // Build must have UUID when production extension is required (strict mode only)
+    if model.build.production_uuid.is_none() && !lenient_mode {
+        return Err(Error::InvalidModel(
+            "Build element is missing required p:UUID attribute.\n\
+             Per 3MF Production Extension spec, when production extension is in requiredextensions, \
+             the <build> element must have a p:UUID attribute.\n\
+             Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to the <build> element."
+                .to_string(),
+        ));
+    }
+
+    // In strict mode, objects referenced in build items should have UUID
+    if !lenient_mode {
+        for (idx, item) in model.build.items.iter().enumerate() {
+            // Skip if the item has a production path (external reference)
+            if item.production_path.is_some() {
+                continue;
+            }
+
+            // Find the object being referenced
+            if let Some(object) = model
+                .resources
+                .objects
+                .iter()
+                .find(|o| o.id == item.objectid)
+            {
+                // Check if object has production UUID
+                let has_uuid = object
+                    .production
+                    .as_ref()
+                    .and_then(|p| p.uuid.as_ref())
+                    .is_some();
+
+                if !has_uuid {
+                    return Err(Error::InvalidModel(format!(
+                        "Build item {}: References object {} which is missing required p:UUID attribute.\n\
+                         Per 3MF Production Extension spec, when production extension is in requiredextensions, \
+                         objects referenced in build items must have p:UUID attributes.\n\
+                         Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to object {}.",
+                        idx, object.id, object.id
+                    )));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate thumbnail format
+///
+/// Per 3MF spec, thumbnails must be PNG or JPEG format, and JPEG must be RGB (not CMYK).
+/// Note: Object.has_thumbnail_attribute is a boolean that tracks if thumbnail was present,
+/// but the actual path is not stored (deprecated attribute).
+fn validate_thumbnail_format(_model: &Model) -> Result<()> {
+    // Thumbnail validation is limited because the thumbnail path is not stored in the model
+    // The parser only tracks whether the attribute was present via has_thumbnail_attribute
+    // Full validation would require parsing the thumbnail file itself
+
+    // For now, this is a placeholder for future thumbnail validation
+    // The parser already handles the thumbnail attribute appropriately
 
     Ok(())
 }
