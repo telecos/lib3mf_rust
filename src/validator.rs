@@ -3099,15 +3099,46 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 
 /// Validate triangle property attributes
 ///
-/// Per 3MF spec:
-/// - Triangles cannot use both pid (property group) and p1/p2/p3 (per-vertex properties) at the same time
-fn validate_triangle_properties(_model: &Model) -> Result<()> {
-    // Triangles can have both pid (property group) and p1/p2/p3 (per-vertex properties)
-    // as they serve different purposes (pid is default, p1/p2/p3 override per vertex)
-    // Per 3MF Material Extension spec, this is valid usage
+/// Per 3MF Materials Extension spec:
+/// - When using per-vertex properties (p1/p2/p3), ALL THREE must be specified
+/// - You cannot specify only some of p1/p2/p3 (e.g., just p1, or p1+p2 without p3)
+/// - This ensures consistent material property application across all triangle vertices
+///
+/// Test cases: N_XPM_0601_01, N_XPM_0604_03, etc.
+fn validate_triangle_properties(model: &Model) -> Result<()> {
+    // Check all mesh objects
+    for object in &model.resources.objects {
+        if object.object_type != ObjectType::Model {
+            continue;
+        }
 
-    // Currently no specific triangle property validations needed
-    // The parser already validates property references
+        if let Some(ref mesh) = object.mesh {
+            for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
+                // Count how many of p1/p2/p3 are specified
+                let p1_set = triangle.p1.is_some();
+                let p2_set = triangle.p2.is_some();
+                let p3_set = triangle.p3.is_some();
+                let count = [p1_set, p2_set, p3_set].iter().filter(|&&x| x).count();
+
+                // If any are set, all must be set (count must be 0 or 3)
+                if count > 0 && count < 3 {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}, triangle {}: Incomplete per-vertex property specification.\n\
+                         Per 3MF Materials Extension spec, when using per-vertex properties (p1/p2/p3), \
+                         ALL THREE attributes must be specified. Found: {} ({}{}{}).\n\
+                         Either specify all three (p1, p2, p3) or use pid/pindex for uniform properties.",
+                        object.id,
+                        tri_idx,
+                        count,
+                        if p1_set { " p1" } else { "" },
+                        if p2_set { " p2" } else { "" },
+                        if p3_set { " p3" } else { "" }
+                    )));
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
