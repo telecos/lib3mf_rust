@@ -141,12 +141,15 @@ pub(crate) fn get_local_name(name_str: &str) -> &str {
 /// # Returns
 /// The first attribute value found with the matching local name, or None
 fn get_attr_by_local_name(attrs: &HashMap<String, String>, local_name: &str) -> Option<String> {
-    for (key, value) in attrs {
-        if get_local_name(key) == local_name {
-            return Some(value.clone());
-        }
-    }
-    None
+    attrs
+        .iter()
+        .find_map(|(key, value)| {
+            if get_local_name(key) == local_name {
+                Some(value.clone())
+            } else {
+                None
+            }
+        })
 }
 
 /// Parse the 3D model XML content
@@ -2224,8 +2227,8 @@ fn parse_component<R: std::io::BufRead>(
     let p_path = get_attr_by_local_name(&attrs, "path");
 
     // For backward compatibility, also set component.path directly
-    if let Some(ref path_str) = p_path {
-        component.path = Some(path_str.clone());
+    if p_path.is_some() {
+        component.path = p_path.clone();
     }
 
     if p_uuid.is_some() || p_path.is_some() {
