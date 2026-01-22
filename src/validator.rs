@@ -2247,16 +2247,54 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                 }
                 
-                // Validate ball vertex indices (from balls sub-extension)
-                // Ball vindex must reference a valid vertex in the mesh
-                for ball_vindex in &beamset.ball_vertex_indices {
-                    if *ball_vindex >= vertex_count {
+                // Validate balls (from balls sub-extension)
+                for (ball_idx, ball) in beamset.balls.iter().enumerate() {
+                    // Validate ball vertex index
+                    if ball.vindex >= vertex_count {
                         return Err(Error::InvalidModel(format!(
-                            "Object {}: Ball references invalid vertex index {} \
+                            "Object {}: Ball {} references invalid vertex index {} \
                              (mesh has {} vertices). Ball vertex indices must be less than \
                              the number of vertices in the mesh.",
-                            object.id, ball_vindex, vertex_count
+                            object.id, ball_idx, ball.vindex, vertex_count
                         )));
+                    }
+                    
+                    // Validate ball material references
+                    if let Some(ball_pid) = ball.property_id {
+                        if !valid_resource_ids.contains(&ball_pid) {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Ball {} references non-existent property group ID {}. \
+                                 Property group IDs must reference existing color groups, base material groups, \
+                                 texture groups, composite materials, or multi-property groups.",
+                                object.id, ball_idx, ball_pid
+                            )));
+                        }
+                        
+                        // Validate ball property index if present
+                        if let Some(ball_p) = ball.property_index {
+                            // Check if it's a color group
+                            if let Some(colorgroup) = model.resources.color_groups.iter().find(|cg| cg.id as u32 == ball_pid) {
+                                if ball_p as usize >= colorgroup.colors.len() {
+                                    let max_index = colorgroup.colors.len().saturating_sub(1);
+                                    return Err(Error::InvalidModel(format!(
+                                        "Object {}: Ball {} property index {} is out of bounds.\n\
+                                         Color group {} has {} colors (valid indices: 0-{}).",
+                                        object.id, ball_idx, ball_p, ball_pid, colorgroup.colors.len(), max_index
+                                    )));
+                                }
+                            }
+                            // Check if it's a base material group
+                            else if let Some(basematerialgroup) = model.resources.base_material_groups.iter().find(|bg| bg.id as u32 == ball_pid) {
+                                if ball_p as usize >= basematerialgroup.materials.len() {
+                                    let max_index = basematerialgroup.materials.len().saturating_sub(1);
+                                    return Err(Error::InvalidModel(format!(
+                                        "Object {}: Ball {} property index {} is out of bounds.\n\
+                                         Base material group {} has {} materials (valid indices: 0-{}).",
+                                        object.id, ball_idx, ball_p, ball_pid, basematerialgroup.materials.len(), max_index
+                                    )));
+                                }
+                            }
+                        }
                     }
                 }
                 

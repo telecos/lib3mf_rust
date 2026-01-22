@@ -686,6 +686,33 @@ impl Beam {
     }
 }
 
+/// A ball element from the Beam Lattice Balls sub-extension
+///
+/// Balls are spheres placed at beam vertices
+#[derive(Debug, Clone)]
+pub struct Ball {
+    /// Vertex index this ball is centered at
+    pub vindex: usize,
+    /// Optional radius for this ball
+    pub radius: Option<f64>,
+    /// Optional property index for this ball
+    pub property_index: Option<u32>,
+    /// Optional property group ID for this ball
+    pub property_id: Option<u32>,
+}
+
+impl Ball {
+    /// Create a new ball at the given vertex index
+    pub fn new(vindex: usize) -> Self {
+        Self {
+            vindex,
+            radius: None,
+            property_index: None,
+            property_id: None,
+        }
+    }
+}
+
 /// A beam lattice structure containing beams and lattice properties
 ///
 /// Part of the Beam Lattice Extension specification.
@@ -716,8 +743,8 @@ pub struct BeamSet {
     pub property_index: Option<u32>,
     /// Beam set references (for metadata grouping) - indices into beams vec
     pub beam_set_refs: Vec<usize>,
-    /// Ball vertex indices (for validation) - from balls sub-extension
-    pub ball_vertex_indices: Vec<usize>,
+    /// Balls (for validation) - from balls sub-extension
+    pub balls: Vec<Ball>,
 }
 
 impl BeamSet {
@@ -736,7 +763,7 @@ impl BeamSet {
             property_id: None,
             property_index: None,
             beam_set_refs: Vec::new(),
-            ball_vertex_indices: Vec::new(),
+            balls: Vec::new(),
         }
     }
 
@@ -755,7 +782,7 @@ impl BeamSet {
             property_id: None,
             property_index: None,
             beam_set_refs: Vec::new(),
-            ball_vertex_indices: Vec::new(),
+            balls: Vec::new(),
         }
     }
 }

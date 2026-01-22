@@ -988,14 +988,34 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ball" if in_beamset => {
                         // ball element from balls sub-extension
-                        // References a vertex index
+                        // References a vertex index and may have material properties
                         let attrs = parse_attributes(&reader, e)?;
-                        if let Some(vindex_str) = attrs.get("vindex") {
-                            let vindex = vindex_str.parse::<usize>()?;
-                            // Store the ball vertex index for validation
-                            if let Some(ref mut beamset) = current_beamset {
-                                beamset.ball_vertex_indices.push(vindex);
-                            }
+                        
+                        // Parse required vindex attribute
+                        let vindex = attrs.get("vindex")
+                            .ok_or_else(|| Error::InvalidXml("Ball element missing required vindex attribute".to_string()))?
+                            .parse::<usize>()?;
+                        
+                        let mut ball = Ball::new(vindex);
+                        
+                        // Parse optional radius
+                        if let Some(r_str) = attrs.get("r") {
+                            ball.radius = Some(r_str.parse::<f64>()?);
+                        }
+                        
+                        // Parse optional pid (property group ID)
+                        if let Some(pid_str) = attrs.get("pid") {
+                            ball.property_id = Some(pid_str.parse::<u32>()?);
+                        }
+                        
+                        // Parse optional p (property index)
+                        if let Some(p_str) = attrs.get("p") {
+                            ball.property_index = Some(p_str.parse::<u32>()?);
+                        }
+                        
+                        // Add ball to beamset
+                        if let Some(ref mut beamset) = current_beamset {
+                            beamset.balls.push(ball);
                         }
                     }
                     "normvectorgroup" if in_resources => {
