@@ -54,6 +54,8 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_boolean_operations(model)?;
     validate_component_references(model)?;
     validate_production_extension_with_config(model, config)?;
+    validate_slices(model)?;
+    validate_slice_extension(model)?;
 
     // Custom extension validation
     for ext_info in config.custom_extensions().values() {
@@ -1149,11 +1151,22 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
             if let Some(ref prod_info) = component.production {
                 has_production_attrs = true;
 
-                // Per Production Extension spec:
+                // Per 3MF Production Extension spec:
                 // - p:UUID can be used on components to uniquely identify them
                 // - p:path is only required when referencing external objects (not in current file)
                 // - A component with p:UUID but no p:path references a local object
-                // Therefore, we do NOT require p:path when p:UUID is present.
+                // - When p:path is used (external reference), p:UUID is REQUIRED to identify the object
+
+                // Validate that p:UUID is present when p:path is used
+                if prod_info.path.is_some() && prod_info.uuid.is_none() {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}, Component {}: Component has p:path but missing required p:UUID.\n\
+                         Per 3MF Production Extension spec, components with external references (p:path) \
+                         must have p:UUID to identify the referenced object.\n\
+                         Add p:UUID attribute to the component element.",
+                        object.id, idx
+                    )));
+                }
 
                 // Validate production path format if present
                 // Note: component.path is set from prod_info.path during parsing
@@ -1187,6 +1200,283 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
             "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
                 .to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+/// Validate slice stacks and their slices
+///
+/// Per 3MF Slice Extension spec, validates that:
+/// - Slices must contain at least one polygon with vertices (non-empty slices)
+/// - Polygon vertex indices (startv and v2) must reference valid vertices in the slice
+fn validate_slices(model: &Model) -> Result<()> {
+    // Validate all slice stacks in resources
+    for slice_stack in &model.resources.slice_stacks {
+        // Validate inline slices within the slice stack
+        for (slice_idx, slice) in slice_stack.slices.iter().enumerate() {
+            validate_slice(slice_stack.id, slice_idx, slice)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate slice extension requirements
+///
+/// Per 3MF Slice Extension spec v1.0.2:
+/// - SliceRef slicepath must point to /2D/ folder (not /3D/ or other directories)
+/// - When an object references a slicestack, transforms must be planar (no Z-axis rotation/shear)
+/// - SliceStack must contain either slices OR slicerefs, not both
+fn validate_slice_extension(model: &Model) -> Result<()> {
+    // Check if model uses slice extension
+    if model.resources.slice_stacks.is_empty() {
+        return Ok(());
+    }
+
+    // Validate slicerefs in all slicestacks
+    for stack in &model.resources.slice_stacks {
+        // Rule: SliceStack must contain either slices OR slicerefs, not both
+        if !stack.slices.is_empty() && !stack.slice_refs.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "SliceStack {}: Contains both <slice> and <sliceref> elements.\n\
+                 Per 3MF Slice Extension spec, a slicestack MUST contain either \
+                 <slice> elements or <sliceref> elements, but MUST NOT contain both element types concurrently.",
+                stack.id
+            )));
+        }
+
+        // Validate each sliceref
+        for sliceref in &stack.slice_refs {
+            // Rule: SliceRef slicepath must be in /2D/ folder
+            // Per spec: "For package readability and organization, slice models SHOULD be stored
+            // in the 2D folder UNLESS they are part of the root model part."
+            // We enforce this as a MUST for external slice files to catch common packaging errors.
+            if !sliceref.slicepath.starts_with("/2D/") {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: SliceRef references invalid path '{}'.\n\
+                     Per 3MF Slice Extension spec, external slice models must be stored in the /2D/ folder. \
+                     Slicepath must start with '/2D/'.",
+                    stack.id, sliceref.slicepath
+                )));
+            }
+
+            // Note: We cannot validate that the referenced slicestack doesn't contain slicerefs
+            // because the referenced slicestack is in an external file that was loaded separately.
+            // The parser already handles loading external slice files, so we trust that validation
+            // is performed during parsing of those files.
+        }
+    }
+
+    // Find all objects that reference slicestacks
+    let mut objects_with_slices: Vec<&crate::model::Object> = Vec::new();
+    for object in &model.resources.objects {
+        if object.slicestackid.is_some() {
+            objects_with_slices.push(object);
+        }
+    }
+
+    // If no objects reference slicestacks, we're done
+    if objects_with_slices.is_empty() {
+        return Ok(());
+    }
+
+    // Validate transforms for build items that reference objects with slicestacks
+    for item in &model.build.items {
+        // Check if this build item references an object with a slicestack
+        let object_has_slicestack = objects_with_slices
+            .iter()
+            .any(|obj| obj.id == item.objectid);
+
+        if !object_has_slicestack {
+            continue;
+        }
+
+        // If object has slicestack, validate that transform is planar
+        if let Some(ref transform) = item.transform {
+            validate_planar_transform(
+                transform,
+                &format!("Build Item referencing object {}", item.objectid),
+            )?;
+        }
+    }
+
+    // Also validate transforms in components that reference objects with slicestacks
+    for object in &model.resources.objects {
+        for component in &object.components {
+            // Check if this component references an object with a slicestack
+            let component_has_slicestack = objects_with_slices
+                .iter()
+                .any(|obj| obj.id == component.objectid);
+
+            if !component_has_slicestack {
+                continue;
+            }
+
+            // If component references object with slicestack, validate transform
+            if let Some(ref transform) = component.transform {
+                validate_planar_transform(
+                    transform,
+                    &format!(
+                        "Object {}, Component referencing object {}",
+                        object.id, component.objectid
+                    ),
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate a single slice
+fn validate_slice(
+    slice_stack_id: usize,
+    slice_idx: usize,
+    slice: &crate::model::Slice,
+) -> Result<()> {
+    // Per 3MF Slice Extension spec:
+    // A slice MUST contain at least one polygon, and each polygon must have vertices
+    // Empty slices (no polygons or no vertices) are invalid
+
+    if slice.polygons.is_empty() {
+        return Err(Error::InvalidModel(format!(
+            "SliceStack {}: Slice {} (ztop={}) is empty (no polygons). \
+             Per 3MF Slice Extension spec, a slice must contain at least one polygon. \
+             Remove the empty slice or add polygon data.",
+            slice_stack_id, slice_idx, slice.ztop
+        )));
+    }
+
+    // If there are polygons, there must be vertices
+    if slice.vertices.is_empty() {
+        return Err(Error::InvalidModel(format!(
+            "SliceStack {}: Slice {} (ztop={}) has {} polygon(s) but no vertices. \
+             Per 3MF Slice Extension spec, slices with polygons must have vertex data. \
+             Add vertices to the slice.",
+            slice_stack_id,
+            slice_idx,
+            slice.ztop,
+            slice.polygons.len()
+        )));
+    }
+
+    let num_vertices = slice.vertices.len();
+
+    // Validate polygon vertex indices
+    for (poly_idx, polygon) in slice.polygons.iter().enumerate() {
+        // Validate startv index
+        if polygon.startv >= num_vertices {
+            return Err(Error::InvalidModel(format!(
+                "SliceStack {}: Slice {} (ztop={}), Polygon {} has invalid startv={} \
+                 (slice has {} vertices, valid indices: 0-{}). \
+                 Vertex indices must reference valid vertices in the slice.",
+                slice_stack_id,
+                slice_idx,
+                slice.ztop,
+                poly_idx,
+                polygon.startv,
+                num_vertices,
+                num_vertices - 1
+            )));
+        }
+
+        // Validate segment v2 indices
+        for (seg_idx, segment) in polygon.segments.iter().enumerate() {
+            if segment.v2 >= num_vertices {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: Slice {} (ztop={}), Polygon {}, Segment {} has invalid v2={} \
+                     (slice has {} vertices, valid indices: 0-{}). \
+                     Vertex indices must reference valid vertices in the slice.",
+                    slice_stack_id,
+                    slice_idx,
+                    slice.ztop,
+                    poly_idx,
+                    seg_idx,
+                    segment.v2,
+                    num_vertices,
+                    num_vertices - 1
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that a transform is planar (no Z-axis rotation or shear)
+///
+/// Per 3MF Slice Extension spec:
+/// When an object references slice model data, the 3D transform matrices in <build><item>
+/// and <component> elements are limited to those that do not impact the slicing orientation
+/// (planar transformations). Therefore, any transform applied (directly or indirectly) to an
+/// object that references a <slicestack> MUST have m02, m12, m20, and m21 equal to zero and
+/// m22 equal to one.
+///
+/// Transform matrix layout (row-major, 4x3):
+/// ```
+/// [m00, m01, m02, m03,
+///  m10, m11, m12, m13,
+///  m20, m21, m22, m23]
+/// ```
+///
+/// For planar transforms:
+/// - m02 (index 2), m12 (index 6), m20 (index 8), m21 (index 9) must be exactly 0.0
+/// - m22 (index 10) must be exactly 1.0
+fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()> {
+    // Check m02 (index 2)
+    if transform[2] != 0.0 {
+        return Err(Error::InvalidModel(format!(
+            "{}: Transform is not planar. Matrix element m02 = {} (must be 0.0).\n\
+             Per 3MF Slice Extension spec, when an object references a slicestack, \
+             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
+             must be 0.0 and m22 must be 1.0.",
+            context, transform[2]
+        )));
+    }
+
+    // Check m12 (index 6)
+    if transform[6] != 0.0 {
+        return Err(Error::InvalidModel(format!(
+            "{}: Transform is not planar. Matrix element m12 = {} (must be 0.0).\n\
+             Per 3MF Slice Extension spec, when an object references a slicestack, \
+             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
+             must be 0.0 and m22 must be 1.0.",
+            context, transform[6]
+        )));
+    }
+
+    // Check m20 (index 8)
+    if transform[8] != 0.0 {
+        return Err(Error::InvalidModel(format!(
+            "{}: Transform is not planar. Matrix element m20 = {} (must be 0.0).\n\
+             Per 3MF Slice Extension spec, when an object references a slicestack, \
+             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
+             must be 0.0 and m22 must be 1.0.",
+            context, transform[8]
+        )));
+    }
+
+    // Check m21 (index 9)
+    if transform[9] != 0.0 {
+        return Err(Error::InvalidModel(format!(
+            "{}: Transform is not planar. Matrix element m21 = {} (must be 0.0).\n\
+             Per 3MF Slice Extension spec, when an object references a slicestack, \
+             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
+             must be 0.0 and m22 must be 1.0.",
+            context, transform[9]
+        )));
+    }
+
+    // Check m22 (index 10)
+    if transform[10] != 1.0 {
+        return Err(Error::InvalidModel(format!(
+            "{}: Transform is not planar. Matrix element m22 = {} (must be 1.0).\n\
+             Per 3MF Slice Extension spec, when an object references a slicestack, \
+             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
+             must be 0.0 and m22 must be 1.0.",
+            context, transform[10]
+        )));
     }
 
     Ok(())
