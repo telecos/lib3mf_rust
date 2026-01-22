@@ -1884,13 +1884,17 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                 }
                 
-                // Validate ball mode (currently unsupported - detect and reject)
-                if beamset.ball_mode.is_some() {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: BeamLattice uses ballmode attribute which is from the \
-                         Ball Lattice sub-extension. This extension is not currently supported.",
-                        object.id
-                    )));
+                // Validate ball mode - only check if value is valid
+                // Valid values are: "none", "all", "mixed"
+                // Per Beam Lattice Balls sub-extension spec
+                if let Some(ref ball_mode) = beamset.ball_mode {
+                    if ball_mode != "none" && ball_mode != "all" && ball_mode != "mixed" {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice has invalid ballmode '{}'. \
+                             Valid values are: 'none', 'all', 'mixed'.",
+                            object.id, ball_mode
+                        )));
+                    }
                 }
                 
                 // Validate beamset material reference and property index
