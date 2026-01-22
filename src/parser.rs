@@ -2887,7 +2887,7 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     file_path: &str,
     object_id: usize,
-    expected_uuid: &Option<String>,
+    _expected_uuid: &Option<String>,
     reference_context: &str,
     cache: &mut HashMap<String, Vec<(usize, Option<String>)>>,
 ) -> Result<()> {
@@ -2980,6 +2980,11 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     }
 
     // If we have an expected UUID, validate it matches
+    // NOTE: Per official 3MF test suite (P_XXX_2203_04_Prod_Ext.3mf, P_OPX_3002_03_production.3mf),
+    // UUID mismatches between component p:UUID and referenced object p:UUID are allowed.
+    // The component's p:UUID is for identifying the component instance, not for matching
+    // the referenced object's UUID. UUID validation is therefore commented out.
+    /*
     if let Some(ref expected) = expected_uuid {
         if let Some((_, Some(ref actual_uuid))) = found_obj {
             if expected != actual_uuid {
@@ -2992,6 +2997,7 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
             }
         }
     }
+    */
 
     Ok(())
 }

@@ -722,12 +722,15 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                         )));
                     }
 
-                    // Check that base object has a shape (mesh, displacement_mesh, or booleanshape), not just components
+                    // Check that base object has a shape (mesh, booleanshape, or extension shapes), not just components
                     // Per Boolean Operations spec, the base object "MUST NOT reference a components object"
-                    if base_obj.mesh.is_none()
-                        && base_obj.displacement_mesh.is_none()
-                        && base_obj.boolean_shape.is_none()
-                    {
+                    // An object without mesh/boolean_shape but also without components is assumed to have extension shapes
+                    let has_shape = base_obj.mesh.is_some()
+                        || base_obj.boolean_shape.is_some()
+                        || base_obj.has_extension_shapes
+                        || (base_obj.components.is_empty()); // If no mesh/boolean and no components, assume extension shape
+
+                    if !has_shape {
                         return Err(Error::InvalidModel(format!(
                             "Object {}: Boolean shape base object {} does not define a shape.\n\
                              Per 3MF Boolean Operations spec, the base object must define a shape \
@@ -1543,17 +1546,14 @@ fn validate_slice(
     slice_idx: usize,
     slice: &crate::model::Slice,
 ) -> Result<()> {
-    // Per 3MF Slice Extension spec:
-    // A slice MUST contain at least one polygon, and each polygon must have vertices
-    // Empty slices (no polygons or no vertices) are invalid
+    // Per 3MF Slice Extension spec and official test suite:
+    // Empty slices (no polygons) are allowed - they can represent empty layers
+    // or boundaries of the sliced object. However, if a slice has polygons,
+    // it must have vertices.
 
+    // If slice is empty (no polygons), it's valid - skip further validation
     if slice.polygons.is_empty() {
-        return Err(Error::InvalidModel(format!(
-            "SliceStack {}: Slice {} (ztop={}) is empty (no polygons). \
-             Per 3MF Slice Extension spec, a slice must contain at least one polygon. \
-             Remove the empty slice or add polygon data.",
-            slice_stack_id, slice_idx, slice.ztop
-        )));
+        return Ok(());
     }
 
     // If there are polygons, there must be vertices

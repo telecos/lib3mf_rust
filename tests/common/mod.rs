@@ -44,8 +44,11 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
 
         // Suite 7: Beam Lattice
         // Also register the balls sub-extension namespace
+        // Note: Most test files use Production extension attributes (p:UUID) even though
+        // they don't declare it in requiredextensions, so we support it in the config
         "suite7_beam" => ParserConfig::new()
             .with_extension(Extension::BeamLattice)
+            .with_extension(Extension::Production)
             .with_custom_extension(
                 "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07",
                 "BeamLattice Balls",
