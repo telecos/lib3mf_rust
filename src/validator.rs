@@ -116,34 +116,35 @@ fn validate_required_structure(model: &Model) -> Result<()> {
 ///
 /// Per 3MF spec, when a model uses features from an extension, that extension
 /// must be listed in the requiredextensions attribute (unless the extension is optional).
-/// 
+///
 /// Specifically:
 /// - Boolean Operations extension must be declared when using booleanshape elements
 /// - Objects with pid/pindex must NOT also have booleanshape (per Boolean Ops spec)
 fn validate_required_extensions(model: &Model) -> Result<()> {
     let mut uses_boolean_ops = false;
     let mut objects_with_boolean_and_material_props = Vec::new();
-    
+
     // Check if model uses boolean operations
     for object in &model.resources.objects {
         if object.boolean_shape.is_some() {
             uses_boolean_ops = true;
-            
-            // Per Boolean Operations spec: "producers MUST NOT assign pid or pindex 
+
+            // Per Boolean Operations spec: "producers MUST NOT assign pid or pindex
             // attributes to objects that contain booleanshape"
             if object.pid.is_some() || object.pindex.is_some() {
                 objects_with_boolean_and_material_props.push(object.id);
             }
         }
     }
-    
+
     // Validate Boolean Operations extension requirements
     if uses_boolean_ops {
         // Check if Boolean Operations extension is in required extensions
-        let has_bo_extension = model.required_extensions.iter().any(|ext| {
-            *ext == Extension::BooleanOperations
-        });
-        
+        let has_bo_extension = model
+            .required_extensions
+            .iter()
+            .any(|ext| *ext == Extension::BooleanOperations);
+
         if !has_bo_extension {
             return Err(Error::InvalidModel(
                 "Model uses boolean operations (<booleanshape>) but does not declare \
@@ -155,7 +156,7 @@ fn validate_required_extensions(model: &Model) -> Result<()> {
             ));
         }
     }
-    
+
     // Check for objects with both booleanshape and material properties
     if !objects_with_boolean_and_material_props.is_empty() {
         return Err(Error::InvalidModel(format!(
@@ -166,7 +167,7 @@ fn validate_required_extensions(model: &Model) -> Result<()> {
             objects_with_boolean_and_material_props
         )));
     }
-    
+
     Ok(())
 }
 
@@ -618,7 +619,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
 fn validate_boolean_operations(model: &Model) -> Result<()> {
     // Build a set of valid object IDs for quick lookup
     let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
-    
+
     // Build a map of object ID to its index in the objects vector (for forward reference check)
     let object_indices: HashMap<usize, usize> = model
         .resources
@@ -627,7 +628,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
         .enumerate()
         .map(|(idx, obj)| (obj.id, idx))
         .collect();
-    
+
     // Build a map of object ID to the object itself for type checking
     let object_map: HashMap<usize, &crate::model::Object> = model
         .resources
@@ -649,7 +650,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                     object.id, object.object_type
                 )));
             }
-            
+
             // Per 3MF Boolean Operations Extension spec, an object can have
             // EITHER a mesh, components, OR booleanshape, but not multiple
             // Check that object with booleanshape doesn't also have components or mesh
@@ -662,7 +663,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                     object.id
                 )));
             }
-            
+
             if object.mesh.is_some() {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Contains both <booleanshape> and <mesh>.\n\
@@ -672,7 +673,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                     object.id
                 )));
             }
-            
+
             // Check that booleanshape has at least one operand
             if boolean_shape.operands.is_empty() {
                 return Err(Error::InvalidModel(format!(
@@ -683,7 +684,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                     object.id
                 )));
             }
-            
+
             // Validate the base object ID exists (skip if it has a path to an external file)
             if boolean_shape.path.is_none() {
                 if !valid_object_ids.contains(&boolean_shape.objectid) {
@@ -695,7 +696,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                         object.id, boolean_shape.objectid, available_ids
                     )));
                 }
-                
+
                 // Check forward reference: base object must be defined before this object
                 if let Some(&base_idx) = object_indices.get(&boolean_shape.objectid) {
                     if base_idx >= current_idx {
@@ -707,7 +708,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                         )));
                     }
                 }
-                
+
                 // Check that base object is of type "model"
                 if let Some(base_obj) = object_map.get(&boolean_shape.objectid) {
                     if base_obj.object_type != crate::model::ObjectType::Model {
@@ -718,7 +719,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                             object.id, boolean_shape.objectid, base_obj.object_type
                         )));
                     }
-                    
+
                     // Check that base object has a shape (mesh or booleanshape), not just components
                     // Per Boolean Operations spec, the base object "MUST NOT reference a components object"
                     if base_obj.mesh.is_none() && base_obj.boolean_shape.is_none() {
@@ -744,7 +745,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                             object.id, operand.objectid, available_ids
                         )));
                     }
-                    
+
                     // Check forward reference: operand object must be defined before this object
                     if let Some(&operand_idx) = object_indices.get(&operand.objectid) {
                         if operand_idx >= current_idx {
@@ -756,7 +757,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                             )));
                         }
                     }
-                    
+
                     // Check that operand object is of type "model" and is a mesh
                     if let Some(operand_obj) = object_map.get(&operand.objectid) {
                         if operand_obj.object_type != crate::model::ObjectType::Model {
@@ -767,7 +768,7 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                                 object.id, operand.objectid, operand_obj.object_type
                             )));
                         }
-                        
+
                         // Per spec, operand must be a triangle mesh object only
                         // It MUST NOT contain shapes defined in any other extension
                         if operand_obj.mesh.is_none() {
@@ -777,11 +778,12 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                                 object.id, operand.objectid
                             )));
                         }
-                        
+
                         // Check that operand doesn't have booleanshape or components
                         // Actually the spec says "MUST be only a triangle mesh object" which means
                         // it should have ONLY a mesh, not other shape types
-                        if operand_obj.boolean_shape.is_some() || !operand_obj.components.is_empty() {
+                        if operand_obj.boolean_shape.is_some() || !operand_obj.components.is_empty()
+                        {
                             return Err(Error::InvalidModel(format!(
                                 "Object {}: Boolean operand object {} must be a simple triangle mesh.\n\
                                  Per 3MF Boolean Operations spec, operands must be mesh objects only, \
