@@ -857,6 +857,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "beamlattice" if current_mesh.is_some() => {
+                        // Check if we already have a beamset - nested or multiple beamlattice is invalid
+                        if in_beamset {
+                            return Err(Error::InvalidXml(
+                                "Multiple or nested beamlattice elements are not allowed. \
+                                 Each mesh can have only one beamlattice element.".to_string()
+                            ));
+                        }
+                        
                         in_beamset = true;
 
                         // Mark that this object has extension shape elements
@@ -953,6 +961,25 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if let Some(ref mut beamset) = current_beamset {
                             let beam = parse_beam(&reader, e)?;
                             beamset.beams.push(beam);
+                        }
+                    }
+                    "beamsets" if in_beamset => {
+                        // beamsets container element for grouping beams into sets
+                        // No attributes to parse, just contains beamset children
+                    }
+                    "beamset" if in_beamset => {
+                        // beamset element within beamsets - contains ref elements
+                        // No attributes to parse, just contains ref children
+                    }
+                    "ref" if in_beamset => {
+                        // ref element references a beam by index
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(index_str) = attrs.get("index") {
+                            let index = index_str.parse::<usize>()?;
+                            // Store the ref index for validation
+                            if let Some(ref mut beamset) = current_beamset {
+                                beamset.beam_set_refs.push(index);
+                            }
                         }
                     }
                     "normvectorgroup" if in_resources => {

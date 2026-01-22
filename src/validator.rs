@@ -2224,6 +2224,18 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                 }
                 
+                // Validate beamset references (if any)
+                // Beamset refs are indices into the beams array and must be within bounds
+                for ref_index in &beamset.beam_set_refs {
+                    if *ref_index >= beamset.beams.len() {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamSet reference index {} is out of bounds. \
+                             The beamlattice has {} beams (valid indices: 0-{}).",
+                            object.id, ref_index, beamset.beams.len(), beamset.beams.len().saturating_sub(1)
+                        )));
+                    }
+                }
+                
                 // Validate clipping mesh reference
                 if let Some(clip_id) = beamset.clipping_mesh_id {
                     if !valid_resource_ids.contains(&clip_id) {
