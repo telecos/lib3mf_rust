@@ -1403,28 +1403,36 @@ fn load_keystore<R: Read + std::io::Seek>(
                         }
                     }
                     "consumer" => {
-                        // EPX-2604: Track consumer IDs for duplicate detection
+                        // EPX-2602/2604: Track consumer IDs and validate required attributes
+                        let mut has_consumer_id = false;
+                        let mut consumer_id_value = String::new();
+
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!("Invalid attribute in consumer: {}", e))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
                             if attr_name == "consumerid" {
-                                let consumer_id = std::str::from_utf8(&attr.value)
+                                has_consumer_id = true;
+                                consumer_id_value = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
-                                if let Some(ref mut sc) = model.secure_content {
-                                    // EPX-2604: Check for duplicate consumer IDs
-                                    if sc.consumer_ids.contains(&consumer_id) {
-                                        return Err(Error::InvalidSecureContent(format!(
-                                            "Duplicate consumer ID '{}' in keystore (EPX-2604)",
-                                            consumer_id
-                                        )));
-                                    }
-                                    sc.consumer_ids.push(consumer_id);
-                                    sc.consumer_count += 1;
+                            }
+                        }
+
+                        if has_consumer_id {
+                            if let Some(ref mut sc) = model.secure_content {
+                                // EPX-2604: Check for duplicate consumer IDs
+                                if sc.consumer_ids.contains(&consumer_id_value) {
+                                    return Err(Error::InvalidSecureContent(format!(
+                                        "Duplicate consumer ID '{}' in keystore (EPX-2604)",
+                                        consumer_id_value
+                                    )));
                                 }
+                                sc.consumer_ids.push(consumer_id_value);
+                                sc.consumer_count += 1;
                             }
                         }
                     }
@@ -1432,7 +1440,10 @@ fn load_keystore<R: Read + std::io::Seek>(
                         // EPX-2601: Track and validate consumer index
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!("Invalid attribute in accessright: {}", e))
+                                Error::InvalidXml(format!(
+                                    "Invalid attribute in accessright: {}",
+                                    e
+                                ))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
@@ -1450,35 +1461,80 @@ fn load_keystore<R: Read + std::io::Seek>(
                         }
                     }
                     "kekparams" => {
-                        // EPX-2603: Validate wrapping algorithm
+                        // EPX-2603: Validate wrapping algorithm and related attributes
+                        let mut wrapping_algorithm = String::new();
+                        let mut mgf_algorithm = String::new();
+                        let mut digest_method = String::new();
+
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!("Invalid attribute in kekparams: {}", e))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            if attr_name == "wrappingalgorithm" {
-                                let algorithm = std::str::from_utf8(&attr.value)
-                                    .map_err(|e| Error::InvalidXml(e.to_string()))?
-                                    .to_string();
-                                
-                                // EPX-2603: Validate wrapping algorithm
-                                // Valid algorithms per 3MF spec (SecureContent extension):
-                                // - http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p (2001 version)
-                                // - http://www.w3.org/2009/xmlenc11#rsa-oaep (2009 version)
-                                let is_valid = algorithm == VALID_WRAPPING_ALGORITHM_2001
-                                    || algorithm == VALID_WRAPPING_ALGORITHM_2009;
-                                
-                                if !is_valid {
-                                    return Err(Error::InvalidSecureContent(format!(
-                                        "Invalid wrapping algorithm '{}'. Must be either 'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p' or 'http://www.w3.org/2009/xmlenc11#rsa-oaep' (EPX-2603)",
-                                        algorithm
-                                    )));
-                                }
-                                
-                                if let Some(ref mut sc) = model.secure_content {
-                                    sc.wrapping_algorithms.push(algorithm);
-                                }
+                            let attr_value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                .to_string();
+
+                            match attr_name {
+                                "wrappingalgorithm" => wrapping_algorithm = attr_value,
+                                "mgfalgorithm" => mgf_algorithm = attr_value,
+                                "digestmethod" => digest_method = attr_value,
+                                _ => {}
+                            }
+                        }
+
+                        // EPX-2603: Validate wrapping algorithm
+                        if !wrapping_algorithm.is_empty() {
+                            // Valid algorithms per 3MF spec (SecureContent extension):
+                            // - http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p (2001 version)
+                            // - http://www.w3.org/2009/xmlenc11#rsa-oaep (2009 version)
+                            let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
+                                || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
+
+                            if !is_valid {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid wrapping algorithm '{}'. Must be either '{}' or '{}' (EPX-2603)",
+                                    wrapping_algorithm, VALID_WRAPPING_ALGORITHM_2001, VALID_WRAPPING_ALGORITHM_2009
+                                )));
+                            }
+
+                            if let Some(ref mut sc) = model.secure_content {
+                                sc.wrapping_algorithms.push(wrapping_algorithm.clone());
+                            }
+                        }
+
+                        // EPX-2603: Validate mgfalgorithm if present
+                        if !mgf_algorithm.is_empty() {
+                            // Valid MGF algorithms: mgf1sha1, mgf1sha256, mgf1sha384, mgf1sha512
+                            let valid_mgf_algs = [
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha1",
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha256",
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha384",
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha512",
+                            ];
+                            if !valid_mgf_algs.contains(&mgf_algorithm.as_str()) {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
+                                    mgf_algorithm
+                                )));
+                            }
+                        }
+
+                        // EPX-2603: Validate digestmethod if present
+                        if !digest_method.is_empty() {
+                            // Valid digest methods: sha1, sha256, sha384, sha512
+                            let valid_digest_methods = [
+                                "http://www.w3.org/2000/09/xmldsig#sha1",
+                                "http://www.w3.org/2001/04/xmlenc#sha256",
+                                "http://www.w3.org/2001/04/xmlenc#sha384",
+                                "http://www.w3.org/2001/04/xmlenc#sha512",
+                            ];
+                            if !valid_digest_methods.contains(&digest_method.as_str()) {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
+                                    digest_method
+                                )));
                             }
                         }
                     }
@@ -1497,7 +1553,15 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 let path = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
-                                
+
+                                // EPX-2605: Validate path is not empty
+                                if path.trim().is_empty() {
+                                    return Err(Error::InvalidSecureContent(
+                                        "Resource data path attribute cannot be empty (EPX-2605)"
+                                            .to_string(),
+                                    ));
+                                }
+
                                 // EPX-2605: Validate encrypted file paths are not OPC relationship files
                                 // OPC relationship files (_rels/*.rels or *.rels) cannot be encrypted
                                 let path_lower = path.to_lowercase();
@@ -1507,7 +1571,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                                         path
                                     )));
                                 }
-                                
+
                                 // EPX-2607: Validate referenced file exists in package
                                 // Remove leading slash for package lookup
                                 let lookup_path = path.trim_start_matches('/');
@@ -1517,7 +1581,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                                         path
                                     )));
                                 }
-                                
+
                                 if let Some(ref mut sc) = model.secure_content {
                                     sc.encrypted_files.push(path);
                                 }
@@ -1544,10 +1608,10 @@ fn load_keystore<R: Read + std::io::Seek>(
         // EPX-2602: If we have accessrights but no consumers, that's an error
         if !consumer_indices.is_empty() && sc.consumer_count == 0 {
             return Err(Error::InvalidSecureContent(
-                "Keystore has accessright elements but no consumer elements (EPX-2602)".to_string()
+                "Keystore has accessright elements but no consumer elements (EPX-2602)".to_string(),
             ));
         }
-        
+
         // EPX-2601: Validate all consumer indices are valid (must be < consumer_count)
         for index in consumer_indices {
             if index >= sc.consumer_count {
