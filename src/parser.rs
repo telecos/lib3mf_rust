@@ -166,6 +166,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut in_colorgroup = false;
     let mut current_beamset: Option<BeamSet> = None;
     let mut in_beamset = false;
+    let mut in_ballsets = false;
     let mut current_slicestack: Option<SliceStack> = None;
     let mut in_slicestack = false;
     let mut current_slice: Option<Slice> = None;
@@ -861,10 +862,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if in_beamset {
                             return Err(Error::InvalidXml(
                                 "Multiple or nested beamlattice elements are not allowed. \
-                                 Each mesh can have only one beamlattice element.".to_string()
+                                 Each mesh can have only one beamlattice element."
+                                    .to_string(),
                             ));
                         }
-                        
+
                         in_beamset = true;
 
                         // Mark that this object has extension shape elements
@@ -924,13 +926,18 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         // Parse ballmode attribute (optional) - from balls extension
                         // This can be in default namespace or balls namespace (b2:ballmode)
-                        if let Some(ball_mode) = attrs.get("ballmode").or_else(|| attrs.get("b2:ballmode")) {
+                        if let Some(ball_mode) =
+                            attrs.get("ballmode").or_else(|| attrs.get("b2:ballmode"))
+                        {
                             beamset.ball_mode = Some(ball_mode.clone());
                         }
 
                         // Parse ballradius attribute (optional) - from balls extension
                         // This can be in default namespace or balls namespace (b2:ballradius)
-                        if let Some(ball_radius_str) = attrs.get("ballradius").or_else(|| attrs.get("b2:ballradius")) {
+                        if let Some(ball_radius_str) = attrs
+                            .get("ballradius")
+                            .or_else(|| attrs.get("b2:ballradius"))
+                        {
                             let ball_radius = ball_radius_str.parse::<f64>()?;
                             // Validate ball radius is finite and positive
                             if !ball_radius.is_finite() || ball_radius <= 0.0 {
@@ -972,13 +979,19 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // No attributes to parse, just contains ref children
                     }
                     "ref" if in_beamset => {
-                        // ref element references a beam by index
+                        // ref element can be in beamsets or ballsets
                         let attrs = parse_attributes(&reader, e)?;
                         if let Some(index_str) = attrs.get("index") {
                             let index = index_str.parse::<usize>()?;
                             // Store the ref index for validation
                             if let Some(ref mut beamset) = current_beamset {
-                                beamset.beam_set_refs.push(index);
+                                if in_ballsets {
+                                    // This is a ballref (reference to ball)
+                                    beamset.ball_set_refs.push(index);
+                                } else {
+                                    // This is a beamref (reference to beam)
+                                    beamset.beam_set_refs.push(index);
+                                }
                             }
                         }
                     }
@@ -990,33 +1003,47 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // ball element from balls sub-extension
                         // References a vertex index and may have material properties
                         let attrs = parse_attributes(&reader, e)?;
-                        
+
                         // Parse required vindex attribute
-                        let vindex = attrs.get("vindex")
-                            .ok_or_else(|| Error::InvalidXml("Ball element missing required vindex attribute".to_string()))?
+                        let vindex = attrs
+                            .get("vindex")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Ball element missing required vindex attribute".to_string(),
+                                )
+                            })?
                             .parse::<usize>()?;
-                        
+
                         let mut ball = Ball::new(vindex);
-                        
+
                         // Parse optional radius
                         if let Some(r_str) = attrs.get("r") {
                             ball.radius = Some(r_str.parse::<f64>()?);
                         }
-                        
+
                         // Parse optional pid (property group ID)
                         if let Some(pid_str) = attrs.get("pid") {
                             ball.property_id = Some(pid_str.parse::<u32>()?);
                         }
-                        
+
                         // Parse optional p (property index)
                         if let Some(p_str) = attrs.get("p") {
                             ball.property_index = Some(p_str.parse::<u32>()?);
                         }
-                        
+
                         // Add ball to beamset
                         if let Some(ref mut beamset) = current_beamset {
                             beamset.balls.push(ball);
                         }
+                    }
+                    "ballsets" if in_beamset => {
+                        // ballsets container element for grouping balls into sets
+                        // Contains ballset children with ref elements
+                        in_ballsets = true;
+                    }
+                    "ballset" if in_beamset => {
+                        // ballset element within ballsets - contains ref elements
+                        // No attributes to parse
                     }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
@@ -1452,6 +1479,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                         in_beamset = false;
+                        in_ballsets = false;
                     }
                     "slicestack" => {
                         if let Some(slicestack) = current_slicestack.take() {
@@ -1488,6 +1516,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "trianglesets" => {
                         in_trianglesets = false;
+                    }
+                    "ballsets" => {
+                        in_ballsets = false;
                     }
                     _ => {}
                 }
@@ -2402,7 +2433,7 @@ fn parse_beam<R: std::io::BufRead>(
             )));
         }
         beam.r2 = Some(r2_val);
-        
+
         // If r2 is specified, r1 must also be specified (per 3MF Beam Lattice spec)
         if beam.r1.is_none() {
             return Err(Error::InvalidXml(
@@ -2434,7 +2465,7 @@ fn parse_beam<R: std::io::BufRead>(
     // Parse p2 attribute (optional) - property index at v2
     if let Some(p2_str) = attrs.get("p2") {
         beam.p2 = Some(p2_str.parse::<u32>()?);
-        
+
         // If p2 is specified, p1 must also be specified (per 3MF spec convention)
         if beam.p1.is_none() {
             return Err(Error::InvalidXml(
