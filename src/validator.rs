@@ -1358,26 +1358,6 @@ fn detect_circular_components(
     Ok(None)
 }
 
-/// Helper function to validate thumbnail attribute conflicts with production extension
-fn validate_thumbnail_production_conflict(object: &crate::model::Object) -> Result<()> {
-    // Per 3MF Production Extension spec v1.2.0 Section 3.1:
-    // The thumbnail attribute is deprecated when using the production extension.
-    // Objects with both thumbnail attribute AND production UUID should be rejected.
-    if object.has_thumbnail_attribute {
-        if let Some(ref prod_info) = object.production {
-            if prod_info.uuid.is_some() || prod_info.path.is_some() {
-                return Err(Error::InvalidModel(format!(
-                    "Object {}: Cannot use deprecated 'thumbnail' attribute with Production extension attributes (p:UUID or p:path).\n\
-                     Per 3MF Production Extension v1.2.0, the thumbnail attribute is deprecated and must not be used with production attributes.\n\
-                     Remove either the thumbnail attribute or the production extension attributes.",
-                    object.id
-                )));
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Validate production extension requirements
 ///
 /// Checks that:
@@ -1440,7 +1420,10 @@ fn validate_production_extension(model: &Model) -> Result<()> {
 
     // Check all objects to validate production paths
     for object in &model.resources.objects {
-        validate_thumbnail_production_conflict(object)?;
+        // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
+        // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
+        // thumbnail attributes and production extension should still parse successfully.
+        // Therefore, we do not reject files with thumbnail attributes.
 
         // Validate production extension usage
         if let Some(ref prod_info) = object.production {
@@ -1551,7 +1534,10 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
 
     // Check all objects to validate production paths
     for object in &model.resources.objects {
-        validate_thumbnail_production_conflict(object)?;
+        // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
+        // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
+        // thumbnail attributes and production extension should still parse successfully.
+        // Therefore, we do not reject files with thumbnail attributes.
 
         // Validate production extension usage and track attributes
         if let Some(ref prod_info) = object.production {
