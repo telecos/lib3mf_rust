@@ -1154,7 +1154,7 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
                 // - p:path is only required when referencing external objects (not in current file)
                 // - A component with p:UUID but no p:path references a local object
                 // Therefore, we do NOT require p:path when p:UUID is present
-              
+
                 // Validate production path format if present
                 // Note: component.path is set from prod_info.path during parsing
                 if let Some(ref path) = prod_info.path {

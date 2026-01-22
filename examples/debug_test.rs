@@ -24,8 +24,10 @@ fn main() {
                     for obj in &model.resources.objects {
                         println!("  Object {}: {} components", obj.id, obj.components.len());
                         for (i, comp) in obj.components.iter().enumerate() {
-                            println!("    Component {}: objid={}, path={:?}, production={:?}", 
-                                i, comp.objectid, comp.path, comp.production);
+                            println!(
+                                "    Component {}: objid={}, path={:?}, production={:?}",
+                                i, comp.objectid, comp.path, comp.production
+                            );
                         }
                     }
                 }
