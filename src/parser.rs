@@ -166,6 +166,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut in_colorgroup = false;
     let mut current_beamset: Option<BeamSet> = None;
     let mut in_beamset = false;
+    let mut in_ballsets = false;
     let mut current_slicestack: Option<SliceStack> = None;
     let mut in_slicestack = false;
     let mut current_slice: Option<Slice> = None;
@@ -857,6 +858,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "beamlattice" if current_mesh.is_some() => {
+                        // Check if we already have a beamset - nested or multiple beamlattice is invalid
+                        if in_beamset {
+                            return Err(Error::InvalidXml(
+                                "Multiple or nested beamlattice elements are not allowed. \
+                                 Each mesh can have only one beamlattice element."
+                                    .to_string(),
+                            ));
+                        }
+
                         in_beamset = true;
 
                         // Mark that this object has extension shape elements
@@ -899,6 +909,56 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.cap_mode = cap_str.parse()?;
                         }
 
+                        // Parse clippingmesh ID attribute (optional)
+                        if let Some(clip_id_str) = attrs.get("clippingmesh") {
+                            beamset.clipping_mesh_id = Some(clip_id_str.parse::<u32>()?);
+                        }
+
+                        // Parse representationmesh ID attribute (optional)
+                        if let Some(rep_id_str) = attrs.get("representationmesh") {
+                            beamset.representation_mesh_id = Some(rep_id_str.parse::<u32>()?);
+                        }
+
+                        // Parse clippingmode attribute (optional)
+                        if let Some(clip_mode) = attrs.get("clippingmode") {
+                            beamset.clipping_mode = Some(clip_mode.clone());
+                        }
+
+                        // Parse ballmode attribute (optional) - from balls extension
+                        // This can be in default namespace or balls namespace (b2:ballmode)
+                        if let Some(ball_mode) =
+                            attrs.get("ballmode").or_else(|| attrs.get("b2:ballmode"))
+                        {
+                            beamset.ball_mode = Some(ball_mode.clone());
+                        }
+
+                        // Parse ballradius attribute (optional) - from balls extension
+                        // This can be in default namespace or balls namespace (b2:ballradius)
+                        if let Some(ball_radius_str) = attrs
+                            .get("ballradius")
+                            .or_else(|| attrs.get("b2:ballradius"))
+                        {
+                            let ball_radius = ball_radius_str.parse::<f64>()?;
+                            // Validate ball radius is finite and positive
+                            if !ball_radius.is_finite() || ball_radius <= 0.0 {
+                                return Err(Error::InvalidXml(format!(
+                                    "BeamLattice ballradius must be positive and finite (got {})",
+                                    ball_radius
+                                )));
+                            }
+                            beamset.ball_radius = Some(ball_radius);
+                        }
+
+                        // Parse pid attribute (optional) - material/property group ID
+                        if let Some(pid_str) = attrs.get("pid") {
+                            beamset.property_id = Some(pid_str.parse::<u32>()?);
+                        }
+
+                        // Parse pindex attribute (optional) - property index
+                        if let Some(pindex_str) = attrs.get("pindex") {
+                            beamset.property_index = Some(pindex_str.parse::<u32>()?);
+                        }
+
                         current_beamset = Some(beamset);
                     }
                     "beams" if in_beamset => {
@@ -908,6 +968,92 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if let Some(ref mut beamset) = current_beamset {
                             let beam = parse_beam(&reader, e)?;
                             beamset.beams.push(beam);
+                        }
+                    }
+                    "beamsets" if in_beamset => {
+                        // beamsets container element for grouping beams into sets
+                        // No attributes to parse, just contains beamset children
+                    }
+                    "beamset" if in_beamset => {
+                        // beamset element within beamsets - contains ref elements
+                        // No attributes to parse, just contains ref children
+                    }
+                    "ref" if in_beamset => {
+                        // ref element can be in beamsets or ballsets
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(index_str) = attrs.get("index") {
+                            let index = index_str.parse::<usize>()?;
+                            // Store the ref index for validation
+                            if let Some(ref mut beamset) = current_beamset {
+                                if in_ballsets {
+                                    // This is a ballref (reference to ball)
+                                    beamset.ball_set_refs.push(index);
+                                } else {
+                                    // This is a beamref (reference to beam)
+                                    beamset.beam_set_refs.push(index);
+                                }
+                            }
+                        }
+                    }
+                    "balls" if in_beamset => {
+                        // balls container element from balls sub-extension
+                        // Contains ball elements
+                    }
+                    "ball" if in_beamset => {
+                        // ball element from balls sub-extension
+                        // References a vertex index and may have material properties
+                        let attrs = parse_attributes(&reader, e)?;
+
+                        // Parse required vindex attribute
+                        let vindex = attrs
+                            .get("vindex")
+                            .ok_or_else(|| {
+                                Error::InvalidXml(
+                                    "Ball element missing required vindex attribute".to_string(),
+                                )
+                            })?
+                            .parse::<usize>()?;
+
+                        let mut ball = Ball::new(vindex);
+
+                        // Parse optional radius
+                        if let Some(r_str) = attrs.get("r") {
+                            ball.radius = Some(r_str.parse::<f64>()?);
+                        }
+
+                        // Parse optional pid (property group ID)
+                        if let Some(pid_str) = attrs.get("pid") {
+                            ball.property_id = Some(pid_str.parse::<u32>()?);
+                        }
+
+                        // Parse optional p (property index)
+                        if let Some(p_str) = attrs.get("p") {
+                            ball.property_index = Some(p_str.parse::<u32>()?);
+                        }
+
+                        // Add ball to beamset
+                        if let Some(ref mut beamset) = current_beamset {
+                            beamset.balls.push(ball);
+                        }
+                    }
+                    "ballsets" if in_beamset => {
+                        // ballsets container element for grouping balls into sets
+                        // Contains ballset children with ref/ballref elements
+                        in_ballsets = true;
+                    }
+                    "ballset" if in_beamset => {
+                        // ballset element within ballsets - contains ref/ballref elements
+                        // No attributes to parse
+                    }
+                    "ballref" if in_beamset => {
+                        // ballref element - explicit ball reference (alternative to generic ref in ballsets)
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(index_str) = attrs.get("index") {
+                            let index = index_str.parse::<usize>()?;
+                            // Store the ballref index for validation
+                            if let Some(ref mut beamset) = current_beamset {
+                                beamset.ball_set_refs.push(index);
+                            }
                         }
                     }
                     "normvectorgroup" if in_resources => {
@@ -1344,6 +1490,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                         in_beamset = false;
+                        in_ballsets = false;
                     }
                     "slicestack" => {
                         if let Some(slicestack) = current_slicestack.take() {
@@ -1380,6 +1527,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "trianglesets" => {
                         in_trianglesets = false;
+                    }
+                    "ballsets" => {
+                        in_ballsets = false;
                     }
                     _ => {}
                 }
@@ -2254,8 +2404,6 @@ fn parse_beam<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per Beam Lattice Extension spec v1.2.0: v1, v2, r1, r2, cap1, cap2, p1, p2, pid
-    // Currently implemented: v1, v2, r1, r2, cap1, cap2
-    // TODO: Implement p1, p2, pid attributes for per-beam property overrides
     validate_attributes(
         &attrs,
         &["v1", "v2", "r1", "r2", "cap1", "cap2", "p1", "p2", "pid"],
@@ -2296,6 +2444,13 @@ fn parse_beam<R: std::io::BufRead>(
             )));
         }
         beam.r2 = Some(r2_val);
+
+        // If r2 is specified, r1 must also be specified (per 3MF Beam Lattice spec)
+        if beam.r1.is_none() {
+            return Err(Error::InvalidXml(
+                "Beam attribute r2 is specified but r1 is not. When specifying r2, r1 must also be provided.".to_string()
+            ));
+        }
     }
 
     // Parse cap1 attribute (optional, defaults to beamset cap mode)
@@ -2306,6 +2461,28 @@ fn parse_beam<R: std::io::BufRead>(
     // Parse cap2 attribute (optional, defaults to beamset cap mode)
     if let Some(cap2_str) = attrs.get("cap2") {
         beam.cap2 = Some(cap2_str.parse()?);
+    }
+
+    // Parse pid attribute (optional) - material/property group ID
+    if let Some(pid_str) = attrs.get("pid") {
+        beam.property_id = Some(pid_str.parse::<u32>()?);
+    }
+
+    // Parse p1 attribute (optional) - property index at v1
+    if let Some(p1_str) = attrs.get("p1") {
+        beam.p1 = Some(p1_str.parse::<u32>()?);
+    }
+
+    // Parse p2 attribute (optional) - property index at v2
+    if let Some(p2_str) = attrs.get("p2") {
+        beam.p2 = Some(p2_str.parse::<u32>()?);
+
+        // If p2 is specified, p1 must also be specified (per 3MF spec convention)
+        if beam.p1.is_none() {
+            return Err(Error::InvalidXml(
+                "Beam attribute p2 is specified but p1 is not. When specifying p2, p1 must also be provided.".to_string()
+            ));
+        }
     }
 
     Ok(beam)

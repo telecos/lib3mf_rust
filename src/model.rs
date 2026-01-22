@@ -631,6 +631,12 @@ pub struct Beam {
     pub cap1: Option<BeamCapMode>,
     /// Cap mode at second vertex (optional, defaults to beamset cap mode)
     pub cap2: Option<BeamCapMode>,
+    /// Material/property group ID
+    pub property_id: Option<u32>,
+    /// Property index at first vertex
+    pub p1: Option<u32>,
+    /// Property index at second vertex
+    pub p2: Option<u32>,
 }
 
 impl Beam {
@@ -643,6 +649,9 @@ impl Beam {
             r2: None,
             cap1: None,
             cap2: None,
+            property_id: None,
+            p1: None,
+            p2: None,
         }
     }
 
@@ -655,6 +664,9 @@ impl Beam {
             r2: None,
             cap1: None,
             cap2: None,
+            property_id: None,
+            p1: None,
+            p2: None,
         }
     }
 
@@ -667,6 +679,36 @@ impl Beam {
             r2: Some(r2),
             cap1: None,
             cap2: None,
+            property_id: None,
+            p1: None,
+            p2: None,
+        }
+    }
+}
+
+/// A ball element from the Beam Lattice Balls sub-extension
+///
+/// Balls are spheres placed at beam vertices
+#[derive(Debug, Clone)]
+pub struct Ball {
+    /// Vertex index this ball is centered at
+    pub vindex: usize,
+    /// Optional radius for this ball
+    pub radius: Option<f64>,
+    /// Optional property index for this ball
+    pub property_index: Option<u32>,
+    /// Optional property group ID for this ball
+    pub property_id: Option<u32>,
+}
+
+impl Ball {
+    /// Create a new ball at the given vertex index
+    pub fn new(vindex: usize) -> Self {
+        Self {
+            vindex,
+            radius: None,
+            property_index: None,
+            property_id: None,
         }
     }
 }
@@ -685,6 +727,26 @@ pub struct BeamSet {
     pub cap_mode: BeamCapMode,
     /// List of beams in the lattice
     pub beams: Vec<Beam>,
+    /// Optional clipping mesh ID for beam lattice clipping
+    pub clipping_mesh_id: Option<u32>,
+    /// Optional representation mesh ID for alternative representation
+    pub representation_mesh_id: Option<u32>,
+    /// Clipping mode (none, inside, outside)
+    pub clipping_mode: Option<String>,
+    /// Ball mode for beam endpoints (from balls extension)
+    pub ball_mode: Option<String>,
+    /// Ball radius for beam endpoints (from balls extension)
+    pub ball_radius: Option<f64>,
+    /// Material/property group ID for beam lattice
+    pub property_id: Option<u32>,
+    /// Property index within the property group
+    pub property_index: Option<u32>,
+    /// Beam set references (for metadata grouping) - indices into beams vec
+    pub beam_set_refs: Vec<usize>,
+    /// Balls (for validation) - from balls sub-extension
+    pub balls: Vec<Ball>,
+    /// Ball set references (for metadata grouping) - indices into balls vec
+    pub ball_set_refs: Vec<usize>,
 }
 
 impl BeamSet {
@@ -695,6 +757,16 @@ impl BeamSet {
             min_length: 0.0001,
             cap_mode: BeamCapMode::Sphere,
             beams: Vec::new(),
+            clipping_mesh_id: None,
+            representation_mesh_id: None,
+            clipping_mode: None,
+            ball_mode: None,
+            ball_radius: None,
+            property_id: None,
+            property_index: None,
+            beam_set_refs: Vec::new(),
+            balls: Vec::new(),
+            ball_set_refs: Vec::new(),
         }
     }
 
@@ -705,6 +777,16 @@ impl BeamSet {
             min_length: 0.0001,
             cap_mode: BeamCapMode::Sphere,
             beams: Vec::new(),
+            clipping_mesh_id: None,
+            representation_mesh_id: None,
+            clipping_mode: None,
+            ball_mode: None,
+            ball_radius: None,
+            property_id: None,
+            property_index: None,
+            beam_set_refs: Vec::new(),
+            balls: Vec::new(),
+            ball_set_refs: Vec::new(),
         }
     }
 }
