@@ -181,6 +181,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut in_normvectorgroup = false;
     let mut current_disp2dgroup: Option<Disp2DGroup> = None;
     let mut in_disp2dgroup = false;
+    let mut current_displacement_mesh: Option<DisplacementMesh> = None;
+    let mut in_displacement_mesh = false;
+    let mut current_displacement_triangles_did: Option<usize> = None; // did attribute on <d:triangles>
+    let mut in_displacement_triangles = false;
 
     // Materials extension state for advanced features
     let mut current_texture2dgroup: Option<Texture2DGroup> = None;
@@ -424,6 +428,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "mesh" if in_resources && current_object.is_some() => {
                         current_mesh = Some(Mesh::new());
                     }
+                    "displacementmesh" if in_resources && current_object.is_some() => {
+                        current_displacement_mesh = Some(DisplacementMesh::new());
+                        in_displacement_mesh = true;
+                        // Mark object as having extension shapes
+                        if let Some(ref mut obj) = current_object {
+                            obj.has_extension_shapes = true;
+                        }
+                    }
                     "components" if in_resources && current_object.is_some() => {
                         in_components = true;
                     }
@@ -436,19 +448,45 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "vertices" if current_mesh.is_some() => {
                         // Vertices will be parsed as individual vertex elements
                     }
+                    "vertices" if in_displacement_mesh => {
+                        // Displacement vertices will be parsed as individual vertex elements
+                    }
                     "vertex" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
                             let vertex = parse_vertex(&reader, e)?;
                             mesh.vertices.push(vertex);
                         }
                     }
+                    "vertex" if in_displacement_mesh => {
+                        if let Some(ref mut disp_mesh) = current_displacement_mesh {
+                            let vertex = parse_vertex(&reader, e)?;
+                            disp_mesh.vertices.push(vertex);
+                        }
+                    }
                     "triangles" if current_mesh.is_some() => {
                         // Triangles will be parsed as individual triangle elements
+                    }
+                    "triangles" if in_displacement_mesh => {
+                        in_displacement_triangles = true;
+                        // Parse did attribute from triangles element
+                        let attrs = parse_attributes(&reader, e)?;
+                        current_displacement_triangles_did =
+                            attrs.get("did").and_then(|s| s.parse::<usize>().ok());
                     }
                     "triangle" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
                             let triangle = parse_triangle(&reader, e)?;
                             mesh.triangles.push(triangle);
+                        }
+                    }
+                    "triangle" if in_displacement_triangles => {
+                        if let Some(ref mut disp_mesh) = current_displacement_mesh {
+                            let mut triangle = parse_displacement_triangle(&reader, e)?;
+                            // If did not specified on triangle, use the one from triangles element
+                            if triangle.did.is_none() {
+                                triangle.did = current_displacement_triangles_did;
+                            }
+                            disp_mesh.triangles.push(triangle);
                         }
                     }
                     "item" if in_build => {
@@ -950,7 +988,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         current_disp2dgroup = Some(disp2dgroup);
                     }
-                    "disp2dcoords" if in_disp2dgroup => {
+                    "disp2dcoord" if in_disp2dgroup => {
                         if let Some(ref mut d2dgroup) = current_disp2dgroup {
                             let attrs = parse_attributes(&reader, e)?;
                             let u = attrs
@@ -1238,11 +1276,21 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             if let Some(mesh) = current_mesh.take() {
                                 obj.mesh = Some(mesh);
                             }
+                            if let Some(disp_mesh) = current_displacement_mesh.take() {
+                                obj.displacement_mesh = Some(disp_mesh);
+                            }
                             model.resources.objects.push(obj);
                         }
                     }
                     "mesh" => {
                         // Mesh parsing complete
+                    }
+                    "displacementmesh" => {
+                        in_displacement_mesh = false;
+                    }
+                    "triangles" if in_displacement_triangles => {
+                        in_displacement_triangles = false;
+                        current_displacement_triangles_did = None;
                     }
                     "components" => {
                         in_components = false;
@@ -1934,6 +1982,80 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
 
     if let Some(p3) = attrs.get("p3") {
         triangle.p3 = Some(p3.parse::<usize>()?);
+    }
+
+    Ok(triangle)
+}
+
+/// Parse displacement triangle element attributes
+pub(crate) fn parse_displacement_triangle<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<DisplacementTriangle> {
+    let attrs = parse_attributes(reader, e)?;
+
+    // Validate only allowed attributes are present
+    // Per Displacement Extension spec: v1, v2, v3, pid, pindex, p1, p2, p3, did, d1, d2, d3
+    validate_attributes(
+        &attrs,
+        &[
+            "v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3", "did", "d1", "d2", "d3",
+        ],
+        "triangle",
+    )?;
+
+    let v1 = attrs
+        .get("v1")
+        .ok_or_else(|| Error::InvalidXml("Displacement triangle missing v1 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let v2 = attrs
+        .get("v2")
+        .ok_or_else(|| Error::InvalidXml("Displacement triangle missing v2 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let v3 = attrs
+        .get("v3")
+        .ok_or_else(|| Error::InvalidXml("Displacement triangle missing v3 attribute".to_string()))?
+        .parse::<usize>()?;
+
+    let mut triangle = DisplacementTriangle::new(v1, v2, v3);
+
+    if let Some(pid) = attrs.get("pid") {
+        triangle.pid = Some(pid.parse::<usize>()?);
+    }
+
+    if let Some(pindex) = attrs.get("pindex") {
+        triangle.pindex = Some(pindex.parse::<usize>()?);
+    }
+
+    if let Some(p1) = attrs.get("p1") {
+        triangle.p1 = Some(p1.parse::<usize>()?);
+    }
+
+    if let Some(p2) = attrs.get("p2") {
+        triangle.p2 = Some(p2.parse::<usize>()?);
+    }
+
+    if let Some(p3) = attrs.get("p3") {
+        triangle.p3 = Some(p3.parse::<usize>()?);
+    }
+
+    // Parse displacement-specific attributes
+    if let Some(did) = attrs.get("did") {
+        triangle.did = Some(did.parse::<usize>()?);
+    }
+
+    if let Some(d1) = attrs.get("d1") {
+        triangle.d1 = Some(d1.parse::<usize>()?);
+    }
+
+    if let Some(d2) = attrs.get("d2") {
+        triangle.d2 = Some(d2.parse::<usize>()?);
+    }
+
+    if let Some(d3) = attrs.get("d3") {
+        triangle.d3 = Some(d3.parse::<usize>()?);
     }
 
     Ok(triangle)
