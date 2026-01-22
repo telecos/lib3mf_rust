@@ -355,10 +355,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
     // Property groups include: color groups, base material groups, multiproperties,
     // texture2d groups, and composite materials
     let mut seen_property_group_ids: HashMap<usize, String> = HashMap::new();
-    
+
     // Check color group IDs
     for colorgroup in &model.resources.color_groups {
-        if let Some(existing_type) = seen_property_group_ids.insert(colorgroup.id, "colorgroup".to_string()) {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(colorgroup.id, "colorgroup".to_string())
+        {
             return Err(Error::InvalidModel(format!(
                 "Duplicate resource ID: {}. \
                  This ID is used by both a {} and a colorgroup. \
@@ -368,10 +370,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     // Check base material group IDs
     for basematerialgroup in &model.resources.base_material_groups {
-        if let Some(existing_type) = seen_property_group_ids.insert(basematerialgroup.id, "basematerials".to_string()) {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(basematerialgroup.id, "basematerials".to_string())
+        {
             return Err(Error::InvalidModel(format!(
                 "Duplicate resource ID: {}. \
                  This ID is used by both a {} and a basematerials group. \
@@ -381,10 +385,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     // Check multiproperties IDs
     for multiprop in &model.resources.multi_properties {
-        if let Some(existing_type) = seen_property_group_ids.insert(multiprop.id, "multiproperties".to_string()) {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(multiprop.id, "multiproperties".to_string())
+        {
             return Err(Error::InvalidModel(format!(
                 "Duplicate resource ID: {}. \
                  This ID is used by both a {} and a multiproperties group. \
@@ -394,10 +400,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     // Check texture2d group IDs
     for tex2dgroup in &model.resources.texture2d_groups {
-        if let Some(existing_type) = seen_property_group_ids.insert(tex2dgroup.id, "texture2dgroup".to_string()) {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(tex2dgroup.id, "texture2dgroup".to_string())
+        {
             return Err(Error::InvalidModel(format!(
                 "Duplicate resource ID: {}. \
                  This ID is used by both a {} and a texture2dgroup. \
@@ -407,10 +415,12 @@ fn validate_material_references(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     // Check composite materials IDs
     for composite in &model.resources.composite_materials {
-        if let Some(existing_type) = seen_property_group_ids.insert(composite.id, "compositematerials".to_string()) {
+        if let Some(existing_type) =
+            seen_property_group_ids.insert(composite.id, "compositematerials".to_string())
+        {
             return Err(Error::InvalidModel(format!(
                 "Duplicate resource ID: {}. \
                  This ID is used by both a {} and a compositematerials group. \
@@ -481,8 +491,11 @@ fn validate_material_references(model: &Model) -> Result<()> {
                     }
                 }
                 // Check if it's a texture2d group
-                else if let Some(tex2dgroup) =
-                    model.resources.texture2d_groups.iter().find(|tg| tg.id == pid)
+                else if let Some(tex2dgroup) = model
+                    .resources
+                    .texture2d_groups
+                    .iter()
+                    .find(|tg| tg.id == pid)
                 {
                     if pindex >= tex2dgroup.tex2coords.len() {
                         let max_index = tex2dgroup.tex2coords.len().saturating_sub(1);
@@ -2106,7 +2119,7 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
 fn validate_color_formats(model: &Model) -> Result<()> {
     // Colors are already validated during parsing (stored as (u8, u8, u8, u8) tuples)
     // This function is a placeholder for any additional color validation needs
-    
+
     // Validate that color groups have at least one color
     for color_group in &model.resources.color_groups {
         if color_group.colors.is_empty() {
@@ -2117,7 +2130,7 @@ fn validate_color_formats(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     Ok(())
 }
 
@@ -2130,7 +2143,7 @@ fn validate_uuid_formats(model: &Model) -> Result<()> {
     let validate_uuid = |uuid: &str, context: &str| -> Result<()> {
         // UUID format: 8-4-4-4-12 hexadecimal digits separated by hyphens
         // Example: 550e8400-e29b-41d4-a716-446655440000
-        
+
         // Check length (36 characters including hyphens)
         if uuid.len() != 36 {
             return Err(Error::InvalidModel(format!(
@@ -2138,7 +2151,7 @@ fn validate_uuid_formats(model: &Model) -> Result<()> {
                 context, uuid
             )));
         }
-        
+
         // Check hyphen positions (at indices 8, 13, 18, 23)
         if uuid.chars().nth(8) != Some('-')
             || uuid.chars().nth(13) != Some('-')
@@ -2150,7 +2163,7 @@ fn validate_uuid_formats(model: &Model) -> Result<()> {
                 context, uuid
             )));
         }
-        
+
         // Check that all other characters are hexadecimal digits
         for (idx, ch) in uuid.chars().enumerate() {
             if idx == 8 || idx == 13 || idx == 18 || idx == 23 {
@@ -2163,22 +2176,22 @@ fn validate_uuid_formats(model: &Model) -> Result<()> {
                 )));
             }
         }
-        
+
         Ok(())
     };
-    
+
     // Validate build UUID
     if let Some(ref uuid) = model.build.production_uuid {
         validate_uuid(uuid, "Build")?;
     }
-    
+
     // Validate build item UUIDs
     for (idx, item) in model.build.items.iter().enumerate() {
         if let Some(ref uuid) = item.production_uuid {
             validate_uuid(uuid, &format!("Build item {}", idx))?;
         }
     }
-    
+
     // Validate object UUIDs
     for object in &model.resources.objects {
         if let Some(ref prod_info) = object.production {
@@ -2186,7 +2199,7 @@ fn validate_uuid_formats(model: &Model) -> Result<()> {
                 validate_uuid(uuid, &format!("Object {}", object.id))?;
             }
         }
-        
+
         // Validate component UUIDs
         for (idx, component) in object.components.iter().enumerate() {
             if let Some(ref prod_info) = component.production {
@@ -2196,7 +2209,7 @@ fn validate_uuid_formats(model: &Model) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -2210,7 +2223,7 @@ fn validate_production_paths(model: &Model) -> Result<()> {
         // OPC internal paths that should not be referenced:
         // - /_rels/.rels or any path starting with /_rels/
         // - /[Content_Types].xml
-        
+
         if path.starts_with("/_rels/") || path == "/_rels" {
             return Err(Error::InvalidModel(format!(
                 "{}: Production path '{}' references OPC internal relationships directory.\n\
@@ -2218,7 +2231,7 @@ fn validate_production_paths(model: &Model) -> Result<()> {
                 context, path
             )));
         }
-        
+
         if path == "/[Content_Types].xml" {
             return Err(Error::InvalidModel(format!(
                 "{}: Production path '{}' references OPC content types file.\n\
@@ -2226,10 +2239,10 @@ fn validate_production_paths(model: &Model) -> Result<()> {
                 context, path
             )));
         }
-        
+
         Ok(())
     };
-    
+
     // Check all objects
     for object in &model.resources.objects {
         if let Some(ref prod_info) = object.production {
@@ -2237,7 +2250,7 @@ fn validate_production_paths(model: &Model) -> Result<()> {
                 validate_not_opc_internal(path, &format!("Object {}", object.id))?;
             }
         }
-        
+
         // Check components
         for (idx, component) in object.components.iter().enumerate() {
             if let Some(ref prod_info) = component.production {
@@ -2250,14 +2263,14 @@ fn validate_production_paths(model: &Model) -> Result<()> {
             }
         }
     }
-    
+
     // Check build items
     for (idx, item) in model.build.items.iter().enumerate() {
         if let Some(ref path) = item.production_path {
             validate_not_opc_internal(path, &format!("Build item {}", idx))?;
         }
     }
-    
+
     Ok(())
 }
 
