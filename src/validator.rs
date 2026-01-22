@@ -725,11 +725,11 @@ fn validate_boolean_operations(model: &Model) -> Result<()> {
                     // Check that base object has a shape (mesh, booleanshape, or extension shapes), not just components
                     // Per Boolean Operations spec, the base object "MUST NOT reference a components object"
                     // An object without mesh/boolean_shape but also without components is assumed to have extension shapes
-                    let has_shape = base_obj.mesh.is_some() 
-                        || base_obj.boolean_shape.is_some() 
+                    let has_shape = base_obj.mesh.is_some()
+                        || base_obj.boolean_shape.is_some()
                         || base_obj.has_extension_shapes
                         || (base_obj.components.is_empty()); // If no mesh/boolean and no components, assume extension shape
-                        
+
                     if !has_shape {
                         return Err(Error::InvalidModel(format!(
                             "Object {}: Boolean shape base object {} does not define a shape.\n\

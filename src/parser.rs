@@ -2887,7 +2887,7 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     file_path: &str,
     object_id: usize,
-    expected_uuid: &Option<String>,
+    _expected_uuid: &Option<String>,
     reference_context: &str,
     cache: &mut HashMap<String, Vec<(usize, Option<String>)>>,
 ) -> Result<()> {
