@@ -2292,10 +2292,18 @@ fn validate_production_paths(model: &Model) -> Result<()> {
         }
     }
 
-    // Check build items
+    // Check build items - they should NOT have p:path
+    // Per 3MF Production Extension spec, p:path is only allowed on component elements
     for (idx, item) in model.build.items.iter().enumerate() {
         if let Some(ref path) = item.production_path {
-            validate_not_opc_internal(path, &format!("Build item {}", idx))?;
+            return Err(Error::InvalidModel(format!(
+                "Build item {}: Has p:path attribute ('{}').\n\
+                 Per 3MF Production Extension specification, the p:path attribute is only allowed on \
+                 <component> elements, not on <item> elements in the build section.\n\
+                 To reference an external model part, use a component with p:path inside an object, \
+                 then reference that object in the build item.",
+                idx, path
+            )));
         }
     }
 
@@ -2541,11 +2549,11 @@ fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> R
         return Ok(());
     }
 
-    // Check if we're in lenient mode (config supports production)
-    let lenient_mode = config.supports(&Extension::Production);
+    // When production is required in the file, we always enforce strict validation
+    // The lenient mode only applies when production is NOT in requiredextensions
 
-    // Build must have UUID when production extension is required (strict mode only)
-    if model.build.production_uuid.is_none() && !lenient_mode {
+    // Build must have UUID when production extension is required
+    if model.build.production_uuid.is_none() {
         return Err(Error::InvalidModel(
             "Build element is missing required p:UUID attribute.\n\
              Per 3MF Production Extension spec, when production extension is in requiredextensions, \
@@ -2555,37 +2563,41 @@ fn validate_production_uuids_required(model: &Model, config: &ParserConfig) -> R
         ));
     }
 
-    // In strict mode, objects referenced in build items should have UUID
-    if !lenient_mode {
-        for (idx, item) in model.build.items.iter().enumerate() {
-            // Skip if the item has a production path (external reference)
-            if item.production_path.is_some() {
-                continue;
-            }
+    // Validate build items and their referenced objects
+    for (idx, item) in model.build.items.iter().enumerate() {
+        // Build items must have p:UUID when production extension is required
+        if item.production_uuid.is_none() {
+            return Err(Error::InvalidModel(format!(
+                "Build item {}: Missing required p:UUID attribute.\n\
+                 Per 3MF Production Extension spec, when production extension is in requiredextensions, \
+                 all <item> elements in the build section must have p:UUID attributes.\n\
+                 Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to build item {}.",
+                idx, idx
+            )));
+        }
 
-            // Find the object being referenced
-            if let Some(object) = model
-                .resources
-                .objects
-                .iter()
-                .find(|o| o.id == item.objectid)
-            {
-                // Check if object has production UUID
-                let has_uuid = object
-                    .production
-                    .as_ref()
-                    .and_then(|p| p.uuid.as_ref())
-                    .is_some();
+        // Find the object being referenced
+        if let Some(object) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            // Check if object has production UUID
+            let has_uuid = object
+                .production
+                .as_ref()
+                .and_then(|p| p.uuid.as_ref())
+                .is_some();
 
-                if !has_uuid {
-                    return Err(Error::InvalidModel(format!(
-                        "Build item {}: References object {} which is missing required p:UUID attribute.\n\
-                         Per 3MF Production Extension spec, when production extension is in requiredextensions, \
-                         objects referenced in build items must have p:UUID attributes.\n\
-                         Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to object {}.",
-                        idx, object.id, object.id
-                    )));
-                }
+            if !has_uuid {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: References object {} which is missing required p:UUID attribute.\n\
+                     Per 3MF Production Extension spec, when production extension is in requiredextensions, \
+                     objects referenced in build items must have p:UUID attributes.\n\
+                     Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to object {}.",
+                    idx, object.id, object.id
+                )));
             }
         }
     }

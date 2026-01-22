@@ -290,12 +290,23 @@ impl<R: Read + std::io::Seek> Package<R> {
     /// Validate OPC part name according to OPC specification
     ///
     /// Part names must not contain:
+    /// - Non-ASCII characters (per OPC spec, part names must be ASCII)
     /// - Fragment identifiers (#)
     /// - Query strings (?)
     /// - Path segments that are "." or ".."
     /// - Empty path segments (consecutive slashes)
     /// - Segments ending with "." (like "3D.")
     fn validate_opc_part_name(part_name: &str) -> Result<()> {
+        // Check for non-ASCII characters
+        // Per OPC spec and 3MF spec, part names must contain only ASCII characters
+        if !part_name.is_ascii() {
+            return Err(Error::InvalidFormat(format!(
+                "Part name cannot contain non-ASCII characters: {}. \
+                 Per OPC and 3MF specifications, part names must contain only ASCII characters.",
+                part_name
+            )));
+        }
+
         // Check for fragment identifiers
         if part_name.contains('#') {
             return Err(Error::InvalidFormat(format!(
