@@ -2694,11 +2694,13 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
         }
 
         // Per 3MF spec, texture paths should be in /3D/Textures/ directory
-        if !texture.path.starts_with("/3D/Textures/") {
+        // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
+        if !texture.path.to_lowercase().starts_with("/3d/textures/") {
             return Err(Error::InvalidModel(format!(
-                "Texture2D resource {}: Path '{}' is not in /3D/Textures/ directory.\n\
-                 Per 3MF Material Extension spec, texture files must be stored in /3D/Textures/.\n\
-                 Move the texture file to /3D/Textures/ and update the path.",
+                "Texture2D resource {}: Path '{}' is not in /3D/Textures/ directory (case-insensitive).\n\
+                 Per 3MF Material Extension spec, texture files must be stored in /3D/Textures/ \
+                 (any case variation like /3D/textures/ is also accepted).\n\
+                 Move the texture file to the appropriate directory and update the path.",
                 texture.id, texture.path
             )));
         }
