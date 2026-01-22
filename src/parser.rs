@@ -15,6 +15,9 @@ const TRANSFORM_MATRIX_SIZE: usize = 12;
 /// Default buffer capacity for XML parsing (4KB)
 const XML_BUFFER_CAPACITY: usize = 4096;
 
+/// Maximum number of object IDs to display in error messages
+const MAX_DISPLAYED_OBJECT_IDS: usize = 20;
+
 /// Parse a 3MF file from a reader
 pub fn parse_3mf<R: Read + std::io::Seek>(reader: R) -> Result<Model> {
     // Use default config that supports all extensions for backward compatibility
@@ -2393,10 +2396,8 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
     reference_type: &str,
     cache: &mut HashMap<String, Vec<usize>>,
 ) -> Result<()> {
-    // Check cache first
-    let object_ids = if let Some(ids) = cache.get(file_path) {
-        ids.clone()
-    } else {
+    // Check cache first and load if needed
+    if !cache.contains_key(file_path) {
         // Load and parse the external model file
         let external_xml = package.get_file(file_path)?;
 
@@ -2440,15 +2441,21 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
         }
 
         // Cache the results for future use
-        cache.insert(file_path.to_string(), ids.clone());
-        ids
-    };
+        cache.insert(file_path.to_string(), ids);
+    }
+
+    // Get the cached object IDs
+    let object_ids = cache.get(file_path).unwrap();
 
     // Check if the referenced object ID exists
     if !object_ids.contains(&object_id) {
-        // Limit displayed IDs to first 20 to avoid overwhelming error messages
-        let display_ids: Vec<usize> = object_ids.iter().take(20).copied().collect();
-        let id_display = if object_ids.len() > 20 {
+        // Limit displayed IDs to avoid overwhelming error messages
+        let display_ids: Vec<usize> = object_ids
+            .iter()
+            .take(MAX_DISPLAYED_OBJECT_IDS)
+            .copied()
+            .collect();
+        let id_display = if object_ids.len() > MAX_DISPLAYED_OBJECT_IDS {
             format!("{:?} ... ({} total)", display_ids, object_ids.len())
         } else {
             format!("{:?}", display_ids)
@@ -2559,10 +2566,8 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     reference_context: &str,
     cache: &mut HashMap<String, Vec<(usize, Option<String>)>>,
 ) -> Result<()> {
-    // Check cache first
-    let object_info = if let Some(info) = cache.get(file_path) {
-        info.clone()
-    } else {
+    // Check cache first and get object info
+    if !cache.contains_key(file_path) {
         // Load and parse the external model file
         let external_xml = package.get_file(file_path)?;
 
@@ -2619,17 +2624,23 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
         }
 
         // Cache the results for future use
-        cache.insert(file_path.to_string(), info.clone());
-        info
-    };
+        cache.insert(file_path.to_string(), info);
+    }
+
+    // Get the cached info
+    let object_info = cache.get(file_path).unwrap();
 
     // Check if the referenced object ID exists
     let found_obj = object_info.iter().find(|(id, _)| *id == object_id);
 
     if found_obj.is_none() {
         // Object ID not found
-        let available_ids: Vec<usize> = object_info.iter().map(|(id, _)| *id).take(20).collect();
-        let id_display = if object_info.len() > 20 {
+        let available_ids: Vec<usize> = object_info
+            .iter()
+            .map(|(id, _)| *id)
+            .take(MAX_DISPLAYED_OBJECT_IDS)
+            .collect();
+        let id_display = if object_info.len() > MAX_DISPLAYED_OBJECT_IDS {
             format!("{:?} ... ({} total)", available_ids, object_info.len())
         } else {
             format!("{:?}", available_ids)
