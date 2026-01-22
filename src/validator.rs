@@ -1755,6 +1755,16 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                         )));
                     }
                     
+                    // Validate that beam is not self-referencing (v1 != v2)
+                    // A beam must connect two different vertices
+                    if beam.v1 == beam.v2 {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Beam {} is self-referencing (v1=v2={}). \
+                             A beam must connect two different vertices.",
+                            object.id, beam_idx, beam.v1
+                        )));
+                    }
+                    
                     // Validate beam material references
                     if let Some(pid) = beam.property_id {
                         if !valid_resource_ids.contains(&pid) {
@@ -1765,6 +1775,27 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                                 object.id, beam_idx, pid
                             )));
                         }
+                    }
+                }
+                
+                // Validate no duplicate beams
+                // Two beams are considered duplicates if they connect the same pair of vertices
+                // (regardless of order: beam(v1,v2) equals beam(v2,v1))
+                let mut seen_beams = HashSet::new();
+                for (beam_idx, beam) in beamset.beams.iter().enumerate() {
+                    // Normalize beam to sorted order so (1,2) and (2,1) are treated as the same
+                    let normalized = if beam.v1 < beam.v2 {
+                        (beam.v1, beam.v2)
+                    } else {
+                        (beam.v2, beam.v1)
+                    };
+                    
+                    if !seen_beams.insert(normalized) {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Beam {} is a duplicate (connects vertices {} and {}). \
+                             Each pair of vertices can only be connected by one beam.",
+                            object.id, beam_idx, beam.v1, beam.v2
+                        )));
                     }
                 }
                 
@@ -1786,6 +1817,18 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                             object.id
                         )));
                     }
+                    
+                    // Check that the referenced object is a mesh object (not a component-only object)
+                    if let Some(clip_obj) = model.resources.objects.iter().find(|o| o.id as u32 == clip_id) {
+                        // Object must have a mesh, not just components
+                        if clip_obj.mesh.is_none() && !clip_obj.components.is_empty() {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: BeamLattice clippingmesh references object {} which is a component object (no mesh). \
+                                 The clippingmesh must reference an object that contains a mesh.",
+                                object.id, clip_id
+                            )));
+                        }
+                    }
                 }
                 
                 // Validate representation mesh reference
@@ -1805,6 +1848,18 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                              The representationmesh cannot be the same object that contains the beamlattice.",
                             object.id
                         )));
+                    }
+                    
+                    // Check that the referenced object is a mesh object (not a component-only object)
+                    if let Some(rep_obj) = model.resources.objects.iter().find(|o| o.id as u32 == rep_id) {
+                        // Object must have a mesh, not just components
+                        if rep_obj.mesh.is_none() && !rep_obj.components.is_empty() {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: BeamLattice representationmesh references object {} which is a component object (no mesh). \
+                                 The representationmesh must reference an object that contains a mesh.",
+                                object.id, rep_id
+                            )));
+                        }
                     }
                 }
                 

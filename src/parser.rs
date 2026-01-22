@@ -915,8 +915,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
 
                         // Parse ballmode attribute (optional) - from balls extension
-                        // This can be in default namespace or balls namespace
-                        if let Some(ball_mode) = attrs.get("ballmode") {
+                        // This can be in default namespace or balls namespace (b2:ballmode)
+                        if let Some(ball_mode) = attrs.get("ballmode").or_else(|| attrs.get("b2:ballmode")) {
                             beamset.ball_mode = Some(ball_mode.clone());
                         }
 
