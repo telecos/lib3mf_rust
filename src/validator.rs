@@ -432,20 +432,8 @@ fn validate_material_references(model: &Model) -> Result<()> {
     // Validate multiproperties: each multi element's pindices must be valid for the referenced property groups
     for multiprop in &model.resources.multi_properties {
         for (multi_idx, multi) in multiprop.multis.iter().enumerate() {
-            // Check that pindices length matches pids length
-            if multi.pindices.len() != multiprop.pids.len() {
-                return Err(Error::InvalidModel(format!(
-                    "MultiProperties group {}: Multi element {} has {} pindices but {} pids.\n\
-                     Each multi element must have the same number of pindices as the parent multiproperties has pids.\n\
-                     Hint: Check that all <m:multi> elements have the correct number of pindices.",
-                    multiprop.id,
-                    multi_idx,
-                    multi.pindices.len(),
-                    multiprop.pids.len()
-                )));
-            }
-
             // Validate each pindex against the corresponding property group
+            // Note: pindices.len() can be less than pids.len() - unspecified indices default to 0
             for (layer_idx, (&pid, &pindex)) in
                 multiprop.pids.iter().zip(multi.pindices.iter()).enumerate()
             {
