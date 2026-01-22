@@ -353,13 +353,8 @@ impl<R: Read + std::io::Seek> Package<R> {
         // Discover model path from relationships (validation already done in open())
         let model_path = self.discover_model_path()?;
 
-        // Read the model file as binary to handle potential encrypted/binary content
-        let mut file = self
-            .archive
-            .by_name(&model_path)
-            .map_err(|_| Error::MissingFile(model_path.clone()))?;
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)?;
+        // Read as binary to handle potential encrypted/binary content
+        let bytes = self.get_file_binary(&model_path)?;
 
         // Convert to string using lossy conversion to handle any non-UTF-8 sequences
         // This allows parsing models that may contain encrypted content
@@ -429,12 +424,9 @@ impl<R: Read + std::io::Seek> Package<R> {
 
     /// Get a file by name from the archive
     pub fn get_file(&mut self, name: &str) -> Result<String> {
-        let mut file = self
-            .archive
-            .by_name(name)
-            .map_err(|_| Error::MissingFile(name.to_string()))?;
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)?;
+        // Read as binary to handle potential encrypted/binary content
+        let bytes = self.get_file_binary(name)?;
+        
         // Convert to string using lossy conversion to handle any non-UTF-8 sequences
         // This allows reading files that may contain encrypted/binary content
         Ok(String::from_utf8_lossy(&bytes).into_owned())
