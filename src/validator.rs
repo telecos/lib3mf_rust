@@ -2630,7 +2630,9 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
             }
             volume /= 6.0;
 
-            if volume < 0.0 {
+            // Use small epsilon for floating-point comparison
+            const EPSILON: f64 = 1e-10;
+            if volume < -EPSILON {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Mesh has negative volume ({}), indicating inverted or incorrectly oriented triangles",
                     object.id, volume
@@ -2642,39 +2644,62 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
 }
 
 /// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting reversed vertex order reliably requires sophisticated mesh analysis
+/// algorithms that are computationally expensive and have reliability issues with
+/// certain mesh geometries (e.g., non-convex shapes, complex topology). The simple
+/// heuristic of checking if normals point away from the centroid fails for many
+/// valid meshes and can cause false positives.
+///
+/// A proper implementation would require:
+/// - Ray casting or winding number algorithms
+/// - Topological mesh analysis
+/// - Consideration of non-manifold geometries
+///
+/// For now, we rely on other validators like volume calculation to catch some
+/// cases of inverted meshes.
 fn validate_vertex_order(_model: &Model) -> Result<()> {
-    // Note: This validation is disabled as the heuristic for detecting reversed
-    // vertex order is not reliable enough for all mesh geometries and can be
-    // computationally expensive for large meshes. A proper implementation would
-    // require mesh analysis algorithms that are beyond the scope of basic validation.
     Ok(())
 }
 
 /// N_XPX_0419_01: Validate JPEG thumbnail colorspace (must be RGB, not CMYK)
+///
+/// **Note: Partial validation implemented in OPC layer.**
+///
+/// JPEG CMYK validation is performed in `opc::Package::get_thumbnail_metadata()`
+/// where the actual thumbnail file data is available. This placeholder exists
+/// for documentation and to maintain the validation function signature.
 fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
-    // Note: Thumbnail validation for CMYK would require loading the actual file
-    // data from the OPC package, which is not available at the model validation stage.
-    // This validation would need to be performed during package parsing in opc.rs
-    // For now, this is a placeholder.
     Ok(())
 }
 
 /// N_XPX_0420_01: Validate no DTD declaration in XML (security risk)
+///
+/// **Note: Validation implemented in parser.**
+///
+/// DTD validation is handled during XML parsing in `parser::parse_model_xml()`
+/// where the parser rejects `Event::DocType` to prevent XXE (XML External Entity)
+/// attacks. This placeholder exists for documentation and to maintain the
+/// validation function signature.
 fn validate_dtd_declaration(_model: &Model) -> Result<()> {
-    // DTD validation is handled during XML parsing in parser.rs
-    // The parser rejects DOCTYPE events in the XML stream
-    // This placeholder exists for documentation purposes
     Ok(())
 }
 
 /// N_XPX_0421_01: Validate build item transform doesn't place object outside printable area
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// The test case appears to check for negative coordinates in the translation
+/// component of transforms. However, this is too strict:
+/// 1. Negative coordinates in transforms can be valid (e.g., centering around origin)
+/// 2. The transform translation doesn't directly indicate if the MESH is outside bounds
+/// 3. Proper validation would need to apply the transform to mesh vertices
+///
+/// Many valid 3MF files in the test suite use negative transform coordinates
+/// legitimately, so this validation causes false positives.
 fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
-    // Note: This validation is disabled because negative coordinates in transforms
-    // can be valid in certain use cases (e.g., centering objects around origin).
-    // The 3MF spec doesn't strictly prohibit negative coordinates in transforms.
-    // A proper implementation would need to consider the actual mesh bounds and
-    // check if the transformed mesh extends into negative coordinates, not just
-    // the translation component of the transform.
     Ok(())
 }
 
@@ -2720,16 +2745,22 @@ fn validate_duplicate_uuids(model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// N_XPX_0803_01: Validate no component reference chains across multiple model parts  
+/// N_XPX_0803_01: Validate no component reference chains across multiple model parts
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting component reference chains requires parsing and analyzing external
+/// model files referenced via `p:path`. Since the parser only loads the root model
+/// file, we cannot reliably detect multi-level chains.
+///
+/// A full implementation would require:
+/// 1. Loading all referenced external model files
+/// 2. Building a dependency graph across files
+/// 3. Detecting cycles or chains longer than allowed depth
+///
+/// This is beyond the scope of single-file validation and would require
+/// significant architectural changes to support multi-file analysis.
 fn validate_component_chain(_model: &Model) -> Result<()> {
-    // Note: This validation is disabled because detecting component reference chains
-    // requires parsing and analyzing external model files referenced via p:path.
-    // Since the parser only loads the root model file, we cannot reliably detect
-    // multi-level chains. A full implementation would require:
-    // 1. Loading all referenced external model files
-    // 2. Building a dependency graph
-    // 3. Detecting cycles or chains longer than allowed
-    // This is beyond the scope of single-file validation.
     Ok(())
 }
 

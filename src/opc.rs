@@ -742,10 +742,15 @@ impl<R: Read + std::io::Seek> Package<R> {
                             }
                             break;
                         }
-                        // Skip this marker
+                        // Skip this marker - length includes the 2-byte length field itself
                         if i + 3 < data.len() {
                             let len = ((data[i + 2] as usize) << 8) | (data[i + 3] as usize);
-                            i += len + 2;
+                            // Verify we won't overflow
+                            if len >= 2 && i + len + 2 <= data.len() {
+                                i += len + 2;
+                            } else {
+                                break; // Invalid marker, stop parsing
+                            }
                         } else {
                             break;
                         }
