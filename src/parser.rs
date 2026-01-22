@@ -45,6 +45,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Load external slice files if any slice stacks have references
     load_slice_references(&mut package, &mut model)?;
 
+    // Validate boolean operation external paths before general validation
+    // This requires access to the package to check if referenced files exist
+    validate_boolean_external_paths(&mut package, &model)?;
+
     // Validate the model AFTER loading keystore and slices
     // This ensures validation can check encrypted file references correctly
     validator::validate_model(&model)?;
@@ -1038,6 +1042,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "booleanshape" if in_resources && current_object.is_some() => {
                         // Check if object already has a booleanshape
+                        // Per 3MF Boolean Operations spec, an object can only have one booleanshape
+                        if let Some(ref obj) = current_object {
+                            if obj.boolean_shape.is_some() {
+                                return Err(Error::InvalidXml(
+                                    "Object can only have one booleanshape element".to_string(),
+                                ));
+                            }
+                        }
                         if in_boolean_shape {
                             return Err(Error::InvalidXml(
                                 "Object can only have one booleanshape element".to_string(),
@@ -2270,4 +2282,59 @@ mod tests {
         assert_eq!(obj3.components[1].objectid, 2);
         assert!(obj3.components[1].transform.is_some());
     }
+}
+
+/// Validate that external file paths referenced in boolean operations exist in the package
+///
+/// Per 3MF Boolean Operations Extension spec:
+/// - The path attribute references objects in non-root model files
+/// - Path is an absolute path from the root of the 3MF container
+/// - This validation ensures referenced files exist
+fn validate_boolean_external_paths<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    model: &Model,
+) -> Result<()> {
+    for object in &model.resources.objects {
+        if let Some(ref boolean_shape) = object.boolean_shape {
+            // Check if booleanshape references an external file
+            if let Some(ref path) = boolean_shape.path {
+                // Normalize path: remove leading slash if present
+                let normalized_path = path.trim_start_matches('/');
+                
+                if !package.has_file(normalized_path) {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Boolean shape references non-existent external file: {}\n\
+                         The path attribute in <booleanshape> must reference a valid model file in the 3MF package.\n\
+                         Check that:\n\
+                         - The file exists in the package\n\
+                         - The path is correct (case-sensitive)\n\
+                         - The path format follows 3MF conventions (e.g., /3D/filename.model)",
+                        object.id, path
+                    )));
+                }
+            }
+
+            // Check if boolean operands reference external files
+            for operand in &boolean_shape.operands {
+                if let Some(ref path) = operand.path {
+                    // Normalize path: remove leading slash if present
+                    let normalized_path = path.trim_start_matches('/');
+                    
+                    if !package.has_file(normalized_path) {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Boolean operand references non-existent external file: {}\n\
+                             The path attribute in <boolean> must reference a valid model file in the 3MF package.\n\
+                             Check that:\n\
+                             - The file exists in the package\n\
+                             - The path is correct (case-sensitive)\n\
+                             - The path format follows 3MF conventions (e.g., /3D/filename.model)",
+                            object.id, path
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
