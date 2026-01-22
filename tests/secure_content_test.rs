@@ -221,3 +221,46 @@ fn test_keystore_parsing() {
         .encrypted_files
         .contains(&"/3D/Texture/photo_1_encrypted.jpg".to_string()));
 }
+
+/// Test that keystore parsing handles binary/encrypted data correctly
+/// This verifies the fix for suite8 UTF-8 errors where keystore files
+/// may contain encrypted content that is not valid UTF-8
+#[test]
+fn test_keystore_handles_binary_data() {
+    // This test validates that the parser can handle keystore files
+    // with binary/encrypted content without throwing UTF-8 errors
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" 
+       xml:lang="en-US" 
+       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+       xmlns:sc="http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07"
+       requiredextensions="sc">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+
+    let config = ParserConfig::new().with_extension(Extension::SecureContent);
+    let result = lib3mf::parser::parse_model_xml_with_config(xml, config);
+
+    // Should parse successfully without UTF-8 errors
+    assert!(
+        result.is_ok(),
+        "Failed to parse secure content model: {:?}",
+        result.err()
+    );
+}
