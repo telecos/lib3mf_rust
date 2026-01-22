@@ -353,12 +353,15 @@ impl<R: Read + std::io::Seek> Package<R> {
         // Discover model path from relationships (validation already done in open())
         let model_path = self.discover_model_path()?;
 
-        // Read as binary to handle potential encrypted/binary content
-        let bytes = self.get_file_binary(&model_path)?;
+        // Read the model file
+        let mut file = self
+            .archive
+            .by_name(&model_path)
+            .map_err(|_| Error::MissingFile(model_path.clone()))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
 
-        // Convert to string using lossy conversion to handle any non-UTF-8 sequences
-        // This allows parsing models that may contain encrypted content
-        Ok(String::from_utf8_lossy(&bytes).into_owned())
+        Ok(content)
     }
 
     /// Discover the model file path from the relationships file
@@ -424,12 +427,13 @@ impl<R: Read + std::io::Seek> Package<R> {
 
     /// Get a file by name from the archive
     pub fn get_file(&mut self, name: &str) -> Result<String> {
-        // Read as binary to handle potential encrypted/binary content
-        let bytes = self.get_file_binary(name)?;
-        
-        // Convert to string using lossy conversion to handle any non-UTF-8 sequences
-        // This allows reading files that may contain encrypted/binary content
-        Ok(String::from_utf8_lossy(&bytes).into_owned())
+        let mut file = self
+            .archive
+            .by_name(name)
+            .map_err(|_| Error::MissingFile(name.to_string()))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        Ok(content)
     }
 
     /// Check if a file exists in the archive
