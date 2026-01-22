@@ -2571,8 +2571,8 @@ fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> 
                 "Build item {}: Missing required p:UUID attribute.\n\
                  Per 3MF Production Extension spec, when production extension is in requiredextensions, \
                  all <item> elements in the build section must have p:UUID attributes.\n\
-                 Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to build item {}.",
-                idx, idx
+                 Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to this build item.",
+                idx
             )));
         }
 

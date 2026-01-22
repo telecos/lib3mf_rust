@@ -309,7 +309,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                                 let path = if let Some(stripped) = t.strip_prefix('/') {
                                     stripped.to_string()
                                 } else {
-                                    t.clone()
+                                    t
                                 };
 
                                 // Verify the target file exists
