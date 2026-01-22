@@ -501,6 +501,80 @@ impl Default for Mesh {
     }
 }
 
+/// A triangle in a displacement mesh
+#[derive(Debug, Clone, PartialEq)]
+pub struct DisplacementTriangle {
+    /// Index of first vertex
+    pub v1: usize,
+    /// Index of second vertex
+    pub v2: usize,
+    /// Index of third vertex
+    pub v3: usize,
+    /// Optional material ID (property ID)
+    pub pid: Option<usize>,
+    /// Optional material index for entire triangle (property index)
+    pub pindex: Option<usize>,
+    /// Optional material index for vertex 1 (property index)
+    pub p1: Option<usize>,
+    /// Optional material index for vertex 2 (property index)
+    pub p2: Option<usize>,
+    /// Optional material index for vertex 3 (property index)
+    pub p3: Option<usize>,
+    /// Optional disp2d group ID (referenced in triangles element or individual triangle)
+    pub did: Option<usize>,
+    /// Optional displacement coordinate index for vertex 1
+    pub d1: Option<usize>,
+    /// Optional displacement coordinate index for vertex 2
+    pub d2: Option<usize>,
+    /// Optional displacement coordinate index for vertex 3
+    pub d3: Option<usize>,
+}
+
+impl DisplacementTriangle {
+    /// Create a new displacement triangle
+    pub fn new(v1: usize, v2: usize, v3: usize) -> Self {
+        Self {
+            v1,
+            v2,
+            v3,
+            pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
+            did: None,
+            d1: None,
+            d2: None,
+            d3: None,
+        }
+    }
+}
+
+/// A displacement mesh containing vertices and displacement triangles
+#[derive(Debug, Clone)]
+pub struct DisplacementMesh {
+    /// List of vertices
+    pub vertices: Vec<Vertex>,
+    /// List of displacement triangles
+    pub triangles: Vec<DisplacementTriangle>,
+}
+
+impl DisplacementMesh {
+    /// Create a new empty displacement mesh
+    pub fn new() -> Self {
+        Self {
+            vertices: Vec::new(),
+            triangles: Vec::new(),
+        }
+    }
+}
+
+impl Default for DisplacementMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Cap mode for beam lattice ends
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BeamCapMode {
@@ -1360,6 +1434,9 @@ pub struct Object {
     pub object_type: ObjectType,
     /// Optional mesh data
     pub mesh: Option<Mesh>,
+    /// Optional displacement mesh data (Displacement extension)
+    /// An object can have either a regular mesh OR a displacement mesh, not both
+    pub displacement_mesh: Option<DisplacementMesh>,
     /// Optional material ID (property ID)
     pub pid: Option<usize>,
     /// Optional material index (property index) - used with pid to select from color groups
@@ -1405,6 +1482,7 @@ impl Object {
             name: None,
             object_type: ObjectType::Model,
             mesh: None,
+            displacement_mesh: None,
             pid: None,
             pindex: None,
             basematerialid: None,
