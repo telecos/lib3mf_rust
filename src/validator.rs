@@ -2223,6 +2223,7 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                     
                     // Check that the referenced object is a mesh object (not a component-only object)
+                    // and does not contain a beamlattice
                     if let Some(clip_obj) = model.resources.objects.iter().find(|o| o.id as u32 == clip_id) {
                         // Object must have a mesh, not just components
                         if clip_obj.mesh.is_none() && !clip_obj.components.is_empty() {
@@ -2231,6 +2232,17 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                                  The clippingmesh must reference an object that contains a mesh.",
                                 object.id, clip_id
                             )));
+                        }
+                        
+                        // Clipping mesh MUST NOT contain a beamlattice
+                        if let Some(ref clip_mesh) = clip_obj.mesh {
+                            if clip_mesh.beamset.is_some() {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: BeamLattice clippingmesh references object {} which contains a beamlattice. \
+                                     Per the Beam Lattice spec, clippingmesh objects MUST NOT contain a beamlattice.",
+                                    object.id, clip_id
+                                )));
+                            }
                         }
                     }
                 }
@@ -2255,6 +2267,7 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                     }
                     
                     // Check that the referenced object is a mesh object (not a component-only object)
+                    // and does not contain a beamlattice
                     if let Some(rep_obj) = model.resources.objects.iter().find(|o| o.id as u32 == rep_id) {
                         // Object must have a mesh, not just components
                         if rep_obj.mesh.is_none() && !rep_obj.components.is_empty() {
@@ -2263,6 +2276,17 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                                  The representationmesh must reference an object that contains a mesh.",
                                 object.id, rep_id
                             )));
+                        }
+                        
+                        // Representation mesh MUST NOT contain a beamlattice
+                        if let Some(ref rep_mesh) = rep_obj.mesh {
+                            if rep_mesh.beamset.is_some() {
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: BeamLattice representationmesh references object {} which contains a beamlattice. \
+                                     Per the Beam Lattice spec, representationmesh objects MUST NOT contain a beamlattice.",
+                                    object.id, rep_id
+                                )));
+                            }
                         }
                     }
                 }
