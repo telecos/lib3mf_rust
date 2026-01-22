@@ -703,11 +703,12 @@ fn detect_circular_components(
             // Skip circular reference check for components with external production paths
             // When a component has p:path, it references an object in an external file,
             // so it doesn't create a circular reference within the current model
-            if component
+            let has_external_path = component
                 .production
                 .as_ref()
-                .is_some_and(|p| p.path.is_some())
-            {
+                .map_or(false, |p| p.path.is_some());
+            
+            if has_external_path {
                 continue;
             }
 
@@ -784,7 +785,7 @@ fn validate_production_extension(model: &Model) -> Result<()> {
         Ok(())
     };
 
-    // Check all objects for validate production paths
+    // Check all objects to validate production paths
     for object in &model.resources.objects {
         // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
         // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
@@ -898,7 +899,7 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
         Ok(())
     };
 
-    // Check all objects for validate production paths
+    // Check all objects to validate production paths
     for object in &model.resources.objects {
         // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
         // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
