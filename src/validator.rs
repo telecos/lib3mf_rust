@@ -1226,7 +1226,7 @@ fn validate_slice(slice_stack_id: usize, slice_idx: usize, slice: &crate::model:
     }
 
     // If there are polygons, there must be vertices
-    if !slice.polygons.is_empty() && slice.vertices.is_empty() {
+    if slice.vertices.is_empty() {
         return Err(Error::InvalidModel(format!(
             "SliceStack {}: Slice {} (ztop={}) has {} polygon(s) but no vertices. \
              Per 3MF Slice Extension spec, slices with polygons must have vertex data. \
@@ -1245,8 +1245,13 @@ fn validate_slice(slice_stack_id: usize, slice_idx: usize, slice: &crate::model:
                 "SliceStack {}: Slice {} (ztop={}), Polygon {} has invalid startv={} \
                  (slice has {} vertices, valid indices: 0-{}). \
                  Vertex indices must reference valid vertices in the slice.",
-                slice_stack_id, slice_idx, slice.ztop, poly_idx, polygon.startv, 
-                num_vertices, num_vertices - 1
+                slice_stack_id,
+                slice_idx,
+                slice.ztop,
+                poly_idx,
+                polygon.startv,
+                num_vertices,
+                num_vertices - 1
             )));
         }
 
@@ -1257,8 +1262,14 @@ fn validate_slice(slice_stack_id: usize, slice_idx: usize, slice: &crate::model:
                     "SliceStack {}: Slice {} (ztop={}), Polygon {}, Segment {} has invalid v2={} \
                      (slice has {} vertices, valid indices: 0-{}). \
                      Vertex indices must reference valid vertices in the slice.",
-                    slice_stack_id, slice_idx, slice.ztop, poly_idx, seg_idx, segment.v2,
-                    num_vertices, num_vertices - 1
+                    slice_stack_id,
+                    slice_idx,
+                    slice.ztop,
+                    poly_idx,
+                    seg_idx,
+                    segment.v2,
+                    num_vertices,
+                    num_vertices - 1
                 )));
             }
         }
