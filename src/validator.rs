@@ -2135,7 +2135,7 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
     }
 
     // Validate each object with beam lattice
-    for object in &model.resources.objects {
+    for (obj_position, object) in model.resources.objects.iter().enumerate() {
         if let Some(ref mesh) = object.mesh {
             if let Some(ref beamset) = mesh.beamset {
                 let vertex_count = mesh.vertices.len();
@@ -2243,6 +2243,19 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                         )));
                     }
                     
+                    // Per spec: "The clippingmesh attribute MUST reference an object id earlier in the file"
+                    // This means clippingmesh must be a backward reference (earlier position in objects vector)
+                    if let Some(clip_obj_position) = model.resources.objects.iter().position(|o| o.id as u32 == clip_id) {
+                        if clip_obj_position >= obj_position {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: BeamLattice clippingmesh={} is not declared earlier in the file. \
+                                 Per the Beam Lattice spec, clippingmesh MUST reference an object that appears earlier \
+                                 in the resources section of the 3MF file.",
+                                object.id, clip_id
+                            )));
+                        }
+                    }
+                    
                     // Check that the referenced object is a mesh object (not a component-only object)
                     // and does not contain a beamlattice
                     if let Some(clip_obj) = model.resources.objects.iter().find(|o| o.id as u32 == clip_id) {
@@ -2285,6 +2298,19 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
                              The representationmesh cannot be the same object that contains the beamlattice.",
                             object.id
                         )));
+                    }
+                    
+                    // Per spec: "The representationmesh attribute MUST reference an object id earlier in the file"
+                    // This means representationmesh must be a backward reference (earlier position in objects vector)
+                    if let Some(rep_obj_position) = model.resources.objects.iter().position(|o| o.id as u32 == rep_id) {
+                        if rep_obj_position >= obj_position {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: BeamLattice representationmesh={} is not declared earlier in the file. \
+                                 Per the Beam Lattice spec, representationmesh MUST reference an object that appears earlier \
+                                 in the resources section of the 3MF file.",
+                                object.id, rep_id
+                            )));
+                        }
                     }
                     
                     // Check that the referenced object is a mesh object (not a component-only object)
