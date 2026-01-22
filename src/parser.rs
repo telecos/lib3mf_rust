@@ -1500,6 +1500,10 @@ fn load_slice_references<R: Read + std::io::Seek>(
             // Merge objects from the external file into the main model
             model.resources.objects.extend(objects);
         }
+
+        // After loading all slice references, clear the slice_refs vector
+        // to avoid validation errors about having both slices and slicerefs
+        slice_stack.slice_refs.clear();
     }
 
     Ok(())

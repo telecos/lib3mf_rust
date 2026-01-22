@@ -1435,10 +1435,21 @@ fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()>
         )));
     }
 
-    // Check m12 (index 6)
-    if transform[6] != 0.0 {
+    // Check m12 (index 5)
+    if transform[5] != 0.0 {
         return Err(Error::InvalidModel(format!(
             "{}: Transform is not planar. Matrix element m12 = {} (must be 0.0).\n\
+             Per 3MF Slice Extension spec, when an object references a slicestack, \
+             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
+             must be 0.0 and m22 must be 1.0.",
+            context, transform[5]
+        )));
+    }
+
+    // Check m20 (index 6)
+    if transform[6] != 0.0 {
+        return Err(Error::InvalidModel(format!(
+            "{}: Transform is not planar. Matrix element m20 = {} (must be 0.0).\n\
              Per 3MF Slice Extension spec, when an object references a slicestack, \
              transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
              must be 0.0 and m22 must be 1.0.",
@@ -1446,36 +1457,25 @@ fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()>
         )));
     }
 
-    // Check m20 (index 8)
-    if transform[8] != 0.0 {
-        return Err(Error::InvalidModel(format!(
-            "{}: Transform is not planar. Matrix element m20 = {} (must be 0.0).\n\
-             Per 3MF Slice Extension spec, when an object references a slicestack, \
-             transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
-             must be 0.0 and m22 must be 1.0.",
-            context, transform[8]
-        )));
-    }
-
-    // Check m21 (index 9)
-    if transform[9] != 0.0 {
+    // Check m21 (index 7)
+    if transform[7] != 0.0 {
         return Err(Error::InvalidModel(format!(
             "{}: Transform is not planar. Matrix element m21 = {} (must be 0.0).\n\
              Per 3MF Slice Extension spec, when an object references a slicestack, \
              transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
              must be 0.0 and m22 must be 1.0.",
-            context, transform[9]
+            context, transform[7]
         )));
     }
 
-    // Check m22 (index 10)
-    if transform[10] != 1.0 {
+    // Check m22 (index 8)
+    if transform[8] != 1.0 {
         return Err(Error::InvalidModel(format!(
             "{}: Transform is not planar. Matrix element m22 = {} (must be 1.0).\n\
              Per 3MF Slice Extension spec, when an object references a slicestack, \
              transforms must be planar (no Z-axis rotation or shear). Elements m02, m12, m20, m21 \
              must be 0.0 and m22 must be 1.0.",
-            context, transform[10]
+            context, transform[8]
         )));
     }
 
