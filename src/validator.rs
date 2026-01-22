@@ -66,6 +66,12 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
         }
     }
 
+    // Additional Material and Production validations
+    validate_texture_paths(model)?;
+    validate_color_formats(model)?;
+    validate_uuid_formats(model)?;
+    validate_production_paths(model)?;
+
     Ok(())
 }
 
@@ -345,15 +351,72 @@ fn validate_build_references(model: &Model) -> Result<()> {
 
 /// Validate material, color group, and base material references
 fn validate_material_references(model: &Model) -> Result<()> {
-    // Validate that color group IDs are unique
-    let mut seen_colorgroup_ids = HashSet::new();
+    // Validate that all property group IDs are unique across all property group types
+    // Property groups include: color groups, base material groups, multiproperties,
+    // texture2d groups, and composite materials
+    let mut seen_property_group_ids: HashMap<usize, String> = HashMap::new();
+    
+    // Check color group IDs
     for colorgroup in &model.resources.color_groups {
-        if !seen_colorgroup_ids.insert(colorgroup.id) {
+        if let Some(existing_type) = seen_property_group_ids.insert(colorgroup.id, "colorgroup".to_string()) {
             return Err(Error::InvalidModel(format!(
-                "Duplicate color group ID: {}. \
-                 Each color group must have a unique id attribute. \
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a colorgroup. \
+                 Each resource must have a unique id attribute. \
                  Check your material definitions for duplicate IDs.",
-                colorgroup.id
+                colorgroup.id, existing_type
+            )));
+        }
+    }
+    
+    // Check base material group IDs
+    for basematerialgroup in &model.resources.base_material_groups {
+        if let Some(existing_type) = seen_property_group_ids.insert(basematerialgroup.id, "basematerials".to_string()) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a basematerials group. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                basematerialgroup.id, existing_type
+            )));
+        }
+    }
+    
+    // Check multiproperties IDs
+    for multiprop in &model.resources.multi_properties {
+        if let Some(existing_type) = seen_property_group_ids.insert(multiprop.id, "multiproperties".to_string()) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a multiproperties group. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                multiprop.id, existing_type
+            )));
+        }
+    }
+    
+    // Check texture2d group IDs
+    for tex2dgroup in &model.resources.texture2d_groups {
+        if let Some(existing_type) = seen_property_group_ids.insert(tex2dgroup.id, "texture2dgroup".to_string()) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a texture2dgroup. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                tex2dgroup.id, existing_type
+            )));
+        }
+    }
+    
+    // Check composite materials IDs
+    for composite in &model.resources.composite_materials {
+        if let Some(existing_type) = seen_property_group_ids.insert(composite.id, "compositematerials".to_string()) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate resource ID: {}. \
+                 This ID is used by both a {} and a compositematerials group. \
+                 Each resource must have a unique id attribute. \
+                 Check your material definitions for duplicate IDs.",
+                composite.id, existing_type
             )));
         }
     }
@@ -363,32 +426,7 @@ fn validate_material_references(model: &Model) -> Result<()> {
     // texture2d groups, and composite materials
 
     // Collect all valid property group IDs into a single HashSet for efficient lookup
-    let mut valid_property_group_ids: HashSet<usize> = HashSet::new();
-
-    // Add color group IDs
-    for cg in &model.resources.color_groups {
-        valid_property_group_ids.insert(cg.id);
-    }
-
-    // Add base material group IDs
-    for bg in &model.resources.base_material_groups {
-        valid_property_group_ids.insert(bg.id);
-    }
-
-    // Add multiproperties IDs
-    for mp in &model.resources.multi_properties {
-        valid_property_group_ids.insert(mp.id);
-    }
-
-    // Add texture2d group IDs
-    for tg in &model.resources.texture2d_groups {
-        valid_property_group_ids.insert(tg.id);
-    }
-
-    // Add composite materials IDs
-    for cm in &model.resources.composite_materials {
-        valid_property_group_ids.insert(cm.id);
-    }
+    let valid_property_group_ids: HashSet<usize> = seen_property_group_ids.keys().copied().collect();
 
     // Keep separate base material IDs set for basematerialid validation
     let valid_basematerial_ids: HashSet<usize> = model
@@ -657,6 +695,74 @@ fn validate_material_references(model: &Model) -> Result<()> {
                             composite.composites.len(),
                             max_index
                         )));
+                    }
+                }
+            }
+        }
+
+        // Validate that all property groups used on an object are of the same type
+        // Per 3MF Material Extension spec, you cannot mix different property group types
+        // (e.g., color groups and texture2d groups) on the same object
+        if let Some(ref mesh) = object.mesh {
+            if let Some(obj_pid) = object.pid {
+                // Determine the type of the object's property group
+                let obj_is_colorgroup = model.resources.color_groups.iter().any(|cg| cg.id == obj_pid);
+                let obj_is_basematerial = model.resources.base_material_groups.iter().any(|bg| bg.id == obj_pid);
+                let obj_is_texture2d = model.resources.texture2d_groups.iter().any(|tg| tg.id == obj_pid);
+                let obj_is_composite = model.resources.composite_materials.iter().any(|cm| cm.id == obj_pid);
+
+                // Check each triangle's pid to ensure it matches the object's property group type
+                for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
+                    if let Some(tri_pid) = triangle.pid {
+                        // Skip if triangle uses the same pid as object
+                        if tri_pid == obj_pid {
+                            continue;
+                        }
+
+                        // Check if triangle's property group is of a different type
+                        let tri_is_colorgroup = model.resources.color_groups.iter().any(|cg| cg.id == tri_pid);
+                        let tri_is_basematerial = model.resources.base_material_groups.iter().any(|bg| bg.id == tri_pid);
+                        let tri_is_texture2d = model.resources.texture2d_groups.iter().any(|tg| tg.id == tri_pid);
+                        let tri_is_composite = model.resources.composite_materials.iter().any(|cm| cm.id == tri_pid);
+
+                        // Determine type names for error message
+                        let obj_type = if obj_is_colorgroup {
+                            "color group"
+                        } else if obj_is_basematerial {
+                            "base material group"
+                        } else if obj_is_texture2d {
+                            "texture2d group"
+                        } else if obj_is_composite {
+                            "composite materials group"
+                        } else {
+                            "unknown"
+                        };
+
+                        let tri_type = if tri_is_colorgroup {
+                            "color group"
+                        } else if tri_is_basematerial {
+                            "base material group"
+                        } else if tri_is_texture2d {
+                            "texture2d group"
+                        } else if tri_is_composite {
+                            "composite materials group"
+                        } else {
+                            "unknown"
+                        };
+
+                        // Check for type mismatch
+                        if (obj_is_colorgroup && !tri_is_colorgroup)
+                            || (obj_is_basematerial && !tri_is_basematerial)
+                            || (obj_is_texture2d && !tri_is_texture2d)
+                            || (obj_is_composite && !tri_is_composite)
+                        {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Triangle {} uses property group {} ({}), but object uses property group {} ({}).\n\
+                                 Per 3MF Material Extension spec, all property groups used on an object must be of the same type.\n\
+                                 Hint: Ensure all triangles reference property groups of the same type as the object's property group.",
+                                object.id, tri_idx, tri_pid, tri_type, obj_pid, obj_type
+                            )));
+                        }
                     }
                 }
             }
@@ -1385,10 +1491,21 @@ fn validate_production_extension(model: &Model) -> Result<()> {
 
     // Check all objects to validate production paths
     for object in &model.resources.objects {
-        // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
-        // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
-        // thumbnail attributes and production extension should still parse successfully.
-        // Therefore, we do not reject files with thumbnail attributes.
+        // Per 3MF Production Extension spec v1.2.0 Section 3.1:
+        // The thumbnail attribute is deprecated when using the production extension.
+        // Objects with both thumbnail attribute AND production UUID should be rejected.
+        if object.has_thumbnail_attribute {
+            if let Some(ref prod_info) = object.production {
+                if prod_info.uuid.is_some() || prod_info.path.is_some() {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Cannot use deprecated 'thumbnail' attribute with Production extension attributes (p:UUID or p:path).\n\
+                         Per 3MF Production Extension v1.2.0, the thumbnail attribute is deprecated and must not be used with production attributes.\n\
+                         Remove either the thumbnail attribute or the production extension attributes.",
+                        object.id
+                    )));
+                }
+            }
+        }
 
         // Validate production extension usage
         if let Some(ref prod_info) = object.production {
@@ -1499,10 +1616,21 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
 
     // Check all objects to validate production paths
     for object in &model.resources.objects {
-        // Note: The thumbnail attribute is deprecated in 3MF v1.4+ when production extension is used,
-        // but deprecation doesn't make it invalid. Per the official 3MF test suite, files with
-        // thumbnail attributes and production extension should still parse successfully.
-        // Therefore, we do not reject files with thumbnail attributes.
+        // Per 3MF Production Extension spec v1.2.0 Section 3.1:
+        // The thumbnail attribute is deprecated when using the production extension.
+        // Objects with both thumbnail attribute AND production UUID should be rejected.
+        if object.has_thumbnail_attribute {
+            if let Some(ref prod_info) = object.production {
+                if prod_info.uuid.is_some() || prod_info.path.is_some() {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Cannot use deprecated 'thumbnail' attribute with Production extension attributes (p:UUID or p:path).\n\
+                         Per 3MF Production Extension v1.2.0, the thumbnail attribute is deprecated and must not be used with production attributes.\n\
+                         Remove either the thumbnail attribute or the production extension attributes.",
+                        object.id
+                    )));
+                }
+            }
+        }
 
         // Validate production extension usage and track attributes
         if let Some(ref prod_info) = object.production {
@@ -2054,6 +2182,187 @@ fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()>
         )));
     }
 
+    Ok(())
+}
+
+/// Validate texture paths contain only valid ASCII characters
+///
+/// Per 3MF Material Extension spec, texture paths must contain only valid ASCII characters.
+/// Non-ASCII characters (like Unicode) in texture paths are not allowed.
+fn validate_texture_paths(model: &Model) -> Result<()> {
+    for texture in &model.resources.texture2d_resources {
+        // Check that the path contains only ASCII characters
+        if !texture.path.is_ascii() {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' contains non-ASCII characters.\n\
+                 Per 3MF Material Extension specification, texture paths must contain only ASCII characters.\n\
+                 Hint: Remove Unicode or special characters from the texture path.",
+                texture.id, texture.path
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Validate color formats in color groups
+///
+/// Per 3MF Material Extension spec, colors are stored as RGBA tuples (u8, u8, u8, u8).
+/// The parser already validates format during parsing, but this provides an additional check.
+fn validate_color_formats(model: &Model) -> Result<()> {
+    // Colors are already validated during parsing (stored as (u8, u8, u8, u8) tuples)
+    // This function is a placeholder for any additional color validation needs
+    
+    // Validate that color groups have at least one color
+    for color_group in &model.resources.color_groups {
+        if color_group.colors.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Color group {}: Must contain at least one color.\n\
+                 A color group without colors is invalid.",
+                color_group.id
+            )));
+        }
+    }
+    
+    Ok(())
+}
+
+/// Validate UUID format per RFC 4122
+///
+/// UUIDs must follow the format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+/// where x is a hexadecimal digit (0-9, a-f, A-F).
+fn validate_uuid_formats(model: &Model) -> Result<()> {
+    // Helper function to validate a single UUID
+    let validate_uuid = |uuid: &str, context: &str| -> Result<()> {
+        // UUID format: 8-4-4-4-12 hexadecimal digits separated by hyphens
+        // Example: 550e8400-e29b-41d4-a716-446655440000
+        
+        // Check length (36 characters including hyphens)
+        if uuid.len() != 36 {
+            return Err(Error::InvalidModel(format!(
+                "{}: Invalid UUID '{}' - must be 36 characters in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                context, uuid
+            )));
+        }
+        
+        // Check hyphen positions (at indices 8, 13, 18, 23)
+        if uuid.chars().nth(8) != Some('-')
+            || uuid.chars().nth(13) != Some('-')
+            || uuid.chars().nth(18) != Some('-')
+            || uuid.chars().nth(23) != Some('-')
+        {
+            return Err(Error::InvalidModel(format!(
+                "{}: Invalid UUID '{}' - hyphens must be at positions 8, 13, 18, and 23",
+                context, uuid
+            )));
+        }
+        
+        // Check that all other characters are hexadecimal digits
+        for (idx, ch) in uuid.chars().enumerate() {
+            if idx == 8 || idx == 13 || idx == 18 || idx == 23 {
+                continue; // Skip hyphens
+            }
+            if !ch.is_ascii_hexdigit() {
+                return Err(Error::InvalidModel(format!(
+                    "{}: Invalid UUID '{}' - character '{}' at position {} is not a hexadecimal digit",
+                    context, uuid, ch, idx
+                )));
+            }
+        }
+        
+        Ok(())
+    };
+    
+    // Validate build UUID
+    if let Some(ref uuid) = model.build.production_uuid {
+        validate_uuid(uuid, "Build")?;
+    }
+    
+    // Validate build item UUIDs
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref uuid) = item.production_uuid {
+            validate_uuid(uuid, &format!("Build item {}", idx))?;
+        }
+    }
+    
+    // Validate object UUIDs
+    for object in &model.resources.objects {
+        if let Some(ref prod_info) = object.production {
+            if let Some(ref uuid) = prod_info.uuid {
+                validate_uuid(uuid, &format!("Object {}", object.id))?;
+            }
+        }
+        
+        // Validate component UUIDs
+        for (idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                if let Some(ref uuid) = prod_info.uuid {
+                    validate_uuid(uuid, &format!("Object {}, Component {}", object.id, idx))?;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Validate production paths don't reference OPC internal files
+///
+/// Per 3MF Production Extension spec, production paths must not reference
+/// OPC package internal files like /.rels or /[Content_Types].xml.
+fn validate_production_paths(model: &Model) -> Result<()> {
+    // Helper function to validate that a path doesn't reference OPC internal files
+    let validate_not_opc_internal = |path: &str, context: &str| -> Result<()> {
+        // OPC internal paths that should not be referenced:
+        // - /_rels/.rels or any path starting with /_rels/
+        // - /[Content_Types].xml
+        
+        if path.starts_with("/_rels/") || path == "/_rels" {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' references OPC internal relationships directory.\n\
+                 Production paths must not reference package internal files.",
+                context, path
+            )));
+        }
+        
+        if path == "/[Content_Types].xml" {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' references OPC content types file.\n\
+                 Production paths must not reference package internal files.",
+                context, path
+            )));
+        }
+        
+        Ok(())
+    };
+    
+    // Check all objects
+    for object in &model.resources.objects {
+        if let Some(ref prod_info) = object.production {
+            if let Some(ref path) = prod_info.path {
+                validate_not_opc_internal(path, &format!("Object {}", object.id))?;
+            }
+        }
+        
+        // Check components
+        for (idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                if let Some(ref path) = prod_info.path {
+                    validate_not_opc_internal(
+                        path,
+                        &format!("Object {}, Component {}", object.id, idx),
+                    )?;
+                }
+            }
+        }
+    }
+    
+    // Check build items
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref path) = item.production_path {
+            validate_not_opc_internal(path, &format!("Build item {}", idx))?;
+        }
+    }
+    
     Ok(())
 }
 
