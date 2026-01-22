@@ -355,6 +355,11 @@ impl<R: Read + std::io::Seek> Package<R> {
                                         }
                                     }
                                 }
+                            } else {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Relationship missing required Id attribute in '{}'",
+                                    rels_file
+                                )));
                             }
 
                             // N_XPX_0405_03 & N_XPX_0405_05: Validate relationship Type values
@@ -730,9 +735,13 @@ impl<R: Read + std::io::Seek> Package<R> {
                             && marker != 0xC8
                             && marker != 0xCC
                         {
-                            // SOF marker found, check component count at offset +7
-                            if i + 9 < data.len() {
-                                let num_components = data[i + 9];
+                            // SOF marker found, check component count
+                            // JPEG SOF structure: FF marker [2 bytes length] [precision] [height] [width] [components]
+                            // Component count is at offset +7 from marker start, or +9 from current position
+                            const SOF_COMPONENT_COUNT_OFFSET: usize = 9;
+                            if i + SOF_COMPONENT_COUNT_OFFSET < data.len() {
+                                let num_components = data[i + SOF_COMPONENT_COUNT_OFFSET];
+                                // 4 components typically indicates CMYK (or YCCK)
                                 if num_components == 4 {
                                     return Err(Error::InvalidFormat(
                                         "Thumbnail JPEG uses CMYK color space, only RGB is allowed"
@@ -745,11 +754,17 @@ impl<R: Read + std::io::Seek> Package<R> {
                         // Skip this marker - length includes the 2-byte length field itself
                         if i + 3 < data.len() {
                             let len = ((data[i + 2] as usize) << 8) | (data[i + 3] as usize);
-                            // Verify we won't overflow
-                            if len >= 2 && i + len + 2 <= data.len() {
-                                i += len + 2;
+                            // Verify we won't overflow: check that len is at least 2 and won't cause overflow
+                            if len >= 2 {
+                                // Use saturating_add to prevent overflow
+                                let next_pos = i.saturating_add(len).saturating_add(2);
+                                if next_pos <= data.len() {
+                                    i = next_pos;
+                                } else {
+                                    break; // Invalid marker, stop parsing
+                                }
                             } else {
-                                break; // Invalid marker, stop parsing
+                                break; // Invalid length, stop parsing
                             }
                         } else {
                             break;
