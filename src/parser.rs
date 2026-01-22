@@ -6,7 +6,7 @@ use crate::opc::Package;
 use crate::validator;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 /// Size of 3MF transformation matrix (4x3 affine transform in row-major order)
@@ -177,6 +177,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     // Component state
     let mut in_components = false;
 
+    // Triangleset extension state (for validation)
+    let mut in_trianglesets = false;
+
     // Track required elements for validation
     let mut resources_count = 0;
     let mut build_count = 0;
@@ -200,6 +203,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // 2. Then resolve requiredextensions which may use those prefixes
                         let mut namespaces = HashMap::new();
                         let mut required_ext_value = None;
+                        let mut recommended_ext_value = None;
                         let mut all_attrs = HashMap::new();
 
                         // Parse model attributes
@@ -234,7 +238,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "recommendedextensions" => {
                                     // Per 3MF spec, recommendedextensions are optional and may be ignored
                                     // They suggest extensions that enhance user experience but are not required
-                                    // We allow the attribute for spec compliance but don't store it
+                                    // Validate that the value is not empty if present
+                                    if value.trim().is_empty() {
+                                        return Err(Error::InvalidXml(
+                                            "recommendedextensions attribute cannot be empty"
+                                                .to_string(),
+                                        ));
+                                    }
+                                    recommended_ext_value = Some(value.to_string());
                                 }
                                 _ => {
                                     // Check if it's a namespace declaration (xmlns:prefix)
@@ -265,9 +276,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         )?;
 
                         // Now parse required extensions with namespace context
-                        if let Some(ext_value) = required_ext_value {
+                        if let Some(ref ext_value) = required_ext_value {
                             let (extensions, custom_extensions) =
-                                parse_required_extensions_with_namespaces(&ext_value, &namespaces)?;
+                                parse_required_extensions_with_namespaces(ext_value, &namespaces)?;
                             model.required_extensions = extensions;
                             model.required_custom_extensions = custom_extensions;
                             // Validate that all required extensions are supported
@@ -276,6 +287,13 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 &model.required_custom_extensions,
                                 &config,
                             )?;
+                        }
+
+                        // Validate that no extension appears in both required and recommended
+                        if let (Some(req_value), Some(rec_value)) =
+                            (&required_ext_value, &recommended_ext_value)
+                        {
+                            validate_no_duplicate_extensions(req_value, rec_value, &namespaces)?;
                         }
                     }
                     "metadata" => {
@@ -1088,7 +1106,72 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             shape.operands.push(operand);
                         }
                     }
-                    _ => {}
+                    "trianglesets" if current_mesh.is_some() => {
+                        in_trianglesets = true;
+                    }
+                    "triangleset" if in_trianglesets => {
+                        // Triangleset element - validate name attribute is not empty
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(name) = attrs.get("name") {
+                            if name.trim().is_empty() {
+                                return Err(Error::InvalidXml(
+                                    "triangleset name attribute cannot be empty".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    "ref" if in_trianglesets => {
+                        // Validate triangle index in ref element
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let Some(index_str) = attrs.get("index") {
+                            let index = index_str.parse::<usize>().map_err(|_| {
+                                Error::InvalidXml(format!("Invalid triangle index: {}", index_str))
+                            })?;
+                            // Validate index is within bounds
+                            if let Some(ref mesh) = current_mesh {
+                                validate_triangle_index(mesh, index, "ref")?;
+                            }
+                        }
+                    }
+                    "refrange" if in_trianglesets => {
+                        // Validate triangle index range in refrange element
+                        let attrs = parse_attributes(&reader, e)?;
+                        if let (Some(start_str), Some(end_str)) =
+                            (attrs.get("startindex"), attrs.get("endindex"))
+                        {
+                            let start_index = start_str.parse::<usize>().map_err(|_| {
+                                Error::InvalidXml(format!(
+                                    "Invalid triangle start index: {}",
+                                    start_str
+                                ))
+                            })?;
+                            let end_index = end_str.parse::<usize>().map_err(|_| {
+                                Error::InvalidXml(format!(
+                                    "Invalid triangle end index: {}",
+                                    end_str
+                                ))
+                            })?;
+
+                            // Validate that start_index <= end_index
+                            if start_index > end_index {
+                                return Err(Error::InvalidXml(format!(
+                                    "refrange start index {} is greater than end index {}",
+                                    start_index, end_index
+                                )));
+                            }
+
+                            // Validate indices are within bounds
+                            if let Some(ref mesh) = current_mesh {
+                                validate_triangle_index(mesh, start_index, "refrange start")?;
+                                validate_triangle_index(mesh, end_index, "refrange end")?;
+                            }
+                        }
+                    }
+                    _ => {
+                        // Unknown/custom extension element - validate that attribute values don't use namespace prefixes
+                        let attrs = parse_attributes(&reader, e)?;
+                        validate_attribute_values(&attrs, &declared_namespaces)?;
+                    }
                 }
             }
             Ok(Event::End(ref e)) => {
@@ -1201,6 +1284,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                         in_boolean_shape = false;
+                    }
+                    "trianglesets" => {
+                        in_trianglesets = false;
                     }
                     _ => {}
                 }
@@ -1947,6 +2033,60 @@ fn validate_extensions(
     Ok(())
 }
 
+/// Validate that no extension appears in both requiredextensions and recommendedextensions
+fn validate_no_duplicate_extensions(
+    required_str: &str,
+    recommended_str: &str,
+    namespaces: &HashMap<String, String>,
+) -> Result<()> {
+    // Parse both extension lists to get their resolved namespaces
+    let required_items: Vec<&str> = required_str.split_whitespace().collect();
+    let recommended_items: Vec<&str> = recommended_str.split_whitespace().collect();
+
+    // Resolve each item to its namespace URI
+    let mut required_namespaces = HashSet::new();
+    for item in required_items {
+        // If it's a namespace prefix, resolve it
+        if let Some(uri) = namespaces.get(item) {
+            required_namespaces.insert(uri.as_str());
+        } else {
+            // It's already a URI
+            required_namespaces.insert(item);
+        }
+    }
+
+    // Check recommended items against required
+    for item in recommended_items {
+        let resolved = if let Some(uri) = namespaces.get(item) {
+            uri.as_str()
+        } else {
+            item
+        };
+
+        if required_namespaces.contains(resolved) {
+            return Err(Error::InvalidXml(format!(
+                "Extension '{}' cannot appear in both requiredextensions and recommendedextensions",
+                item
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that a triangle index is within bounds of the mesh
+fn validate_triangle_index(mesh: &Mesh, index: usize, context: &str) -> Result<()> {
+    if index >= mesh.triangles.len() {
+        return Err(Error::InvalidXml(format!(
+            "{} triangle index {} is out of bounds (mesh has {} triangles)",
+            context,
+            index,
+            mesh.triangles.len()
+        )));
+    }
+    Ok(())
+}
+
 /// Try to handle an element with custom extension handlers
 /// Returns true if a handler was invoked, false otherwise
 #[allow(dead_code)] // Will be used in future enhancement
@@ -2017,6 +2157,47 @@ pub(crate) fn parse_attributes<R: std::io::BufRead>(
     }
 
     Ok(attrs)
+}
+
+/// Validate that attribute values don't contain namespace prefixes
+/// Per 3MF spec, namespace prefixes can only be used in element/attribute names, not in values
+/// Exception: Some attributes have QName type (like 'identifier') which DO allow prefixes
+pub(crate) fn validate_attribute_values(
+    attrs: &HashMap<String, String>,
+    declared_namespaces: &HashMap<String, String>,
+) -> Result<()> {
+    for (key, value) in attrs {
+        // Skip namespace declarations and XML attributes
+        if key.starts_with("xmlns") || key.starts_with("xml:") {
+            continue;
+        }
+
+        // Skip attributes that are defined as QName type in the spec (they can have namespace prefixes)
+        // The trianglesets extension defines 'identifier' as QName
+        if key == "identifier" || key.ends_with(":identifier") {
+            continue;
+        }
+
+        // Skip attributes that legitimately contain colons (URIs, etc.)
+        // Only check non-URI-like values
+        if value.contains("://") {
+            // This looks like a URI, skip it
+            continue;
+        }
+
+        // Check if the value starts with a declared namespace prefix followed by colon
+        if let Some(colon_pos) = value.find(':') {
+            let potential_prefix = &value[..colon_pos];
+            if declared_namespaces.contains_key(potential_prefix) {
+                return Err(Error::InvalidXml(format!(
+                    "Attribute '{}' has value '{}' which uses namespace prefix '{}:'. \
+                    Namespace prefixes are not allowed in attribute values per 3MF specification",
+                    key, value, potential_prefix
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Check if an attribute key should be skipped during validation
