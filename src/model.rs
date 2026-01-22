@@ -631,6 +631,12 @@ pub struct Beam {
     pub cap1: Option<BeamCapMode>,
     /// Cap mode at second vertex (optional, defaults to beamset cap mode)
     pub cap2: Option<BeamCapMode>,
+    /// Material/property group ID
+    pub property_id: Option<u32>,
+    /// Property index at first vertex
+    pub p1: Option<u32>,
+    /// Property index at second vertex
+    pub p2: Option<u32>,
 }
 
 impl Beam {
@@ -643,6 +649,9 @@ impl Beam {
             r2: None,
             cap1: None,
             cap2: None,
+            property_id: None,
+            p1: None,
+            p2: None,
         }
     }
 
@@ -655,6 +664,9 @@ impl Beam {
             r2: None,
             cap1: None,
             cap2: None,
+            property_id: None,
+            p1: None,
+            p2: None,
         }
     }
 
@@ -667,6 +679,9 @@ impl Beam {
             r2: Some(r2),
             cap1: None,
             cap2: None,
+            property_id: None,
+            p1: None,
+            p2: None,
         }
     }
 }
@@ -685,6 +700,18 @@ pub struct BeamSet {
     pub cap_mode: BeamCapMode,
     /// List of beams in the lattice
     pub beams: Vec<Beam>,
+    /// Optional clipping mesh ID for beam lattice clipping
+    pub clipping_mesh_id: Option<u32>,
+    /// Optional representation mesh ID for alternative representation
+    pub representation_mesh_id: Option<u32>,
+    /// Clipping mode (none, inside, outside)
+    pub clipping_mode: Option<String>,
+    /// Ball mode for beam endpoints (from balls extension)
+    pub ball_mode: Option<String>,
+    /// Material/property group ID for beam lattice
+    pub property_id: Option<u32>,
+    /// Property index within the property group
+    pub property_index: Option<u32>,
 }
 
 impl BeamSet {
@@ -695,6 +722,12 @@ impl BeamSet {
             min_length: 0.0001,
             cap_mode: BeamCapMode::Sphere,
             beams: Vec::new(),
+            clipping_mesh_id: None,
+            representation_mesh_id: None,
+            clipping_mode: None,
+            ball_mode: None,
+            property_id: None,
+            property_index: None,
         }
     }
 
@@ -705,6 +738,12 @@ impl BeamSet {
             min_length: 0.0001,
             cap_mode: BeamCapMode::Sphere,
             beams: Vec::new(),
+            clipping_mesh_id: None,
+            representation_mesh_id: None,
+            clipping_mode: None,
+            ball_mode: None,
+            property_id: None,
+            property_index: None,
         }
     }
 }

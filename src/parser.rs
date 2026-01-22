@@ -899,6 +899,37 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             beamset.cap_mode = cap_str.parse()?;
                         }
 
+                        // Parse clippingmesh ID attribute (optional)
+                        if let Some(clip_id_str) = attrs.get("clippingmesh") {
+                            beamset.clipping_mesh_id = Some(clip_id_str.parse::<u32>()?);
+                        }
+
+                        // Parse representationmesh ID attribute (optional)
+                        if let Some(rep_id_str) = attrs.get("representationmesh") {
+                            beamset.representation_mesh_id = Some(rep_id_str.parse::<u32>()?);
+                        }
+
+                        // Parse clippingmode attribute (optional)
+                        if let Some(clip_mode) = attrs.get("clippingmode") {
+                            beamset.clipping_mode = Some(clip_mode.clone());
+                        }
+
+                        // Parse ballmode attribute (optional) - from balls extension
+                        // This can be in default namespace or balls namespace
+                        if let Some(ball_mode) = attrs.get("ballmode") {
+                            beamset.ball_mode = Some(ball_mode.clone());
+                        }
+
+                        // Parse pid attribute (optional) - material/property group ID
+                        if let Some(pid_str) = attrs.get("pid") {
+                            beamset.property_id = Some(pid_str.parse::<u32>()?);
+                        }
+
+                        // Parse pindex attribute (optional) - property index
+                        if let Some(pindex_str) = attrs.get("pindex") {
+                            beamset.property_index = Some(pindex_str.parse::<u32>()?);
+                        }
+
                         current_beamset = Some(beamset);
                     }
                     "beams" if in_beamset => {
@@ -2249,8 +2280,6 @@ fn parse_beam<R: std::io::BufRead>(
 
     // Validate only allowed attributes are present
     // Per Beam Lattice Extension spec v1.2.0: v1, v2, r1, r2, cap1, cap2, p1, p2, pid
-    // Currently implemented: v1, v2, r1, r2, cap1, cap2
-    // TODO: Implement p1, p2, pid attributes for per-beam property overrides
     validate_attributes(
         &attrs,
         &["v1", "v2", "r1", "r2", "cap1", "cap2", "p1", "p2", "pid"],
@@ -2301,6 +2330,21 @@ fn parse_beam<R: std::io::BufRead>(
     // Parse cap2 attribute (optional, defaults to beamset cap mode)
     if let Some(cap2_str) = attrs.get("cap2") {
         beam.cap2 = Some(cap2_str.parse()?);
+    }
+
+    // Parse pid attribute (optional) - material/property group ID
+    if let Some(pid_str) = attrs.get("pid") {
+        beam.property_id = Some(pid_str.parse::<u32>()?);
+    }
+
+    // Parse p1 attribute (optional) - property index at v1
+    if let Some(p1_str) = attrs.get("p1") {
+        beam.p1 = Some(p1_str.parse::<u32>()?);
+    }
+
+    // Parse p2 attribute (optional) - property index at v2
+    if let Some(p2_str) = attrs.get("p2") {
+        beam.p2 = Some(p2_str.parse::<u32>()?);
     }
 
     Ok(beam)

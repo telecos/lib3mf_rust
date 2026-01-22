@@ -57,6 +57,7 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_displacement_extension(model)?;
     validate_slices(model)?;
     validate_slice_extension(model)?;
+    validate_beam_lattice(model)?;
 
     // Custom extension validation
     for ext_info in config.custom_extensions().values() {
@@ -1693,6 +1694,256 @@ fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()>
         )));
     }
 
+    Ok(())
+}
+
+/// Validate beam lattice extension requirements
+///
+/// Performs validation specific to beam lattice objects according to the
+/// Beam Lattice Extension specification, including:
+/// - Beam vertex indices must reference valid vertices in the mesh
+/// - Clipping mesh references must be valid
+/// - Representation mesh references must be valid and not self-referencing
+/// - Clipping mode must have an associated clipping mesh
+/// - Ball mode is detected (currently unsupported)
+/// - Material/property references from beams and beamsets are valid
+fn validate_beam_lattice(model: &Model) -> Result<()> {
+    // Collect all valid resource IDs (objects, property groups, etc.)
+    let mut valid_resource_ids = HashSet::new();
+    
+    for obj in &model.resources.objects {
+        valid_resource_ids.insert(obj.id as u32);
+    }
+    for cg in &model.resources.color_groups {
+        valid_resource_ids.insert(cg.id as u32);
+    }
+    for bg in &model.resources.base_material_groups {
+        valid_resource_ids.insert(bg.id as u32);
+    }
+    for tg in &model.resources.texture2d_groups {
+        valid_resource_ids.insert(tg.id as u32);
+    }
+    for c2d in &model.resources.composite_materials {
+        valid_resource_ids.insert(c2d.id as u32);
+    }
+    for mg in &model.resources.multi_properties {
+        valid_resource_ids.insert(mg.id as u32);
+    }
+
+    // Validate each object with beam lattice
+    for object in &model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            if let Some(ref beamset) = mesh.beamset {
+                let vertex_count = mesh.vertices.len();
+                
+                // Validate beam vertex indices
+                for (beam_idx, beam) in beamset.beams.iter().enumerate() {
+                    if beam.v1 >= vertex_count {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Beam {} references invalid vertex index v1={} \
+                             (mesh has {} vertices). Beam vertex indices must be less than \
+                             the number of vertices in the mesh.",
+                            object.id, beam_idx, beam.v1, vertex_count
+                        )));
+                    }
+                    if beam.v2 >= vertex_count {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Beam {} references invalid vertex index v2={} \
+                             (mesh has {} vertices). Beam vertex indices must be less than \
+                             the number of vertices in the mesh.",
+                            object.id, beam_idx, beam.v2, vertex_count
+                        )));
+                    }
+                    
+                    // Validate beam material references
+                    if let Some(pid) = beam.property_id {
+                        if !valid_resource_ids.contains(&pid) {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Beam {} references non-existent property group ID {}. \
+                                 Property group IDs must reference existing color groups, base material groups, \
+                                 texture groups, composite materials, or multi-property groups.",
+                                object.id, beam_idx, pid
+                            )));
+                        }
+                    }
+                }
+                
+                // Validate clipping mesh reference
+                if let Some(clip_id) = beamset.clipping_mesh_id {
+                    if !valid_resource_ids.contains(&clip_id) {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice references non-existent clippingmesh ID {}. \
+                             The clippingmesh attribute must reference a valid object resource.",
+                            object.id, clip_id
+                        )));
+                    }
+                    
+                    // Check for self-reference (clipping mesh cannot be the same object)
+                    if clip_id == object.id as u32 {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice clippingmesh references itself. \
+                             The clippingmesh cannot be the same object that contains the beamlattice.",
+                            object.id
+                        )));
+                    }
+                }
+                
+                // Validate representation mesh reference
+                if let Some(rep_id) = beamset.representation_mesh_id {
+                    if !valid_resource_ids.contains(&rep_id) {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice references non-existent representationmesh ID {}. \
+                             The representationmesh attribute must reference a valid object resource.",
+                            object.id, rep_id
+                        )));
+                    }
+                    
+                    // Check for self-reference (representation mesh cannot be the same object)
+                    if rep_id == object.id as u32 {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice representationmesh references itself. \
+                             The representationmesh cannot be the same object that contains the beamlattice.",
+                            object.id
+                        )));
+                    }
+                }
+                
+                // Validate clipping mode
+                if let Some(ref clip_mode) = beamset.clipping_mode {
+                    // Check that clipping mode has valid value
+                    if clip_mode != "none" && clip_mode != "inside" && clip_mode != "outside" {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice has invalid clippingmode '{}'. \
+                             Valid values are: 'none', 'inside', 'outside'.",
+                            object.id, clip_mode
+                        )));
+                    }
+                    
+                    // If clipping mode is specified (and not 'none'), must have clipping mesh
+                    if clip_mode != "none" && beamset.clipping_mesh_id.is_none() {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice has clippingmode='{}' but no clippingmesh attribute. \
+                             When clippingmode is specified (other than 'none'), a clippingmesh must be provided.",
+                            object.id, clip_mode
+                        )));
+                    }
+                }
+                
+                // Validate ball mode (currently unsupported - detect and reject)
+                if beamset.ball_mode.is_some() {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: BeamLattice uses ballmode attribute which is from the \
+                         Ball Lattice sub-extension. This extension is not currently supported.",
+                        object.id
+                    )));
+                }
+                
+                // Validate beamset material reference and property index
+                if let Some(pid) = beamset.property_id {
+                    if !valid_resource_ids.contains(&pid) {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: BeamLattice references non-existent property group ID {}. \
+                             Property group IDs must reference existing color groups, base material groups, \
+                             texture groups, composite materials, or multi-property groups.",
+                            object.id, pid
+                        )));
+                    }
+                    
+                    // Validate beamset pindex if present
+                    if let Some(pindex) = beamset.property_index {
+                        // Check if it's a color group
+                        if let Some(colorgroup) = model.resources.color_groups.iter().find(|cg| cg.id as u32 == pid) {
+                            if pindex as usize >= colorgroup.colors.len() {
+                                let max_index = colorgroup.colors.len().saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: BeamLattice pindex {} is out of bounds.\n\
+                                     Color group {} has {} colors (valid indices: 0-{}).",
+                                    object.id, pindex, pid, colorgroup.colors.len(), max_index
+                                )));
+                            }
+                        }
+                        // Check if it's a base material group
+                        else if let Some(basematerialgroup) = model.resources.base_material_groups.iter().find(|bg| bg.id as u32 == pid) {
+                            if pindex as usize >= basematerialgroup.materials.len() {
+                                let max_index = basematerialgroup.materials.len().saturating_sub(1);
+                                return Err(Error::InvalidModel(format!(
+                                    "Object {}: BeamLattice pindex {} is out of bounds.\n\
+                                     Base material group {} has {} materials (valid indices: 0-{}).",
+                                    object.id, pindex, pid, basematerialgroup.materials.len(), max_index
+                                )));
+                            }
+                        }
+                    }
+                }
+                
+                // Validate beam-level property indices (p1, p2)
+                for (beam_idx, beam) in beamset.beams.iter().enumerate() {
+                    // Determine which property group to use for validation
+                    let pid_to_check = beam.property_id.or(beamset.property_id);
+                    
+                    if let Some(pid) = pid_to_check {
+                        // Check if it's a color group
+                        if let Some(colorgroup) = model.resources.color_groups.iter().find(|cg| cg.id as u32 == pid) {
+                            let num_colors = colorgroup.colors.len();
+                            
+                            // Validate p1
+                            if let Some(p1) = beam.p1 {
+                                if p1 as usize >= num_colors {
+                                    let max_index = num_colors.saturating_sub(1);
+                                    return Err(Error::InvalidModel(format!(
+                                        "Object {}: Beam {} p1 {} is out of bounds.\n\
+                                         Color group {} has {} colors (valid indices: 0-{}).",
+                                        object.id, beam_idx, p1, pid, num_colors, max_index
+                                    )));
+                                }
+                            }
+                            
+                            // Validate p2
+                            if let Some(p2) = beam.p2 {
+                                if p2 as usize >= num_colors {
+                                    let max_index = num_colors.saturating_sub(1);
+                                    return Err(Error::InvalidModel(format!(
+                                        "Object {}: Beam {} p2 {} is out of bounds.\n\
+                                         Color group {} has {} colors (valid indices: 0-{}).",
+                                        object.id, beam_idx, p2, pid, num_colors, max_index
+                                    )));
+                                }
+                            }
+                        }
+                        // Check if it's a base material group
+                        else if let Some(basematerialgroup) = model.resources.base_material_groups.iter().find(|bg| bg.id as u32 == pid) {
+                            let num_materials = basematerialgroup.materials.len();
+                            
+                            // Validate p1
+                            if let Some(p1) = beam.p1 {
+                                if p1 as usize >= num_materials {
+                                    let max_index = num_materials.saturating_sub(1);
+                                    return Err(Error::InvalidModel(format!(
+                                        "Object {}: Beam {} p1 {} is out of bounds.\n\
+                                         Base material group {} has {} materials (valid indices: 0-{}).",
+                                        object.id, beam_idx, p1, pid, num_materials, max_index
+                                    )));
+                                }
+                            }
+                            
+                            // Validate p2
+                            if let Some(p2) = beam.p2 {
+                                if p2 as usize >= num_materials {
+                                    let max_index = num_materials.saturating_sub(1);
+                                    return Err(Error::InvalidModel(format!(
+                                        "Object {}: Beam {} p2 {} is out of bounds.\n\
+                                         Base material group {} has {} materials (valid indices: 0-{}).",
+                                        object.id, beam_idx, p2, pid, num_materials, max_index
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     Ok(())
 }
 
