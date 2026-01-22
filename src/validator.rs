@@ -2138,6 +2138,17 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
     for (obj_position, object) in model.resources.objects.iter().enumerate() {
         if let Some(ref mesh) = object.mesh {
             if let Some(ref beamset) = mesh.beamset {
+                // Validate object type
+                // Per spec: "A beamlattice MUST only be added to a mesh object of type 'model' or 'solidsupport'"
+                use crate::model::ObjectType;
+                if object.object_type != ObjectType::Model && object.object_type != ObjectType::SolidSupport {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: BeamLattice can only be added to objects of type 'model' or 'solidsupport'. \
+                         This object has type '{:?}'. Per the Beam Lattice spec, types like 'support' or 'other' are not allowed.",
+                        object.id, object.object_type
+                    )));
+                }
+                
                 let vertex_count = mesh.vertices.len();
                 
                 // Validate beam vertex indices
