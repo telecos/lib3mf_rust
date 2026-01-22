@@ -1413,16 +1413,22 @@ fn validate_slice(
 /// object that references a <slicestack> MUST have m02, m12, m20, and m21 equal to zero and
 /// m22 equal to one.
 ///
-/// Transform matrix layout (row-major, 4x3):
+/// Transform matrix layout (3x3 rotation + translation, stored in row-major order as 12 elements):
 /// ```
-/// [m00, m01, m02, m03,
-///  m10, m11, m12, m13,
-///  m20, m21, m22, m23]
+/// Matrix representation:
+/// [m00, m01, m02, tx,
+///  m10, m11, m12, ty,
+///  m20, m21, m22, tz]
+///
+/// Array indices:
+/// [0:m00, 1:m01, 2:m02, 3:tx,
+///  4:m10, 5:m11, 6:m12, 7:ty,
+///  8:m20, 9:m21, 10:m22, 11:tz]
 /// ```
 ///
 /// For planar transforms:
-/// - m02 (index 2), m12 (index 6), m20 (index 8), m21 (index 9) must be exactly 0.0
-/// - m22 (index 10) must be exactly 1.0
+/// - m02 (index 2), m12 (index 5), m20 (index 6), m21 (index 7) must be exactly 0.0
+/// - m22 (index 8) must be exactly 1.0
 fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()> {
     // Check m02 (index 2)
     if transform[2] != 0.0 {
