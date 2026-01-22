@@ -706,8 +706,8 @@ fn detect_circular_components(
             let has_external_path = component
                 .production
                 .as_ref()
-                .map_or(false, |p| p.path.is_some());
-            
+                .is_some_and(|p| p.path.is_some());
+
             if has_external_path {
                 continue;
             }
