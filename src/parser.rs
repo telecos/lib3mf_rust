@@ -129,6 +129,26 @@ pub(crate) fn get_local_name(name_str: &str) -> &str {
     }
 }
 
+/// Get an attribute value by its local name, regardless of namespace prefix
+///
+/// This is useful for extension attributes that can use different prefixes.
+/// For example, `p:UUID` and `y:UUID` both have local name `"UUID"`.
+///
+/// # Arguments
+/// * `attrs` - The attributes HashMap
+/// * `local_name` - The local name to search for (e.g., "UUID", "path")
+///
+/// # Returns
+/// The first attribute value found with the matching local name, or None
+fn get_attr_by_local_name(attrs: &HashMap<String, String>, local_name: &str) -> Option<String> {
+    for (key, value) in attrs {
+        if get_local_name(key) == local_name {
+            return Some(value.clone());
+        }
+    }
+    None
+}
+
 /// Parse the 3D model XML content
 ///
 /// This is primarily used for testing. For production use, use `Model::from_reader()`.
@@ -417,9 +437,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Only extension attributes (like p:UUID) are allowed
                         validate_attributes(&attrs, &[], "build")?;
 
-                        // Extract Production extension UUID (p:UUID) from build element
-                        if let Some(p_uuid) = attrs.get("p:UUID") {
-                            model.build.production_uuid = Some(p_uuid.clone());
+                        // Extract Production extension UUID (p:UUID, or any prefix) from build element
+                        if let Some(p_uuid) = get_attr_by_local_name(&attrs, "UUID") {
+                            model.build.production_uuid = Some(p_uuid);
                         }
                     }
                     "object" if in_resources => {
@@ -1873,14 +1893,14 @@ pub(crate) fn parse_object<R: std::io::BufRead>(
         object.has_thumbnail_attribute = true;
     }
 
-    // Extract Production extension attributes (p:UUID, p:path)
-    let p_uuid = attrs.get("p:UUID");
-    let p_path = attrs.get("p:path");
+    // Extract Production extension attributes (UUID, path - any namespace prefix)
+    let p_uuid = get_attr_by_local_name(&attrs, "UUID");
+    let p_path = get_attr_by_local_name(&attrs, "path");
 
     if p_uuid.is_some() || p_path.is_some() {
         let mut prod_info = ProductionInfo::new();
-        prod_info.uuid = p_uuid.cloned();
-        prod_info.path = p_path.cloned();
+        prod_info.uuid = p_uuid;
+        prod_info.path = p_path;
         object.production = Some(prod_info);
     }
 
@@ -2130,14 +2150,14 @@ pub(crate) fn parse_build_item<R: std::io::BufRead>(
         item.transform = Some(transform);
     }
 
-    // Extract Production extension UUID (p:UUID)
-    if let Some(p_uuid) = attrs.get("p:UUID") {
-        item.production_uuid = Some(p_uuid.clone());
+    // Extract Production extension UUID (any namespace prefix)
+    if let Some(p_uuid) = get_attr_by_local_name(&attrs, "UUID") {
+        item.production_uuid = Some(p_uuid);
     }
 
-    // Extract Production extension path (p:path)
-    if let Some(p_path) = attrs.get("p:path") {
-        item.production_path = Some(p_path.clone());
+    // Extract Production extension path (any namespace prefix)
+    if let Some(p_path) = get_attr_by_local_name(&attrs, "path") {
+        item.production_path = Some(p_path);
     }
 
     Ok(item)
@@ -2199,19 +2219,19 @@ fn parse_component<R: std::io::BufRead>(
         component.transform = Some(transform);
     }
 
-    // Extract p:path attribute (Production extension)
-    // This indicates the component references an object in an external model file
-    if let Some(path_str) = attrs.get("p:path") {
+    // Extract Production extension attributes (UUID, path - any namespace prefix)
+    let p_uuid = get_attr_by_local_name(&attrs, "UUID");
+    let p_path = get_attr_by_local_name(&attrs, "path");
+
+    // For backward compatibility, also set component.path directly
+    if let Some(ref path_str) = p_path {
         component.path = Some(path_str.clone());
     }
-    // Extract Production extension attributes (p:UUID, p:path)
-    let p_uuid = attrs.get("p:UUID");
-    let p_path = attrs.get("p:path");
 
     if p_uuid.is_some() || p_path.is_some() {
         let mut prod_info = ProductionInfo::new();
-        prod_info.uuid = p_uuid.cloned();
-        prod_info.path = p_path.cloned();
+        prod_info.uuid = p_uuid;
+        prod_info.path = p_path;
         component.production = Some(prod_info);
     }
 
