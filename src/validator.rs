@@ -1635,6 +1635,33 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
 /// - DisplacementTriangle did must reference existing Disp2DGroup resources
 /// - DisplacementTriangle d1, d2, d3 must reference valid displacement coordinates
 fn validate_displacement_extension(model: &Model) -> Result<()> {
+    // Validate Displacement2D path requirements (DPX 3300)
+    // Per 3MF Displacement Extension spec 3.1: displacement texture paths must be in /3D/Textures/
+    // Per OPC spec: paths must contain only ASCII characters
+    for disp_map in &model.resources.displacement_maps {
+        // Check that the path contains only ASCII characters
+        if !disp_map.path.is_ascii() {
+            return Err(Error::InvalidModel(format!(
+                "Displacement2D resource {}: Path '{}' contains non-ASCII characters.\n\
+                 Per OPC specification, all 3MF package paths must contain only ASCII characters.\n\
+                 Hint: Remove Unicode or special characters from the displacement texture path.",
+                disp_map.id, disp_map.path
+            )));
+        }
+
+        // Per 3MF Displacement Extension spec 3.1, displacement texture paths should be in /3D/Textures/
+        // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
+        if !disp_map.path.to_lowercase().starts_with("/3d/textures/") {
+            return Err(Error::InvalidModel(format!(
+                "Displacement2D resource {}: Path '{}' is not in /3D/Textures/ directory (case-insensitive).\n\
+                 Per 3MF Displacement Extension spec 3.1, displacement texture files must be stored in /3D/Textures/ \
+                 (any case variation like /3D/textures/ is also accepted).\n\
+                 Move the displacement texture file to the appropriate directory and update the path.",
+                disp_map.id, disp_map.path
+            )));
+        }
+    }
+
     // Build sets of valid IDs for quick lookup
     let displacement_map_ids: HashSet<usize> = model
         .resources
