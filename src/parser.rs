@@ -1937,8 +1937,16 @@ fn load_keystore<R: Read + std::io::Seek>(
                     if let Some(ref mut access_right) = current_access_right {
                         access_right.kek_params = KEKParams {
                             wrapping_algorithm,
-                            mgf_algorithm: if mgf_algorithm.is_empty() { None } else { Some(mgf_algorithm) },
-                            digest_method: if digest_method.is_empty() { None } else { Some(digest_method) },
+                            mgf_algorithm: if mgf_algorithm.is_empty() {
+                                None
+                            } else {
+                                Some(mgf_algorithm)
+                            },
+                            digest_method: if digest_method.is_empty() {
+                                None
+                            } else {
+                                Some(digest_method)
+                            },
                         };
                     }
                 }
