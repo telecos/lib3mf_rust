@@ -61,10 +61,7 @@ fn main() {
     println!("Passed (correctly rejected): {}", total_passed);
     println!("Failed (incorrectly accepted): {}", total_failed);
     println!("\nFiles that should be rejected but were accepted:");
-    for (i, file) in failed_files.iter().enumerate().take(20) {
+    for (i, file) in failed_files.iter().enumerate() {
         println!("  {}. {}", i + 1, file);
-    }
-    if failed_files.len() > 20 {
-        println!("  ... and {} more", failed_files.len() - 20);
     }
 }
