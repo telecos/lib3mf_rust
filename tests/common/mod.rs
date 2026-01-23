@@ -18,6 +18,7 @@ use lib3mf::{Extension, ParserConfig};
 /// # Returns
 ///
 /// A `ParserConfig` configured with the appropriate extensions for the suite
+#[allow(dead_code)]
 pub fn get_suite_config(suite_name: &str) -> ParserConfig {
     match suite_name {
         // Suite 1: Core + Production + Slice
@@ -101,6 +102,7 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
 
 /// Helper to parse and validate XML for testing component errors
 /// Since parse_model_xml doesn't validate, we need to check manually
+#[allow(dead_code)]
 pub fn parse_and_validate_components(xml: &str) -> Result<lib3mf::Model, lib3mf::Error> {
     let model = lib3mf::parser::parse_model_xml(xml)?;
 
