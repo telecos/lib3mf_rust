@@ -18,7 +18,7 @@ const XML_BUFFER_CAPACITY: usize = 4096;
 /// Valid wrapping algorithm for SecureContent (2001 version)
 const VALID_WRAPPING_ALGORITHM_2001: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
 
-/// Valid wrapping algorithm for SecureContent (2009 version)  
+/// Valid wrapping algorithm for SecureContent (2009 version)
 const VALID_WRAPPING_ALGORITHM_2009: &str = "http://www.w3.org/2009/xmlenc11#rsa-oaep";
 
 /// Valid encryption algorithm for SecureContent (AES-256-GCM)
