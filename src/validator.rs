@@ -1372,7 +1372,8 @@ fn detect_circular_components(
 
     // Done processing this object, remove from path and visited set
     // We need to remove from visited to allow the node to be visited from other paths
-    // This is necessary for proper cycle detection in cases like A→B→C→A
+    // This is necessary for proper cycle detection when the same node can be reached
+    // via different paths in the component graph (e.g., checking if A→B→C→A forms a cycle)
     path.pop();
     visited.remove(&object_id);
     Ok(None)
