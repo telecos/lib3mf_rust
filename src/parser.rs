@@ -1962,6 +1962,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                     "consumer" => {
                         // EPX-2602/2604: Track consumer IDs and validate required attributes
                         let mut has_consumer_id = false;
+                        let mut has_key_id = false;
                         let mut consumer_id_value = String::new();
 
                         for attr in e.attributes() {
@@ -1976,7 +1977,17 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 consumer_id_value = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
+                            } else if attr_name == "keyid" {
+                                has_key_id = true;
                             }
+                        }
+
+                        // EPX-2602: Consumer elements must have both consumerid and keyid attributes
+                        if has_consumer_id && !has_key_id {
+                            return Err(Error::InvalidSecureContent(
+                                "Consumer element is missing required 'keyid' attribute (EPX-2602)"
+                                    .to_string(),
+                            ));
                         }
 
                         if has_consumer_id {
