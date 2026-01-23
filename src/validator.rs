@@ -1716,6 +1716,18 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 disp_map.id, disp_map.path
             )));
         }
+
+        // Validate file extension matches expected image type (DPX 3314_08)
+        // Displacement textures should be PNG files
+        let path_lower = disp_map.path.to_lowercase();
+        if !path_lower.ends_with(".png") {
+            return Err(Error::InvalidModel(format!(
+                "Displacement2D resource {}: Path '{}' does not end with .png extension.\n\
+                 Per 3MF Displacement Extension spec 3.1, displacement textures should be PNG files.\n\
+                 Hint: Ensure the displacement texture file has a .png extension and correct content type.",
+                disp_map.id, disp_map.path
+            )));
+        }
     }
 
     // Build sets of valid IDs for quick lookup
@@ -1879,6 +1891,16 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 return Err(Error::InvalidModel(format!(
                     "Object {}: Displacement mesh has negative volume ({:.6}), indicating inverted or incorrectly oriented triangles.\n\
                      Hint: Check triangle vertex winding order - vertices should be ordered counter-clockwise when viewed from outside.",
+                    object.id, volume
+                )));
+            }
+
+            // Also reject near-zero volumes which indicate degenerate or flat meshes (DPX 3314_07)
+            const MIN_VOLUME: f64 = 1e-12;
+            if volume.abs() < MIN_VOLUME && disp_mesh.triangles.len() >= 4 {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Displacement mesh has near-zero volume ({:.6}), indicating a degenerate or flat mesh.\n\
+                     Hint: Ensure the mesh encloses a non-zero 3D volume.",
                     object.id, volume
                 )));
             }
@@ -3272,6 +3294,30 @@ fn validate_transform_matrices(model: &Model) -> Result<()> {
             // Determinant = m00*(m11*m22 - m12*m21) - m01*(m10*m22 - m12*m20) + m02*(m10*m21 - m11*m20)
             let det = m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20)
                 + m02 * (m10 * m21 - m11 * m20);
+
+            // Check for zero determinant (singular matrix) - DPX 3314_07
+            const DET_EPSILON: f64 = 1e-10;
+            if det.abs() < DET_EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: Transform matrix has zero determinant ({:.6}), indicating a singular (non-invertible) transformation.\n\
+                     Transform: [{} {} {} {} {} {} {} {} {} {} {} {}]\n\
+                     Hint: Check that the transform matrix is valid and non-degenerate.",
+                    idx,
+                    det,
+                    transform[0],
+                    transform[1],
+                    transform[2],
+                    transform[3],
+                    transform[4],
+                    transform[5],
+                    transform[6],
+                    transform[7],
+                    transform[8],
+                    transform[9],
+                    transform[10],
+                    transform[11]
+                )));
+            }
 
             if det < 0.0 {
                 return Err(Error::InvalidModel(format!(
