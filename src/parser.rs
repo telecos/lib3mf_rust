@@ -2730,7 +2730,7 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
     let mut x_opt: Option<f64> = None;
     let mut y_opt: Option<f64> = None;
     let mut z_opt: Option<f64> = None;
-    let mut extra_attrs = 0;
+    let mut invalid_attr_name: Option<String> = None;
 
     for attr_result in e.attributes() {
         let attr = attr_result?;
@@ -2753,16 +2753,24 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
                 z_opt = Some(value.parse::<f64>()?);
             }
             _ => {
-                extra_attrs += 1;
+                // Store first invalid attribute for error reporting
+                if invalid_attr_name.is_none() {
+                    invalid_attr_name = Some(
+                        std::str::from_utf8(key)
+                            .unwrap_or("<invalid UTF-8>")
+                            .to_string()
+                    );
+                }
             }
         }
     }
 
     // Validate only allowed attributes are present
-    if extra_attrs > 0 {
-        // Fall back to full validation for error reporting
-        let attrs = parse_attributes(reader, e)?;
-        validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
+    if let Some(attr_name) = invalid_attr_name {
+        return Err(Error::InvalidXml(format!(
+            "Unexpected attribute '{}' in vertex element. Only x, y, z are allowed.",
+            attr_name
+        )));
     }
 
     let x = x_opt.ok_or_else(|| Error::InvalidXml("Vertex missing x attribute".to_string()))?;
@@ -2806,7 +2814,7 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
     let mut p1_opt: Option<usize> = None;
     let mut p2_opt: Option<usize> = None;
     let mut p3_opt: Option<usize> = None;
-    let mut has_invalid_attrs = false;
+    let mut invalid_attr_name: Option<String> = None;
 
     for attr_result in e.attributes() {
         let attr = attr_result?;
@@ -2824,19 +2832,25 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
             b"p1" => p1_opt = Some(value_str.parse::<usize>()?),
             b"p2" => p2_opt = Some(value_str.parse::<usize>()?),
             b"p3" => p3_opt = Some(value_str.parse::<usize>()?),
-            _ => has_invalid_attrs = true,
+            _ => {
+                // Store first invalid attribute for error reporting
+                if invalid_attr_name.is_none() {
+                    invalid_attr_name = Some(
+                        std::str::from_utf8(key)
+                            .unwrap_or("<invalid UTF-8>")
+                            .to_string()
+                    );
+                }
+            }
         }
     }
 
     // Validate only allowed attributes are present
-    if has_invalid_attrs {
-        // Fall back to full validation for error reporting
-        let attrs = parse_attributes(reader, e)?;
-        validate_attributes(
-            &attrs,
-            &["v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3"],
-            "triangle",
-        )?;
+    if let Some(attr_name) = invalid_attr_name {
+        return Err(Error::InvalidXml(format!(
+            "Unexpected attribute '{}' in triangle element. Only v1, v2, v3, pid, pindex, p1, p2, p3 are allowed.",
+            attr_name
+        )));
     }
 
     let v1 = v1_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v1 attribute".to_string()))?;
