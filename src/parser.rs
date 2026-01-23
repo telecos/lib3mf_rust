@@ -2068,6 +2068,116 @@ fn load_keystore<R: Read + std::io::Seek>(
     Ok(())
 }
 
+/// Load a file from the package, decrypting if it's an encrypted file
+///
+/// This function checks if the file is in the encrypted files list, and if so,
+/// attempts to decrypt it using the test keys. Otherwise, it loads the file normally.
+fn load_file_with_decryption<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    normalized_path: &str,
+    display_path: &str,
+    model: &Model,
+) -> Result<String> {
+    // Check if this file is encrypted
+    let is_encrypted = model
+        .secure_content
+        .as_ref()
+        .map(|sc| {
+            let path_with_slash = format!("/{}", normalized_path);
+            sc.encrypted_files.contains(&path_with_slash)
+                || sc.encrypted_files.contains(&normalized_path.to_string())
+        })
+        .unwrap_or(false);
+
+    if !is_encrypted {
+        // Load normally
+        return package.get_file(normalized_path).map_err(|e| {
+            Error::InvalidXml(format!(
+                "Failed to load file '{}': {}",
+                display_path, e
+            ))
+        });
+    }
+
+    // File is encrypted - decrypt it
+    let secure_content = model
+        .secure_content
+        .as_ref()
+        .ok_or_else(|| Error::InvalidSecureContent("No secure content info".to_string()))?;
+
+    // Load the encrypted file
+    let encrypted_data = package.get_file_binary(normalized_path).map_err(|e| {
+        Error::InvalidXml(format!(
+            "Failed to load encrypted file '{}': {}",
+            display_path, e
+        ))
+    })?;
+
+    // Find the resource data for this file
+    let path_with_slash = format!("/{}", normalized_path);
+    let resource_data = secure_content
+        .resource_data_groups
+        .iter()
+        .flat_map(|group| &group.resource_data)
+        .find(|rd| rd.path == path_with_slash || rd.path == normalized_path)
+        .ok_or_else(|| {
+            Error::InvalidSecureContent(format!(
+                "No resource data found for encrypted file '{}'",
+                display_path
+            ))
+        })?;
+
+    // Find an access right we can use (look for test consumer)
+    let (access_right, _consumer_index) = secure_content
+        .resource_data_groups
+        .iter()
+        .find_map(|group| {
+            // Check if this group contains our resource
+            if group.resource_data.iter().any(|rd| {
+                rd.path == path_with_slash || rd.path == normalized_path
+            }) {
+                // Find an access right for the test consumer
+                group.access_rights.iter().enumerate().find(|(idx, _)| {
+                    if *idx < secure_content.consumers.len() {
+                        secure_content.consumers[*idx].consumer_id == crate::decryption::TEST_CONSUMER_ID
+                    } else {
+                        false
+                    }
+                }).map(|(idx, ar)| (ar.clone(), idx))
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            Error::InvalidSecureContent(format!(
+                "No access right found for test consumer for file '{}'",
+                display_path
+            ))
+        })?;
+
+    // Decrypt the file
+    let decrypted = crate::decryption::decrypt_with_test_key(
+        &encrypted_data,
+        &resource_data.cek_params,
+        &access_right,
+        secure_content,
+    )
+    .map_err(|e| {
+        Error::InvalidSecureContent(format!(
+            "Failed to decrypt file '{}': {}",
+            display_path, e
+        ))
+    })?;
+
+    // Convert to string
+    String::from_utf8(decrypted).map_err(|e| {
+        Error::InvalidXml(format!(
+            "Decrypted file '{}' is not valid UTF-8: {}",
+            display_path, e
+        ))
+    })
+}
+
 /// Load and parse external slice files referenced in slice stacks
 ///
 /// Iterates through all slice stacks in the model and loads any external slice files
@@ -2078,53 +2188,52 @@ fn load_slice_references<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
-    // Process each slice stack independently
-    for slice_stack in &mut model.resources.slice_stacks {
-        // Load slices from each referenced file
+    // Collect information needed for loading before we start mutating
+    let mut slices_to_load: Vec<(usize, Vec<(String, String, usize)>)> = Vec::new();
+    
+    for (stack_idx, slice_stack) in model.resources.slice_stacks.iter().enumerate() {
+        let mut refs_for_stack = Vec::new();
         for slice_ref in &slice_stack.slice_refs {
-            // Normalize the path (remove leading slash if present)
             let normalized_path = if slice_ref.slicepath.starts_with('/') {
-                &slice_ref.slicepath[1..]
+                slice_ref.slicepath[1..].to_string()
             } else {
-                &slice_ref.slicepath
+                slice_ref.slicepath.clone()
             };
-
-            // Skip loading encrypted slice files (Secure Content extension)
-            // Encrypted files follow the pattern: *_encrypted.model (or other extension)
-            // They cannot be decrypted by this library per the Secure Content spec.
-            // Check if the filename (without directory path) contains "_encrypted"
-            // followed by a file extension (e.g., "_encrypted.model")
-            if let Some(filename) = normalized_path.rsplit('/').next() {
-                if filename.contains("_encrypted.") {
-                    // For encrypted slice files, we acknowledge they exist but can't load them
-                    // The file structure is valid even if we can't decrypt the content
-                    continue;
-                }
-            }
-
-            // Load the slice file from the package
-            let slice_xml = package.get_file(normalized_path).map_err(|e| {
-                Error::InvalidXml(format!(
-                    "Failed to load slice reference file '{}': {}",
-                    slice_ref.slicepath, e
-                ))
-            })?;
+            refs_for_stack.push((
+                normalized_path,
+                slice_ref.slicepath.clone(),
+                slice_ref.slicestackid,
+            ));
+        }
+        if !refs_for_stack.is_empty() {
+            slices_to_load.push((stack_idx, refs_for_stack));
+        }
+    }
+    
+    // Now load and process each slice reference
+    for (stack_idx, refs) in slices_to_load {
+        for (normalized_path, display_path, expected_stack_id) in refs {
+            // Load the slice file from the package (decrypt if encrypted)
+            let slice_xml = load_file_with_decryption(
+                package,
+                &normalized_path,
+                &display_path,
+                &model,
+            )?;
 
             // Parse the slice file to extract slices and objects
-            // Use the slicestackid from the sliceref, which identifies the stack ID in the external file
             let (slices, objects) =
-                parse_slice_file_with_objects(&slice_xml, slice_ref.slicestackid)?;
+                parse_slice_file_with_objects(&slice_xml, expected_stack_id)?;
 
             // Add the slices to this slice stack
-            slice_stack.slices.extend(slices);
+            model.resources.slice_stacks[stack_idx].slices.extend(slices);
 
             // Merge objects from the external file into the main model
             model.resources.objects.extend(objects);
         }
-
-        // After loading all slice references, clear the slice_refs vector
-        // to avoid validation errors about having both slices and slicerefs
-        slice_stack.slice_refs.clear();
+        
+        // Clear the slice_refs for this stack
+        model.resources.slice_stacks[stack_idx].slice_refs.clear();
     }
 
     Ok(())

@@ -72,6 +72,9 @@ pub mod streaming;
 mod validator;
 mod writer;
 
+// Decryption support for SecureContent (test keys only, for Suite 8 validation)
+pub mod decryption;
+
 pub use error::{Error, Result};
 pub use model::{
     AccessRight, BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod,
