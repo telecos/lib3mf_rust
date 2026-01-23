@@ -14,6 +14,7 @@ zip = "2.3"
 quick-xml = "0.37"
 thiserror = "2.0"
 urlencoding = "2.1"
+clipper2 = "0.2"
 
 [dev-dependencies]
 tempfile = "3.14"
