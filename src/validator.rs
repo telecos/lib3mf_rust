@@ -2766,21 +2766,6 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
 /// Non-ASCII characters (like Unicode) in texture paths are not allowed.
 fn validate_texture_paths(model: &Model) -> Result<()> {
     for texture in &model.resources.texture2d_resources {
-        // Check if this texture is encrypted (Secure Content extension)
-        // For encrypted files, skip strict path validation as they may use non-standard paths
-        let is_encrypted = model
-            .secure_content
-            .as_ref()
-            .map(|sc| {
-                sc.encrypted_files.iter().any(|encrypted_path| {
-                    // Compare normalized paths (both without leading slash)
-                    let texture_normalized = texture.path.trim_start_matches('/');
-                    let enc_normalized = encrypted_path.trim_start_matches('/');
-                    enc_normalized == texture_normalized
-                })
-            })
-            .unwrap_or(false);
-
         // Check that the path contains only ASCII characters
         if !texture.path.is_ascii() {
             return Err(Error::InvalidModel(format!(
@@ -2791,23 +2776,11 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
             )));
         }
 
-        // Per 3MF spec, texture paths should be in /3D/Texture/ or /3D/Textures/ directory
-        // Skip this check for encrypted files as they may use non-standard paths
-        // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
-        // Accept both singular (/3D/Texture/) and plural (/3D/Textures/) forms
-        let path_lower = texture.path.to_lowercase();
-        if !is_encrypted
-            && !path_lower.starts_with("/3d/texture/")
-            && !path_lower.starts_with("/3d/textures/")
-        {
-            return Err(Error::InvalidModel(format!(
-                "Texture2D resource {}: Path '{}' is not in /3D/Texture/ or /3D/Textures/ directory (case-insensitive).\n\
-                 Per 3MF Material Extension spec, texture files must be stored in /3D/Texture/ or /3D/Textures/ \
-                 (any case variation is accepted).\n\
-                 Move the texture file to the appropriate directory and update the path.",
-                texture.id, texture.path
-            )));
-        }
+        // Note: The 3MF Materials Extension spec does NOT require texture paths to be in
+        // /3D/Texture/ or /3D/Textures/ directories. The spec only requires that:
+        // 1. The path attribute specifies the part name of the texture data
+        // 2. The texture must be the target of a 3D Texture relationship from the 3D Model part
+        // Therefore, we do not validate the directory path here.
 
         // Validate content type
         let valid_content_types = ["image/png", "image/jpeg"];
