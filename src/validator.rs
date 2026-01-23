@@ -3104,6 +3104,12 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 /// - You cannot specify only some of p1/p2/p3 (e.g., just p1, or p1+p2 without p3)
 /// - This ensures consistent material property application across all triangle vertices
 ///
+/// Note: This validation applies to all model objects, regardless of whether the materials
+/// extension is explicitly declared. This is intentional because:
+/// - Triangle properties (p1/p2/p3) are only meaningful with materials
+/// - Partial specification would be ambiguous and spec-violating
+/// - The spec requires complete vertex properties when any are used
+///
 /// Test cases: N_XPM_0601_01, N_XPM_0604_03, etc.
 fn validate_triangle_properties(model: &Model) -> Result<()> {
     // Check all mesh objects

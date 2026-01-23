@@ -579,7 +579,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     Error::InvalidXml(format!(
                                         "Invalid color format '{}' in colorgroup {}.\n\
                                          Colors must be in format #RRGGBB or #RRGGBBAA where each component is a hexadecimal value (0-9, A-F).\n\
-                                         Example: #FF0000 (red), #00FF0080 (green with 50% transparency)",
+                                         Examples: #FF0000 (red), #00FF0080 (semi-transparent green)",
                                         color_str, colorgroup.id
                                     ))
                                 })?;
