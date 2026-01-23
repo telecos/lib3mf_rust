@@ -1661,7 +1661,7 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
             )));
         }
     }
-    
+
     // Build sets of valid IDs for quick lookup
     let displacement_map_ids: HashSet<usize> = model
         .resources

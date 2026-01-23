@@ -208,7 +208,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut current_displacement_triangles_did: Option<usize> = None; // did attribute on <d:triangles>
     let mut in_displacement_triangles = false;
     let mut has_displacement_triangles = false; // Track if we've seen triangles element (DPX 3314)
-    
+
     // Track declared displacement resources for forward-reference validation (DPX 3312)
     let mut declared_displacement2d_ids = std::collections::HashSet::<usize>::new();
     let mut declared_normvectorgroup_ids = std::collections::HashSet::<usize>::new();
@@ -507,7 +507,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
                         if has_displacement_triangles {
                             return Err(Error::InvalidXml(
-                                "Displacement mesh can only have one <triangles> element".to_string()
+                                "Displacement mesh can only have one <triangles> element"
+                                    .to_string(),
                             ));
                         }
                         has_displacement_triangles = true;
@@ -526,22 +527,24 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "triangle" if in_displacement_triangles => {
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let mut triangle = parse_displacement_triangle(&reader, e)?;
-                            
+
                             // Per DPX spec 4.1.2.1: Validate displacement attribute consistency
                             // If d2 or d3 specified without d1, that's invalid
-                            if (triangle.d2.is_some() || triangle.d3.is_some()) && triangle.d1.is_none() {
+                            if (triangle.d2.is_some() || triangle.d3.is_some())
+                                && triangle.d1.is_none()
+                            {
                                 return Err(Error::InvalidXml(
                                     "Displacement triangle: d2 or d3 displacement coordinate index specified without d1. \
                                      If d1 is unspecified, no displacement coordinate indices can be used."
                                         .to_string()
                                 ));
                             }
-                            
+
                             // If did not specified on triangle, use the one from triangles element
                             if triangle.did.is_none() {
                                 triangle.did = current_displacement_triangles_did;
                             }
-                            
+
                             // If d1 is specified, did MUST be specified (either on triangle or triangles)
                             if triangle.d1.is_some() && triangle.did.is_none() {
                                 return Err(Error::InvalidXml(
@@ -550,7 +553,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                         .to_string()
                                 ));
                             }
-                            
+
                             disp_mesh.triangles.push(triangle);
                         }
                     }
@@ -824,15 +827,22 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "displacement2d" if in_resources => {
                         let attrs = parse_attributes(&reader, e)?;
-                        
+
                         // Validate only allowed attributes are present
                         // Per Displacement Extension spec 3.1: id, path, channel, tilestyleu, tilestylev, filter
                         validate_attributes(
                             &attrs,
-                            &["id", "path", "channel", "tilestyleu", "tilestylev", "filter"],
+                            &[
+                                "id",
+                                "path",
+                                "channel",
+                                "tilestyleu",
+                                "tilestylev",
+                                "filter",
+                            ],
                             "displacement2d",
                         )?;
-                        
+
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
@@ -858,10 +868,12 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "G" => Channel::G,
                                 "B" => Channel::B,
                                 "A" => Channel::A,
-                                _ => return Err(Error::InvalidXml(format!(
-                                    "Invalid channel value '{}'. Valid values are: R, G, B, A",
-                                    channel_str
-                                ))),
+                                _ => {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Invalid channel value '{}'. Valid values are: R, G, B, A",
+                                        channel_str
+                                    )))
+                                }
                             };
                         }
 
@@ -1145,11 +1157,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
-                        
+
                         // Validate only allowed attributes are present
                         // Per Displacement Extension spec 3.2: id
                         validate_attributes(&attrs, &["id"], "normvectorgroup")?;
-                        
+
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
@@ -1163,11 +1175,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "normvector" if in_normvectorgroup => {
                         if let Some(ref mut nvgroup) = current_normvectorgroup {
                             let attrs = parse_attributes(&reader, e)?;
-                            
+
                             // Validate only allowed attributes are present
                             // Per Displacement Extension spec 3.2.1: x, y, z
                             validate_attributes(&attrs, &["x", "y", "z"], "normvector")?;
-                            
+
                             let x = attrs
                                 .get("x")
                                 .ok_or_else(|| {
@@ -1186,7 +1198,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     Error::InvalidXml("normvector missing z attribute".to_string())
                                 })?
                                 .parse::<f64>()?;
-                            
+
                             // Validate values are finite
                             if !x.is_finite() || !y.is_finite() || !z.is_finite() {
                                 return Err(Error::InvalidXml(format!(
@@ -1194,18 +1206,22 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     x, y, z
                                 )));
                             }
-                            
+
                             nvgroup.vectors.push(NormVector::new(x, y, z));
                         }
                     }
                     "disp2dgroup" if in_resources => {
                         in_disp2dgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
-                        
+
                         // Validate only allowed attributes are present
                         // Per Displacement Extension spec 3.3: id, dispid, nid, height, offset
-                        validate_attributes(&attrs, &["id", "dispid", "nid", "height", "offset"], "disp2dgroup")?;
-                        
+                        validate_attributes(
+                            &attrs,
+                            &["id", "dispid", "nid", "height", "offset"],
+                            "disp2dgroup",
+                        )?;
+
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
@@ -1220,7 +1236,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 )
                             })?
                             .parse::<usize>()?;
-                        
+
                         // Per DPX spec 3.3: Validate dispid references declared Displacement2D resource
                         if !declared_displacement2d_ids.contains(&dispid) {
                             return Err(Error::InvalidXml(format!(
@@ -1229,14 +1245,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 dispid
                             )));
                         }
-                        
+
                         let nid = attrs
                             .get("nid")
                             .ok_or_else(|| {
                                 Error::InvalidXml("disp2dgroup missing nid attribute".to_string())
                             })?
                             .parse::<usize>()?;
-                        
+
                         // Per DPX spec 3.3: Validate nid references declared NormVectorGroup resource
                         if !declared_normvectorgroup_ids.contains(&nid) {
                             return Err(Error::InvalidXml(format!(
@@ -1253,7 +1269,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 )
                             })?
                             .parse::<f64>()?;
-                        
+
                         // Validate height is finite
                         if !height.is_finite() {
                             return Err(Error::InvalidXml(format!(
@@ -1281,11 +1297,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "disp2dcoord" if in_disp2dgroup => {
                         if let Some(ref mut d2dgroup) = current_disp2dgroup {
                             let attrs = parse_attributes(&reader, e)?;
-                            
+
                             // Validate only allowed attributes are present
                             // Per Displacement Extension spec 3.3.1: u, v, n, f
                             validate_attributes(&attrs, &["u", "v", "n", "f"], "disp2dcoord")?;
-                            
+
                             let u = attrs
                                 .get("u")
                                 .ok_or_else(|| {
@@ -1310,7 +1326,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     )
                                 })?
                                 .parse::<usize>()?;
-                            
+
                             // Validate u,v are finite
                             if !u.is_finite() || !v.is_finite() {
                                 return Err(Error::InvalidXml(format!(
@@ -1598,7 +1614,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "displacementmesh" => {
                         in_displacement_mesh = false;
                         has_displacement_triangles = false; // Reset for next displacementmesh
-                        // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
+                                                            // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
                         if let Some(ref obj) = current_object {
                             if obj.object_type != ObjectType::Model {
                                 return Err(Error::InvalidXml(format!(
