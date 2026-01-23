@@ -24,6 +24,7 @@ pub use expected_failures::ExpectedFailuresManager;
 /// # Returns
 ///
 /// A `ParserConfig` configured with the appropriate extensions for the suite
+#[allow(dead_code)] // Used by multiple test files but not all
 pub fn get_suite_config(suite_name: &str) -> ParserConfig {
     match suite_name {
         // Suite 1: Core + Production + Slice
