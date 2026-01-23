@@ -4010,7 +4010,10 @@ mod tests {
 
         // Should pass validation because object has slicestackid
         let result = validate_mesh_volume(&model);
-        assert!(result.is_ok(), "Sliced object should allow negative volume mesh");
+        assert!(
+            result.is_ok(),
+            "Sliced object should allow negative volume mesh"
+        );
     }
 
     #[test]
@@ -4126,6 +4129,9 @@ mod tests {
             result.is_err(),
             "Non-sliced object should reject mirror transformation"
         );
-        assert!(result.unwrap_err().to_string().contains("negative determinant"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("negative determinant"));
     }
 }
