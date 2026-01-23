@@ -1643,6 +1643,41 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
 /// - DisplacementTriangle did must reference existing Disp2DGroup resources
 /// - DisplacementTriangle d1, d2, d3 must reference valid displacement coordinates
 fn validate_displacement_extension(model: &Model) -> Result<()> {
+    // Check if displacement resources/elements are used (DPX 3312)
+    let has_displacement_resources = !model.resources.displacement_maps.is_empty()
+        || !model.resources.norm_vector_groups.is_empty()
+        || !model.resources.disp2d_groups.is_empty()
+        || model
+            .resources
+            .objects
+            .iter()
+            .any(|obj| obj.displacement_mesh.is_some());
+
+    if has_displacement_resources {
+        // Check if displacement extension is declared in requiredextensions
+        let has_displacement_required = model
+            .required_extensions
+            .iter()
+            .any(|ext| matches!(ext, Extension::Displacement))
+            || model
+                .required_custom_extensions
+                .iter()
+                .any(|ns| {
+                    ns.contains("displacement/2022/07") || ns.contains("displacement/2023/10")
+                });
+
+        if !has_displacement_required {
+            return Err(Error::InvalidModel(
+                "Model contains displacement extension elements (displacement2d, normvectorgroup, disp2dgroup, or displacementmesh) \
+                 but displacement extension is not declared in requiredextensions attribute.\n\
+                 Per 3MF Displacement Extension spec, files using displacement elements MUST declare the displacement extension \
+                 as a required extension in the <model> element's requiredextensions attribute.\n\
+                 Add 'd' to requiredextensions and declare xmlns:d=\"http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07\"."
+                    .to_string(),
+            ));
+        }
+    }
+
     // Validate Displacement2D path requirements (DPX 3300)
     // Per 3MF Displacement Extension spec 3.1: displacement texture paths must be in /3D/Textures/
     // Per OPC spec: paths must contain only ASCII characters
@@ -1754,6 +1789,29 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
         }
     }
 
+    // Validate NormVectorGroup - vectors must point outward
+    // Per DPX 3302: Normalized displacement vectors MUST point to the outer hemisphere of the triangle
+    // The scalar product of a normalized displacement vector to the triangle normal MUST be greater than 0
+    for norm_group in &model.resources.norm_vector_groups {
+        for (idx, norm_vec) in norm_group.vectors.iter().enumerate() {
+            // Calculate the magnitude of the vector
+            let length_squared = norm_vec.x * norm_vec.x + norm_vec.y * norm_vec.y + norm_vec.z * norm_vec.z;
+            
+            // Check if vector has zero length
+            if length_squared < 0.000001 {
+                return Err(Error::InvalidModel(format!(
+                    "NormVectorGroup {}: Normvector {} has near-zero length (x={}, y={}, z={}). \
+                     Normal vectors must have non-zero length.",
+                    norm_group.id, idx, norm_vec.x, norm_vec.y, norm_vec.z
+                )));
+            }
+
+            // Note: Full validation of scalar product with triangle normal requires knowing
+            // which triangles use which normvectors, which is complex cross-referencing.
+            // The parser and validator together ensure proper usage.
+        }
+    }
+
     // NOTE: Normalization validation is commented out because official test suite positive tests
     // include non-normalized vectors (e.g., P_DPX_3204_03.3mf has z=0.9, P_DPX_3204_06.3mf has x=y=z=1)
     // The spec may allow non-normalized vectors to be automatically normalized by the renderer.
@@ -1780,6 +1838,17 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
     // Validate displacement meshes in objects
     for object in &model.resources.objects {
         if let Some(ref disp_mesh) = object.displacement_mesh {
+            // Validate that displacement mesh has at least 4 triangles (minimum for closed volume)
+            // Per DPX 3308: A valid 3D mesh must have at least 4 triangles to form a tetrahedron
+            if disp_mesh.triangles.len() < 4 {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Displacement mesh has only {} triangles. \
+                     A valid 3D mesh must have at least 4 triangles to form a closed volume.",
+                    object.id,
+                    disp_mesh.triangles.len()
+                )));
+            }
+
             // Validate that displacement triangles have valid vertex references
             for (tri_idx, triangle) in disp_mesh.triangles.iter().enumerate() {
                 // Check vertex indices
@@ -1811,6 +1880,16 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                         tri_idx,
                         triangle.v3,
                         disp_mesh.vertices.len()
+                    )));
+                }
+
+                // Check for degenerate triangles (DPX 3310)
+                // All three vertices must be distinct
+                if triangle.v1 == triangle.v2 || triangle.v2 == triangle.v3 || triangle.v1 == triangle.v3 {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement triangle {} is degenerate (v1={}, v2={}, v3={}). \
+                         All three vertex indices must be distinct.",
+                        object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3
                     )));
                 }
 
@@ -1869,6 +1948,66 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                                     object.id, tri_idx, d3, did, disp_group.coords.len(),
                                     max_coord_index
                                 )));
+                            }
+                        }
+
+                        // Validate that normvectors point outward relative to triangle normal (DPX 3302)
+                        // Calculate triangle normal and check scalar product with displacement vectors
+                        let v1 = &disp_mesh.vertices[triangle.v1];
+                        let v2 = &disp_mesh.vertices[triangle.v2];
+                        let v3 = &disp_mesh.vertices[triangle.v3];
+
+                        // Calculate triangle normal using cross product
+                        let edge1_x = v2.x - v1.x;
+                        let edge1_y = v2.y - v1.y;
+                        let edge1_z = v2.z - v1.z;
+                        let edge2_x = v3.x - v1.x;
+                        let edge2_y = v3.y - v1.y;
+                        let edge2_z = v3.z - v1.z;
+
+                        let normal_x = edge1_y * edge2_z - edge1_z * edge2_y;
+                        let normal_y = edge1_z * edge2_x - edge1_x * edge2_z;
+                        let normal_z = edge1_x * edge2_y - edge1_y * edge2_x;
+
+                        // Get the normvectorgroup
+                        if let Some(norm_group) = model
+                            .resources
+                            .norm_vector_groups
+                            .iter()
+                            .find(|n| n.id == disp_group.nid)
+                        {
+                            // Check normvectors for each displacement coordinate used
+                            for (_coord_idx, disp_coord_idx) in [
+                                (1, triangle.d1),
+                                (2, triangle.d2),
+                                (3, triangle.d3),
+                            ]
+                            .iter()
+                            {
+                                if let Some(d_idx) = disp_coord_idx {
+                                    if *d_idx < disp_group.coords.len() {
+                                        let coord = &disp_group.coords[*d_idx];
+                                        if coord.n < norm_group.vectors.len() {
+                                            let norm_vec = &norm_group.vectors[coord.n];
+
+                                            // Calculate scalar (dot) product
+                                            let dot_product = normal_x * norm_vec.x
+                                                + normal_y * norm_vec.y
+                                                + normal_z * norm_vec.z;
+
+                                            // Per DPX spec: scalar product must be > 0
+                                            if dot_product <= 0.0 {
+                                                return Err(Error::InvalidModel(format!(
+                                                    "Object {}: Displacement triangle {} uses normvector {} from group {} \
+                                                     that points inward (scalar product with triangle normal = {:.6} <= 0).\n\
+                                                     Per 3MF Displacement spec, normalized displacement vectors MUST point to the outer hemisphere.\n\
+                                                     Hint: Reverse the normvector direction or fix the triangle vertex order.",
+                                                    object.id, tri_idx, coord.n, disp_group.nid, dot_product
+                                                )));
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

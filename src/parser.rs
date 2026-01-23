@@ -232,6 +232,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     // Track declared displacement resources for forward-reference validation (DPX 3312)
     let mut declared_displacement2d_ids = std::collections::HashSet::<usize>::new();
     let mut declared_normvectorgroup_ids = std::collections::HashSet::<usize>::new();
+    let mut declared_disp2dgroup_ids = std::collections::HashSet::<usize>::new();
 
     // Materials extension state for advanced features
     let mut current_texture2dgroup: Option<Texture2DGroup> = None;
@@ -511,16 +512,26 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "vertices" if in_displacement_mesh => {
                         // Displacement vertices will be parsed as individual vertex elements
                     }
+                    "vertex" if in_displacement_mesh => {
+                        // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
+                        let has_displacement_prefix = name_str.starts_with("d:") || name_str.starts_with("displacement:");
+                        if !has_displacement_prefix {
+                            return Err(Error::InvalidXml(format!(
+                                "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:vertex>). \
+                                 Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
+                                 the displacement namespace prefix.",
+                                name_str
+                            )));
+                        }
+                        if let Some(ref mut disp_mesh) = current_displacement_mesh {
+                            let vertex = parse_vertex(&reader, e)?;
+                            disp_mesh.vertices.push(vertex);
+                        }
+                    }
                     "vertex" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
                             let vertex = parse_vertex(&reader, e)?;
                             mesh.vertices.push(vertex);
-                        }
-                    }
-                    "vertex" if in_displacement_mesh => {
-                        if let Some(ref mut disp_mesh) = current_displacement_mesh {
-                            let vertex = parse_vertex(&reader, e)?;
-                            disp_mesh.vertices.push(vertex);
                         }
                     }
                     // Displacement mesh triangles must be checked BEFORE regular mesh triangles
@@ -529,6 +540,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     // If we check current_mesh.is_some() first, displacement triangles would be
                     // parsed as regular triangles and d1/d2/d3 attributes would be rejected.
                     "triangles" if in_displacement_mesh => {
+                        // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
+                        let has_displacement_prefix = name_str.starts_with("d:") || name_str.starts_with("displacement:");
+                        if !has_displacement_prefix {
+                            return Err(Error::InvalidXml(format!(
+                                "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:triangles>). \
+                                 Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
+                                 the displacement namespace prefix.",
+                                name_str
+                            )));
+                        }
                         // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
                         if has_displacement_triangles {
                             return Err(Error::InvalidXml(
@@ -540,14 +561,36 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_displacement_triangles = true;
                         // Parse did attribute from triangles element
                         let attrs = parse_attributes(&reader, e)?;
-                        current_displacement_triangles_did =
-                            attrs.get("did").and_then(|s| s.parse::<usize>().ok());
+                        if let Some(did_str) = attrs.get("did") {
+                            let did = did_str.parse::<usize>()?;
+                            // Validate forward reference (DPX 3312)
+                            if !declared_disp2dgroup_ids.contains(&did) {
+                                return Err(Error::InvalidXml(format!(
+                                    "Triangles element references Disp2DGroup with ID {} which has not been declared yet. \
+                                     Resources must be declared before they are referenced.",
+                                    did
+                                )));
+                            }
+                            current_displacement_triangles_did = Some(did);
+                        } else {
+                            current_displacement_triangles_did = None;
+                        }
                     }
                     "triangles" if current_mesh.is_some() => {
                         // Regular mesh triangles - parsed as individual triangle elements
                     }
                     // Displacement triangle must be checked BEFORE regular triangle for same reason
                     "triangle" if in_displacement_triangles => {
+                        // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
+                        let has_displacement_prefix = name_str.starts_with("d:") || name_str.starts_with("displacement:");
+                        if !has_displacement_prefix {
+                            return Err(Error::InvalidXml(format!(
+                                "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:triangle>). \
+                                 Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
+                                 the displacement namespace prefix.",
+                                name_str
+                            )));
+                        }
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let mut triangle = parse_displacement_triangle(&reader, e)?;
 
@@ -561,6 +604,17 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                      If d1 is unspecified, no displacement coordinate indices can be used."
                                         .to_string()
                                 ));
+                            }
+
+                            // Validate forward reference for did on triangle element (DPX 3312)
+                            if let Some(did) = triangle.did {
+                                if !declared_disp2dgroup_ids.contains(&did) {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Triangle element references Disp2DGroup with ID {} which has not been declared yet. \
+                                         Resources must be declared before they are referenced.",
+                                        did
+                                    )));
+                                }
                             }
 
                             // If did not specified on triangle, use the one from triangles element
@@ -1711,6 +1765,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "disp2dgroup" => {
                         if let Some(d2dgroup) = current_disp2dgroup.take() {
+                            declared_disp2dgroup_ids.insert(d2dgroup.id); // Track for forward-reference validation
                             model.resources.disp2d_groups.push(d2dgroup);
                         }
                         in_disp2dgroup = false;
