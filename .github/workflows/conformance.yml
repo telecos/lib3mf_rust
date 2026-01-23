@@ -37,7 +37,6 @@ jobs:
   # Setup test suites once for all conformance jobs
   setup-test-suites:
     runs-on: ubuntu-latest
-    needs: basic-tests
     
     steps:
       - name: Cache test suites
@@ -64,7 +63,7 @@ jobs:
   # Run each conformance suite in parallel
   conformance:
     runs-on: ubuntu-latest
-    needs: setup-test-suites
+    needs: [basic-tests, setup-test-suites]
     
     strategy:
       fail-fast: false
