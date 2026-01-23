@@ -275,7 +275,12 @@ pub fn compute_build_volume(model: &Model) -> Option<BoundingBox> {
                     cur_max.2.max(max.2),
                 ));
             }
-            _ => unreachable!(),
+            // This should never happen as we initialize both to None together
+            // and update both together, but we handle it gracefully just in case
+            _ => {
+                overall_min = Some(min);
+                overall_max = Some(max);
+            }
         }
     }
 

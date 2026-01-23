@@ -133,7 +133,8 @@ fn test_build_volume_computation() {
     let mut mesh1 = Mesh::new();
     mesh1.vertices.push(Vertex::new(0.0, 0.0, 0.0));
     mesh1.vertices.push(Vertex::new(10.0, 10.0, 10.0));
-    mesh1.triangles.push(Triangle::new(0, 1, 0));
+    mesh1.vertices.push(Vertex::new(0.0, 10.0, 0.0));
+    mesh1.triangles.push(Triangle::new(0, 1, 2)); // Valid triangle
 
     let mut object1 = Object::new(1);
     object1.mesh = Some(mesh1);
@@ -143,7 +144,8 @@ fn test_build_volume_computation() {
     let mut mesh2 = Mesh::new();
     mesh2.vertices.push(Vertex::new(0.0, 0.0, 0.0));
     mesh2.vertices.push(Vertex::new(5.0, 5.0, 5.0));
-    mesh2.triangles.push(Triangle::new(0, 1, 0));
+    mesh2.vertices.push(Vertex::new(5.0, 0.0, 0.0));
+    mesh2.triangles.push(Triangle::new(0, 1, 2)); // Valid triangle
 
     let mut object2 = Object::new(2);
     object2.mesh = Some(mesh2);
@@ -155,7 +157,9 @@ fn test_build_volume_computation() {
     // Add second build item translated by (20, 20, 20)
     let mut item2 = BuildItem::new(2);
     item2.transform = Some([
-        1.0, 0.0, 0.0, 20.0, 0.0, 1.0, 0.0, 20.0, 0.0, 0.0, 1.0, 20.0,
+        1.0, 0.0, 0.0, 20.0, // Row 0: identity + tx=20
+        0.0, 1.0, 0.0, 20.0, // Row 1: identity + ty=20
+        0.0, 0.0, 1.0, 20.0, // Row 2: identity + tz=20
     ]);
     model.build.items.push(item2);
 
@@ -223,11 +227,12 @@ fn test_detect_inverted_mesh() {
 fn test_build_volume_validation_integration() {
     let mut model = Model::new();
 
-    // Create a mesh
+    // Create a mesh with valid triangle
     let mut mesh = Mesh::new();
     mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
     mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
-    mesh.triangles.push(Triangle::new(0, 1, 0));
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.triangles.push(Triangle::new(0, 1, 2)); // Valid triangle
 
     let mut object = Object::new(1);
     object.mesh = Some(mesh);
@@ -236,8 +241,9 @@ fn test_build_volume_validation_integration() {
     // Test 1: Build item with transform that places mesh in valid space (positive coords)
     let mut item_valid = BuildItem::new(1);
     item_valid.transform = Some([
-        1.0, 0.0, 0.0, 5.0, // Translation by (5, 0, 0)
-        0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        1.0, 0.0, 0.0, 5.0,  // Row 0: identity + tx=5
+        0.0, 1.0, 0.0, 0.0,  // Row 1: identity + ty=0
+        0.0, 0.0, 1.0, 0.0,  // Row 2: identity + tz=0
     ]);
 
     let (min, max) = mesh_ops::compute_transformed_aabb(
@@ -254,8 +260,9 @@ fn test_build_volume_validation_integration() {
     // This would be caught by N_XPX_0421 validation
     let mut item_negative = BuildItem::new(1);
     item_negative.transform = Some([
-        1.0, 0.0, 0.0, -50.0, // Translation by (-50, -50, -50)
-        0.0, 1.0, 0.0, -50.0, 0.0, 0.0, 1.0, -50.0,
+        1.0, 0.0, 0.0, -50.0, // Row 0: identity + tx=-50
+        0.0, 1.0, 0.0, -50.0, // Row 1: identity + ty=-50
+        0.0, 0.0, 1.0, -50.0, // Row 2: identity + tz=-50
     ]);
 
     let (min, max) = mesh_ops::compute_transformed_aabb(
