@@ -1789,10 +1789,10 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
     // Validate NormVectorGroup - vectors must point outward
     // Per DPX 3302: Normalized displacement vectors MUST point to the outer hemisphere of the triangle
     // The scalar product of a normalized displacement vector to the triangle normal MUST be greater than 0
-    
+
     // Epsilon for zero-length vector detection
     const NORMVECTOR_ZERO_EPSILON: f64 = 0.000001;
-    
+
     for norm_group in &model.resources.norm_vector_groups {
         for (idx, norm_vec) in norm_group.vectors.iter().enumerate() {
             // Calculate the magnitude of the vector
