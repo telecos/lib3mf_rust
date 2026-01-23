@@ -4408,6 +4408,7 @@ mod tests {
         // Add build item with near-singular transformation (very small positive determinant)
         // This matches test case P_XXX_0338_01.3mf
         // Transform: [0.0001 0 0 0 0.0001 0 0 0 0.0001 50 50 50]
+        // Determinant = 0.0001 * 0.0001 * 0.0001 = 1e-12
         let mut item = BuildItem::new(1);
         item.transform = Some([
             0.0001, 0.0, 0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0001, 50.0, 50.0, 50.0,
