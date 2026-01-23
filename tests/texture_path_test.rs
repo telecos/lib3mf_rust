@@ -45,7 +45,7 @@ fn test_all_pxxm_0508_files() {
             continue;
         }
         
-        let file = File::open(&test_file).expect(&format!("Failed to open {}", test_file));
+        let file = File::open(&test_file).unwrap_or_else(|_| panic!("Failed to open {}", test_file));
         let result = Model::from_reader_with_config(file, config.clone());
         
         assert!(
