@@ -3368,20 +3368,21 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 /// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
 /// doesn't place object outside printable area
 ///
-/// These test cases validate that after applying the build item transform,
-/// all vertices of the mesh remain within the default build volume [0, 100]³ mm.
+/// Per 3MF specification, the validation checks that after applying the build
+/// item transform, all vertices of the mesh have non-negative coordinates.
+/// The spec requires positive coordinates but does not define a maximum limit.
 ///
-/// The specific test cases check for:
-/// - N_XXX_0421_01: Negative coordinates (below build plate)
-/// - N_XXX_0420_01: Exceeding X dimension (> 100mm)
-/// - N_XXX_0418_01: Exceeding Y and Z dimensions (> 100mm)
+/// The specific test case checks for:
+/// - N_XXX_0421_01: Negative coordinates (below build plate at z=0 or negative x/y)
+///
+/// Note: N_XXX_0420_01 and N_XXX_0418_01 also test for specific dimension limits,
+/// but since the 3MF spec does not define a universal maximum build volume,
+/// we only validate the minimum (non-negative) constraint.
 ///
 /// With triangle mesh computing capabilities (parry3d), we can now properly
-/// validate transformed bounding boxes against the default build volume.
+/// validate transformed bounding boxes.
 fn validate_build_transform_bounds(model: &Model) -> Result<()> {
-    // Default build volume: [0, 100]³ mm as per 3MF specification test cases
     const BUILD_VOLUME_MIN: f64 = 0.0;
-    const BUILD_VOLUME_MAX: f64 = 100.0;
     const EPSILON: f64 = 1e-6; // Small tolerance for floating-point comparisons
 
     for item in &model.build.items {
@@ -3406,29 +3407,19 @@ fn validate_build_transform_bounds(model: &Model) -> Result<()> {
         };
 
         // Compute the transformed bounding box
-        let Ok((min, max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
+        let Ok((min, _max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
             continue; // Skip if we can't compute AABB
         };
 
         // N_XXX_0421_01: Check for negative coordinates (below build plate)
+        // The 3MF spec requires all coordinates to be non-negative
         if min.0 < BUILD_VOLUME_MIN - EPSILON
             || min.1 < BUILD_VOLUME_MIN - EPSILON
             || min.2 < BUILD_VOLUME_MIN - EPSILON
         {
             return Err(Error::InvalidModel(format!(
-                "Build item for object {}: Transform places mesh below build plate. Min coordinates: ({:.2}, {:.2}, {:.2}), build volume starts at {:.2}",
+                "Build item for object {}: Transform places mesh below build plate. Min coordinates: ({:.2}, {:.2}, {:.2}), all coordinates must be >= {:.2}",
                 item.objectid, min.0, min.1, min.2, BUILD_VOLUME_MIN
-            )));
-        }
-
-        // N_XXX_0420_01 and N_XXX_0418_01: Check for exceeding build volume dimensions
-        if max.0 > BUILD_VOLUME_MAX + EPSILON
-            || max.1 > BUILD_VOLUME_MAX + EPSILON
-            || max.2 > BUILD_VOLUME_MAX + EPSILON
-        {
-            return Err(Error::InvalidModel(format!(
-                "Build item for object {}: Transform places mesh outside build volume [0, {}]³. Max coordinates: ({:.2}, {:.2}, {:.2})",
-                item.objectid, BUILD_VOLUME_MAX, max.0, max.1, max.2
             )));
         }
     }
@@ -4264,7 +4255,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_transform_exceeds_x_dimension() {
+    fn test_build_transform_exceeds_x_dimension_allowed() {
         let mut model = Model::new();
 
         // Create a simple mesh
@@ -4278,7 +4269,8 @@ mod tests {
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
 
-        // Add build item with transform that exceeds X dimension
+        // Add build item with transform that exceeds typical build volume
+        // This is OK per spec - no maximum coordinate limit
         let mut item = BuildItem::new(1);
         item.transform = Some([
             1.0, 0.0, 0.0, 95.0, // Translation by (95, 0, 0) - mesh goes to 105
@@ -4286,17 +4278,16 @@ mod tests {
         ]);
         model.build.items.push(item);
 
-        // Should fail validation (N_XXX_0420_01)
+        // Should pass validation - spec has no maximum coordinate limit
         let result = validate_build_transform_bounds(&model);
-        assert!(result.is_err(), "Should reject mesh exceeding X dimension");
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("outside build volume"));
+        assert!(
+            result.is_ok(),
+            "Should accept mesh with large positive coordinates (no max limit in spec)"
+        );
     }
 
     #[test]
-    fn test_build_transform_exceeds_yz_dimensions() {
+    fn test_build_transform_exceeds_yz_dimensions_allowed() {
         let mut model = Model::new();
 
         // Create a simple mesh
@@ -4310,7 +4301,8 @@ mod tests {
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
 
-        // Add build item with transform that exceeds Y and Z dimensions
+        // Add build item with transform that exceeds typical build volume
+        // This is OK per spec - no maximum coordinate limit
         let mut item = BuildItem::new(1);
         item.transform = Some([
             1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 95.0, // Translation by (0, 95, 95)
@@ -4318,20 +4310,16 @@ mod tests {
         ]);
         model.build.items.push(item);
 
-        // Should fail validation (N_XXX_0418_01)
+        // Should pass validation - spec has no maximum coordinate limit
         let result = validate_build_transform_bounds(&model);
         assert!(
-            result.is_err(),
-            "Should reject mesh exceeding Y and Z dimensions"
+            result.is_ok(),
+            "Should accept mesh with large positive coordinates (no max limit in spec)"
         );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("outside build volume"));
     }
 
     #[test]
-    fn test_build_transform_within_bounds() {
+    fn test_build_transform_positive_coordinates() {
         let mut model = Model::new();
 
         // Create a simple mesh
@@ -4345,7 +4333,7 @@ mod tests {
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
 
-        // Add build item with transform that keeps mesh within bounds [0, 100]³
+        // Add build item with transform that keeps mesh in positive space
         let mut item = BuildItem::new(1);
         item.transform = Some([
             1.0, 0.0, 0.0, 45.0, // Translation by (45, 45, 45)
@@ -4356,6 +4344,9 @@ mod tests {
 
         // Should pass validation
         let result = validate_build_transform_bounds(&model);
-        assert!(result.is_ok(), "Should accept mesh within build volume");
+        assert!(
+            result.is_ok(),
+            "Should accept mesh with positive coordinates"
+        );
     }
 }
