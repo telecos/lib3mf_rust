@@ -2766,7 +2766,19 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
 /// Per 3MF Material Extension spec, texture paths must contain only valid ASCII characters.
 /// Non-ASCII characters (like Unicode) in texture paths are not allowed.
 fn validate_texture_paths(model: &Model) -> Result<()> {
+    // Get list of encrypted files to skip validation for them
+    let encrypted_files: Vec<String> = model
+        .secure_content
+        .as_ref()
+        .map(|sc| sc.encrypted_files.clone())
+        .unwrap_or_default();
+
     for texture in &model.resources.texture2d_resources {
+        // Skip validation for encrypted files (they may not follow standard paths)
+        if encrypted_files.contains(&texture.path) {
+            continue;
+        }
+
         // Check that the path contains only ASCII characters
         if !texture.path.is_ascii() {
             return Err(Error::InvalidModel(format!(

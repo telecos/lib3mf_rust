@@ -24,30 +24,65 @@ This document describes the implementation and security considerations for the 3
    - Conformance tests defined in `tests/conformance_tests.rs`
    - Tests pass when test files are available
 
+### What is NOW Supported ✅
+
+1. **Extension Recognition**: The SecureContent extension is recognized and validated
+   - The extension enum includes `Extension::SecureContent`
+   - Namespace URI is properly mapped
+   - Extension can be validated in `requiredextensions` attribute
+
+2. **Complete Keystore Parsing**: Full structural parsing of keystore.xml
+   - Extracts keystore UUID
+   - Parses consumer definitions (ID, key ID, PEM public keys)
+   - Parses resource data groups with encryption metadata
+   - Parses access rights linking consumers to encrypted resources
+   - Extracts encryption parameters (algorithms, IV, tags, AAD, compression)
+
+3. **Validation Framework**: Comprehensive validation per 3MF spec
+   - EPX-2601: Consumer index validation
+   - EPX-2602: Consumer existence validation
+   - EPX-2603: Algorithm validation (wrapping, MGF, digest)
+   - EPX-2604: Consumer ID uniqueness validation
+   - EPX-2605: Encrypted file path validation
+   - EPX-2607: File existence validation
+
+4. **Test-Only Decryption**: Decryption using Suite 8 test keys
+   - RSA-OAEP key unwrapping with test private key (consumerid="test3mf01")
+   - AES-256-GCM content decryption
+   - DEFLATE decompression support
+   - Automatic decryption of encrypted files during parsing
+   - **For Suite 8 conformance testing only**
+
 ### What is NOT Supported ❌
 
-1. **No Cryptographic Operations**
+1. **Production Decryption**
+   - No configurable key provider
+   - No production key management
+   - Only test keys from Suite 8 Appendix D are embedded
+   - Not suitable for production use with real encrypted content
+
+2. **Advanced Cryptographic Features**
    - No signature verification
-   - No decryption of encrypted content
-   - No certificate/key management
-   - No cryptographic primitives implementation
+   - No certificate/key management beyond test keys
+   - No PKI integration
 
-2. **No Key Store Parsing**
-   - `<keystore>` elements are not parsed
-   - `<consumer>` elements are not extracted
-   - `<resourcedatagroup>` elements are not processed
-   - Encryption metadata is not captured
+## Scope of Support: Test-Only Decryption + Metadata Extraction
 
-3. **No Content Access**
-   - Encrypted OPC parts are not decrypted
-   - Cannot read encrypted model files
-   - Cannot access encrypted resources
+This implementation provides two levels of support:
 
-## Scope of Support: Read-Only Validation
+1. **Test-Only Decryption** (Suite 8 Conformance):
+   - Automatic decryption of files encrypted with Suite 8 test keys
+   - Enables conformance validation against test suite
+   - Uses hardcoded test keys from Appendix D
+   - **Not for production use**
 
-This implementation provides **read-only validation** of secure content elements:
+2. **Complete Metadata Extraction** (Production Applications):
+   - Full keystore structure parsing
+   - All encryption parameters exposed
+   - Applications implement their own decryption
+   - Choose their own cryptographic libraries and key management
 
-### Design Decision: Validation Only
+### Design Decision: Test Keys for Conformance, Metadata for Production
 
 **Rationale:**
 1. **Complexity**: Full cryptographic support requires:
@@ -77,8 +112,32 @@ This implementation provides **read-only validation** of secure content elements
 
 ### What This Implementation Provides
 
+#### For Suite 8 Conformance Testing
+
+Files encrypted with the test keys are **automatically decrypted** during parsing:
+
 ```rust
-// Users can:
+use lib3mf::Model;
+
+// Parse a 3MF file with encrypted content (Suite 8 test files)
+// Files encrypted with consumerid="test3mf01" are automatically decrypted
+let model = Model::from_reader(file)?;
+
+// Encrypted files are transparently decrypted and accessible
+// This enables Suite 8 conformance validation
+```
+
+The decryption happens automatically in the background. Test keys are from Suite 8 Appendix D:
+- Consumer ID: `test3mf01`
+- Key ID: `test3mfkek01`
+- RSA-2048 private key (embedded)
+
+#### For Production Applications (Metadata Access)
+
+```rust
+use lib3mf::Model;
+
+// Parse a 3MF file with secure content
 let model = Model::from_reader(file)?;
 
 // 1. Check if secure content is used
@@ -86,52 +145,261 @@ if model.required_extensions.contains(&Extension::SecureContent) {
     println!("This file uses secure content");
 }
 
-// 2. Parse file structure (currently limited to non-encrypted parts)
-// 3. Validate 3MF package integrity
+// 2. Access keystore metadata
+if let Some(ref sc) = model.secure_content {
+    // Access keystore UUID
+    if let Some(ref uuid) = sc.keystore_uuid {
+        println!("Keystore UUID: {}", uuid);
+    }
+    
+    // Access consumer information
+    for consumer in &sc.consumers {
+        println!("Consumer ID: {}", consumer.consumer_id);
+        if let Some(ref key_id) = consumer.key_id {
+            println!("  Key ID: {}", key_id);
+        }
+        if let Some(ref key_value) = consumer.key_value {
+            println!("  Public Key (PEM): {}", key_value);
+        }
+    }
+    
+    // Access encrypted resources and their encryption metadata
+    for group in &sc.resource_data_groups {
+        println!("Resource Group: {}", group.key_uuid);
+        
+        // Access rights per consumer
+        for access_right in &group.access_rights {
+            println!("  Consumer {}: Algorithm {}", 
+                access_right.consumer_index,
+                access_right.kek_params.wrapping_algorithm);
+            // access_right.cipher_value contains the wrapped CEK
+        }
+        
+        // Encrypted files in this group
+        for resource in &group.resource_data {
+            println!("  Encrypted file: {}", resource.path);
+            println!("    Algorithm: {}", resource.cek_params.encryption_algorithm);
+            println!("    Compression: {}", resource.cek_params.compression);
+            if let Some(ref iv) = resource.cek_params.iv {
+                println!("    IV: {}", iv);
+            }
+            if let Some(ref tag) = resource.cek_params.tag {
+                println!("    Tag: {}", tag);
+            }
+        }
+    }
+}
+
+// 3. Implement your own decryption using external crypto libraries
+// Example: Use the `ring` or `RustCrypto` crates for actual cryptographic operations
 ```
 
 ## Data Structures
 
-### Minimal Secure Content Support
+### Complete Secure Content Support
 
-For basic awareness and metadata extraction, we define minimal structures:
+The library provides comprehensive data structures that mirror the 3MF SecureContent
+extension specification, allowing applications to access all keystore metadata:
 
 ```rust
-/// Secure content metadata (read-only)
-#[derive(Debug, Clone)]
+/// Main secure content information container
 pub struct SecureContentInfo {
     /// UUID of the keystore
     pub keystore_uuid: Option<String>,
-    /// Paths to encrypted files in the package
+    /// List of encrypted file paths (for quick reference)
     pub encrypted_files: Vec<String>,
+    /// Consumer definitions (authorized parties)
+    pub consumers: Vec<Consumer>,
+    /// Resource data groups (encrypted resources with shared CEK)
+    pub resource_data_groups: Vec<ResourceDataGroup>,
+}
+
+/// Consumer (authorized party that can decrypt content)
+pub struct Consumer {
+    /// Unique consumer identifier (alphanumeric, human-readable)
+    pub consumer_id: String,
+    /// Optional key identifier for the KEK
+    pub key_id: Option<String>,
+    /// Optional public key in PEM format (RFC 7468)
+    pub key_value: Option<String>,
+}
+
+/// Resource data group (encrypted resources sharing the same CEK)
+pub struct ResourceDataGroup {
+    /// UUID identifying the Content Encryption Key
+    pub key_uuid: String,
+    /// Access rights (one per authorized consumer)
+    pub access_rights: Vec<AccessRight>,
+    /// Encrypted resources in this group
+    pub resource_data: Vec<ResourceData>,
+}
+
+/// Access right (links consumer to wrapped CEK)
+pub struct AccessRight {
+    /// Zero-based index to the consumer
+    pub consumer_index: usize,
+    /// Key encryption parameters
+    pub kek_params: KEKParams,
+    /// Base64-encoded wrapped CEK
+    pub cipher_value: String,
+}
+
+/// Key Encryption Key parameters
+pub struct KEKParams {
+    /// Wrapping algorithm URI
+    pub wrapping_algorithm: String,
+    /// Optional mask generation function URI
+    pub mgf_algorithm: Option<String>,
+    /// Optional message digest method URI
+    pub digest_method: Option<String>,
+}
+
+/// Encrypted resource metadata
+pub struct ResourceData {
+    /// Path to encrypted file in package
+    pub path: String,
+    /// Content encryption parameters
+    pub cek_params: CEKParams,
+}
+
+/// Content Encryption Key parameters
+pub struct CEKParams {
+    /// Encryption algorithm URI (e.g., AES-256-GCM)
+    pub encryption_algorithm: String,
+    /// Compression algorithm ("none" or "deflate")
+    pub compression: String,
+    /// Initialization Vector (base64, typically 96-bit for AES-GCM)
+    pub iv: Option<String>,
+    /// Authentication Tag (base64, typically 128-bit for AES-GCM)
+    pub tag: Option<String>,
+    /// Additional Authenticated Data (base64, optional)
+    pub aad: Option<String>,
 }
 ```
 
-These structures are **intentionally minimal** to avoid giving false confidence that full security features are implemented.
+These structures provide **all the metadata** needed for an application to implement
+decryption using external cryptographic libraries.
+
+## Implementing Decryption (External Libraries Required)
+
+To actually decrypt content, applications must use external cryptographic libraries.
+Here's a conceptual workflow:
+
+### Step 1: Extract Keystore Metadata
+
+```rust
+use lib3mf::Model;
+
+let model = Model::from_reader(file)?;
+let sc = model.secure_content.as_ref().expect("No secure content");
+
+// Identify your consumer
+let my_consumer_id = "MyApp#Device#12345";
+let consumer_index = sc.consumers.iter()
+    .position(|c| c.consumer_id == my_consumer_id)
+    .expect("Consumer not authorized");
+```
+
+### Step 2: Unwrap the CEK Using Your Private Key
+
+```rust
+// Pseudo-code - requires external crypto library (e.g., ring, RustCrypto, OpenSSL)
+for group in &sc.resource_data_groups {
+    // Find access right for your consumer
+    let access_right = group.access_rights.iter()
+        .find(|ar| ar.consumer_index == consumer_index)
+        .expect("No access right for this consumer");
+    
+    // Decode the wrapped CEK
+    let wrapped_cek = base64::decode(&access_right.cipher_value)?;
+    
+    // Load your RSA private key (from secure storage)
+    let private_key = load_private_key_from_secure_storage()?;
+    
+    // Unwrap using RSA-OAEP (requires external crypto library)
+    let cek = rsa_oaep_unwrap(
+        &wrapped_cek,
+        &private_key,
+        &access_right.kek_params
+    )?;
+    
+    // Now decrypt each resource in this group
+    for resource in &group.resource_data {
+        decrypt_resource(resource, &cek)?;
+    }
+}
+```
+
+### Step 3: Decrypt Resource Using AES-GCM
+
+```rust
+// Pseudo-code - requires external crypto library
+fn decrypt_resource(resource: &ResourceData, cek: &[u8]) -> Result<Vec<u8>> {
+    // Read encrypted file from package
+    let encrypted_data = package.get_file_binary(&resource.path)?;
+    
+    // Decode parameters
+    let iv = base64::decode(resource.cek_params.iv.as_ref().unwrap())?;
+    let tag = base64::decode(resource.cek_params.tag.as_ref().unwrap())?;
+    let aad = resource.cek_params.aad.as_ref()
+        .map(|a| base64::decode(a)).transpose()?;
+    
+    // Decrypt using AES-256-GCM (requires external crypto library)
+    let plaintext = aes_gcm_decrypt(
+        &encrypted_data,
+        cek,
+        &iv,
+        &tag,
+        aad.as_deref()
+    )?;
+    
+    // Decompress if needed
+    if resource.cek_params.compression == "deflate" {
+        Ok(decompress(&plaintext)?)
+    } else {
+        Ok(plaintext)
+    }
+}
+```
+
+### Recommended Cryptographic Libraries
+
+- **[ring](https://crates.io/crates/ring)**: Recommended, well-audited, focused on correctness
+- **[RustCrypto](https://github.com/RustCrypto)**: Pure Rust implementations
+- **[OpenSSL bindings](https://crates.io/crates/openssl)**: Battle-tested, widely used
+
+**Security Warning**: Implementing cryptography incorrectly is dangerous. Always:
+- Use established, well-audited libraries
+- Follow library documentation exactly
+- Never implement your own cryptographic primitives
+- Protect private keys using secure storage (HSM, TPM, key vaults)
+- Consider professional security review for production systems
 
 ## Security Considerations
 
 ### ⚠️ Important Security Warnings
 
-1. **NO DECRYPTION**: This library does NOT decrypt secure content
-   - Encrypted files remain encrypted
-   - No access to encrypted resources
-   - No cryptographic key handling
+1. **TEST-ONLY DECRYPTION**: Decryption uses hardcoded test keys
+   - Private key is embedded in the source code
+   - Only works for Suite 8 test files (consumerid="test3mf01")
+   - **NEVER use for production encrypted content**
+   - Test keys are publicly known (Suite 8 Appendix D)
 
-2. **NO SIGNATURE VERIFICATION**: Digital signatures are NOT verified
+2. **NO PRODUCTION KEY MANAGEMENT**: 
+   - No configurable key provider
+   - No secure key storage
+   - No key rotation
+   - Production applications must implement their own key management
+
+3. **NO SIGNATURE VERIFICATION**: Digital signatures are NOT verified
    - Cannot validate authenticity
    - Cannot detect tampering
    - Cannot verify signer identity
 
-3. **NO CERTIFICATE VALIDATION**: Certificates/keys are NOT validated
+4. **NO CERTIFICATE VALIDATION**: Certificates/keys are NOT validated beyond test keys
    - No PKI integration
    - No certificate chain validation
    - No revocation checking
-
-4. **METADATA ONLY**: Only structural parsing
-   - Can identify encrypted parts
-   - Can read unencrypted metadata
-   - Cannot access protected content
 
 ### Recommended Security Practices
 
@@ -153,7 +421,7 @@ For applications requiring secure content support:
    - Consult security professionals for production use
 
 4. **Key Management**:
-   - Never embed keys in source code
+   - **NEVER embed keys in source code** (except for testing)
    - Use secure key storage (HSM, TPM, key vaults)
    - Implement proper key rotation
    - Follow principle of least privilege
@@ -219,33 +487,38 @@ For development and testing without official test files:
 
 ## Future Enhancements
 
-### Potential Extensions (Out of Current Scope)
+### Currently Implemented ✅
 
-1. **Metadata Extraction**:
-   - Parse `<keystore>` structure
-   - Extract consumer IDs
-   - Identify encryption algorithms used
-   - Track encrypted resource paths
+1. **Complete Keystore Metadata Extraction**:
+   - ✅ Parse complete `<keystore>` structure
+   - ✅ Extract consumer IDs, key IDs, and PEM public keys
+   - ✅ Identify encryption algorithms (wrapping, MGF, digest)
+   - ✅ Track encrypted resource paths
+   - ✅ Extract all CEK and KEK parameters (IV, tag, AAD, compression)
+   - ✅ Comprehensive EPX validation (EPX-2601 through EPX-2607)
 
-2. **Signature Verification** (with external library):
+### Potential Future Extensions (Out of Current Scope)
+
+1. **Signature Verification** (requires external library):
    - Integrate with `ring` or `RustCrypto`
-   - Verify digital signatures
+   - Verify digital signatures on encrypted content
    - Validate certificate chains
    - Check for tampering
 
-3. **Decryption Support** (with external library):
+2. **Built-in Decryption Support** (requires external library):
+   - Provide optional convenience wrappers around crypto libraries
    - RSA-2048 OAEP key unwrapping
    - AES-256 GCM decryption
-   - Content decompression
+   - Automatic content decompression
    - Secure key management integration
 
-4. **PKI Integration**:
+3. **PKI Integration**:
    - Certificate validation
    - Trust chain verification
-   - Revocation checking
+   - Revocation checking (OCSP, CRL)
    - Key distribution protocols
 
-### Why These Are Not Implemented Now
+### Why Cryptographic Operations Are Not Built-In
 
 Each of these requires:
 - Extensive cryptographic expertise
@@ -271,8 +544,29 @@ Each of these requires:
 
 ## Conclusion
 
-This implementation provides **structural validation only** for the Secure Content extension. It correctly recognizes the extension and validates its presence in the `requiredextensions` attribute, but does **NOT** implement cryptographic operations.
+This implementation provides **complete keystore metadata extraction** for the Secure Content extension. It:
 
-For applications requiring actual security features (encryption, signatures, key management), integrate with specialized cryptographic libraries and security ecosystems rather than implementing these features within this general-purpose 3MF parser.
+- ✅ Recognizes and validates the SecureContent extension
+- ✅ Parses the complete keystore.xml structure according to the 3MF spec
+- ✅ Extracts all consumer information, encryption parameters, and access rights
+- ✅ Validates keystore structure per EPX error codes (EPX-2601 through EPX-2607)
+- ✅ Provides all metadata needed for applications to implement decryption
 
-**Security is hard. When in doubt, consult experts.**
+Applications can access this metadata to:
+- Identify which files are encrypted
+- Determine which consumers can decrypt content
+- Retrieve encryption algorithm parameters
+- Implement decryption using external cryptographic libraries (ring, RustCrypto, OpenSSL)
+
+This "parse structure, delegate cryptography" approach provides maximum flexibility while
+maintaining security by leaving actual cryptographic operations to specialized, well-audited
+libraries chosen by the application developer.
+
+**For Suite 8 conformance testing**: Files encrypted with test keys (consumerid="test3mf01")
+are automatically decrypted during parsing. This enables complete conformance validation.
+
+**For production applications**: Use the metadata extraction APIs to access encryption
+parameters and implement your own decryption using external cryptographic libraries.
+See the "Implementing Decryption" section above for conceptual workflow.
+
+**Security is hard. When in doubt, consult experts. Never use test keys in production.**

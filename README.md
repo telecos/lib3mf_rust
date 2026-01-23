@@ -744,11 +744,15 @@ The parser successfully handles files using all 3MF extensions including:
 - Production Extension (1.2.0)
 - Slice Extension (1.0.2)
 - Beam Lattice Extension (1.2.0)
-- Secure Content Extension (1.0.2) - ⚠️ **Read-only validation** (no cryptographic operations)
+- Secure Content Extension (1.0.2) - ⚠️ **Test-only decryption + metadata extraction**
 - Boolean Operations Extension (1.1.1)
 - Displacement Extension (1.0.0)
 
-**Important Security Note**: The Secure Content extension is recognized for validation purposes only. This library does NOT implement cryptographic operations (encryption, decryption, or signature verification). See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed security considerations and integration guidance.
+**Important Security Note**: The Secure Content extension provides:
+1. **Test-only decryption** using Suite 8 test keys for conformance validation
+2. **Complete keystore metadata extraction** for production applications
+
+Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automatically decrypted during parsing. For production applications, access all encryption metadata (consumers, encryption parameters, access rights) and implement decryption using external cryptographic libraries. **Never use embedded test keys in production.** See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed information.
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
