@@ -3160,26 +3160,58 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
 
 /// Validate production extension UUID usage
 ///
-/// Per 3MF Production Extension spec:
-/// - Producers MUST include p:UUID on build items, objects, and components when using production extension
-/// - However, consumers should be lenient and accept files without these UUIDs for backward compatibility
+/// N_XPX_0802_01 and N_XPX_0802_05: Per 3MF Production Extension spec Chapter 4:
+/// - Build MUST have p:UUID when production extension is required
+/// - Build items MUST have p:UUID when production extension is required  
+/// - Objects MUST have p:UUID when production extension is required
 ///
-/// Note: The spec states requirements for producers (file writers), not strict validation requirements
-/// for consumers (parsers). The official 3MF test suite includes positive test cases that demonstrate
-/// files with production extension declared but without all UUIDs should still be accepted.
-///
-/// This validation is intentionally lenient to match the official test suite expectations.
-fn validate_production_uuids_required(_model: &Model, _config: &ParserConfig) -> Result<()> {
-    // Per the 3MF Production Extension spec and official test suite:
-    // - UUIDs are REQUIRED for producers (when writing 3MF files with production extension)
-    // - UUIDs are OPTIONAL for consumers (parsers should accept files without them)
-    //
-    // The official test suite contains positive tests (e.g., suite 9, P_XXX_2202_01.3mf)
-    // that have production extension in requiredextensions but do NOT include all UUIDs.
-    // These tests are expected to pass, demonstrating that consumers should not reject
-    // files solely based on missing production UUIDs.
-    //
-    // Therefore, we do not perform strict UUID validation here.
+/// Note: The validation for missing UUIDs applies only when production extension
+/// is declared as "required" in the model's requiredextensions attribute.
+fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> Result<()> {
+    // Only validate if production extension is explicitly required in the model
+    // The config.supports() tells us what the parser accepts, but we need to check
+    // what the model file actually requires
+    let production_required = model.required_extensions.contains(&Extension::Production);
+
+    if !production_required {
+        return Ok(());
+    }
+
+    // When production extension is required:
+    // 1. Build MUST have UUID (Chapter 4.1) if it has items
+    // Per spec, the build UUID is required to identify builds across devices/jobs
+    if !model.build.items.is_empty() && model.build.production_uuid.is_none() {
+        return Err(Error::InvalidModel(
+            "Production extension requires build to have p:UUID attribute when build items are present".to_string(),
+        ));
+    }
+
+    // 2. Build items MUST have UUID (Chapter 4.1.1)
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if item.production_uuid.is_none() {
+            return Err(Error::InvalidModel(format!(
+                "Production extension requires build item {} to have p:UUID attribute",
+                idx
+            )));
+        }
+    }
+
+    // 3. Objects MUST have UUID (Chapter 4.2)
+    for object in &model.resources.objects {
+        // Check if object has production info with UUID
+        let has_uuid = object
+            .production
+            .as_ref()
+            .and_then(|p| p.uuid.as_ref())
+            .is_some();
+
+        if !has_uuid {
+            return Err(Error::InvalidModel(format!(
+                "Production extension requires object {} to have p:UUID attribute",
+                object.id
+            )));
+        }
+    }
 
     Ok(())
 }
@@ -3305,10 +3337,40 @@ fn validate_component_properties(model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// N_XPX_0802_04: Validate no duplicate UUIDs between objects
+/// N_XPX_0802_04 and N_XPX_0802_05: Validate no duplicate UUIDs across all scopes
+///
+/// Per the 3MF Production Extension specification, UUIDs must be globally unique
+/// across all elements in a 3MF package including:
+/// - Build element
+/// - Build item elements
+/// - Object elements
+/// - Component elements
 fn validate_duplicate_uuids(model: &Model) -> Result<()> {
     let mut uuids = std::collections::HashSet::new();
 
+    // Check build UUID
+    if let Some(ref uuid) = model.build.production_uuid {
+        if !uuids.insert(uuid.clone()) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate UUID '{}' found in build",
+                uuid
+            )));
+        }
+    }
+
+    // Check build item UUIDs
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref uuid) = item.production_uuid {
+            if !uuids.insert(uuid.clone()) {
+                return Err(Error::InvalidModel(format!(
+                    "Duplicate UUID '{}' found in build item {}",
+                    uuid, idx
+                )));
+            }
+        }
+    }
+
+    // Check object UUIDs
     for object in &model.resources.objects {
         if let Some(ref production) = object.production {
             if let Some(ref uuid) = production.uuid {
@@ -3317,6 +3379,20 @@ fn validate_duplicate_uuids(model: &Model) -> Result<()> {
                         "Duplicate UUID '{}' found on object {}",
                         uuid, object.id
                     )));
+                }
+            }
+        }
+
+        // Check component UUIDs within each object
+        for (comp_idx, component) in object.components.iter().enumerate() {
+            if let Some(ref production) = component.production {
+                if let Some(ref uuid) = production.uuid {
+                    if !uuids.insert(uuid.clone()) {
+                        return Err(Error::InvalidModel(format!(
+                            "Duplicate UUID '{}' found in object {} component {}",
+                            uuid, object.id, comp_idx
+                        )));
+                    }
                 }
             }
         }
