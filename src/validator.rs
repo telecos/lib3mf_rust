@@ -9,6 +9,7 @@
 //! - Material, color group, and base material references are valid
 
 use crate::error::{Error, Result};
+use crate::mesh_ops;
 use crate::model::{Extension, Model, ObjectType, ParserConfig};
 use std::collections::{HashMap, HashSet};
 
@@ -3292,26 +3293,8 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
         }
 
         if let Some(ref mesh) = object.mesh {
-            // Calculate signed volume using divergence theorem
-            let mut volume = 0.0_f64;
-            for triangle in &mesh.triangles {
-                if triangle.v1 >= mesh.vertices.len()
-                    || triangle.v2 >= mesh.vertices.len()
-                    || triangle.v3 >= mesh.vertices.len()
-                {
-                    continue; // Skip invalid triangles (caught by other validation)
-                }
-
-                let v1 = &mesh.vertices[triangle.v1];
-                let v2 = &mesh.vertices[triangle.v2];
-                let v3 = &mesh.vertices[triangle.v3];
-
-                // Signed volume contribution of this triangle
-                volume += v1.x * (v2.y * v3.z - v2.z * v3.y)
-                    + v2.x * (v3.y * v1.z - v3.z * v1.y)
-                    + v3.x * (v1.y * v2.z - v1.z * v2.y);
-            }
-            volume /= 6.0;
+            // Use signed volume to detect inverted meshes
+            let volume = mesh_ops::compute_mesh_signed_volume(mesh)?;
 
             // Use small epsilon for floating-point comparison
             const EPSILON: f64 = 1e-10;
@@ -3372,17 +3355,49 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 
 /// N_XPX_0421_01: Validate build item transform doesn't place object outside printable area
 ///
-/// **Note: This validation is intentionally disabled.**
+/// This validation checks that transformed meshes remain within reasonable bounds.
+/// While the 3MF spec doesn't define strict printable area limits, objects with
+/// all vertices in negative coordinates after transformation are likely errors.
 ///
-/// The test case appears to check for negative coordinates in the translation
-/// component of transforms. However, this is too strict:
-/// 1. Negative coordinates in transforms can be valid (e.g., centering around origin)
-/// 2. The transform translation doesn't directly indicate if the MESH is outside bounds
-/// 3. Proper validation would need to apply the transform to mesh vertices
-///
-/// Many valid 3MF files in the test suite use negative transform coordinates
-/// legitimately, so this validation causes false positives.
-fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
+/// We use a conservative approach:
+/// - Check if the transformed bounding box has all coordinates negative (likely error)
+/// - Allow negative coordinates if at least some part is in positive space (valid centering)
+fn validate_build_transform_bounds(model: &Model) -> Result<()> {
+    for item in &model.build.items {
+        // Find the object for this build item
+        let Some(object) = model
+            .resources
+            .objects
+            .iter()
+            .find(|obj| obj.id == item.objectid)
+        else {
+            continue; // Object reference validation is done elsewhere
+        };
+
+        // Get the mesh
+        let Some(mesh) = &object.mesh else {
+            continue; // No mesh to validate
+        };
+
+        // Only validate if there's a transform
+        let Some(transform) = &item.transform else {
+            continue; // No transform, nothing to check
+        };
+
+        // Compute the transformed bounding box
+        let Ok((_min, max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
+            continue; // Skip if we can't compute AABB
+        };
+
+        // Check if the entire bounding box is in negative space (all coordinates < 0)
+        // This is a strong indicator that the transform is incorrect
+        if max.0 < 0.0 && max.1 < 0.0 && max.2 < 0.0 {
+            return Err(Error::InvalidModel(format!(
+                "Build item for object {}: Transform places entire mesh in negative coordinate space (max: {:.2}, {:.2}, {:.2}). This likely indicates an incorrect transformation.",
+                item.objectid, max.0, max.1, max.2
+            )));
+        }
+    }
     Ok(())
 }
 
