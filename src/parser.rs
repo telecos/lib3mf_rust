@@ -575,9 +575,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if let Some(ref mut colorgroup) = current_colorgroup {
                             let attrs = parse_attributes(&reader, e)?;
                             if let Some(color_str) = attrs.get("color") {
-                                if let Some(color) = parse_color(color_str) {
-                                    colorgroup.colors.push(color);
-                                }
+                                let color = parse_color(color_str).ok_or_else(|| {
+                                    Error::InvalidXml(format!(
+                                        "Invalid color format '{}' in colorgroup {}.\n\
+                                         Colors must be in format #RRGGBB or #RRGGBBAA where each component is a hexadecimal value (0-9, A-F).\n\
+                                         Example: #FF0000 (red), #00FF0080 (green with 50% transparency)",
+                                        color_str, colorgroup.id
+                                    ))
+                                })?;
+                                colorgroup.colors.push(color);
                             }
                         }
                     }
