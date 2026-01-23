@@ -2976,6 +2976,10 @@ fn validate_production_paths(model: &Model) -> Result<()> {
 /// A negative determinant indicates a mirror transformation which would
 /// invert the object's orientation (inside-out).
 ///
+/// Important: Singular transforms (determinant = 0) ARE ALLOWED by the 3MF spec.
+/// These are non-invertible transformations that collapse one or more dimensions.
+/// Test cases P_XXX_0326_03 and P_XXX_0338_01 specifically validate this behavior.
+///
 /// Exception: For sliced objects (objects with slicestackid), the transform
 /// restrictions are different per the 3MF Slice Extension spec. Sliced objects
 /// must have planar transforms (validated separately in validate_slice_extension),
@@ -4352,5 +4356,70 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("negative determinant"));
+    }
+
+    #[test]
+    fn test_singular_transform_is_allowed() {
+        let mut model = Model::new();
+
+        // Create a regular object
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with singular transformation (determinant = 0)
+        // This matches test case P_XXX_0326_03.3mf
+        // Transform: [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            0.0, 0.6667, -0.3333, 1.0, -0.6667, 0.3333, 1.0, 0.6667, -0.3333, 65.101, 80.1025,
+            110.1,
+        ]);
+        model.build.items.push(item);
+
+        // Singular transforms (determinant = 0) ARE ALLOWED per 3MF spec
+        let result = validate_transform_matrices(&model);
+        assert!(
+            result.is_ok(),
+            "Singular transform (determinant = 0) should be allowed. Error: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_near_singular_transform_is_allowed() {
+        let mut model = Model::new();
+
+        // Create a regular object
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with near-singular transformation (very small positive determinant)
+        // This matches test case P_XXX_0338_01.3mf
+        // Transform: [0.0001 0 0 0 0.0001 0 0 0 0.0001 50 50 50]
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            0.0001, 0.0, 0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0001, 50.0, 50.0, 50.0,
+        ]);
+        model.build.items.push(item);
+
+        // Near-singular transforms (very small positive determinant) ARE ALLOWED
+        let result = validate_transform_matrices(&model);
+        assert!(
+            result.is_ok(),
+            "Near-singular transform should be allowed. Error: {:?}",
+            result.err()
+        );
     }
 }
