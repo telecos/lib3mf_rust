@@ -67,12 +67,10 @@ fn test_beam_lattice_mesh_scenario() {
     // No triangles added (beam lattice only)
     
     // This should be safe to check before passing to external libraries
-    if mesh.has_triangles() {
-        panic!("Expected no triangles in beam lattice mesh");
-    } else {
-        // This is the expected case for beam lattice meshes
-        assert!(mesh.has_vertices(), "Beam lattice should have vertices");
-        assert_eq!(mesh.vertices.len(), 10, "Should have 10 vertices");
-        assert_eq!(mesh.triangles.len(), 0, "Should have 0 triangles");
-    }
+    assert!(!mesh.has_triangles(), "Expected no triangles in beam lattice mesh");
+    
+    // This is the expected case for beam lattice meshes
+    assert!(mesh.has_vertices(), "Beam lattice should have vertices");
+    assert_eq!(mesh.vertices.len(), 10, "Should have 10 vertices");
+    assert_eq!(mesh.triangles.len(), 0, "Should have 0 triangles");
 }

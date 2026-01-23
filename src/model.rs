@@ -554,13 +554,41 @@ impl Mesh {
     /// Check if this mesh has any vertices
     ///
     /// Returns `true` if the mesh contains at least one vertex, `false` otherwise.
+    ///
+    /// This is useful for verifying that a mesh has geometry data before processing.
+    /// Note that a mesh can have vertices without triangles (e.g., beam lattice meshes).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::Mesh;
+    ///
+    /// let mesh = Mesh::new();
+    /// assert!(!mesh.has_vertices());
+    /// ```
     pub fn has_vertices(&self) -> bool {
         !self.vertices.is_empty()
     }
 
     /// Check if this mesh is completely empty (no vertices and no triangles)
     ///
-    /// Returns `true` if the mesh has neither vertices nor triangles.
+    /// Returns `true` if the mesh has neither vertices nor triangles, `false` otherwise.
+    ///
+    /// This is useful for filtering out completely empty mesh objects that have no
+    /// geometry data at all. Note that a mesh with vertices but no triangles (beam
+    /// lattice) will return `false` from this method.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::{Mesh, Vertex};
+    ///
+    /// let mut mesh = Mesh::new();
+    /// assert!(mesh.is_empty());
+    ///
+    /// mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    /// assert!(!mesh.is_empty()); // Has vertices, so not empty
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.vertices.is_empty() && self.triangles.is_empty()
     }
