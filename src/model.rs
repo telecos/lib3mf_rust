@@ -466,6 +466,32 @@ impl Triangle {
 }
 
 /// A 3D mesh containing vertices and triangles
+///
+/// # Important Note on Empty Triangle Lists
+///
+/// In 3MF, particularly with the Beam Lattice extension, it is valid for a mesh
+/// to have vertices but **no triangles**. The vertices may serve solely to define
+/// connection points for beams in a beam lattice structure.
+///
+/// **WARNING**: If you intend to use this mesh data with collision detection libraries
+/// (such as parry3d) or other geometry processing libraries that require at least one
+/// triangle, you MUST check `has_triangles()` or verify `!triangles.is_empty()` before
+/// passing the mesh data to those libraries. Failing to do so may result in panics or
+/// runtime errors in those libraries.
+///
+/// # Example
+///
+/// ```
+/// use lib3mf::Mesh;
+///
+/// let mesh = Mesh::new();
+/// // Safe to check before using with external libraries
+/// if mesh.has_triangles() {
+///     // Safe to use mesh with libraries that require triangles
+/// } else {
+///     // This mesh may be a beam lattice mesh with only vertices
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct Mesh {
     /// List of vertices
@@ -496,6 +522,47 @@ impl Mesh {
             triangles: Vec::with_capacity(triangles),
             beamset: None,
         }
+    }
+
+    /// Check if this mesh has any triangles
+    ///
+    /// Returns `true` if the mesh contains at least one triangle, `false` otherwise.
+    ///
+    /// This is particularly useful when working with beam lattice meshes, which may
+    /// have vertices but no triangles. Many geometry processing libraries (like parry3d)
+    /// require at least one triangle and will panic if given an empty triangle list.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::Mesh;
+    ///
+    /// let mesh = Mesh::new();
+    /// assert!(!mesh.has_triangles());
+    ///
+    /// // Before using mesh with external libraries that require triangles:
+    /// if mesh.has_triangles() {
+    ///     // Safe to proceed
+    /// } else {
+    ///     eprintln!("Warning: Mesh has no triangles (may be beam lattice only)");
+    /// }
+    /// ```
+    pub fn has_triangles(&self) -> bool {
+        !self.triangles.is_empty()
+    }
+
+    /// Check if this mesh has any vertices
+    ///
+    /// Returns `true` if the mesh contains at least one vertex, `false` otherwise.
+    pub fn has_vertices(&self) -> bool {
+        !self.vertices.is_empty()
+    }
+
+    /// Check if this mesh is completely empty (no vertices and no triangles)
+    ///
+    /// Returns `true` if the mesh has neither vertices nor triangles.
+    pub fn is_empty(&self) -> bool {
+        self.vertices.is_empty() && self.triangles.is_empty()
     }
 }
 
