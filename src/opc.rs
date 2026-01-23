@@ -28,13 +28,14 @@ pub const MODEL_REL_TYPE: &str = "http://schemas.microsoft.com/3dmanufacturing/2
 pub const THUMBNAIL_REL_TYPE: &str =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
 
-/// Keystore relationship type (Secure Content extension)
+/// Keystore relationship type (Secure Content extension) - 2019/04 namespace
 /// Note: The namespace changed from 2019/04 to 2019/07, but both are valid
 pub const KEYSTORE_REL_TYPE_2019_04: &str =
     "http://schemas.microsoft.com/3dmanufacturing/2019/04/keystore";
+
+/// Keystore relationship type (Secure Content extension) - 2019/07 namespace
 pub const KEYSTORE_REL_TYPE_2019_07: &str =
     "http://schemas.microsoft.com/3dmanufacturing/2019/07/keystore";
-
 
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {

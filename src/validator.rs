@@ -1655,14 +1655,12 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
             .secure_content
             .as_ref()
             .map(|sc| {
-                sc.encrypted_files
-                    .iter()
-                    .any(|encrypted_path| {
-                        // Compare normalized paths (both without leading slash)
-                        let disp_normalized = disp_map.path.trim_start_matches('/');
-                        let enc_normalized = encrypted_path.trim_start_matches('/');
-                        enc_normalized == disp_normalized
-                    })
+                sc.encrypted_files.iter().any(|encrypted_path| {
+                    // Compare normalized paths (both without leading slash)
+                    let disp_normalized = disp_map.path.trim_start_matches('/');
+                    let enc_normalized = encrypted_path.trim_start_matches('/');
+                    enc_normalized == disp_normalized
+                })
             })
             .unwrap_or(false);
 
@@ -2742,14 +2740,12 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
             .secure_content
             .as_ref()
             .map(|sc| {
-                sc.encrypted_files
-                    .iter()
-                    .any(|encrypted_path| {
-                        // Compare normalized paths (both without leading slash)
-                        let texture_normalized = texture.path.trim_start_matches('/');
-                        let enc_normalized = encrypted_path.trim_start_matches('/');
-                        enc_normalized == texture_normalized
-                    })
+                sc.encrypted_files.iter().any(|encrypted_path| {
+                    // Compare normalized paths (both without leading slash)
+                    let texture_normalized = texture.path.trim_start_matches('/');
+                    let enc_normalized = encrypted_path.trim_start_matches('/');
+                    enc_normalized == texture_normalized
+                })
             })
             .unwrap_or(false);
 

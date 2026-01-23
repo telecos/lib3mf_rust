@@ -3056,13 +3056,11 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                     .secure_content
                     .as_ref()
                     .map(|sc| {
-                        sc.encrypted_files
-                            .iter()
-                            .any(|encrypted_path| {
-                                // Compare normalized paths (both without leading slash)
-                                let enc_normalized = encrypted_path.trim_start_matches('/');
-                                enc_normalized == normalized_path
-                            })
+                        sc.encrypted_files.iter().any(|encrypted_path| {
+                            // Compare normalized paths (both without leading slash)
+                            let enc_normalized = encrypted_path.trim_start_matches('/');
+                            enc_normalized == normalized_path
+                        })
                     })
                     .unwrap_or(false);
 
@@ -3106,13 +3104,11 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                         .secure_content
                         .as_ref()
                         .map(|sc| {
-                            sc.encrypted_files
-                                .iter()
-                                .any(|encrypted_path| {
-                                    // Compare normalized paths (both without leading slash)
-                                    let enc_normalized = encrypted_path.trim_start_matches('/');
-                                    enc_normalized == normalized_path
-                                })
+                            sc.encrypted_files.iter().any(|encrypted_path| {
+                                // Compare normalized paths (both without leading slash)
+                                let enc_normalized = encrypted_path.trim_start_matches('/');
+                                enc_normalized == normalized_path
+                            })
                         })
                         .unwrap_or(false);
 
@@ -3262,13 +3258,11 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 .secure_content
                 .as_ref()
                 .map(|sc| {
-                    sc.encrypted_files
-                        .iter()
-                        .any(|encrypted_path| {
-                            // Compare normalized paths (both without leading slash)
-                            let enc_normalized = encrypted_path.trim_start_matches('/');
-                            enc_normalized == normalized_path
-                        })
+                    sc.encrypted_files.iter().any(|encrypted_path| {
+                        // Compare normalized paths (both without leading slash)
+                        let enc_normalized = encrypted_path.trim_start_matches('/');
+                        enc_normalized == normalized_path
+                    })
                 })
                 .unwrap_or(false);
 
@@ -3316,13 +3310,11 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         .secure_content
                         .as_ref()
                         .map(|sc| {
-                            sc.encrypted_files
-                                .iter()
-                                .any(|encrypted_path| {
-                                    // Compare normalized paths (both without leading slash)
-                                    let enc_normalized = encrypted_path.trim_start_matches('/');
-                                    enc_normalized == normalized_path
-                                })
+                            sc.encrypted_files.iter().any(|encrypted_path| {
+                                // Compare normalized paths (both without leading slash)
+                                let enc_normalized = encrypted_path.trim_start_matches('/');
+                                enc_normalized == normalized_path
+                            })
                         })
                         .unwrap_or(false);
 
