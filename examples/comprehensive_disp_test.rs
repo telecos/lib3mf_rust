@@ -21,11 +21,13 @@ fn test_case(name: &str, xml: &str, config: &ParserConfig, should_fail: bool) {
 
 fn main() {
     println!("=== Comprehensive Displacement Extension Validation Tests ===\n");
-    
+
     let config = ParserConfig::new().with_extension(Extension::Displacement);
 
     // Test 1: Valid minimal displacement model (baseline)
-    test_case("Valid minimal model", r#"<?xml version="1.0"?>
+    test_case(
+        "Valid minimal model",
+        r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
   <resources>
     <d:displacement2d id="1" path="/3D/Textures/disp.png" channel="R" filter="linear" tilestyleu="wrap" tilestylev="wrap"/>
@@ -48,10 +50,15 @@ fn main() {
     </object>
   </resources>
   <build><item objectid="4"/></build>
-</model>"#, &config, false);
+</model>"#,
+        &config,
+        false,
+    );
 
     // Test 2: Invalid dispid forward reference (DPX 3312)
-    test_case("Invalid dispid forward ref", r#"<?xml version="1.0"?>
+    test_case(
+        "Invalid dispid forward ref",
+        r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
   <resources>
     <d:normvectorgroup id="2">
@@ -63,10 +70,15 @@ fn main() {
     <d:displacement2d id="1" path="/3D/Textures/disp.png" channel="R" filter="linear" tilestyleu="wrap" tilestylev="wrap"/>
   </resources>
   <build><item objectid="1"/></build>
-</model>"#, &config, true);
+</model>"#,
+        &config,
+        true,
+    );
 
     // Test 3: Invalid nid forward reference (DPX 3312)
-    test_case("Invalid nid forward ref", r#"<?xml version="1.0"?>
+    test_case(
+        "Invalid nid forward ref",
+        r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
   <resources>
     <d:displacement2d id="1" path="/3D/Textures/disp.png" channel="R" filter="linear" tilestyleu="wrap" tilestylev="wrap"/>
@@ -78,10 +90,15 @@ fn main() {
     </d:normvectorgroup>
   </resources>
   <build><item objectid="1"/></build>
-</model>"#, &config, true);
+</model>"#,
+        &config,
+        true,
+    );
 
     // Test 4: Multiple triangles elements (DPX 3314)
-    test_case("Multiple triangles in displacementmesh", r#"<?xml version="1.0"?>
+    test_case(
+        "Multiple triangles in displacementmesh",
+        r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
   <resources>
     <d:displacement2d id="1" path="/3D/Textures/disp.png" channel="R" filter="linear" tilestyleu="wrap" tilestylev="wrap"/>
@@ -107,19 +124,29 @@ fn main() {
     </object>
   </resources>
   <build><item objectid="4"/></build>
-</model>"#, &config, true);
+</model>"#,
+        &config,
+        true,
+    );
 
     // Test 5: Invalid displacement texture path (not in /3D/Textures/)
-    test_case("Invalid texture path", r#"<?xml version="1.0"?>
+    test_case(
+        "Invalid texture path",
+        r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
   <resources>
     <d:displacement2d id="1" path="/Textures/disp.png" channel="R" filter="linear" tilestyleu="wrap" tilestylev="wrap"/>
   </resources>
   <build><item objectid="1"/></build>
-</model>"#, &config, true);
+</model>"#,
+        &config,
+        true,
+    );
 
     // Test 6: Displacementmesh with non-model object type (DPX 4.0)
-    test_case("Displacementmesh on support object", r#"<?xml version="1.0"?>
+    test_case(
+        "Displacementmesh on support object",
+        r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
   <resources>
     <d:displacement2d id="1" path="/3D/Textures/disp.png" channel="R" filter="linear" tilestyleu="wrap" tilestylev="wrap"/>
@@ -142,7 +169,10 @@ fn main() {
     </object>
   </resources>
   <build><item objectid="4"/></build>
-</model>"#, &config, true);
+</model>"#,
+        &config,
+        true,
+    );
 
     println!("\n=== All tests completed ===");
 }

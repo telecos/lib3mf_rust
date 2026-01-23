@@ -491,7 +491,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         current_displacement_mesh = Some(DisplacementMesh::new());
                         in_displacement_mesh = true;
                         has_displacement_triangles = false; // Reset for new displacementmesh
-                        // Mark object as having extension shapes
+                                                            // Mark object as having extension shapes
                         if let Some(ref mut obj) = current_object {
                             obj.has_extension_shapes = true;
                         }

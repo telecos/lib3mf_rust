@@ -2,7 +2,7 @@ use lib3mf::{Extension, ParserConfig};
 
 fn main() {
     let config = ParserConfig::new().with_extension(Extension::Displacement);
-    
+
     // Simple test with explicit namespace prefix
     let xml = r#"<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:d="http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" requiredextensions="d">
