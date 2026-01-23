@@ -1649,9 +1649,27 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
             )));
         }
 
+        // Check if this displacement map is encrypted (Secure Content extension)
+        // For encrypted files, skip strict path validation as they may use non-standard paths
+        let is_encrypted = model
+            .secure_content
+            .as_ref()
+            .map(|sc| {
+                sc.encrypted_files
+                    .iter()
+                    .any(|encrypted_path| {
+                        // Compare normalized paths (both without leading slash)
+                        let disp_normalized = disp_map.path.trim_start_matches('/');
+                        let enc_normalized = encrypted_path.trim_start_matches('/');
+                        enc_normalized == disp_normalized
+                    })
+            })
+            .unwrap_or(false);
+
         // Per 3MF Displacement Extension spec 3.1, displacement texture paths should be in /3D/Textures/
+        // Skip this check for encrypted files as they may use non-standard paths
         // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
-        if !disp_map.path.to_lowercase().starts_with("/3d/textures/") {
+        if !is_encrypted && !disp_map.path.to_lowercase().starts_with("/3d/textures/") {
             return Err(Error::InvalidModel(format!(
                 "Displacement2D resource {}: Path '{}' is not in /3D/Textures/ directory (case-insensitive).\n\
                  Per 3MF Displacement Extension spec 3.1, displacement texture files must be stored in /3D/Textures/ \
@@ -2718,6 +2736,23 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
 /// Non-ASCII characters (like Unicode) in texture paths are not allowed.
 fn validate_texture_paths(model: &Model) -> Result<()> {
     for texture in &model.resources.texture2d_resources {
+        // Check if this texture is encrypted (Secure Content extension)
+        // For encrypted files, skip strict path validation as they may use non-standard paths
+        let is_encrypted = model
+            .secure_content
+            .as_ref()
+            .map(|sc| {
+                sc.encrypted_files
+                    .iter()
+                    .any(|encrypted_path| {
+                        // Compare normalized paths (both without leading slash)
+                        let texture_normalized = texture.path.trim_start_matches('/');
+                        let enc_normalized = encrypted_path.trim_start_matches('/');
+                        enc_normalized == texture_normalized
+                    })
+            })
+            .unwrap_or(false);
+
         // Check that the path contains only ASCII characters
         if !texture.path.is_ascii() {
             return Err(Error::InvalidModel(format!(
@@ -2729,8 +2764,9 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
         }
 
         // Per 3MF spec, texture paths should be in /3D/Textures/ directory
+        // Skip this check for encrypted files as they may use non-standard paths
         // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
-        if !texture.path.to_lowercase().starts_with("/3d/textures/") {
+        if !is_encrypted && !texture.path.to_lowercase().starts_with("/3d/textures/") {
             return Err(Error::InvalidModel(format!(
                 "Texture2D resource {}: Path '{}' is not in /3D/Textures/ directory (case-insensitive).\n\
                  Per 3MF Material Extension spec, texture files must be stored in /3D/Textures/ \

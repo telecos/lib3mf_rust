@@ -1779,12 +1779,24 @@ fn load_keystore<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
-    // Try to load the keystore file - it's OK if it doesn't exist
-    // Use get_file_binary() to handle files that may contain encrypted/binary data
-    let keystore_bytes = match package.get_file_binary("Secure/keystore.xml") {
-        Ok(bytes) => bytes,
-        Err(_) => return Ok(()), // No keystore file, not an error
+    // Discover keystore file path from relationships
+    // Per 3MF SecureContent spec, the keystore is identified by a relationship of type
+    // http://schemas.microsoft.com/3dmanufacturing/{version}/keystore
+    let keystore_path = match package.discover_keystore_path()? {
+        Some(path) => path,
+        None => {
+            // Try fallback to default path for backward compatibility
+            if package.has_file("Secure/keystore.xml") {
+                "Secure/keystore.xml".to_string()
+            } else {
+                return Ok(()); // No keystore file, not an error
+            }
+        }
     };
+
+    // Load the keystore file
+    // Use get_file_binary() to handle files that may contain encrypted/binary data
+    let keystore_bytes = package.get_file_binary(&keystore_path)?;
 
     // Initialize secure_content if not already present
     if model.secure_content.is_none() {
@@ -3038,6 +3050,27 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                 // Normalize path: remove leading slash if present
                 let normalized_path = path.trim_start_matches('/');
 
+                // Skip validation for encrypted files (Secure Content extension)
+                // Encrypted files cannot be parsed, so we can't validate object IDs
+                let is_encrypted = model
+                    .secure_content
+                    .as_ref()
+                    .map(|sc| {
+                        sc.encrypted_files
+                            .iter()
+                            .any(|encrypted_path| {
+                                // Compare normalized paths (both without leading slash)
+                                let enc_normalized = encrypted_path.trim_start_matches('/');
+                                enc_normalized == normalized_path
+                            })
+                    })
+                    .unwrap_or(false);
+
+                if is_encrypted {
+                    // Skip validation for encrypted files - they can't be parsed
+                    continue;
+                }
+
                 if !package.has_file(normalized_path) {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Boolean shape references non-existent external file: {}\n\
@@ -3066,6 +3099,27 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                 if let Some(ref path) = operand.path {
                     // Normalize path: remove leading slash if present
                     let normalized_path = path.trim_start_matches('/');
+
+                    // Skip validation for encrypted files (Secure Content extension)
+                    // Encrypted files cannot be parsed, so we can't validate object IDs
+                    let is_encrypted = model
+                        .secure_content
+                        .as_ref()
+                        .map(|sc| {
+                            sc.encrypted_files
+                                .iter()
+                                .any(|encrypted_path| {
+                                    // Compare normalized paths (both without leading slash)
+                                    let enc_normalized = encrypted_path.trim_start_matches('/');
+                                    enc_normalized == normalized_path
+                                })
+                        })
+                        .unwrap_or(false);
+
+                    if is_encrypted {
+                        // Skip validation for encrypted files - they can't be parsed
+                        continue;
+                    }
 
                     if !package.has_file(normalized_path) {
                         return Err(Error::InvalidModel(format!(
@@ -3202,6 +3256,27 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
             // Normalize path: remove leading slash if present
             let normalized_path = path.trim_start_matches('/');
 
+            // Skip validation for encrypted files (Secure Content extension)
+            // Encrypted files cannot be parsed, so we can't validate object IDs
+            let is_encrypted = model
+                .secure_content
+                .as_ref()
+                .map(|sc| {
+                    sc.encrypted_files
+                        .iter()
+                        .any(|encrypted_path| {
+                            // Compare normalized paths (both without leading slash)
+                            let enc_normalized = encrypted_path.trim_start_matches('/');
+                            enc_normalized == normalized_path
+                        })
+                })
+                .unwrap_or(false);
+
+            if is_encrypted {
+                // Skip validation for encrypted files - they can't be parsed
+                continue;
+            }
+
             // Check if file exists
             if !package.has_file(normalized_path) {
                 return Err(Error::InvalidModel(format!(
@@ -3234,6 +3309,27 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 if let Some(ref path) = prod_info.path {
                     // Normalize path: remove leading slash if present
                     let normalized_path = path.trim_start_matches('/');
+
+                    // Skip validation for encrypted files (Secure Content extension)
+                    // Encrypted files cannot be parsed, so we can't validate object IDs
+                    let is_encrypted = model
+                        .secure_content
+                        .as_ref()
+                        .map(|sc| {
+                            sc.encrypted_files
+                                .iter()
+                                .any(|encrypted_path| {
+                                    // Compare normalized paths (both without leading slash)
+                                    let enc_normalized = encrypted_path.trim_start_matches('/');
+                                    enc_normalized == normalized_path
+                                })
+                        })
+                        .unwrap_or(false);
+
+                    if is_encrypted {
+                        // Skip validation for encrypted files - they can't be parsed
+                        continue;
+                    }
 
                     // Check if file exists
                     if !package.has_file(normalized_path) {
