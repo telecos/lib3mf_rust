@@ -1932,10 +1932,39 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
                 )));
             }
 
-            // Note: We cannot validate that the referenced slicestack doesn't contain slicerefs
-            // because the referenced slicestack is in an external file that was loaded separately.
-            // The parser already handles loading external slice files, so we trust that validation
-            // is performed during parsing of those files.
+            // Note: We cannot validate that the referenced slicestack exists in the external file
+            // because the external file may not be loaded. We only validate the path format here.
+            // However, per 3MF spec, the slicestackid in SliceRef should reference a valid slicestack.
+            // We rely on the consumer of the 3MF file to load and validate external files.
+        }
+    }
+
+    // Build a set of valid slicestack IDs for reference validation
+    let valid_slicestack_ids: std::collections::HashSet<usize> = model
+        .resources
+        .slice_stacks
+        .iter()
+        .map(|stack| stack.id)
+        .collect();
+
+    // Validate that objects reference existing slicestacks
+    for object in &model.resources.objects {
+        if let Some(slicestackid) = object.slicestackid {
+            if !valid_slicestack_ids.contains(&slicestackid) {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: References non-existent slicestackid {}.\n\
+                     Per 3MF Slice Extension spec, the slicestackid attribute must reference \
+                     a valid <slicestack> resource defined in the model.\n\
+                     Available slicestack IDs: {:?}",
+                    object.id,
+                    slicestackid,
+                    {
+                        let mut ids: Vec<usize> = valid_slicestack_ids.iter().copied().collect();
+                        ids.sort();
+                        ids
+                    }
+                )));
+            }
         }
     }
 
@@ -3212,10 +3241,42 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
-fn validate_triangle_properties(_model: &Model) -> Result<()> {
-    // Per-vertex properties (p1/p2/p3) can be partially specified
-    // This is valid usage in real-world 3MF files per Materials Extension spec
-    // No specific validation needed here - the parser already validates property references
+fn validate_triangle_properties(model: &Model) -> Result<()> {
+    // Per 3MF Materials Extension spec: A triangle can have EITHER:
+    // 1. Triangle-level properties (pid and/or pindex)
+    // 2. Per-vertex properties (p1, p2, p3)
+    // But NOT both at the same time
+    
+    for object in &model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
+                // Check if triangle has triangle-level properties
+                let has_triangle_props = triangle.pid.is_some() || triangle.pindex.is_some();
+                
+                // Check if triangle has per-vertex properties
+                let has_vertex_props = triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
+                
+                // Error if both are present
+                if has_triangle_props && has_vertex_props {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}, Triangle {}: Cannot specify both triangle-level properties \
+                         (pid/pindex) and per-vertex properties (p1/p2/p3) on the same triangle.\n\
+                         Per 3MF Materials Extension specification, a triangle must use EITHER \
+                         triangle-level OR per-vertex properties, not both.\n\
+                         Current triangle has: {}{}{}{}{}",
+                        object.id,
+                        tri_idx,
+                        if triangle.pid.is_some() { format!("pid={}, ", triangle.pid.unwrap()) } else { String::new() },
+                        if triangle.pindex.is_some() { format!("pindex={}, ", triangle.pindex.unwrap()) } else { String::new() },
+                        if triangle.p1.is_some() { format!("p1={}, ", triangle.p1.unwrap()) } else { String::new() },
+                        if triangle.p2.is_some() { format!("p2={}, ", triangle.p2.unwrap()) } else { String::new() },
+                        if triangle.p3.is_some() { format!("p3={}", triangle.p3.unwrap()) } else { String::new() },
+                    )));
+                }
+            }
+        }
+    }
+    
     Ok(())
 }
 

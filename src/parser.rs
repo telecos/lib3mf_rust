@@ -293,6 +293,16 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 }
                                 "xmlns" => model.xmlns = value.to_string(),
                                 "requiredextensions" => {
+                                    // Per 3MF spec, requiredextensions must either be omitted or contain
+                                    // at least one extension. An empty string is invalid.
+                                    if value.trim().is_empty() {
+                                        return Err(Error::InvalidXml(
+                                            "requiredextensions attribute cannot be empty. \
+                                             Either omit the attribute or specify at least one required extension. \
+                                             Example: requiredextensions=\"m p\" for Materials and Production extensions."
+                                                .to_string(),
+                                        ));
+                                    }
                                     required_ext_value = Some(value.to_string());
                                 }
                                 "recommendedextensions" => {

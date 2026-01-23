@@ -498,6 +498,7 @@ impl<R: Read + std::io::Seek> Package<R> {
     /// - Path segments that are "." or ".."
     /// - Empty path segments (consecutive slashes)
     /// - Segments ending with "." (like "3D.")
+    /// - Control characters (newlines, tabs, etc.)
     ///
     /// Note: Per OPC spec (ECMA-376), Target attributes should use percent-encoding
     /// for non-ASCII characters. However, for compatibility with real-world files,
@@ -507,6 +508,15 @@ impl<R: Read + std::io::Seek> Package<R> {
         // Per OPC spec, non-ASCII should be percent-encoded, but many real-world
         // files include UTF-8 characters directly. We accept both and handle
         // URL-decoding when looking up files.
+
+        // Check for control characters (newlines, tabs, etc.)
+        // Per OPC spec, these are not allowed in part names
+        if part_name.chars().any(|c| c.is_control()) {
+            return Err(Error::InvalidFormat(format!(
+                "Part name cannot contain control characters (newlines, tabs, etc.): {}",
+                part_name.escape_debug()
+            )));
+        }
 
         // Check for fragment identifiers
         if part_name.contains('#') {
