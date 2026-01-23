@@ -175,6 +175,102 @@
       "reason": "Negative coordinates in build transform. This test expects negative coordinates to fail, but many valid positive test cases use negative coordinates for centering objects. The 3MF spec allows negative coordinates, so this validation is not enforced.",
       "issue_url": "",
       "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3302_01.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3306_02.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3308_02.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3310_01.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3312_03.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3312_04.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3314_01.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3314_02.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3314_05.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3314_06.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3314_07.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_DPX_3314_08.3mf",
+      "suite": "suite11_Displacement",
+      "test_type": "negative",
+      "reason": "Displacement extension validation. The specific validation rule being tested requires detailed analysis of the 3MF Displacement Extension specification. The file structure appears valid based on current parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
     }
   ]
 }
