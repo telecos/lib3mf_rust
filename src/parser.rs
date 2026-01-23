@@ -24,9 +24,6 @@ const VALID_WRAPPING_ALGORITHM_2009: &str = "http://www.w3.org/2009/xmlenc11#rsa
 /// Default compression value for SecureContent CEK params
 const DEFAULT_COMPRESSION: &str = "none";
 
-/// Valid encryption algorithm for SecureContent (AES-256-GCM)
-const VALID_ENCRYPTION_ALGORITHM: &str = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
-
 /// Valid MGF algorithms for SecureContent kekparams
 const VALID_MGF_ALGORITHMS: &[&str] = &[
     "http://www.w3.org/2009/xmlenc11#mgf1sha1",
@@ -1891,8 +1888,6 @@ fn load_keystore<R: Read + std::io::Seek>(
     let mut current_kek_params: Option<KEKParams> = None;
     let mut current_cek_params: Option<CEKParams> = None;
     let mut text_buffer = String::with_capacity(512); // Typical size for base64-encoded values
-    let mut consumer_indices = Vec::new(); // Track consumer indices referenced in accessright
-    let mut has_resourcedatagroup = false; // Track if we have any resourcedatagroup elements
     let mut encrypted_paths = HashSet::new(); // Track resourcedata paths for duplicate detection
 
     loop {
@@ -1905,44 +1900,38 @@ fn load_keystore<R: Read + std::io::Seek>(
                 let local_name = get_local_name(name_str);
 
                 // Handle self-closing elements that need validation or tracking
-                match local_name {
-                    "resourcedatagroup" => {
-                        has_resourcedatagroup = true;
-                    }
-                    "kekparams" => {
-                        // EPX-2603: Extract and validate kekparams attributes
-                        let mut wrapping_algorithm = String::new();
-                        let mut mgf_algorithm = String::new();
-                        let mut digest_method = String::new();
+                if local_name == "kekparams" {
+                    // EPX-2603: Extract and validate kekparams attributes
+                    let mut wrapping_algorithm = String::new();
+                    let mut mgf_algorithm = String::new();
+                    let mut digest_method = String::new();
 
-                        for attr in e.attributes() {
-                            let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!("Invalid attribute in kekparams: {}", e))
-                            })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?
-                                .to_string();
+                    for attr in e.attributes() {
+                        let attr = attr.map_err(|e| {
+                            Error::InvalidXml(format!("Invalid attribute in kekparams: {}", e))
+                        })?;
+                        let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        let attr_value = std::str::from_utf8(&attr.value)
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?
+                            .to_string();
 
-                            match attr_name {
-                                "wrappingalgorithm" => wrapping_algorithm = attr_value,
-                                "mgfalgorithm" => mgf_algorithm = attr_value,
-                                "digestmethod" => digest_method = attr_value,
-                                _ => {}
-                            }
-                        }
-
-                        if let Some(ref mut sc) = model.secure_content {
-                            validate_kekparams_attributes(
-                                &wrapping_algorithm,
-                                &mgf_algorithm,
-                                &digest_method,
-                                sc,
-                            )?;
+                        match attr_name {
+                            "wrappingalgorithm" => wrapping_algorithm = attr_value,
+                            "mgfalgorithm" => mgf_algorithm = attr_value,
+                            "digestmethod" => digest_method = attr_value,
+                            _ => {}
                         }
                     }
-                    _ => {}
+
+                    if let Some(ref mut sc) = model.secure_content {
+                        validate_kekparams_attributes(
+                            &wrapping_algorithm,
+                            &mgf_algorithm,
+                            &digest_method,
+                            sc,
+                        )?;
+                    }
                 }
             }
             Ok(Event::Start(ref e)) => {
@@ -2027,25 +2016,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                             if attr_name == "keyuuid" {
                                 key_uuid = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
-                                    .to_string();                              
-                            }
-                        }
-                      
-                        // Note: keyid attribute appears to be optional based on positive test P_EPX_2107_03
-                        // which has consumerid but no keyid. The specific validation for when keyid
-                        // is required vs optional may depend on other factors like the wrapping algorithm used.
-
-                        if has_consumer_id {
-                            if let Some(ref mut sc) = model.secure_content {
-                                // EPX-2604: Check for duplicate consumer IDs
-                                if sc.consumer_ids.contains(&consumer_id_value) {
-                                    return Err(Error::InvalidSecureContent(format!(
-                                        "Duplicate consumer ID '{}' in keystore (EPX-2604)",
-                                        consumer_id_value
-                                    )));
-                                }
-                                sc.consumer_ids.push(consumer_id_value);
-                                sc.consumer_count += 1;
+                                    .to_string();
                             }
                         }
 
@@ -2092,10 +2063,6 @@ fn load_keystore<R: Read + std::io::Seek>(
                             cipher_value: String::new(),
                         });
                     }
-                    "resourcedatagroup" => {
-                        // EPX-2602: Track that we have at least one resourcedatagroup
-                        has_resourcedatagroup = true;
-                    }
                     "kekparams" => {
                         // EPX-2603: Extract and validate kekparams attributes
                         let mut wrapping_algorithm = String::new();
@@ -2118,63 +2085,6 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 "digestmethod" => digest_method = Some(attr_value),
                                 _ => {}
                             }
-                        }
-
-                        // EPX-2603: Validate wrapping algorithm
-                        if !wrapping_algorithm.is_empty() {
-                            let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
-                                || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
-
-                            if !is_valid {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid wrapping algorithm '{}'. Must be either '{}' or '{}' (EPX-2603)",
-                                    wrapping_algorithm, VALID_WRAPPING_ALGORITHM_2001, VALID_WRAPPING_ALGORITHM_2009
-                                )));
-                            }
-
-                            if let Some(ref mut sc) = model.secure_content {
-                                sc.wrapping_algorithms.push(wrapping_algorithm.clone());
-                            }
-                        }
-
-                        // EPX-2603: Validate mgfalgorithm if present
-                        if let Some(ref mgf) = mgf_algorithm {
-                            let valid_mgf_algs = [
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha1",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha256",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha384",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha512",
-                            ];
-                            if !valid_mgf_algs.contains(&mgf.as_str()) {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
-                                    mgf
-                                )));
-                            }
-                        }
-
-                        // EPX-2603: Validate digestmethod if present
-                        if let Some(ref digest) = digest_method {
-                            let valid_digest_methods = [
-                                "http://www.w3.org/2000/09/xmldsig#sha1",
-                                "http://www.w3.org/2001/04/xmlenc#sha256",
-                                "http://www.w3.org/2001/04/xmlenc#sha384",
-                                "http://www.w3.org/2001/04/xmlenc#sha512",
-                            ];
-                            if !valid_digest_methods.contains(&digest.as_str()) {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
-                                    digest
-                                )));
-                            }
-                        }
-                        if let Some(ref mut sc) = model.secure_content {
-                            validate_kekparams_attributes(
-                                &wrapping_algorithm,
-                                &mgf_algorithm,
-                                &digest_method,
-                                sc,
-                            )?;
                         }
 
                         current_kek_params = Some(KEKParams {
@@ -2240,24 +2150,24 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 path
                             )));
                         }
-                      
-                                // EPX-2607: Validate resourcedata paths are unique (no duplicates)
-                                if !encrypted_paths.insert(path.clone()) {
-                                    return Err(Error::InvalidSecureContent(format!(
-                                        "Duplicate resourcedata path '{}' in keystore (EPX-2607)",
-                                        path
-                                    )));
-                                }
 
-                                // EPX-2607: Validate referenced file exists in package
-                                // Remove leading slash for package lookup
-                                let lookup_path = path.trim_start_matches('/');
-                                if !package.has_file(lookup_path) {
-                                    return Err(Error::InvalidSecureContent(format!(
+                        // EPX-2607: Validate resourcedata paths are unique (no duplicates)
+                        if !encrypted_paths.insert(path.clone()) {
+                            return Err(Error::InvalidSecureContent(format!(
+                                "Duplicate resourcedata path '{}' in keystore (EPX-2607)",
+                                path
+                            )));
+                        }
+
+                        // EPX-2607: Validate referenced file exists in package
+                        // Remove leading slash for package lookup
+                        let lookup_path = path.trim_start_matches('/');
+                        if !package.has_file(lookup_path) {
+                            return Err(Error::InvalidSecureContent(format!(
                                         "Referenced encrypted file '{}' does not exist in package (EPX-2607)",
                                         path
                                     )));
-                                }
+                        }
 
                         // Add to encrypted_files list (for backward compatibility)
                         if let Some(ref mut sc) = model.secure_content {
@@ -2394,50 +2304,6 @@ fn load_keystore<R: Read + std::io::Seek>(
                             cek_params.aad = Some(text_buffer.trim().to_string());
                         }
                     }
-                    "cekparams" => {
-                        // EPX-2603: Validate encryption algorithm
-                        // EPX-2605: Validate compression attribute
-                        let mut encryption_algorithm = String::new();
-                        let mut compression = String::new();
-
-                        for attr in e.attributes() {
-                            let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!("Invalid attribute in cekparams: {}", e))
-                            })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?
-                                .to_string();
-
-                            match attr_name {
-                                "encryptionalgorithm" => encryption_algorithm = attr_value,
-                                "compression" => compression = attr_value,
-                                _ => {}
-                            }
-                        }
-
-                        // EPX-2603: Validate encryption algorithm is valid
-                        if !encryption_algorithm.is_empty()
-                            && encryption_algorithm != VALID_ENCRYPTION_ALGORITHM
-                        {
-                            return Err(Error::InvalidSecureContent(format!(
-                                "Invalid encryption algorithm '{}'. Must be '{}' (EPX-2603)",
-                                encryption_algorithm, VALID_ENCRYPTION_ALGORITHM
-                            )));
-                        }
-
-                        // EPX-2605: Validate compression attribute if present
-                        if !compression.is_empty() {
-                            // Valid compression values: "deflate", "none", or empty
-                            if compression != "deflate" && compression != "none" {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid compression attribute '{}'. Must be 'deflate' or 'none' (EPX-2605)",
-                                    compression
-                                )));
-                            }
-                        }
-                    }
                     _ => {}
                 }
             }
@@ -2456,13 +2322,13 @@ fn load_keystore<R: Read + std::io::Seek>(
     // Final validation
     if let Some(ref sc) = model.secure_content {
         // EPX-2602: If we have resourcedatagroups, at least one consumer must be defined
-        if has_resourcedatagroup && sc.consumer_count == 0 {
+        if !sc.resource_data_groups.is_empty() && sc.consumer_count == 0 {
             return Err(Error::InvalidSecureContent(
                 "Keystore has resourcedatagroup elements but no consumer elements (EPX-2602)"
                     .to_string(),
             ));
         }
-      
+
         // EPX-2602: Check if we have access rights but no consumers
         let has_access_rights = sc
             .resource_data_groups
