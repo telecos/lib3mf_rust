@@ -3242,42 +3242,12 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
-fn validate_triangle_properties(model: &Model) -> Result<()> {
-    // Per 3MF Materials Extension spec: A triangle can have EITHER:
-    // 1. Triangle-level properties (pid and/or pindex)
-    // 2. Per-vertex properties (p1, p2, p3)
-    // But NOT both at the same time
-    
-    for object in &model.resources.objects {
-        if let Some(ref mesh) = object.mesh {
-            for (tri_idx, triangle) in mesh.triangles.iter().enumerate() {
-                // Check if triangle has triangle-level properties
-                let has_triangle_props = triangle.pid.is_some() || triangle.pindex.is_some();
-                
-                // Check if triangle has per-vertex properties
-                let has_vertex_props = triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
-                
-                // Error if both are present
-                if has_triangle_props && has_vertex_props {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}, Triangle {}: Cannot specify both triangle-level properties \
-                         (pid/pindex) and per-vertex properties (p1/p2/p3) on the same triangle.\n\
-                         Per 3MF Materials Extension specification, a triangle must use EITHER \
-                         triangle-level OR per-vertex properties, not both.\n\
-                         Current triangle has: {}{}{}{}{}",
-                        object.id,
-                        tri_idx,
-                        if triangle.pid.is_some() { format!("pid={}, ", triangle.pid.unwrap()) } else { String::new() },
-                        if triangle.pindex.is_some() { format!("pindex={}, ", triangle.pindex.unwrap()) } else { String::new() },
-                        if triangle.p1.is_some() { format!("p1={}, ", triangle.p1.unwrap()) } else { String::new() },
-                        if triangle.p2.is_some() { format!("p2={}, ", triangle.p2.unwrap()) } else { String::new() },
-                        if triangle.p3.is_some() { format!("p3={}", triangle.p3.unwrap()) } else { String::new() },
-                    )));
-                }
-            }
-        }
-    }
-    
+fn validate_triangle_properties(_model: &Model) -> Result<()> {
+    // Per 3MF Materials Extension spec:
+    // - Triangles can have triangle-level properties (pid and/or pindex)
+    // - Triangles can have per-vertex properties (p1, p2, p3) which work WITH pid for interpolation
+    // - Having both pid and p1/p2/p3 is ALLOWED and is used for per-vertex material interpolation
+    // No validation needed here - the parser already validates property references
     Ok(())
 }
 
