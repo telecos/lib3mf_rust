@@ -175,14 +175,6 @@
       "reason": "Negative coordinates in build transform. This test expects negative coordinates to fail, but many valid positive test cases use negative coordinates for centering objects. The 3MF spec allows negative coordinates, so this validation is not enforced.",
       "issue_url": "",
       "date_added": "2026-01-23"
-    },
-    {
-      "file": "P_EPX_2102_01_materialExt.3mf",
-      "suite": "suite8_secure",
-      "test_type": "positive",
-      "reason": "File contains extreme negative Z-axis coordinates (min: -23568.06) in build item object 3 transform, causing error E3001. Appears to contain incorrect transform data despite being in positive test cases.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
     }
   ]
 }
