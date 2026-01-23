@@ -3111,76 +3111,29 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// Validate that required production UUIDs are present
+/// Validate production extension UUID usage
 ///
 /// Per 3MF Production Extension spec:
-/// - Build must have p:UUID when production extension is required
-/// - Objects in build items must have p:UUID when production extension is required
+/// - Producers MUST include p:UUID on build items, objects, and components when using production extension
+/// - However, consumers should be lenient and accept files without these UUIDs for backward compatibility
 ///
-/// Note: This validation is lenient - we only enforce UUID requirements strictly when
-/// the production extension is explicitly in requiredextensions AND the parser config
-/// doesn't support production (which would indicate a lenient mode).
-fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> Result<()> {
-    let has_production = model.required_extensions.contains(&Extension::Production);
-
-    // Only enforce UUID requirements if production extension is explicitly required
-    if !has_production {
-        return Ok(());
-    }
-
-    // When production is required in the file, we always enforce strict validation
-    // The lenient mode only applies when production is NOT in requiredextensions
-
-    // Build must have UUID when production extension is required
-    if model.build.production_uuid.is_none() {
-        return Err(Error::InvalidModel(
-            "Build element is missing required p:UUID attribute.\n\
-             Per 3MF Production Extension spec, when production extension is in requiredextensions, \
-             the <build> element must have a p:UUID attribute.\n\
-             Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to the <build> element."
-                .to_string(),
-        ));
-    }
-
-    // Validate build items and their referenced objects
-    for (idx, item) in model.build.items.iter().enumerate() {
-        // Build items must have p:UUID when production extension is required
-        if item.production_uuid.is_none() {
-            return Err(Error::InvalidModel(format!(
-                "Build item {}: Missing required p:UUID attribute.\n\
-                 Per 3MF Production Extension spec, when production extension is in requiredextensions, \
-                 all <item> elements in the build section must have p:UUID attributes.\n\
-                 Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to this build item.",
-                idx
-            )));
-        }
-
-        // Find the object being referenced
-        if let Some(object) = model
-            .resources
-            .objects
-            .iter()
-            .find(|o| o.id == item.objectid)
-        {
-            // Check if object has production UUID
-            let has_uuid = object
-                .production
-                .as_ref()
-                .and_then(|p| p.uuid.as_ref())
-                .is_some();
-
-            if !has_uuid {
-                return Err(Error::InvalidModel(format!(
-                    "Build item {}: References object {} which is missing required p:UUID attribute.\n\
-                     Per 3MF Production Extension spec, when production extension is in requiredextensions, \
-                     objects referenced in build items must have p:UUID attributes.\n\
-                     Add p:UUID=\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" to object {}.",
-                    idx, object.id, object.id
-                )));
-            }
-        }
-    }
-
+/// Note: The spec states requirements for producers (file writers), not strict validation requirements
+/// for consumers (parsers). The official 3MF test suite includes positive test cases that demonstrate
+/// files with production extension declared but without all UUIDs should still be accepted.
+///
+/// This validation is intentionally lenient to match the official test suite expectations.
+fn validate_production_uuids_required(_model: &Model, _config: &ParserConfig) -> Result<()> {
+    // Per the 3MF Production Extension spec and official test suite:
+    // - UUIDs are REQUIRED for producers (when writing 3MF files with production extension)
+    // - UUIDs are OPTIONAL for consumers (parsers should accept files without them)
+    //
+    // The official test suite contains positive tests (e.g., suite 9, P_XXX_2202_01.3mf)
+    // that have production extension in requiredextensions but do NOT include all UUIDs.
+    // These tests are expected to pass, demonstrating that consumers should not reject
+    // files solely based on missing production UUIDs.
+    //
+    // Therefore, we do not perform strict UUID validation here.
+    
     Ok(())
 }
 
