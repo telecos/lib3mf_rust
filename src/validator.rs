@@ -1952,6 +1952,7 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(slicestackid) = object.slicestackid {
             if !valid_slicestack_ids.contains(&slicestackid) {
+                let available_ids = sorted_ids_from_set(&valid_slicestack_ids);
                 return Err(Error::InvalidModel(format!(
                     "Object {}: References non-existent slicestackid {}.\n\
                      Per 3MF Slice Extension spec, the slicestackid attribute must reference \
@@ -1959,11 +1960,7 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
                      Available slicestack IDs: {:?}",
                     object.id,
                     slicestackid,
-                    {
-                        let mut ids: Vec<usize> = valid_slicestack_ids.iter().copied().collect();
-                        ids.sort();
-                        ids
-                    }
+                    available_ids
                 )));
             }
         }
