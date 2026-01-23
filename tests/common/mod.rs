@@ -103,7 +103,7 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
 /// Since parse_model_xml doesn't validate, we need to check manually
 pub fn parse_and_validate_components(xml: &str) -> Result<lib3mf::Model, lib3mf::Error> {
     let model = lib3mf::parser::parse_model_xml(xml)?;
-    
+
     // Check that all component references are valid
     use std::collections::HashSet;
     let valid_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
@@ -117,7 +117,7 @@ pub fn parse_and_validate_components(xml: &str) -> Result<lib3mf::Model, lib3mf:
             }
         }
     }
-    
+
     // Check for circular component references
     for obj in &model.resources.objects {
         if !obj.components.is_empty() {
@@ -131,7 +131,7 @@ pub fn parse_and_validate_components(xml: &str) -> Result<lib3mf::Model, lib3mf:
             }
         }
     }
-    
+
     Ok(model)
 }
 
@@ -145,15 +145,15 @@ fn has_circular_component(
     if path.contains(&object_id) {
         return true;
     }
-    
+
     // If already fully processed, skip
     if visited.contains(&object_id) {
         return false;
     }
-    
+
     visited.insert(object_id);
     path.push(object_id);
-    
+
     // Check components of this object
     if let Some(obj) = model.resources.objects.iter().find(|o| o.id == object_id) {
         for comp in &obj.components {
@@ -162,7 +162,7 @@ fn has_circular_component(
             }
         }
     }
-    
+
     path.pop();
     visited.remove(&object_id);
     false
