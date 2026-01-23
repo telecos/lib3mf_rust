@@ -77,7 +77,7 @@ conformance:
       suite: [suite1, suite2, ..., suite11]
   steps:
     - name: Download test suites
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v4.1.3
       with:
         name: test-suites
         path: test_suites
