@@ -289,6 +289,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
+name = "clipper2"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64189f2f66e4bcaa87df727f64c09a844b3640da29cd785aeef150606e96f88d"
+dependencies = [
+ "clipper2c-sys",
+ "libc",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "clipper2c-sys"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc0fe1f9be1018d6be0fa3c79ab338d295fb0c0c501e4fe81bfdbe3a89a23098"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -702,6 +723,7 @@ dependencies = [
 name = "lib3mf"
 version = "0.1.0"
 dependencies = [
+ "clipper2",
  "criterion",
  "libtest-mimic",
  "nalgebra",
