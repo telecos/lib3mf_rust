@@ -181,10 +181,11 @@ jobs:
       - name: Generate CONFORMANCE_REPORT.md
         run: |
           echo "Generating basic conformance report..."
-          cat > CONFORMANCE_REPORT.md << 'EOF'
+          TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          cat > CONFORMANCE_REPORT.md << EOF
           # 3MF Conformance Test Report
 
-          **Generated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          **Generated:** $TIMESTAMP
 
           ## Test Execution
 
@@ -218,9 +219,9 @@ jobs:
           - **Negative tests** validate that invalid 3MF files are properly rejected
 
           **To generate a detailed report locally:**
-          ```bash
+          \`\`\`bash
           ./generate_conformance_report.sh
-          ```
+          \`\`\`
           EOF
           echo "✅ Basic conformance report generated"
       
