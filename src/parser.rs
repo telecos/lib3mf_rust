@@ -1589,11 +1589,17 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     Ok(model)
 }
 
-/// Load and parse Secure/keystore.xml to identify encrypted files
+/// Load and parse Secure/keystore.xml to extract complete keystore structure
 ///
-/// Extracts the keystore UUID and list of encrypted file paths from the
-/// SecureContent keystore.xml file. If the file doesn't exist, this is not
-/// an error (not all packages have encrypted content).
+/// Parses the SecureContent keystore.xml file to extract all keystore information:
+/// - Keystore UUID
+/// - Consumer definitions (ID, key ID, public key in PEM format)
+/// - Resource data groups with encryption metadata
+/// - Access rights linking consumers to encrypted resources
+/// - Encryption parameters (algorithms, IV, tags, etc.)
+///
+/// This provides the complete structural information needed for applications to
+/// implement their own decryption logic using external cryptographic libraries.
 ///
 /// This function also performs validation as per 3MF SecureContent specification:
 /// - EPX-2601: Validates consumer index references exist
@@ -1626,7 +1632,15 @@ fn load_keystore<R: Read + std::io::Seek>(
     reader.config_mut().trim_text(true);
 
     let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
-    let mut consumer_indices = Vec::new(); // Track consumer indices referenced in accessright
+    
+    // State tracking for nested parsing
+    let mut current_consumer: Option<Consumer> = None;
+    let mut current_resource_group: Option<ResourceDataGroup> = None;
+    let mut current_access_right: Option<AccessRight> = None;
+    let mut current_resource_data: Option<ResourceData> = None;
+    let mut current_kek_params: Option<KEKParams> = None;
+    let mut current_cek_params: Option<CEKParams> = None;
+    let mut text_buffer = String::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -1634,7 +1648,6 @@ fn load_keystore<R: Read + std::io::Seek>(
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
-
                 let local_name = get_local_name(name_str);
 
                 match local_name {
@@ -1657,9 +1670,8 @@ fn load_keystore<R: Read + std::io::Seek>(
                         }
                     }
                     "consumer" => {
-                        // EPX-2602/2604: Track consumer IDs and validate required attributes
-                        let mut has_consumer_id = false;
-                        let mut consumer_id_value = String::new();
+                        let mut consumer_id = String::new();
+                        let mut key_id = None;
 
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
@@ -1667,58 +1679,95 @@ fn load_keystore<R: Read + std::io::Seek>(
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                .to_string();
 
-                            if attr_name == "consumerid" {
-                                has_consumer_id = true;
-                                consumer_id_value = std::str::from_utf8(&attr.value)
+                            match attr_name {
+                                "consumerid" => consumer_id = attr_value,
+                                "keyid" => key_id = Some(attr_value),
+                                _ => {}
+                            }
+                        }
+
+                        // EPX-2604: Check for duplicate consumer IDs
+                        if let Some(ref mut sc) = model.secure_content {
+                            if sc.consumer_ids.contains(&consumer_id) {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Duplicate consumer ID '{}' in keystore (EPX-2604)",
+                                    consumer_id
+                                )));
+                            }
+                            sc.consumer_ids.push(consumer_id.clone());
+                            sc.consumer_count += 1;
+                        }
+
+                        current_consumer = Some(Consumer {
+                            consumer_id,
+                            key_id,
+                            key_value: None,
+                        });
+                    }
+                    "keyvalue" => {
+                        text_buffer.clear();
+                    }
+                    "resourcedatagroup" => {
+                        let mut key_uuid = String::new();
+
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| {
+                                Error::InvalidXml(format!("Invalid attribute in resourcedatagroup: {}", e))
+                            })?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            if attr_name == "keyuuid" {
+                                key_uuid = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
                             }
                         }
 
-                        if has_consumer_id {
-                            if let Some(ref mut sc) = model.secure_content {
-                                // EPX-2604: Check for duplicate consumer IDs
-                                if sc.consumer_ids.contains(&consumer_id_value) {
-                                    return Err(Error::InvalidSecureContent(format!(
-                                        "Duplicate consumer ID '{}' in keystore (EPX-2604)",
-                                        consumer_id_value
-                                    )));
-                                }
-                                sc.consumer_ids.push(consumer_id_value);
-                                sc.consumer_count += 1;
-                            }
-                        }
+                        current_resource_group = Some(ResourceDataGroup {
+                            key_uuid,
+                            access_rights: Vec::new(),
+                            resource_data: Vec::new(),
+                        });
                     }
                     "accessright" => {
-                        // EPX-2601: Track and validate consumer index
+                        let mut consumer_index = 0;
+
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!(
-                                    "Invalid attribute in accessright: {}",
-                                    e
-                                ))
+                                Error::InvalidXml(format!("Invalid attribute in accessright: {}", e))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             if attr_name == "consumerindex" {
                                 let index_str = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                                let index = index_str.parse::<usize>().map_err(|_| {
+                                consumer_index = index_str.parse::<usize>().map_err(|_| {
                                     Error::InvalidSecureContent(format!(
                                         "Invalid consumer index '{}' (must be a valid number)",
                                         index_str
                                     ))
                                 })?;
-                                consumer_indices.push(index);
                             }
                         }
+
+                        current_access_right = Some(AccessRight {
+                            consumer_index,
+                            kek_params: KEKParams {
+                                wrapping_algorithm: String::new(),
+                                mgf_algorithm: None,
+                                digest_method: None,
+                            },
+                            cipher_value: String::new(),
+                        });
                     }
                     "kekparams" => {
-                        // EPX-2603: Validate wrapping algorithm and related attributes
                         let mut wrapping_algorithm = String::new();
-                        let mut mgf_algorithm = String::new();
-                        let mut digest_method = String::new();
+                        let mut mgf_algorithm = None;
+                        let mut digest_method = None;
 
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
@@ -1732,17 +1781,14 @@ fn load_keystore<R: Read + std::io::Seek>(
 
                             match attr_name {
                                 "wrappingalgorithm" => wrapping_algorithm = attr_value,
-                                "mgfalgorithm" => mgf_algorithm = attr_value,
-                                "digestmethod" => digest_method = attr_value,
+                                "mgfalgorithm" => mgf_algorithm = Some(attr_value),
+                                "digestmethod" => digest_method = Some(attr_value),
                                 _ => {}
                             }
                         }
 
                         // EPX-2603: Validate wrapping algorithm
                         if !wrapping_algorithm.is_empty() {
-                            // Valid algorithms per 3MF spec (SecureContent extension):
-                            // - http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p (2001 version)
-                            // - http://www.w3.org/2009/xmlenc11#rsa-oaep (2009 version)
                             let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
                                 || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
 
@@ -1759,87 +1805,222 @@ fn load_keystore<R: Read + std::io::Seek>(
                         }
 
                         // EPX-2603: Validate mgfalgorithm if present
-                        if !mgf_algorithm.is_empty() {
-                            // Valid MGF algorithms: mgf1sha1, mgf1sha256, mgf1sha384, mgf1sha512
+                        if let Some(ref mgf) = mgf_algorithm {
                             let valid_mgf_algs = [
                                 "http://www.w3.org/2009/xmlenc11#mgf1sha1",
                                 "http://www.w3.org/2009/xmlenc11#mgf1sha256",
                                 "http://www.w3.org/2009/xmlenc11#mgf1sha384",
                                 "http://www.w3.org/2009/xmlenc11#mgf1sha512",
                             ];
-                            if !valid_mgf_algs.contains(&mgf_algorithm.as_str()) {
+                            if !valid_mgf_algs.contains(&mgf.as_str()) {
                                 return Err(Error::InvalidSecureContent(format!(
                                     "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
-                                    mgf_algorithm
+                                    mgf
                                 )));
                             }
                         }
 
                         // EPX-2603: Validate digestmethod if present
-                        if !digest_method.is_empty() {
-                            // Valid digest methods: sha1, sha256, sha384, sha512
+                        if let Some(ref digest) = digest_method {
                             let valid_digest_methods = [
                                 "http://www.w3.org/2000/09/xmldsig#sha1",
                                 "http://www.w3.org/2001/04/xmlenc#sha256",
                                 "http://www.w3.org/2001/04/xmlenc#sha384",
                                 "http://www.w3.org/2001/04/xmlenc#sha512",
                             ];
-                            if !valid_digest_methods.contains(&digest_method.as_str()) {
+                            if !valid_digest_methods.contains(&digest.as_str()) {
                                 return Err(Error::InvalidSecureContent(format!(
                                     "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
-                                    digest_method
+                                    digest
                                 )));
                             }
                         }
+
+                        current_kek_params = Some(KEKParams {
+                            wrapping_algorithm,
+                            mgf_algorithm,
+                            digest_method,
+                        });
+                    }
+                    "cipherdata" => {
+                        // cipherdata contains xenc:CipherValue
+                    }
+                    "CipherValue" => {
+                        text_buffer.clear();
                     }
                     "resourcedata" => {
-                        // Extract path attribute from resourcedata element
+                        let mut path = String::new();
+
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!(
-                                    "Invalid attribute in resourcedata: {}",
-                                    e
-                                ))
+                                Error::InvalidXml(format!("Invalid attribute in resourcedata: {}", e))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             if attr_name == "path" {
-                                let path = std::str::from_utf8(&attr.value)
+                                path = std::str::from_utf8(&attr.value)
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
-
-                                // EPX-2605: Validate path is not empty
-                                if path.trim().is_empty() {
-                                    return Err(Error::InvalidSecureContent(
-                                        "Resource data path attribute cannot be empty (EPX-2605)"
-                                            .to_string(),
-                                    ));
-                                }
-
-                                // EPX-2605: Validate encrypted file paths are not OPC relationship files
-                                // OPC relationship files (_rels/*.rels or *.rels) cannot be encrypted
-                                let path_lower = path.to_lowercase();
-                                if path_lower.contains("/_rels/") || path_lower.ends_with(".rels") {
-                                    return Err(Error::InvalidSecureContent(format!(
-                                        "Invalid encrypted file path '{}'. OPC relationship files cannot be encrypted (EPX-2605)",
-                                        path
-                                    )));
-                                }
-
-                                // EPX-2607: Validate referenced file exists in package
-                                // Remove leading slash for package lookup
-                                let lookup_path = path.trim_start_matches('/');
-                                if !package.has_file(lookup_path) {
-                                    return Err(Error::InvalidSecureContent(format!(
-                                        "Referenced encrypted file '{}' does not exist in package (EPX-2607)",
-                                        path
-                                    )));
-                                }
-
-                                if let Some(ref mut sc) = model.secure_content {
-                                    sc.encrypted_files.push(path);
-                                }
                             }
+                        }
+
+                        // EPX-2605: Validate path
+                        if path.trim().is_empty() {
+                            return Err(Error::InvalidSecureContent(
+                                "Resource data path attribute cannot be empty (EPX-2605)".to_string(),
+                            ));
+                        }
+
+                        let path_lower = path.to_lowercase();
+                        if path_lower.contains("/_rels/") || path_lower.ends_with(".rels") {
+                            return Err(Error::InvalidSecureContent(format!(
+                                "Invalid encrypted file path '{}'. OPC relationship files cannot be encrypted (EPX-2605)",
+                                path
+                            )));
+                        }
+
+                        // EPX-2607: Validate file exists
+                        let lookup_path = path.trim_start_matches('/');
+                        if !package.has_file(lookup_path) {
+                            return Err(Error::InvalidSecureContent(format!(
+                                "Referenced encrypted file '{}' does not exist in package (EPX-2607)",
+                                path
+                            )));
+                        }
+
+                        // Add to encrypted_files list (for backward compatibility)
+                        if let Some(ref mut sc) = model.secure_content {
+                            sc.encrypted_files.push(path.clone());
+                        }
+
+                        current_resource_data = Some(ResourceData {
+                            path,
+                            cek_params: CEKParams {
+                                encryption_algorithm: String::new(),
+                                compression: "none".to_string(),
+                                iv: None,
+                                tag: None,
+                                aad: None,
+                            },
+                        });
+                    }
+                    "cekparams" => {
+                        let mut encryption_algorithm = String::new();
+                        let mut compression = "none".to_string();
+
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| {
+                                Error::InvalidXml(format!("Invalid attribute in cekparams: {}", e))
+                            })?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                .to_string();
+
+                            match attr_name {
+                                "encryptionalgorithm" => encryption_algorithm = attr_value,
+                                "compression" => compression = attr_value,
+                                _ => {}
+                            }
+                        }
+
+                        current_cek_params = Some(CEKParams {
+                            encryption_algorithm,
+                            compression,
+                            iv: None,
+                            tag: None,
+                            aad: None,
+                        });
+                    }
+                    "iv" => {
+                        text_buffer.clear();
+                    }
+                    "tag" => {
+                        text_buffer.clear();
+                    }
+                    "aad" => {
+                        text_buffer.clear();
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(ref e)) => {
+                let text = e.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                text_buffer.push_str(&text);
+            }
+            Ok(Event::End(ref e)) => {
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let local_name = get_local_name(name_str);
+
+                match local_name {
+                    "consumer" => {
+                        if let Some(consumer) = current_consumer.take() {
+                            if let Some(ref mut sc) = model.secure_content {
+                                sc.consumers.push(consumer);
+                            }
+                        }
+                    }
+                    "keyvalue" => {
+                        if let Some(ref mut consumer) = current_consumer {
+                            consumer.key_value = Some(text_buffer.trim().to_string());
+                        }
+                    }
+                    "resourcedatagroup" => {
+                        if let Some(group) = current_resource_group.take() {
+                            if let Some(ref mut sc) = model.secure_content {
+                                sc.resource_data_groups.push(group);
+                            }
+                        }
+                    }
+                    "accessright" => {
+                        if let Some(access_right) = current_access_right.take() {
+                            if let Some(ref mut group) = current_resource_group {
+                                group.access_rights.push(access_right);
+                            }
+                        }
+                    }
+                    "kekparams" => {
+                        if let Some(kek_params) = current_kek_params.take() {
+                            if let Some(ref mut access_right) = current_access_right {
+                                access_right.kek_params = kek_params;
+                            }
+                        }
+                    }
+                    "CipherValue" => {
+                        if let Some(ref mut access_right) = current_access_right {
+                            access_right.cipher_value = text_buffer.trim().to_string();
+                        }
+                    }
+                    "resourcedata" => {
+                        if let Some(resource_data) = current_resource_data.take() {
+                            if let Some(ref mut group) = current_resource_group {
+                                group.resource_data.push(resource_data);
+                            }
+                        }
+                    }
+                    "cekparams" => {
+                        if let Some(cek_params) = current_cek_params.take() {
+                            if let Some(ref mut resource_data) = current_resource_data {
+                                resource_data.cek_params = cek_params;
+                            }
+                        }
+                    }
+                    "iv" => {
+                        if let Some(ref mut cek_params) = current_cek_params {
+                            cek_params.iv = Some(text_buffer.trim().to_string());
+                        }
+                    }
+                    "tag" => {
+                        if let Some(ref mut cek_params) = current_cek_params {
+                            cek_params.tag = Some(text_buffer.trim().to_string());
+                        }
+                    }
+                    "aad" => {
+                        if let Some(ref mut cek_params) = current_cek_params {
+                            cek_params.aad = Some(text_buffer.trim().to_string());
                         }
                     }
                     _ => {}
@@ -1857,22 +2038,25 @@ fn load_keystore<R: Read + std::io::Seek>(
         buf.clear();
     }
 
-    // After parsing, perform final validation
+    // Final validation
     if let Some(ref sc) = model.secure_content {
-        // EPX-2602: If we have accessrights but no consumers, that's an error
-        if !consumer_indices.is_empty() && sc.consumer_count == 0 {
+        // EPX-2602: Check if we have access rights but no consumers
+        let has_access_rights = sc.resource_data_groups.iter().any(|g| !g.access_rights.is_empty());
+        if has_access_rights && sc.consumer_count == 0 {
             return Err(Error::InvalidSecureContent(
                 "Keystore has accessright elements but no consumer elements (EPX-2602)".to_string(),
             ));
         }
 
-        // EPX-2601: Validate all consumer indices are valid (must be < consumer_count)
-        for index in consumer_indices {
-            if index >= sc.consumer_count {
-                return Err(Error::InvalidSecureContent(format!(
-                    "Invalid consumer index {}. Only {} consumer(s) defined (EPX-2601)",
-                    index, sc.consumer_count
-                )));
+        // EPX-2601: Validate all consumer indices
+        for group in &sc.resource_data_groups {
+            for access_right in &group.access_rights {
+                if access_right.consumer_index >= sc.consumer_count {
+                    return Err(Error::InvalidSecureContent(format!(
+                        "Invalid consumer index {}. Only {} consumer(s) defined (EPX-2601)",
+                        access_right.consumer_index, sc.consumer_count
+                    )));
+                }
             }
         }
     }
