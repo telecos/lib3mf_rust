@@ -477,6 +477,72 @@ Custom extension features:
 
 See `examples/custom_extension.rs` for a complete working example.
 
+### Mesh Operations and Geometry Analysis
+
+The library includes comprehensive mesh operation capabilities using the `parry3d` crate for accurate geometric computations:
+
+```rust
+use lib3mf::{mesh_ops, Model};
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open("model.3mf")?;
+    let model = Model::from_reader(file)?;
+
+    for object in &model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            // Compute signed volume (detects inverted meshes)
+            let signed_volume = mesh_ops::compute_mesh_signed_volume(mesh)?;
+            if signed_volume < 0.0 {
+                println!("Warning: Object {} has inverted triangles", object.id);
+            }
+
+            // Compute absolute volume
+            let volume = mesh_ops::compute_mesh_volume(mesh)?;
+            println!("Volume: {} cubic units", volume);
+
+            // Compute bounding box
+            let (min, max) = mesh_ops::compute_mesh_aabb(mesh)?;
+            println!("AABB: min={:?}, max={:?}", min, max);
+        }
+    }
+
+    // Analyze build items with transformations
+    for item in &model.build.items {
+        let object = model.resources.objects
+            .iter()
+            .find(|obj| obj.id == item.objectid);
+
+        if let Some(object) = object {
+            if let Some(ref mesh) = object.mesh {
+                // Compute transformed bounding box
+                let (min, max) = mesh_ops::compute_transformed_aabb(
+                    mesh,
+                    item.transform.as_ref()
+                )?;
+                println!("Transformed AABB: min={:?}, max={:?}", min, max);
+            }
+        }
+    }
+
+    // Compute overall build volume
+    if let Some((min, max)) = mesh_ops::compute_build_volume(&model) {
+        println!("Build Volume: {:?} to {:?}", min, max);
+    }
+
+    Ok(())
+}
+```
+
+**Mesh Operations Features:**
+- **Volume Computation**: Signed volume for orientation detection, absolute volume for manufacturing
+- **Bounding Boxes**: Axis-aligned bounding boxes (AABB) for spatial queries
+- **Transformations**: Apply affine transforms and compute transformed bounding boxes
+- **Build Volume**: Calculate overall build volume encompassing all build items
+- **Validation Support**: Used internally for mesh orientation validation (N_XXX_0416, N_XXX_0421)
+
+See `examples/mesh_analysis.rs` for a complete demonstration.
+
 ### Running Examples
 
 The repository includes several comprehensive examples demonstrating different features:
@@ -512,6 +578,11 @@ cargo run --example validation_errors test_files/core/box.3mf strict
 #### Working with Build Items and Transformations
 ```bash
 cargo run --example build_transformations test_files/core/box.3mf
+```
+
+#### Mesh Operations and Geometry Analysis
+```bash
+cargo run --example mesh_analysis test_files/core/box.3mf
 ```
 
 #### Extracting Color Information
@@ -724,6 +795,8 @@ The library uses minimal, well-maintained dependencies:
 - `zip` - For reading ZIP archives (3MF container format)
 - `quick-xml` - For parsing XML model files
 - `thiserror` - For error handling
+- `parry3d` - For triangle mesh geometric operations (volume, bounding boxes)
+- `nalgebra` - Linear algebra library (used by parry3d)
 
 All dependencies are regularly updated and checked for vulnerabilities.
 
