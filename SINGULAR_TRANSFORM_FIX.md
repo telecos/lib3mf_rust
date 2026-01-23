@@ -28,7 +28,7 @@ Added two new unit tests to prevent regression:
 2. **test_near_singular_transform_is_allowed**: Validates that a transform with very small positive determinant is accepted
    - Uses the transform from P_XXX_0338_01.3mf
    - Transform: `[0.0001 0 0 0 0.0001 0 0 0 0.0001 50 50 50]`
-   - Determinant = 0.0001³ = 1e-12
+   - Determinant = (0.0001)^3 = 1×10^-12
 
 ### Current Validation Logic
 The existing validation in `validate_transform_matrices` already correctly:
