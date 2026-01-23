@@ -52,7 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(signed_volume) => {
                     println!("  Signed Volume: {:.6} cubic units", signed_volume);
                     if signed_volume < 0.0 {
-                        println!("    ⚠️  WARNING: Negative volume detected - mesh may be inverted!");
+                        println!(
+                            "    ⚠️  WARNING: Negative volume detected - mesh may be inverted!"
+                        );
                     } else {
                         println!("    ✓ Positive volume - mesh orientation is correct");
                     }

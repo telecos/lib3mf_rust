@@ -100,7 +100,7 @@ fn test_transformed_bounding_box() {
     mesh.vertices.push(Vertex::new(10.0, 0.0, 10.0)); // 5
     mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0)); // 6
     mesh.vertices.push(Vertex::new(0.0, 10.0, 10.0)); // 7
-    // Add at least two triangles to define the bounding box properly
+                                                      // Add at least two triangles to define the bounding box properly
     mesh.triangles.push(Triangle::new(0, 1, 2));
     mesh.triangles.push(Triangle::new(4, 5, 6));
 
@@ -241,13 +241,13 @@ fn test_build_volume_validation_integration() {
     // Test 1: Build item with transform that places mesh in valid space (positive coords)
     let mut item_valid = BuildItem::new(1);
     item_valid.transform = Some([
-        1.0, 0.0, 0.0, 5.0,  // Row 0: identity + tx=5
-        0.0, 1.0, 0.0, 0.0,  // Row 1: identity + ty=0
-        0.0, 0.0, 1.0, 0.0,  // Row 2: identity + tz=0
+        1.0, 0.0, 0.0, 5.0, // Row 0: identity + tx=5
+        0.0, 1.0, 0.0, 0.0, // Row 1: identity + ty=0
+        0.0, 0.0, 1.0, 0.0, // Row 2: identity + tz=0
     ]);
 
     let (min, max) = mesh_ops::compute_transformed_aabb(
-        &model.resources.objects[0].mesh.as_ref().unwrap(),
+        model.resources.objects[0].mesh.as_ref().unwrap(),
         item_valid.transform.as_ref(),
     )
     .unwrap();
@@ -266,7 +266,7 @@ fn test_build_volume_validation_integration() {
     ]);
 
     let (min, max) = mesh_ops::compute_transformed_aabb(
-        &model.resources.objects[0].mesh.as_ref().unwrap(),
+        model.resources.objects[0].mesh.as_ref().unwrap(),
         item_negative.transform.as_ref(),
     )
     .unwrap();

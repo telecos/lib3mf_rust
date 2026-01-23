@@ -3353,7 +3353,7 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform 
+/// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
 /// doesn't place object outside printable area
 ///
 /// This validation checks that transformed meshes remain within reasonable bounds.
@@ -3399,22 +3399,6 @@ fn validate_build_transform_bounds(model: &Model) -> Result<()> {
             )));
         }
     }
-    Ok(())
-}  
-  
-/// These test cases validate that after applying the build item transform,
-/// all vertices of the mesh remain within the default build volume [0, 100]³ mm.
-/// However, this validation causes false positives with many legitimate 3MF files
-/// in the test suite that have objects extending beyond 100mm, as there is no
-/// universal build volume size requirement in the 3MF specification.
-///
-/// The specific test cases check for:
-/// - N_XXX_0421_01: Negative coordinates (below build plate)
-/// - N_XXX_0420_01: Exceeding X dimension 
-/// - N_XXX_0418_01: Exceeding Y and Z dimensions
-///
-/// These tests are added to the expected failures list in tests/expected_failures.json
-fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
     Ok(())
 }
 

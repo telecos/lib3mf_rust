@@ -134,16 +134,8 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
     let aabb = trimesh.local_aabb();
 
     Ok((
-        (
-            aabb.mins.x as f64,
-            aabb.mins.y as f64,
-            aabb.mins.z as f64,
-        ),
-        (
-            aabb.maxs.x as f64,
-            aabb.maxs.y as f64,
-            aabb.maxs.z as f64,
-        ),
+        (aabb.mins.x as f64, aabb.mins.y as f64, aabb.mins.z as f64),
+        (aabb.maxs.x as f64, aabb.maxs.y as f64, aabb.maxs.z as f64),
     ))
 }
 
@@ -176,10 +168,7 @@ pub fn apply_transform(point: Point3d, transform: &[f64; 12]) -> Point3d {
 ///
 /// # Returns
 /// A tuple of (min_point, max_point) where each point is (x, y, z)
-pub fn compute_transformed_aabb(
-    mesh: &Mesh,
-    transform: Option<&[f64; 12]>,
-) -> Result<BoundingBox> {
+pub fn compute_transformed_aabb(mesh: &Mesh, transform: Option<&[f64; 12]>) -> Result<BoundingBox> {
     // Get the original AABB
     let (min, max) = compute_mesh_aabb(mesh)?;
 
@@ -333,7 +322,11 @@ mod tests {
         // Test signed volume
         let signed_volume = compute_mesh_signed_volume(&mesh).unwrap();
         assert!(signed_volume > 0.0, "Signed volume should be positive");
-        assert!((signed_volume - 1.0).abs() < 0.01, "Signed volume: {}", signed_volume);
+        assert!(
+            (signed_volume - 1.0).abs() < 0.01,
+            "Signed volume: {}",
+            signed_volume
+        );
 
         // Test unsigned volume
         let volume = compute_mesh_volume(&mesh).unwrap();
@@ -370,7 +363,11 @@ mod tests {
         mesh.triangles.push(Triangle::new(5, 6, 1)); // inverted
 
         let signed_volume = compute_mesh_signed_volume(&mesh).unwrap();
-        assert!(signed_volume < 0.0, "Inverted mesh should have negative signed volume, got {}", signed_volume);
+        assert!(
+            signed_volume < 0.0,
+            "Inverted mesh should have negative signed volume, got {}",
+            signed_volume
+        );
     }
 
     #[test]
