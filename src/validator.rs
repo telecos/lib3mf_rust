@@ -1887,19 +1887,19 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
 
             // Use small epsilon for floating-point comparison
             const EPSILON: f64 = 1e-10;
-            if volume < -EPSILON {
+            // DPX 3314_02, 3314_05: Reject negative volumes (inverted/reversed triangles)
+            // Use a very small negative threshold to catch reversed triangles
+            if volume < EPSILON {
+                if volume < 0.0 {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement mesh has negative volume ({:.10}), indicating inverted or incorrectly oriented triangles.\n\
+                         Hint: Check triangle vertex winding order - vertices should be ordered counter-clockwise when viewed from outside.",
+                        object.id, volume
+                    )));
+                }
+                // Also reject very small positive volumes as they indicate nearly flat meshes
                 return Err(Error::InvalidModel(format!(
-                    "Object {}: Displacement mesh has negative volume ({:.6}), indicating inverted or incorrectly oriented triangles.\n\
-                     Hint: Check triangle vertex winding order - vertices should be ordered counter-clockwise when viewed from outside.",
-                    object.id, volume
-                )));
-            }
-
-            // Also reject near-zero volumes which indicate degenerate or flat meshes (DPX 3314_07)
-            const MIN_VOLUME: f64 = 1e-12;
-            if volume.abs() < MIN_VOLUME && disp_mesh.triangles.len() >= 4 {
-                return Err(Error::InvalidModel(format!(
-                    "Object {}: Displacement mesh has near-zero volume ({:.6}), indicating a degenerate or flat mesh.\n\
+                    "Object {}: Displacement mesh has near-zero volume ({:.10}), indicating a degenerate or flat mesh.\n\
                      Hint: Ensure the mesh encloses a non-zero 3D volume.",
                     object.id, volume
                 )));
