@@ -2932,13 +2932,7 @@ fn validate_transform_matrices(model: &Model) -> Result<()> {
         .resources
         .objects
         .iter()
-        .filter_map(|obj| {
-            if obj.slicestackid.is_some() {
-                Some(obj.id)
-            } else {
-                None
-            }
-        })
+        .filter_map(|obj| obj.slicestackid.map(|_| obj.id))
         .collect();
 
     for (idx, item) in model.build.items.iter().enumerate() {
@@ -4040,8 +4034,8 @@ mod tests {
 
         // Correct winding from box.3mf:
         // <triangle v1="3" v2="2" v3="1" />
-        // For negative volume, swap to: v1="1" v2="2" v3="3"
-        // All triangles with INVERTED winding (swap v1 and v3)
+        // For negative volume, swap the first and third vertex indices: v1="1" v2="2" v3="3"
+        // All triangles with INVERTED winding (first and third indices swapped)
         mesh.triangles.push(Triangle::new(1, 2, 3)); // Was (3, 2, 1)
         mesh.triangles.push(Triangle::new(3, 0, 1)); // Was (1, 0, 3)
         mesh.triangles.push(Triangle::new(6, 5, 4)); // Was (4, 5, 6)
