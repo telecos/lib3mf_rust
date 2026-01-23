@@ -18,9 +18,7 @@ fn main() {
         ("suite11_Displacement", "Negative Tests"),
     ];
 
-    let mut total_passed = 0;
-    let mut total_failed = 0;
-    let mut failed_files = Vec::new();
+    let mut failures = Vec::new();
 
     for (suite, neg_dir) in suites {
         let path = format!("test_suites/{}/{}", suite, neg_dir);
@@ -42,12 +40,10 @@ fn main() {
                 Ok(file) => match Model::from_reader(file) {
                     Ok(_) => {
                         // File was accepted but should have been rejected
-                        total_failed += 1;
-                        failed_files.push(format!("{}: {}", suite, file_name));
+                        failures.push(format!("{:30} {}", suite, file_name));
                     }
                     Err(_) => {
-                        // File was correctly rejected
-                        total_passed += 1;
+                        // File was correctly rejected - OK
                     }
                 },
                 Err(e) => {
@@ -57,14 +53,8 @@ fn main() {
         }
     }
 
-    println!("\n=== Negative Test Analysis ===");
-    println!("Passed (correctly rejected): {}", total_passed);
-    println!("Failed (incorrectly accepted): {}", total_failed);
-    println!("\nFiles that should be rejected but were accepted:");
-    for (i, file) in failed_files.iter().enumerate().take(20) {
-        println!("  {}. {}", i + 1, file);
-    }
-    if failed_files.len() > 20 {
-        println!("  ... and {} more", failed_files.len() - 20);
+    println!("\n=== All Failed Tests (Incorrectly Accepted) ===\n");
+    for f in failures {
+        println!("{}", f);
     }
 }
