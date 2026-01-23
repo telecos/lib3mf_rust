@@ -179,22 +179,22 @@ pub fn union_polygons(
         return Ok(Vec::new());
     }
     
-    if polygons.len() == 1 {
-        // Single polygon, no union needed
-        return Ok(polygons.to_vec());
+    // Convert all polygons to paths
+    let mut all_paths = Vec::new();
+    for polygon in polygons {
+        all_paths.push(slice_polygon_to_paths(polygon, vertices)?);
     }
     
-    // Convert first polygon to paths
-    let first_path = slice_polygon_to_paths(&polygons[0], vertices)?;
-    
-    // Convert remaining polygons to paths
-    let mut other_paths = Vec::new();
-    for polygon in polygons.iter().skip(1) {
-        other_paths.push(slice_polygon_to_paths(polygon, vertices)?);
+    // If only one polygon, simplify it and return
+    if all_paths.len() == 1 {
+        let simplified = simplify::<Centi>(all_paths, 0.01, false);
+        let result_paths: Vec<Vec<(f64, f64)>> = simplified.into();
+        return Ok(paths_to_slice_polygons(result_paths, result_vertices));
     }
     
-    // Perform union operation
-    let result = union::<Centi>(vec![first_path], other_paths, FillRule::default())
+    // Perform union operation on multiple polygons
+    let first_path = all_paths.remove(0);
+    let result = union::<Centi>(vec![first_path], all_paths, FillRule::default())
         .map_err(|e| ClippingError::ClipperError(format!("{:?}", e)))?;
     
     // Convert back to slice polygons
@@ -271,15 +271,17 @@ pub fn difference_polygons(
         return Ok(Vec::new());
     }
     
-    if clip_polygons.is_empty() {
-        // Nothing to subtract, return subject as-is
-        return Ok(subject_polygons.to_vec());
-    }
-    
     // Convert subject polygons to paths
     let mut subject_paths = Vec::new();
     for polygon in subject_polygons {
         subject_paths.push(slice_polygon_to_paths(polygon, vertices)?);
+    }
+    
+    if clip_polygons.is_empty() {
+        // Nothing to subtract, simplify and return subject
+        let simplified = simplify::<Centi>(subject_paths, 0.01, false);
+        let result_paths: Vec<Vec<(f64, f64)>> = simplified.into();
+        return Ok(paths_to_slice_polygons(result_paths, result_vertices));
     }
     
     // Convert clip polygons to paths
