@@ -20,6 +20,26 @@ const VALID_WRAPPING_ALGORITHM_2001: &str = "http://www.w3.org/2001/04/xmlenc#rs
 
 /// Valid wrapping algorithm for SecureContent (2009 version)  
 const VALID_WRAPPING_ALGORITHM_2009: &str = "http://www.w3.org/2009/xmlenc11#rsa-oaep";
+
+/// Valid encryption algorithm for SecureContent (AES-256-GCM)
+const VALID_ENCRYPTION_ALGORITHM: &str = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
+
+/// Valid MGF algorithms for SecureContent kekparams
+const VALID_MGF_ALGORITHMS: &[&str] = &[
+    "http://www.w3.org/2009/xmlenc11#mgf1sha1",
+    "http://www.w3.org/2009/xmlenc11#mgf1sha256",
+    "http://www.w3.org/2009/xmlenc11#mgf1sha384",
+    "http://www.w3.org/2009/xmlenc11#mgf1sha512",
+];
+
+/// Valid digest methods for SecureContent kekparams
+const VALID_DIGEST_METHODS: &[&str] = &[
+    "http://www.w3.org/2000/09/xmldsig#sha1",
+    "http://www.w3.org/2001/04/xmlenc#sha256",
+    "http://www.w3.org/2001/04/xmlenc#sha384",
+    "http://www.w3.org/2001/04/xmlenc#sha512",
+];
+
 /// Maximum number of object IDs to display in error messages
 const MAX_DISPLAYED_OBJECT_IDS: usize = 20;
 
@@ -1764,6 +1784,52 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     Ok(model)
 }
 
+/// Validate kekparams attributes (wrapping algorithm, mgf algorithm, digest method)
+///
+/// This helper validates the cryptographic algorithm attributes in kekparams elements
+/// per EPX-2603 SecureContent specification.
+fn validate_kekparams_attributes(
+    wrapping_algorithm: &str,
+    mgf_algorithm: &str,
+    digest_method: &str,
+    sc: &mut SecureContentInfo,
+) -> Result<()> {
+    // EPX-2603: Validate wrapping algorithm
+    if !wrapping_algorithm.is_empty() {
+        let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
+            || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
+
+        if !is_valid {
+            return Err(Error::InvalidSecureContent(format!(
+                "Invalid wrapping algorithm '{}'. Must be either '{}' or '{}' (EPX-2603)",
+                wrapping_algorithm, VALID_WRAPPING_ALGORITHM_2001, VALID_WRAPPING_ALGORITHM_2009
+            )));
+        }
+
+        sc.wrapping_algorithms.push(wrapping_algorithm.to_string());
+    }
+
+    // EPX-2603: Validate mgfalgorithm if present
+    if !mgf_algorithm.is_empty()
+        && !VALID_MGF_ALGORITHMS.contains(&mgf_algorithm) {
+            return Err(Error::InvalidSecureContent(format!(
+                "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
+                mgf_algorithm
+            )));
+        }
+
+    // EPX-2603: Validate digestmethod if present
+    if !digest_method.is_empty()
+        && !VALID_DIGEST_METHODS.contains(&digest_method) {
+            return Err(Error::InvalidSecureContent(format!(
+                "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
+                digest_method
+            )));
+        }
+
+    Ok(())
+}
+
 /// Load and parse Secure/keystore.xml to identify encrypted files
 ///
 /// Extracts the keystore UUID and list of encrypted file paths from the
@@ -1832,7 +1898,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                         has_resourcedatagroup = true;
                     }
                     "kekparams" => {
-                        // EPX-2603: Validate wrapping algorithm and related attributes
+                        // EPX-2603: Extract and validate kekparams attributes
                         let mut wrapping_algorithm = String::new();
                         let mut mgf_algorithm = String::new();
                         let mut digest_method = String::new();
@@ -1855,53 +1921,13 @@ fn load_keystore<R: Read + std::io::Seek>(
                             }
                         }
 
-                        // EPX-2603: Validate wrapping algorithm
-                        if !wrapping_algorithm.is_empty() {
-                            let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
-                                || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
-
-                            if !is_valid {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid wrapping algorithm '{}'. Must be either '{}' or '{}' (EPX-2603)",
-                                    wrapping_algorithm, VALID_WRAPPING_ALGORITHM_2001, VALID_WRAPPING_ALGORITHM_2009
-                                )));
-                            }
-
-                            if let Some(ref mut sc) = model.secure_content {
-                                sc.wrapping_algorithms.push(wrapping_algorithm.clone());
-                            }
-                        }
-
-                        // EPX-2603: Validate mgfalgorithm if present
-                        if !mgf_algorithm.is_empty() {
-                            let valid_mgf_algs = [
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha1",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha256",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha384",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha512",
-                            ];
-                            if !valid_mgf_algs.contains(&mgf_algorithm.as_str()) {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
-                                    mgf_algorithm
-                                )));
-                            }
-                        }
-
-                        // EPX-2603: Validate digestmethod if present
-                        if !digest_method.is_empty() {
-                            let valid_digest_methods = [
-                                "http://www.w3.org/2000/09/xmldsig#sha1",
-                                "http://www.w3.org/2001/04/xmlenc#sha256",
-                                "http://www.w3.org/2001/04/xmlenc#sha384",
-                                "http://www.w3.org/2001/04/xmlenc#sha512",
-                            ];
-                            if !valid_digest_methods.contains(&digest_method.as_str()) {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
-                                    digest_method
-                                )));
-                            }
+                        if let Some(ref mut sc) = model.secure_content {
+                            validate_kekparams_attributes(
+                                &wrapping_algorithm,
+                                &mgf_algorithm,
+                                &digest_method,
+                                sc
+                            )?;
                         }
                     }
                     _ => {}
@@ -1998,7 +2024,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                         has_resourcedatagroup = true;
                     }
                     "kekparams" => {
-                        // EPX-2603: Validate wrapping algorithm and related attributes
+                        // EPX-2603: Extract and validate kekparams attributes
                         let mut wrapping_algorithm = String::new();
                         let mut mgf_algorithm = String::new();
                         let mut digest_method = String::new();
@@ -2021,58 +2047,13 @@ fn load_keystore<R: Read + std::io::Seek>(
                             }
                         }
 
-                        // EPX-2603: Validate wrapping algorithm
-                        if !wrapping_algorithm.is_empty() {
-                            // Valid algorithms per 3MF spec (SecureContent extension):
-                            // - http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p (2001 version)
-                            // - http://www.w3.org/2009/xmlenc11#rsa-oaep (2009 version)
-                            let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
-                                || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
-
-                            if !is_valid {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid wrapping algorithm '{}'. Must be either '{}' or '{}' (EPX-2603)",
-                                    wrapping_algorithm, VALID_WRAPPING_ALGORITHM_2001, VALID_WRAPPING_ALGORITHM_2009
-                                )));
-                            }
-
-                            if let Some(ref mut sc) = model.secure_content {
-                                sc.wrapping_algorithms.push(wrapping_algorithm.clone());
-                            }
-                        }
-
-                        // EPX-2603: Validate mgfalgorithm if present
-                        if !mgf_algorithm.is_empty() {
-                            // Valid MGF algorithms: mgf1sha1, mgf1sha256, mgf1sha384, mgf1sha512
-                            let valid_mgf_algs = [
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha1",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha256",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha384",
-                                "http://www.w3.org/2009/xmlenc11#mgf1sha512",
-                            ];
-                            if !valid_mgf_algs.contains(&mgf_algorithm.as_str()) {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
-                                    mgf_algorithm
-                                )));
-                            }
-                        }
-
-                        // EPX-2603: Validate digestmethod if present
-                        if !digest_method.is_empty() {
-                            // Valid digest methods: sha1, sha256, sha384, sha512
-                            let valid_digest_methods = [
-                                "http://www.w3.org/2000/09/xmldsig#sha1",
-                                "http://www.w3.org/2001/04/xmlenc#sha256",
-                                "http://www.w3.org/2001/04/xmlenc#sha384",
-                                "http://www.w3.org/2001/04/xmlenc#sha512",
-                            ];
-                            if !valid_digest_methods.contains(&digest_method.as_str()) {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
-                                    digest_method
-                                )));
-                            }
+                        if let Some(ref mut sc) = model.secure_content {
+                            validate_kekparams_attributes(
+                                &wrapping_algorithm,
+                                &mgf_algorithm,
+                                &digest_method,
+                                sc
+                            )?;
                         }
                     }
                     "resourcedata" => {
@@ -2157,16 +2138,13 @@ fn load_keystore<R: Read + std::io::Seek>(
                         }
 
                         // EPX-2603: Validate encryption algorithm is valid
-                        if !encryption_algorithm.is_empty() {
-                            // Valid encryption algorithm per 3MF SecureContent spec
-                            let valid_algorithm = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
-                            if encryption_algorithm != valid_algorithm {
+                        if !encryption_algorithm.is_empty()
+                            && encryption_algorithm != VALID_ENCRYPTION_ALGORITHM {
                                 return Err(Error::InvalidSecureContent(format!(
                                     "Invalid encryption algorithm '{}'. Must be '{}' (EPX-2603)",
-                                    encryption_algorithm, valid_algorithm
+                                    encryption_algorithm, VALID_ENCRYPTION_ALGORITHM
                                 )));
                             }
-                        }
 
                         // EPX-2605: Validate compression attribute if present
                         if !compression.is_empty() {
