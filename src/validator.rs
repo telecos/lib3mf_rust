@@ -1644,6 +1644,38 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
 /// - DisplacementTriangle did must reference existing Disp2DGroup resources
 /// - DisplacementTriangle d1, d2, d3 must reference valid displacement coordinates
 fn validate_displacement_extension(model: &Model) -> Result<()> {
+    // Check if displacement resources/elements are used (DPX 3312)
+    let has_displacement_resources = !model.resources.displacement_maps.is_empty()
+        || !model.resources.norm_vector_groups.is_empty()
+        || !model.resources.disp2d_groups.is_empty()
+        || model
+            .resources
+            .objects
+            .iter()
+            .any(|obj| obj.displacement_mesh.is_some());
+
+    if has_displacement_resources {
+        // Check if displacement extension is declared in requiredextensions
+        let has_displacement_required = model
+            .required_extensions
+            .iter()
+            .any(|ext| matches!(ext, Extension::Displacement))
+            || model.required_custom_extensions.iter().any(|ns| {
+                ns.contains("displacement/2022/07") || ns.contains("displacement/2023/10")
+            });
+
+        if !has_displacement_required {
+            return Err(Error::InvalidModel(
+                "Model contains displacement extension elements (displacement2d, normvectorgroup, disp2dgroup, or displacementmesh) \
+                 but displacement extension is not declared in requiredextensions attribute.\n\
+                 Per 3MF Displacement Extension spec, files using displacement elements MUST declare the displacement extension \
+                 as a required extension in the <model> element's requiredextensions attribute.\n\
+                 Add 'd' to requiredextensions and declare xmlns:d=\"http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07\"."
+                    .to_string(),
+            ));
+        }
+    }
+
     // Validate Displacement2D path requirements (DPX 3300)
     // Per 3MF Displacement Extension spec 3.1: displacement texture paths must be in /3D/Textures/
     // Per OPC spec: paths must contain only ASCII characters
@@ -1682,6 +1714,18 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                  Per 3MF Displacement Extension spec 3.1, displacement texture files must be stored in /3D/Textures/ \
                  (any case variation like /3D/textures/ is also accepted).\n\
                  Move the displacement texture file to the appropriate directory and update the path.",
+                disp_map.id, disp_map.path
+            )));
+        }
+
+        // Validate file extension matches expected image type (DPX 3314_08)
+        // Displacement textures should be PNG files
+        let path_lower = disp_map.path.to_lowercase();
+        if !path_lower.ends_with(".png") {
+            return Err(Error::InvalidModel(format!(
+                "Displacement2D resource {}: Path '{}' does not end with .png extension.\n\
+                 Per 3MF Displacement Extension spec 3.1, displacement textures should be PNG files.\n\
+                 Hint: Ensure the displacement texture file has a .png extension and correct content type.",
                 disp_map.id, disp_map.path
             )));
         }
@@ -1755,6 +1799,34 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
         }
     }
 
+    // Validate NormVectorGroup - vectors must point outward
+    // Per DPX 3302: Normalized displacement vectors MUST point to the outer hemisphere of the triangle
+    // The scalar product of a normalized displacement vector to the triangle normal MUST be greater than 0
+
+    // Epsilon for zero-length vector detection
+    const NORMVECTOR_ZERO_EPSILON: f64 = 0.000001;
+
+    for norm_group in &model.resources.norm_vector_groups {
+        for (idx, norm_vec) in norm_group.vectors.iter().enumerate() {
+            // Calculate the magnitude of the vector
+            let length_squared =
+                norm_vec.x * norm_vec.x + norm_vec.y * norm_vec.y + norm_vec.z * norm_vec.z;
+
+            // Check if vector has zero length
+            if length_squared < NORMVECTOR_ZERO_EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "NormVectorGroup {}: Normvector {} has near-zero length (x={}, y={}, z={}). \
+                     Normal vectors must have non-zero length.",
+                    norm_group.id, idx, norm_vec.x, norm_vec.y, norm_vec.z
+                )));
+            }
+
+            // Note: Full validation of scalar product with triangle normal requires knowing
+            // which triangles use which normvectors, which is complex cross-referencing.
+            // The parser and validator together ensure proper usage.
+        }
+    }
+
     // NOTE: Normalization validation is commented out because official test suite positive tests
     // include non-normalized vectors (e.g., P_DPX_3204_03.3mf has z=0.9, P_DPX_3204_06.3mf has x=y=z=1)
     // The spec may allow non-normalized vectors to be automatically normalized by the renderer.
@@ -1781,6 +1853,105 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
     // Validate displacement meshes in objects
     for object in &model.resources.objects {
         if let Some(ref disp_mesh) = object.displacement_mesh {
+            // Validate that displacement mesh has at least 4 triangles (minimum for closed volume)
+            // Per DPX 3308: A valid 3D mesh must have at least 4 triangles to form a tetrahedron
+            if disp_mesh.triangles.len() < 4 {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Displacement mesh has only {} triangles. \
+                     A valid 3D mesh must have at least 4 triangles to form a closed volume.",
+                    object.id,
+                    disp_mesh.triangles.len()
+                )));
+            }
+
+            // Validate mesh volume (DPX 3314_02)
+            // Calculate signed volume to detect negative volume (inverted meshes)
+            let mut volume = 0.0_f64;
+            for triangle in &disp_mesh.triangles {
+                if triangle.v1 >= disp_mesh.vertices.len()
+                    || triangle.v2 >= disp_mesh.vertices.len()
+                    || triangle.v3 >= disp_mesh.vertices.len()
+                {
+                    continue; // Skip invalid triangles (caught by other validation)
+                }
+
+                let v1 = &disp_mesh.vertices[triangle.v1];
+                let v2 = &disp_mesh.vertices[triangle.v2];
+                let v3 = &disp_mesh.vertices[triangle.v3];
+
+                // Signed volume contribution of this triangle
+                volume += v1.x * (v2.y * v3.z - v2.z * v3.y)
+                    + v2.x * (v3.y * v1.z - v3.z * v1.y)
+                    + v3.x * (v1.y * v2.z - v1.z * v2.y);
+            }
+            volume /= 6.0;
+
+            // Use small epsilon for floating-point comparison
+            const EPSILON: f64 = 1e-10;
+            // DPX 3314_02, 3314_05: Reject negative volumes (inverted/reversed triangles)
+            // Use a very small negative threshold to catch reversed triangles
+            if volume < EPSILON {
+                if volume < 0.0 {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement mesh has negative volume ({:.10}), indicating inverted or incorrectly oriented triangles.\n\
+                         Hint: Check triangle vertex winding order - vertices should be ordered counter-clockwise when viewed from outside.",
+                        object.id, volume
+                    )));
+                }
+                // Also reject very small positive volumes as they indicate nearly flat meshes
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Displacement mesh has near-zero volume ({:.10}), indicating a degenerate or flat mesh.\n\
+                     Hint: Ensure the mesh encloses a non-zero 3D volume.",
+                    object.id, volume
+                )));
+            }
+
+            // Validate manifold mesh and check for duplicate vertices (DPX 3314_06)
+            // Check for duplicate vertices (exact same position)
+            for i in 0..disp_mesh.vertices.len() {
+                for j in (i + 1)..disp_mesh.vertices.len() {
+                    let v1 = &disp_mesh.vertices[i];
+                    let v2 = &disp_mesh.vertices[j];
+                    let dist_sq =
+                        (v1.x - v2.x).powi(2) + (v1.y - v2.y).powi(2) + (v1.z - v2.z).powi(2);
+                    if dist_sq < EPSILON {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Displacement mesh has duplicate vertices at indices {} and {} \
+                             with same position ({}, {}, {}).\n\
+                             Hint: Remove duplicate vertices or merge them properly.",
+                            object.id, i, j, v1.x, v1.y, v1.z
+                        )));
+                    }
+                }
+            }
+
+            // Check for manifold mesh - each edge should be shared by exactly 2 triangles
+            // Build edge map: edge -> count
+            let mut edge_count: HashMap<(usize, usize), usize> = HashMap::new();
+            for triangle in &disp_mesh.triangles {
+                // Add all three edges (use sorted indices for undirected edges)
+                let edges = [
+                    (triangle.v1.min(triangle.v2), triangle.v1.max(triangle.v2)),
+                    (triangle.v2.min(triangle.v3), triangle.v2.max(triangle.v3)),
+                    (triangle.v3.min(triangle.v1), triangle.v3.max(triangle.v1)),
+                ];
+                for edge in &edges {
+                    *edge_count.entry(*edge).or_insert(0) += 1;
+                }
+            }
+
+            // Check for non-manifold edges (shared by != 2 triangles)
+            for (edge, count) in &edge_count {
+                if *count != 2 {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement mesh is non-manifold. \
+                         Edge between vertices {} and {} is used by {} triangles (should be exactly 2).\n\
+                         Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
+                        object.id, edge.0, edge.1, count
+                    )));
+                }
+            }
+
             // Validate that displacement triangles have valid vertex references
             for (tri_idx, triangle) in disp_mesh.triangles.iter().enumerate() {
                 // Check vertex indices
@@ -1812,6 +1983,58 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                         tri_idx,
                         triangle.v3,
                         disp_mesh.vertices.len()
+                    )));
+                }
+
+                // Check for degenerate triangles (DPX 3310)
+                // All three vertices must be distinct
+                if triangle.v1 == triangle.v2
+                    || triangle.v2 == triangle.v3
+                    || triangle.v1 == triangle.v3
+                {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement triangle {} is degenerate (v1={}, v2={}, v3={}). \
+                         All three vertex indices must be distinct.",
+                        object.id, tri_idx, triangle.v1, triangle.v2, triangle.v3
+                    )));
+                }
+
+                // Check for zero-area triangles - collinear vertices (DPX 3314_07, 3314_08)
+                // Even if indices are distinct, vertices might be at same position or collinear
+                let v1 = &disp_mesh.vertices[triangle.v1];
+                let v2 = &disp_mesh.vertices[triangle.v2];
+                let v3 = &disp_mesh.vertices[triangle.v3];
+
+                let edge1_x = v2.x - v1.x;
+                let edge1_y = v2.y - v1.y;
+                let edge1_z = v2.z - v1.z;
+                let edge2_x = v3.x - v1.x;
+                let edge2_y = v3.y - v1.y;
+                let edge2_z = v3.z - v1.z;
+
+                // Cross product magnitude squared = (2 * area)^2
+                let cross_x = edge1_y * edge2_z - edge1_z * edge2_y;
+                let cross_y = edge1_z * edge2_x - edge1_x * edge2_z;
+                let cross_z = edge1_x * edge2_y - edge1_y * edge2_x;
+                let cross_mag_sq = cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
+
+                const AREA_EPSILON: f64 = 1e-20;
+                if cross_mag_sq < AREA_EPSILON {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement triangle {} has zero or near-zero area (vertices are collinear).\n\
+                         Vertices: v1=({:.6}, {:.6}, {:.6}), v2=({:.6}, {:.6}, {:.6}), v3=({:.6}, {:.6}, {:.6})\n\
+                         Hint: Ensure triangle vertices form a non-degenerate triangle with non-zero area.",
+                        object.id,
+                        tri_idx,
+                        v1.x,
+                        v1.y,
+                        v1.z,
+                        v2.x,
+                        v2.y,
+                        v2.z,
+                        v3.x,
+                        v3.y,
+                        v3.z
                     )));
                 }
 
@@ -1870,6 +2093,64 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                                     object.id, tri_idx, d3, did, disp_group.coords.len(),
                                     max_coord_index
                                 )));
+                            }
+                        }
+
+                        // Validate that normvectors point outward relative to triangle normal (DPX 3302)
+                        // Calculate triangle normal and check scalar product with displacement vectors
+                        let v1 = &disp_mesh.vertices[triangle.v1];
+                        let v2 = &disp_mesh.vertices[triangle.v2];
+                        let v3 = &disp_mesh.vertices[triangle.v3];
+
+                        // Calculate triangle normal using cross product
+                        let edge1_x = v2.x - v1.x;
+                        let edge1_y = v2.y - v1.y;
+                        let edge1_z = v2.z - v1.z;
+                        let edge2_x = v3.x - v1.x;
+                        let edge2_y = v3.y - v1.y;
+                        let edge2_z = v3.z - v1.z;
+
+                        let normal_x = edge1_y * edge2_z - edge1_z * edge2_y;
+                        let normal_y = edge1_z * edge2_x - edge1_x * edge2_z;
+                        let normal_z = edge1_x * edge2_y - edge1_y * edge2_x;
+
+                        // Get the normvectorgroup
+                        if let Some(norm_group) = model
+                            .resources
+                            .norm_vector_groups
+                            .iter()
+                            .find(|n| n.id == disp_group.nid)
+                        {
+                            // Check normvectors for each displacement coordinate used
+                            for (_coord_idx, disp_coord_idx) in
+                                [(1, triangle.d1), (2, triangle.d2), (3, triangle.d3)].iter()
+                            {
+                                if let Some(d_idx) = disp_coord_idx {
+                                    if *d_idx < disp_group.coords.len() {
+                                        let coord = &disp_group.coords[*d_idx];
+                                        if coord.n < norm_group.vectors.len() {
+                                            let norm_vec = &norm_group.vectors[coord.n];
+
+                                            // Calculate scalar (dot) product
+                                            let dot_product = normal_x * norm_vec.x
+                                                + normal_y * norm_vec.y
+                                                + normal_z * norm_vec.z;
+
+                                            // Per DPX spec: scalar product must be > 0
+                                            // Use epsilon for floating-point comparison
+                                            const DOT_PRODUCT_EPSILON: f64 = 1e-10;
+                                            if dot_product <= DOT_PRODUCT_EPSILON {
+                                                return Err(Error::InvalidModel(format!(
+                                                    "Object {}: Displacement triangle {} uses normvector {} from group {} \
+                                                     that points inward (scalar product with triangle normal = {:.6} <= 0).\n\
+                                                     Per 3MF Displacement spec, normalized displacement vectors MUST point to the outer hemisphere.\n\
+                                                     Hint: Reverse the normvector direction or fix the triangle vertex order.",
+                                                    object.id, tri_idx, coord.n, disp_group.nid, dot_product
+                                                )));
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -3015,6 +3296,30 @@ fn validate_transform_matrices(model: &Model) -> Result<()> {
             let det = m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20)
                 + m02 * (m10 * m21 - m11 * m20);
 
+            // Check for zero determinant (singular matrix) - DPX 3314_07
+            const DET_EPSILON: f64 = 1e-10;
+            if det.abs() < DET_EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: Transform matrix has zero determinant ({:.6}), indicating a singular (non-invertible) transformation.\n\
+                     Transform: [{} {} {} {} {} {} {} {} {} {} {} {}]\n\
+                     Hint: Check that the transform matrix is valid and non-degenerate.",
+                    idx,
+                    det,
+                    transform[0],
+                    transform[1],
+                    transform[2],
+                    transform[3],
+                    transform[4],
+                    transform[5],
+                    transform[6],
+                    transform[7],
+                    transform[8],
+                    transform[9],
+                    transform[10],
+                    transform[11]
+                )));
+            }
+
             if det < 0.0 {
                 return Err(Error::InvalidModel(format!(
                     "Build item {}: Transform matrix has negative determinant ({:.6}).\n\
@@ -3226,13 +3531,157 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
-fn validate_triangle_properties(_model: &Model) -> Result<()> {
+fn validate_triangle_properties(model: &Model) -> Result<()> {
     // Per 3MF Materials Extension spec:
     // - Triangles can have triangle-level properties (pid and/or pindex)
     // - Triangles can have per-vertex properties (p1, p2, p3) which work WITH pid for interpolation
     // - Having both pid and p1/p2/p3 is ALLOWED and is used for per-vertex material interpolation
-    // No validation needed here - the parser already validates property references
+    //
+    // NOTE: After testing against positive test cases, we found that partial per-vertex
+    // properties are actually allowed in some scenarios. The validation has been relaxed.
+
+    // Validate object-level properties
+    for object in &model.resources.objects {
+        // Validate object-level pid/pindex
+        if let (Some(pid), Some(pindex)) = (object.pid, object.pindex) {
+            // Get the size of the property resource
+            let property_size = get_property_resource_size(model, pid)?;
+
+            // Validate pindex is within bounds
+            if pindex >= property_size {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} has pindex {} which is out of bounds. \
+                     Property resource {} has only {} elements (valid indices: 0-{}).",
+                    object.id,
+                    pindex,
+                    pid,
+                    property_size,
+                    property_size - 1
+                )));
+            }
+        }
+
+        // Validate triangle-level properties
+        if let Some(ref mesh) = object.mesh {
+            for triangle in &mesh.triangles {
+                // Validate triangle pindex is within bounds for multi-properties
+                if let (Some(pid), Some(pindex)) = (triangle.pid, triangle.pindex) {
+                    // Check if pid references a multiproperties resource
+                    if let Some(multi_props) = model
+                        .resources
+                        .multi_properties
+                        .iter()
+                        .find(|m| m.id == pid)
+                    {
+                        // pindex must be within bounds of the multiproperties entries
+                        if pindex >= multi_props.multis.len() {
+                            return Err(Error::InvalidModel(format!(
+                                "Triangle in object {} has pindex {} which is out of bounds. \
+                                 MultiProperties resource {} has only {} entries (valid indices: 0-{}).",
+                                object.id, pindex, pid, multi_props.multis.len(), multi_props.multis.len() - 1
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Helper function to get the size of a property resource (number of entries)
+fn get_property_resource_size(model: &Model, resource_id: usize) -> Result<usize> {
+    // Check colorgroup
+    if let Some(color_group) = model
+        .resources
+        .color_groups
+        .iter()
+        .find(|c| c.id == resource_id)
+    {
+        if color_group.colors.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "ColorGroup {} has no colors. Per 3MF Materials Extension spec, \
+                 color groups must contain at least one color element.",
+                resource_id
+            )));
+        }
+        return Ok(color_group.colors.len());
+    }
+
+    // Check texture2dgroup
+    if let Some(tex_group) = model
+        .resources
+        .texture2d_groups
+        .iter()
+        .find(|t| t.id == resource_id)
+    {
+        if tex_group.tex2coords.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Texture2DGroup {} has no texture coordinates. Per 3MF Materials Extension spec, \
+                 texture2dgroup must contain at least one tex2coord element.",
+                resource_id
+            )));
+        }
+        return Ok(tex_group.tex2coords.len());
+    }
+
+    // Check compositematerials
+    if let Some(composite) = model
+        .resources
+        .composite_materials
+        .iter()
+        .find(|c| c.id == resource_id)
+    {
+        if composite.composites.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "CompositeMaterials {} has no composite elements. Per 3MF Materials Extension spec, \
+                 compositematerials must contain at least one composite element.",
+                resource_id
+            )));
+        }
+        return Ok(composite.composites.len());
+    }
+
+    // Check basematerials
+    if let Some(base_mat) = model
+        .resources
+        .base_material_groups
+        .iter()
+        .find(|b| b.id == resource_id)
+    {
+        if base_mat.materials.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "BaseMaterials {} has no base material elements. Per 3MF spec, \
+                 basematerials must contain at least one base element.",
+                resource_id
+            )));
+        }
+        return Ok(base_mat.materials.len());
+    }
+
+    // Check multiproperties
+    if let Some(multi_props) = model
+        .resources
+        .multi_properties
+        .iter()
+        .find(|m| m.id == resource_id)
+    {
+        if multi_props.multis.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "MultiProperties {} has no multi elements. Per 3MF Materials Extension spec, \
+                 multiproperties must contain at least one multi element.",
+                resource_id
+            )));
+        }
+        return Ok(multi_props.multis.len());
+    }
+
+    // Resource not found or not a property resource
+    Err(Error::InvalidModel(format!(
+        "Property resource {} not found or is not a valid property resource type",
+        resource_id
+    )))
 }
 
 /// Validate production extension UUID usage
@@ -3528,6 +3977,11 @@ fn validate_duplicate_uuids(model: &Model) -> Result<()> {
 /// This is beyond the scope of single-file validation and would require
 /// significant architectural changes to support multi-file analysis.
 fn validate_component_chain(_model: &Model) -> Result<()> {
+    // N_XPM_0803_01: Component reference chain validation
+    //
+    // The validation for components with p:path referencing local objects
+    // is complex and requires more investigation of the 3MF Production Extension spec.
+    // The current understanding is insufficient to implement this correctly.
     Ok(())
 }
 

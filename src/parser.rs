@@ -149,6 +149,31 @@ pub(crate) fn get_local_name(name_str: &str) -> &str {
     }
 }
 
+/// Validate that an element uses the displacement namespace prefix
+///
+/// Per 3MF Displacement Extension spec 4.1, all elements under displacementmesh
+/// MUST use the displacement namespace prefix (e.g., d:vertex, d:triangle).
+///
+/// # Arguments
+/// * `name_str` - The full element name with potential namespace prefix
+/// * `element_type` - Human-readable element type for error messages
+///
+/// # Returns
+/// Ok(()) if element has displacement prefix, Err otherwise
+fn validate_displacement_namespace_prefix(name_str: &str, element_type: &str) -> Result<()> {
+    let has_displacement_prefix =
+        name_str.starts_with("d:") || name_str.starts_with("displacement:");
+    if !has_displacement_prefix {
+        return Err(Error::InvalidXml(format!(
+            "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:{}>). \
+             Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
+             the displacement namespace prefix.",
+            name_str, element_type
+        )));
+    }
+    Ok(())
+}
+
 /// Get an attribute value by its local name, regardless of namespace prefix
 ///
 /// This is useful for extension attributes that can use different prefixes.
@@ -232,6 +257,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     // Track declared displacement resources for forward-reference validation (DPX 3312)
     let mut declared_displacement2d_ids = std::collections::HashSet::<usize>::new();
     let mut declared_normvectorgroup_ids = std::collections::HashSet::<usize>::new();
+    let mut declared_disp2dgroup_ids = std::collections::HashSet::<usize>::new();
 
     // Materials extension state for advanced features
     let mut current_texture2dgroup: Option<Texture2DGroup> = None;
@@ -490,7 +516,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "displacementmesh" if in_resources && current_object.is_some() => {
                         current_displacement_mesh = Some(DisplacementMesh::new());
                         in_displacement_mesh = true;
-                        // Mark object as having extension shapes
+                        has_displacement_triangles = false; // Reset for new displacementmesh
+                                                            // Mark object as having extension shapes
                         if let Some(ref mut obj) = current_object {
                             obj.has_extension_shapes = true;
                         }
@@ -510,22 +537,28 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "vertices" if in_displacement_mesh => {
                         // Displacement vertices will be parsed as individual vertex elements
                     }
+                    "vertex" if in_displacement_mesh => {
+                        // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
+                        validate_displacement_namespace_prefix(name_str, "vertex")?;
+                        if let Some(ref mut disp_mesh) = current_displacement_mesh {
+                            let vertex = parse_vertex(&reader, e)?;
+                            disp_mesh.vertices.push(vertex);
+                        }
+                    }
                     "vertex" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
                             let vertex = parse_vertex(&reader, e)?;
                             mesh.vertices.push(vertex);
                         }
                     }
-                    "vertex" if in_displacement_mesh => {
-                        if let Some(ref mut disp_mesh) = current_displacement_mesh {
-                            let vertex = parse_vertex(&reader, e)?;
-                            disp_mesh.vertices.push(vertex);
-                        }
-                    }
-                    "triangles" if current_mesh.is_some() => {
-                        // Triangles will be parsed as individual triangle elements
-                    }
+                    // Displacement mesh triangles must be checked BEFORE regular mesh triangles
+                    // because an object can have both <mesh> and <d:displacementmesh>, and
+                    // current_mesh stays Some() even when processing displacement elements.
+                    // If we check current_mesh.is_some() first, displacement triangles would be
+                    // parsed as regular triangles and d1/d2/d3 attributes would be rejected.
                     "triangles" if in_displacement_mesh => {
+                        // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
+                        validate_displacement_namespace_prefix(name_str, "triangles")?;
                         // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
                         if has_displacement_triangles {
                             return Err(Error::InvalidXml(
@@ -537,16 +570,28 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_displacement_triangles = true;
                         // Parse did attribute from triangles element
                         let attrs = parse_attributes(&reader, e)?;
-                        current_displacement_triangles_did =
-                            attrs.get("did").and_then(|s| s.parse::<usize>().ok());
-                    }
-                    "triangle" if current_mesh.is_some() => {
-                        if let Some(ref mut mesh) = current_mesh {
-                            let triangle = parse_triangle(&reader, e)?;
-                            mesh.triangles.push(triangle);
+                        if let Some(did_str) = attrs.get("did") {
+                            let did = did_str.parse::<usize>()?;
+                            // Validate forward reference (DPX 3312)
+                            if !declared_disp2dgroup_ids.contains(&did) {
+                                return Err(Error::InvalidXml(format!(
+                                    "Triangles element references Disp2DGroup with ID {} which has not been declared yet. \
+                                     Resources must be declared before they are referenced.",
+                                    did
+                                )));
+                            }
+                            current_displacement_triangles_did = Some(did);
+                        } else {
+                            current_displacement_triangles_did = None;
                         }
                     }
+                    "triangles" if current_mesh.is_some() => {
+                        // Regular mesh triangles - parsed as individual triangle elements
+                    }
+                    // Displacement triangle must be checked BEFORE regular triangle for same reason
                     "triangle" if in_displacement_triangles => {
+                        // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
+                        validate_displacement_namespace_prefix(name_str, "triangle")?;
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let mut triangle = parse_displacement_triangle(&reader, e)?;
 
@@ -560,6 +605,17 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                      If d1 is unspecified, no displacement coordinate indices can be used."
                                         .to_string()
                                 ));
+                            }
+
+                            // Validate forward reference for did on triangle element (DPX 3312)
+                            if let Some(did) = triangle.did {
+                                if !declared_disp2dgroup_ids.contains(&did) {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Triangle element references Disp2DGroup with ID {} which has not been declared yet. \
+                                         Resources must be declared before they are referenced.",
+                                        did
+                                    )));
+                                }
                             }
 
                             // If did not specified on triangle, use the one from triangles element
@@ -577,6 +633,12 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
 
                             disp_mesh.triangles.push(triangle);
+                        }
+                    }
+                    "triangle" if current_mesh.is_some() => {
+                        if let Some(ref mut mesh) = current_mesh {
+                            let triangle = parse_triangle(&reader, e)?;
+                            mesh.triangles.push(triangle);
                         }
                     }
                     "item" if in_build => {
@@ -1641,8 +1703,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "displacementmesh" => {
                         in_displacement_mesh = false;
-                        has_displacement_triangles = false; // Reset for next displacementmesh
-                                                            // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
+                        // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
                         if let Some(ref obj) = current_object {
                             if obj.object_type != ObjectType::Model {
                                 return Err(Error::InvalidXml(format!(
@@ -1705,6 +1766,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "disp2dgroup" => {
                         if let Some(d2dgroup) = current_disp2dgroup.take() {
+                            declared_disp2dgroup_ids.insert(d2dgroup.id); // Track for forward-reference validation
                             model.resources.disp2d_groups.push(d2dgroup);
                         }
                         in_disp2dgroup = false;
@@ -1932,6 +1994,15 @@ fn load_keystore<R: Read + std::io::Seek>(
                             sc,
                         )?;
                     }
+
+                    // Store the KEK params in the current access right
+                    if let Some(ref mut access_right) = current_access_right {
+                        access_right.kek_params = KEKParams {
+                            wrapping_algorithm,
+                            mgf_algorithm: if mgf_algorithm.is_empty() { None } else { Some(mgf_algorithm) },
+                            digest_method: if digest_method.is_empty() { None } else { Some(digest_method) },
+                        };
+                    }
                 }
             }
             Ok(Event::Start(ref e)) => {
@@ -2092,14 +2163,6 @@ fn load_keystore<R: Read + std::io::Seek>(
                             mgf_algorithm,
                             digest_method,
                         });
-
-                        // Assign immediately to current_access_right if this is an Empty element
-                        // (self-closing tag like <kekparams ... />)
-                        if let Some(kek_params) = current_kek_params.take() {
-                            if let Some(ref mut access_right) = current_access_right {
-                                access_right.kek_params = kek_params;
-                            }
-                        }
                     }
                     "cipherdata" => {
                         // cipherdata contains xenc:CipherValue
@@ -3639,6 +3702,44 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
     Ok(())
 }
 
+/// Validate that an encrypted file can be loaded and decrypted
+///
+/// This function attempts to load and decrypt an encrypted external file to ensure:
+/// 1. The file exists in the package
+/// 2. The keystore has a valid consumer that can decrypt it
+/// 3. The decryption succeeds with the test keys
+///
+/// This is crucial for negative test validation - files that can't be decrypted
+/// should fail during parsing, not be silently skipped.
+fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    normalized_path: &str,
+    display_path: &str,
+    model: &Model,
+    context: &str,
+) -> Result<()> {
+    // Check if file exists
+    if !package.has_file(normalized_path) {
+        return Err(Error::InvalidModel(format!(
+            "{}: References non-existent encrypted file: {}\n\
+             The p:path attribute must reference a valid encrypted file in the 3MF package.",
+            context, display_path
+        )));
+    }
+
+    // Attempt to load and decrypt the file
+    // This will fail if:
+    // - The consumer doesn't match test keys (consumerid != "test3mf01")
+    // - The keyid doesn't match (keyid != "test3mfkek01")
+    // - The consumer has no keyid when one is required
+    // - Any other decryption-related issue
+    let _decrypted_content =
+        load_file_with_decryption(package, normalized_path, display_path, model)?;
+
+    // If we got here, decryption succeeded - the file is valid
+    Ok(())
+}
+
 /// Validate production extension external file references
 ///
 /// Per 3MF Production Extension spec:
@@ -3673,7 +3774,15 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 .unwrap_or(false);
 
             if is_encrypted {
-                // Skip validation for encrypted files - they can't be parsed
+                // For encrypted files, attempt to validate that we can decrypt them
+                // This ensures the keystore has valid consumers/keys
+                validate_encrypted_file_can_be_loaded(
+                    package,
+                    normalized_path,
+                    path,
+                    model,
+                    &format!("Build item {}", idx),
+                )?;
                 continue;
             }
 
@@ -3726,7 +3835,15 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         .unwrap_or(false);
 
                     if is_encrypted {
-                        // Skip validation for encrypted files - they can't be parsed
+                        // For encrypted files, attempt to validate that we can decrypt them
+                        // This ensures the keystore has valid consumers/keys
+                        validate_encrypted_file_can_be_loaded(
+                            package,
+                            normalized_path,
+                            path,
+                            model,
+                            &format!("Object {}, Component {}", object.id, comp_idx),
+                        )?;
                         continue;
                     }
 

@@ -39,6 +39,8 @@ python3 generate_conformance_report.py
 
 **Note:** Report generation takes 10+ minutes as it runs all conformance tests across all suites.
 
+**Automated CI Generation:** The conformance workflow automatically generates and commits an updated CONFORMANCE_REPORT.md after conformance tests complete on pushes to main/develop branches.
+
 The generated report includes:
 - Overall conformance percentage
 - Pass/fail statistics by suite
@@ -106,6 +108,7 @@ cargo test --test conformance_tests summary -- --ignored --nocapture
 - **Duration**: ~5-15 minutes
 - **Purpose**: Full validation
 - **Tests**: All 2,241 conformance cases
+- **Auto-reports**: Generates and commits CONFORMANCE_REPORT.md (on push to main/develop)
 
 ## Artifacts
 

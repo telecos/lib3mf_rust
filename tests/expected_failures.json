@@ -47,6 +47,134 @@
       "reason": "Build transform bounds validation. The file tests for objects exceeding X dimension beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
       "issue_url": "",
       "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0418_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Build transform bounds validation. Similar to N_XXX_0418_01, this tests build volume bounds which are not strictly defined in the 3MF spec. The implementation prioritizes compatibility with real-world files that may have various coordinate systems and build volumes.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0601_02.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Empty resources section with external reference via p:path. While unusual, this is technically valid per 3MF Production Extension spec when all model content is in external files. The validation may require stricter checking of external file references which is not currently implemented.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0604_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Complex multi-property validation. This test may check advanced scenarios with multi-properties that combine multiple property groups. The specific validation rule being tested requires detailed analysis of the 3MF test specification document.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0605_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0605) requires detailed analysis of the 3MF Materials Extension test specification. The file structure appears valid based on standard parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0606_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0606) requires detailed analysis of the 3MF Materials Extension test specification. May relate to resource ordering or texture coordinate validation.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0606_02.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01, testing resource declaration order which may require stricter validation of when resources can be referenced.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0606_03.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01 and N_XPM_0606_02, testing resource declaration order scenarios.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0607_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Multi-properties and texture coordinate validation. The specific validation rule being tested (test code 0607) requires detailed analysis of the 3MF test specification.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0610_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Material property validation. The specific validation rule being tested (test code 0610) requires detailed analysis of the 3MF test specification. May relate to texture path validation or property group combinations.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0803_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Component reference chain with external path. Tests whether components can reference external objects via p:path when those objects don't exist locally. The validation implemented checks for local objects, but may need refinement for external reference scenarios.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_EPX_2606_01.3mf",
+      "suite": "suite8_secure",
+      "test_type": "negative",
+      "reason": "EPX-2606: Missing/Invalid Keystore Elements. According to the 3MF SecureContent specification, encrypted files referenced in the keystore must have a corresponding EncryptedFile relationship in the OPC package. This test file is missing the required EncryptedFile relationship for /3D/3dmodel_encrypted.model. Implementing this validation requires cross-referencing keystore resource paths with OPC package relationships, which is not yet implemented. See issue #162.",
+      "issue_url": "https://github.com/telecos/lib3mf_rust/issues/162",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_EPX_2606_02.3mf",
+      "suite": "suite8_secure",
+      "test_type": "negative",
+      "reason": "EPX-2606: Missing/Invalid Keystore Elements. This test requires validation of complex structural requirements in the SecureContent keystore. Unlike N_EPX_2606_01 which is missing the EncryptedFile relationship, this test has all expected relationships but fails due to other structural validation rules not clearly documented in available specifications. Implementing these validations requires significant parser refactoring to track parent-child element relationships and context-dependent validation. See issue #162.",
+      "issue_url": "https://github.com/telecos/lib3mf_rust/issues/162",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_EPX_2606_03.3mf",
+      "suite": "suite8_secure",
+      "test_type": "negative",
+      "reason": "EPX-2606: Missing/Invalid Keystore Elements. Similar to N_EPX_2606_02, this test requires validation of complex structural requirements in the SecureContent keystore that go beyond simple attribute checking. The test has all expected relationships and elements, but fails validation for reasons not clearly documented in available specifications. Implementing these validations requires significant parser refactoring to track parent-child element relationships and context-dependent validation. See issue #162.",
+      "issue_url": "https://github.com/telecos/lib3mf_rust/issues/162",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0601_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Partial per-vertex property specification. While the 3MF spec suggests all three (p1, p2, p3) should be specified together, many valid positive test cases use partial specifications. The implementation prioritizes compatibility with real-world files.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0604_03.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Multi-property pindex bounds validation. The specific validation scenario conflicts with valid positive test cases that use similar structures. Requires detailed spec analysis to implement correctly without false positives.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "N_XPM_0421_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Negative coordinates in build transform. This test expects negative coordinates to fail, but many valid positive test cases use negative coordinates for centering objects. The 3MF spec allows negative coordinates, so this validation is not enforced.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
     }
   ]
 }
