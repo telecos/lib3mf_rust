@@ -61,10 +61,34 @@ impl ExpectedFailuresManager {
         }
         
         let content = fs::read_to_string(config_path)
-            .expect("Failed to read expected_failures.json");
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to read expected_failures.json at {}: {}",
+                    Path::new(config_path)
+                        .canonicalize()
+                        .unwrap_or_else(|_| Path::new(config_path).to_path_buf())
+                        .display(),
+                    e
+                )
+            });
         
         let config: ExpectedFailuresConfig = serde_json::from_str(&content)
-            .expect("Failed to parse expected_failures.json");
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to parse expected_failures.json at {} (current dir: {:?}): {}. Content: {}",
+                    Path::new(config_path)
+                        .canonicalize()
+                        .unwrap_or_else(|_| Path::new(config_path).to_path_buf())
+                        .display(),
+                    std::env::current_dir().ok(),
+                    e,
+                    if content.len() > 200 {
+                        format!("{}... ({} bytes total)", &content[..200], content.len())
+                    } else {
+                        content
+                    }
+                )
+            });
         
         let mut failures = HashMap::new();
         for failure in config.expected_failures {
