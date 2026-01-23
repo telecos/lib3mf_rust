@@ -182,7 +182,6 @@ jobs:
         run: |
           echo "Generating conformance report..."
           ./generate_conformance_report.sh
-        continue-on-error: true
       
       - name: Commit and push conformance report
         # Only commit on push to main/develop, not on PRs
@@ -194,8 +193,14 @@ jobs:
           # Only commit if there are changes
           if ! git diff --cached --quiet; then
             git commit -m "Update conformance report [skip ci]"
-            git push
-            echo "✅ Conformance report updated and committed"
+            # Push with error handling
+            if git push; then
+              echo "✅ Conformance report updated and committed"
+            else
+              echo "❌ Failed to push conformance report"
+              echo "This may be due to concurrent changes or permission issues"
+              exit 1
+            fi
           else
             echo "ℹ️ No changes to conformance report"
           fi
