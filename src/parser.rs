@@ -3670,12 +3670,8 @@ fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
     // - The keyid doesn't match (keyid != "test3mfkek01")
     // - The consumer has no keyid when one is required
     // - Any other decryption-related issue
-    let _decrypted_content = load_file_with_decryption(
-        package,
-        normalized_path,
-        display_path,
-        model,
-    )?;
+    let _decrypted_content =
+        load_file_with_decryption(package, normalized_path, display_path, model)?;
 
     // If we got here, decryption succeeded - the file is valid
     Ok(())

@@ -13,9 +13,9 @@ fn main() {
         );
 
     let files = vec![
-        ("N_EPX_2606_01.3mf", true),  // Should fail
-        ("N_EPX_2606_02.3mf", true),  // Should fail
-        ("N_EPX_2606_03.3mf", true),  // Should fail
+        ("N_EPX_2606_01.3mf", true), // Should fail
+        ("N_EPX_2606_02.3mf", true), // Should fail
+        ("N_EPX_2606_03.3mf", true), // Should fail
     ];
 
     for (filename, should_fail) in files {
@@ -30,8 +30,12 @@ fn main() {
                             println!("    Consumers: {}", sc.consumers.len());
                             println!("    Resource groups: {}", sc.resource_data_groups.len());
                             for (i, group) in sc.resource_data_groups.iter().enumerate() {
-                                println!("    Group {}: {} access rights, {} resources", 
-                                    i, group.access_rights.len(), group.resource_data.len());
+                                println!(
+                                    "    Group {}: {} access rights, {} resources",
+                                    i,
+                                    group.access_rights.len(),
+                                    group.resource_data.len()
+                                );
                             }
                         }
                     } else {
