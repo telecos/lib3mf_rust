@@ -1961,9 +1961,7 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
                      Per 3MF Slice Extension spec, the slicestackid attribute must reference \
                      a valid <slicestack> resource defined in the model.\n\
                      Available slicestack IDs: {:?}",
-                    object.id,
-                    slicestackid,
-                    available_ids
+                    object.id, slicestackid, available_ids
                 )));
             }
         }
