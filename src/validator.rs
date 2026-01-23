@@ -1488,13 +1488,17 @@ fn validate_production_extension(model: &Model) -> Result<()> {
 
 /// Validate production extension requirements with parser configuration
 ///
-/// Per 3MF Production Extension spec, validates that:
-/// - Production paths (p:path) must be valid (absolute, no parent refs, etc.)
-/// - Components with p:path must also have p:UUID
-/// - Production attributes are only used when production extension is declared
-fn validate_production_extension_with_config(model: &Model, _config: &ParserConfig) -> Result<()> {
+/// This is a variant of `validate_production_extension` that accepts a parser config.
+/// When the parser config explicitly supports the production extension, we allow
+/// production attributes to be used even if the file doesn't declare the production
+/// extension in requiredextensions. This is useful for backward compatibility and
+/// for files that use production attributes but were created before strict validation.
+fn validate_production_extension_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
     // Check if production extension is required in the file
     let has_production = model.required_extensions.contains(&Extension::Production);
+
+    // Check if the parser config explicitly supports production extension
+    let config_supports_production = config.supports(&Extension::Production);
 
     // Track whether any production attributes are used (for validation later)
     let mut has_production_attrs = false;
@@ -1614,9 +1618,8 @@ fn validate_production_extension_with_config(model: &Model, _config: &ParserConf
     }
 
     // Validate that production attributes are only used when production extension is declared
-    // Per 3MF spec, if production extension attributes (p:UUID, p:path) are used,
-    // the production extension MUST be declared in requiredextensions
-    if has_production_attrs && !has_production {
+    // UNLESS the parser config explicitly supports production extension (for backward compatibility)
+    if has_production_attrs && !has_production && !config_supports_production {
         return Err(Error::InvalidModel(
             "Production extension attributes (p:UUID, p:path) are used but production extension \
              is not declared in requiredextensions.\n\
