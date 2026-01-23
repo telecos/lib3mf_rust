@@ -114,6 +114,13 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         ));
     }
 
+    // Check for triangles - parry3d requires at least one triangle
+    if mesh.triangles.is_empty() {
+        return Err(Error::InvalidFormat(
+            "Cannot compute bounding box of mesh with no triangles".to_string(),
+        ));
+    }
+
     // Convert mesh to parry3d format
     let vertices: Vec<Point3<f32>> = mesh
         .vertices
@@ -432,5 +439,16 @@ mod tests {
         let mesh = Mesh::new();
         let result = compute_mesh_aabb(&mesh);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mesh_with_no_triangles_aabb() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        // No triangles added
+        let result = compute_mesh_aabb(&mesh);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no triangles"));
     }
 }
