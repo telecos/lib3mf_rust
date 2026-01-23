@@ -49,9 +49,10 @@ jobs:
             ${{ runner.os }}-test-suites-
       
       - name: Clone 3MF test suites
-        if: steps.cache-test-suites.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+          if [ ! -d "test_suites" ]; then
+            git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+          fi
       
       - name: Upload test suites artifact
         uses: actions/upload-artifact@v4
