@@ -21,6 +21,7 @@ flate2 = "1.0"
 sha1 = "0.10"
 sha2 = "0.10"
 urlencoding = "2.1"
+clipper2 = "0.2"
 
 [dev-dependencies]
 tempfile = "3.14"
