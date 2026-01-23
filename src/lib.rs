@@ -65,6 +65,7 @@
 #![warn(missing_docs)]
 
 pub mod error;
+pub mod mesh_ops;
 pub mod model;
 pub mod opc;
 pub mod parser;

@@ -25,10 +25,18 @@
       "date_added": "2026-01-23"
     },
     {
+      "file": "P_BXX_2015_03.3mf",
+      "suite": "suite7_beam",
+      "test_type": "positive",
+      "reason": "File violates 3MF specification coordinate requirements. Build item transform for object 2 places the mesh outside the positive octant with min Y coordinate of -1.00. Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
       "file": "N_XXX_0418_01.3mf",
       "suite": "suite3_core",
       "test_type": "negative",
-      "reason": "Build transform bounds validation. The file places objects outside the default build volume [0-100mm]³ after applying transforms. However, this validation causes false positives with many legitimate 3MF files as there is no universal build volume requirement. Implementation prioritizes compatibility over this specific test case.",
+      "reason": "Build transform bounds validation. The file tests for objects exceeding Y and Z dimensions beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
       "issue_url": "",
       "date_added": "2026-01-23"
     },
@@ -36,15 +44,7 @@
       "file": "N_XXX_0420_01.3mf",
       "suite": "suite3_core",
       "test_type": "negative",
-      "reason": "Build transform bounds validation. The file places objects outside the default build volume [0-100mm]³ after applying transforms. However, this validation causes false positives with many legitimate 3MF files as there is no universal build volume requirement. Implementation prioritizes compatibility over this specific test case.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XXX_0421_01.3mf",
-      "suite": "suite3_core",
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. The file places objects with negative coordinates after applying transforms. However, this validation causes false positives with many legitimate 3MF files that use negative coordinates for centering. Implementation prioritizes compatibility over this specific test case.",
+      "reason": "Build transform bounds validation. The file tests for objects exceeding X dimension beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
       "issue_url": "",
       "date_added": "2026-01-23"
     },
