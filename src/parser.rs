@@ -1636,7 +1636,7 @@ fn load_keystore<R: Read + std::io::Seek>(
     reader.config_mut().trim_text(true);
 
     let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
-    
+
     // State tracking for nested parsing
     let mut current_consumer: Option<Consumer> = None;
     let mut current_resource_group: Option<ResourceDataGroup> = None;
@@ -1720,7 +1720,10 @@ fn load_keystore<R: Read + std::io::Seek>(
 
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!("Invalid attribute in resourcedatagroup: {}", e))
+                                Error::InvalidXml(format!(
+                                    "Invalid attribute in resourcedatagroup: {}",
+                                    e
+                                ))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
@@ -1742,7 +1745,10 @@ fn load_keystore<R: Read + std::io::Seek>(
 
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!("Invalid attribute in accessright: {}", e))
+                                Error::InvalidXml(format!(
+                                    "Invalid attribute in accessright: {}",
+                                    e
+                                ))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
@@ -1857,7 +1863,10 @@ fn load_keystore<R: Read + std::io::Seek>(
 
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
-                                Error::InvalidXml(format!("Invalid attribute in resourcedata: {}", e))
+                                Error::InvalidXml(format!(
+                                    "Invalid attribute in resourcedata: {}",
+                                    e
+                                ))
                             })?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
@@ -1871,7 +1880,8 @@ fn load_keystore<R: Read + std::io::Seek>(
                         // EPX-2605: Validate path
                         if path.trim().is_empty() {
                             return Err(Error::InvalidSecureContent(
-                                "Resource data path attribute cannot be empty (EPX-2605)".to_string(),
+                                "Resource data path attribute cannot be empty (EPX-2605)"
+                                    .to_string(),
                             ));
                         }
 
@@ -2045,7 +2055,10 @@ fn load_keystore<R: Read + std::io::Seek>(
     // Final validation
     if let Some(ref sc) = model.secure_content {
         // EPX-2602: Check if we have access rights but no consumers
-        let has_access_rights = sc.resource_data_groups.iter().any(|g| !g.access_rights.is_empty());
+        let has_access_rights = sc
+            .resource_data_groups
+            .iter()
+            .any(|g| !g.access_rights.is_empty());
         if has_access_rights && sc.consumer_count == 0 {
             return Err(Error::InvalidSecureContent(
                 "Keystore has accessright elements but no consumer elements (EPX-2602)".to_string(),
@@ -2092,10 +2105,7 @@ fn load_file_with_decryption<R: Read + std::io::Seek>(
     if !is_encrypted {
         // Load normally
         return package.get_file(normalized_path).map_err(|e| {
-            Error::InvalidXml(format!(
-                "Failed to load file '{}': {}",
-                display_path, e
-            ))
+            Error::InvalidXml(format!("Failed to load file '{}': {}", display_path, e))
         });
     }
 
@@ -2133,17 +2143,25 @@ fn load_file_with_decryption<R: Read + std::io::Seek>(
         .iter()
         .find_map(|group| {
             // Check if this group contains our resource
-            if group.resource_data.iter().any(|rd| {
-                rd.path == path_with_slash || rd.path == normalized_path
-            }) {
+            if group
+                .resource_data
+                .iter()
+                .any(|rd| rd.path == path_with_slash || rd.path == normalized_path)
+            {
                 // Find an access right for the test consumer
-                group.access_rights.iter().enumerate().find(|(idx, _)| {
-                    if *idx < secure_content.consumers.len() {
-                        secure_content.consumers[*idx].consumer_id == crate::decryption::TEST_CONSUMER_ID
-                    } else {
-                        false
-                    }
-                }).map(|(idx, ar)| (ar.clone(), idx))
+                group
+                    .access_rights
+                    .iter()
+                    .enumerate()
+                    .find(|(idx, _)| {
+                        if *idx < secure_content.consumers.len() {
+                            secure_content.consumers[*idx].consumer_id
+                                == crate::decryption::TEST_CONSUMER_ID
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|(idx, ar)| (ar.clone(), idx))
             } else {
                 None
             }
@@ -2163,10 +2181,7 @@ fn load_file_with_decryption<R: Read + std::io::Seek>(
         secure_content,
     )
     .map_err(|e| {
-        Error::InvalidSecureContent(format!(
-            "Failed to decrypt file '{}': {}",
-            display_path, e
-        ))
+        Error::InvalidSecureContent(format!("Failed to decrypt file '{}': {}", display_path, e))
     })?;
 
     // Convert to string
@@ -2188,9 +2203,13 @@ fn load_slice_references<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
+    // Type alias for complex nested vector to improve readability
+    type SliceRefInfo = (String, String, usize);
+    type StackSliceRefs = (usize, Vec<SliceRefInfo>);
+
     // Collect information needed for loading before we start mutating
-    let mut slices_to_load: Vec<(usize, Vec<(String, String, usize)>)> = Vec::new();
-    
+    let mut slices_to_load: Vec<StackSliceRefs> = Vec::new();
+
     for (stack_idx, slice_stack) in model.resources.slice_stacks.iter().enumerate() {
         let mut refs_for_stack = Vec::new();
         for slice_ref in &slice_stack.slice_refs {
@@ -2209,29 +2228,26 @@ fn load_slice_references<R: Read + std::io::Seek>(
             slices_to_load.push((stack_idx, refs_for_stack));
         }
     }
-    
+
     // Now load and process each slice reference
     for (stack_idx, refs) in slices_to_load {
         for (normalized_path, display_path, expected_stack_id) in refs {
             // Load the slice file from the package (decrypt if encrypted)
-            let slice_xml = load_file_with_decryption(
-                package,
-                &normalized_path,
-                &display_path,
-                &model,
-            )?;
+            let slice_xml =
+                load_file_with_decryption(package, &normalized_path, &display_path, model)?;
 
             // Parse the slice file to extract slices and objects
-            let (slices, objects) =
-                parse_slice_file_with_objects(&slice_xml, expected_stack_id)?;
+            let (slices, objects) = parse_slice_file_with_objects(&slice_xml, expected_stack_id)?;
 
             // Add the slices to this slice stack
-            model.resources.slice_stacks[stack_idx].slices.extend(slices);
+            model.resources.slice_stacks[stack_idx]
+                .slices
+                .extend(slices);
 
             // Merge objects from the external file into the main model
             model.resources.objects.extend(objects);
         }
-        
+
         // Clear the slice_refs for this stack
         model.resources.slice_stacks[stack_idx].slice_refs.clear();
     }
