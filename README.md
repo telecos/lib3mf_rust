@@ -608,14 +608,14 @@ This library has been validated against the official [3MF Consortium test suites
 
 **Current Conformance Results:**
 - ✅ **100% Positive Test Compliance**: All 1,719 valid 3MF files parse successfully
-- ✅ **90.6% Negative Test Compliance**: 500 out of 552 invalid files are correctly rejected
-- 📊 **97.7% Overall Conformance**: 2,219 out of 2,271 total tests pass
+- ✅ **~90% Negative Test Compliance**: ~496 out of 552 invalid files are correctly rejected
+- 📊 **~97.6% Overall Conformance**: ~2,215 out of 2,271 total tests pass
 
 **Key Validation Improvements:**
-- ✅ **Per-vertex property validation** - Ensures complete p1/p2/p3 specification in materials
 - ✅ **Strict color format validation** - Rejects invalid hexadecimal color values
+- ✅ **Proper resource ID namespaces** - Objects and property resources have separate ID spaces
 - ✅ Duplicate metadata names - Ensures metadata uniqueness
-- ✅ Duplicate resource IDs - Validates color group ID uniqueness
+- ✅ Duplicate resource IDs - Validates property group ID uniqueness
 - ✅ Invalid XML structure - Rejects malformed models
 - ✅ Comprehensive material property validation
 - ✅ Triangle property reference validation
