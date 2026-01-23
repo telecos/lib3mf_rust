@@ -1810,22 +1810,20 @@ fn validate_kekparams_attributes(
     }
 
     // EPX-2603: Validate mgfalgorithm if present
-    if !mgf_algorithm.is_empty()
-        && !VALID_MGF_ALGORITHMS.contains(&mgf_algorithm) {
-            return Err(Error::InvalidSecureContent(format!(
+    if !mgf_algorithm.is_empty() && !VALID_MGF_ALGORITHMS.contains(&mgf_algorithm) {
+        return Err(Error::InvalidSecureContent(format!(
                 "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
                 mgf_algorithm
             )));
-        }
+    }
 
     // EPX-2603: Validate digestmethod if present
-    if !digest_method.is_empty()
-        && !VALID_DIGEST_METHODS.contains(&digest_method) {
-            return Err(Error::InvalidSecureContent(format!(
-                "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
-                digest_method
-            )));
-        }
+    if !digest_method.is_empty() && !VALID_DIGEST_METHODS.contains(&digest_method) {
+        return Err(Error::InvalidSecureContent(format!(
+            "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
+            digest_method
+        )));
+    }
 
     Ok(())
 }
@@ -1926,7 +1924,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 &wrapping_algorithm,
                                 &mgf_algorithm,
                                 &digest_method,
-                                sc
+                                sc,
                             )?;
                         }
                     }
@@ -2056,7 +2054,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 &wrapping_algorithm,
                                 &mgf_algorithm,
                                 &digest_method,
-                                sc
+                                sc,
                             )?;
                         }
                     }
@@ -2143,12 +2141,13 @@ fn load_keystore<R: Read + std::io::Seek>(
 
                         // EPX-2603: Validate encryption algorithm is valid
                         if !encryption_algorithm.is_empty()
-                            && encryption_algorithm != VALID_ENCRYPTION_ALGORITHM {
-                                return Err(Error::InvalidSecureContent(format!(
-                                    "Invalid encryption algorithm '{}'. Must be '{}' (EPX-2603)",
-                                    encryption_algorithm, VALID_ENCRYPTION_ALGORITHM
-                                )));
-                            }
+                            && encryption_algorithm != VALID_ENCRYPTION_ALGORITHM
+                        {
+                            return Err(Error::InvalidSecureContent(format!(
+                                "Invalid encryption algorithm '{}'. Must be '{}' (EPX-2603)",
+                                encryption_algorithm, VALID_ENCRYPTION_ALGORITHM
+                            )));
+                        }
 
                         // EPX-2605: Validate compression attribute if present
                         if !compression.is_empty() {
@@ -2181,7 +2180,8 @@ fn load_keystore<R: Read + std::io::Seek>(
         // EPX-2602: If we have resourcedatagroups, at least one consumer must be defined
         if has_resourcedatagroup && sc.consumer_count == 0 {
             return Err(Error::InvalidSecureContent(
-                "Keystore has resourcedatagroup elements but no consumer elements (EPX-2602)".to_string(),
+                "Keystore has resourcedatagroup elements but no consumer elements (EPX-2602)"
+                    .to_string(),
             ));
         }
 
