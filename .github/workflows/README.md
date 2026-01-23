@@ -33,6 +33,7 @@ This directory contains GitHub Actions workflows for automated testing and confo
 - ✅ Caches test suites for faster subsequent runs
 - ✅ Runs conformance summary (2,241 test cases)
 - ✅ Generates conformance report
+- ✅ Commits updated CONFORMANCE_REPORT.md (on push to main/develop)
 - ✅ Uploads report as artifact
 
 **Runtime**: ~10-15 minutes (first run), ~5 minutes (cached)
@@ -72,14 +73,20 @@ gh workflow run conformance.yml
 
 The conformance workflow uploads a detailed report:
 
-**Artifact name**: `conformance-report`  
+**Artifact name**: `conformance-report-combined`  
 **Location**: Actions run → Artifacts section  
 **Retention**: 30 days  
-**Contents**: Detailed conformance test results
+**Contents**: 
+- Detailed conformance test results
+- conformance-summary.md (test run output)
+- CONFORMANCE_REPORT.md (formatted markdown report)
+- suite-reports/ (individual suite results)
+
+**Auto-commit**: On pushes to main/develop, the CONFORMANCE_REPORT.md is automatically committed back to the repository with the commit message "Update conformance report [skip ci]".
 
 To download:
 ```bash
-gh run download <run-id> -n conformance-report
+gh run download <run-id> -n conformance-report-combined
 ```
 
 ## Customizing Workflows
