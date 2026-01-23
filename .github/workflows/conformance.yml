@@ -34,10 +34,37 @@ jobs:
       - name: Run integration tests
         run: cargo test --test integration_test --test test_real_files
   
+  # Setup test suites once for all conformance jobs
+  setup-test-suites:
+    runs-on: ubuntu-latest
+    needs: basic-tests
+    
+    steps:
+      - name: Cache test suites
+        id: cache-test-suites
+        uses: actions/cache@v4
+        with:
+          path: test_suites
+          key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-suites-
+      
+      - name: Clone 3MF test suites
+        if: steps.cache-test-suites.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+      
+      - name: Upload test suites artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-suites
+          path: test_suites/
+          retention-days: 1
+  
   # Run each conformance suite in parallel
   conformance:
     runs-on: ubuntu-latest
-    needs: basic-tests
+    needs: setup-test-suites
     
     strategy:
       fail-fast: false
@@ -99,20 +126,11 @@ jobs:
         with:
           toolchain: stable
       
-      - name: Cache test suites
-        id: cache-test-suites
-        uses: actions/cache@v4
+      - name: Download test suites artifact
+        uses: actions/download-artifact@v4
         with:
+          name: test-suites
           path: test_suites
-          key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-suites-
-      
-      - name: Clone 3MF test suites
-        run: |
-          if [ ! -d "test_suites" ]; then
-            git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
-          fi
       
       - name: Run conformance tests for ${{ matrix.suite.name }}
         id: run-tests
@@ -137,7 +155,7 @@ jobs:
   # Generate overall summary after all suites complete
   conformance-summary:
     runs-on: ubuntu-latest
-    needs: conformance
+    needs: [conformance, setup-test-suites]
     if: always()
     
     steps:
@@ -149,20 +167,11 @@ jobs:
         with:
           toolchain: stable
       
-      - name: Cache test suites
-        id: cache-test-suites
-        uses: actions/cache@v4
+      - name: Download test suites artifact
+        uses: actions/download-artifact@v4
         with:
+          name: test-suites
           path: test_suites
-          key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-suites-
-      
-      - name: Clone 3MF test suites
-        run: |
-          if [ ! -d "test_suites" ]; then
-            git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
-          fi
       
       - name: Generate overall conformance summary
         run: |
