@@ -182,25 +182,54 @@ fn unwrap_cek_with_test_key(wrapped_cek_base64: &str, kek_params: &KEKParams) ->
     // Parse the test private key
     let private_key = parse_test_private_key()?;
 
-    // Determine which digest method to use based on KEK params
-    // Default is SHA-1 if not specified
-    let use_sha256 = kek_params
+    // Determine which digest method and MGF algorithm to use
+    // Default is SHA-1 if not specified (per PKCS#1 v2.0)
+    let digest_is_sha256 = kek_params
         .digest_method
         .as_ref()
-        .map(|dm: &String| dm.contains("sha256"))
+        .map(|dm| dm.contains("sha256"))
         .unwrap_or(false);
 
-    // Decrypt using RSA-OAEP with appropriate digest method
-    let cek = if use_sha256 {
-        let padding = Oaep::new::<Sha256>();
-        private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
-            Error::InvalidSecureContent(format!("RSA-OAEP SHA256 decryption failed: {}", e))
-        })?
-    } else {
-        let padding = Oaep::new::<Sha1>();
-        private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
-            Error::InvalidSecureContent(format!("RSA-OAEP SHA1 decryption failed: {}", e))
-        })?
+    let mgf_is_sha256 = kek_params
+        .mgf_algorithm
+        .as_ref()
+        .map(|mgf| mgf.contains("sha256"))
+        .unwrap_or(false);
+
+    // Decrypt using RSA-OAEP with appropriate digest method and MGF
+    // The OAEP padding has two hash functions:
+    // 1. Digest method for the main OAEP hash
+    // 2. MGF1 hash for the mask generation function
+    // These can be different, so we need to handle all combinations
+    let cek = match (digest_is_sha256, mgf_is_sha256) {
+        (true, true) => {
+            // SHA-256 for both digest and MGF1
+            let padding = Oaep::new::<Sha256>();
+            private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
+                Error::InvalidSecureContent(format!("RSA-OAEP SHA256/SHA256 decryption failed: {}", e))
+            })?
+        }
+        (true, false) => {
+            // SHA-256 for digest, SHA-1 for MGF1
+            let padding = Oaep::new_with_mgf_hash::<Sha256, Sha1>();
+            private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
+                Error::InvalidSecureContent(format!("RSA-OAEP SHA256/SHA1 decryption failed: {}", e))
+            })?
+        }
+        (false, true) => {
+            // SHA-1 for digest, SHA-256 for MGF1
+            let padding = Oaep::new_with_mgf_hash::<Sha1, Sha256>();
+            private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
+                Error::InvalidSecureContent(format!("RSA-OAEP SHA1/SHA256 decryption failed: {}", e))
+            })?
+        }
+        (false, false) => {
+            // SHA-1 for both digest and MGF1 (default)
+            let padding = Oaep::new::<Sha1>();
+            private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
+                Error::InvalidSecureContent(format!("RSA-OAEP SHA1/SHA1 decryption failed: {}", e))
+            })?
+        }
     };
 
     Ok(cek)

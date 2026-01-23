@@ -1932,6 +1932,15 @@ fn load_keystore<R: Read + std::io::Seek>(
                             sc,
                         )?;
                     }
+
+                    // Store the KEK params in the current access right
+                    if let Some(ref mut access_right) = current_access_right {
+                        access_right.kek_params = KEKParams {
+                            wrapping_algorithm,
+                            mgf_algorithm: if mgf_algorithm.is_empty() { None } else { Some(mgf_algorithm) },
+                            digest_method: if digest_method.is_empty() { None } else { Some(digest_method) },
+                        };
+                    }
                 }
             }
             Ok(Event::Start(ref e)) => {
@@ -2092,14 +2101,6 @@ fn load_keystore<R: Read + std::io::Seek>(
                             mgf_algorithm,
                             digest_method,
                         });
-
-                        // Assign immediately to current_access_right if this is an Empty element
-                        // (self-closing tag like <kekparams ... />)
-                        if let Some(kek_params) = current_kek_params.take() {
-                            if let Some(ref mut access_right) = current_access_right {
-                                access_right.kek_params = kek_params;
-                            }
-                        }
                     }
                     "cipherdata" => {
                         // cipherdata contains xenc:CipherValue
