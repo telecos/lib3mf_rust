@@ -511,7 +511,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         current_object = Some(parse_object(&reader, e)?);
                     }
                     "mesh" if in_resources && current_object.is_some() => {
-                        current_mesh = Some(Mesh::new());
+                        // Pre-allocate with reasonable capacity to reduce reallocations
+                        // Most meshes have roughly 2x triangles as vertices
+                        current_mesh = Some(Mesh::with_capacity(1024, 2048));
                     }
                     "displacementmesh" if in_resources && current_object.is_some() => {
                         current_displacement_mesh = Some(DisplacementMesh::new());
@@ -2724,41 +2726,63 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
-    let attrs = parse_attributes(reader, e)?;
+    // Optimized: parse attributes directly without building HashMap
+    let mut x_opt: Option<f64> = None;
+    let mut y_opt: Option<f64> = None;
+    let mut z_opt: Option<f64> = None;
+    let mut extra_attrs = 0;
+
+    for attr_result in e.attributes() {
+        let attr = attr_result?;
+        let key = attr.key.as_ref();
+        
+        match key {
+            b"x" => {
+                let value = std::str::from_utf8(&attr.value)
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                x_opt = Some(value.parse::<f64>()?);
+            }
+            b"y" => {
+                let value = std::str::from_utf8(&attr.value)
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                y_opt = Some(value.parse::<f64>()?);
+            }
+            b"z" => {
+                let value = std::str::from_utf8(&attr.value)
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                z_opt = Some(value.parse::<f64>()?);
+            }
+            _ => {
+                extra_attrs += 1;
+            }
+        }
+    }
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec: x, y, z
-    validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
-
-    let x = attrs
-        .get("x")
-        .ok_or_else(|| Error::InvalidXml("Vertex missing x attribute".to_string()))?
-        .parse::<f64>()?;
-
-    let y = attrs
-        .get("y")
-        .ok_or_else(|| Error::InvalidXml("Vertex missing y attribute".to_string()))?
-        .parse::<f64>()?;
-
-    let z = attrs
-        .get("z")
-        .ok_or_else(|| Error::InvalidXml("Vertex missing z attribute".to_string()))?
-        .parse::<f64>()?;
-
-    // Validate numeric values - reject NaN and Infinity
-    if !x.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex x coordinate must be finite (got {})",
-            x
-        )));
+    if extra_attrs > 0 {
+        // Fall back to full validation for error reporting
+        let attrs = parse_attributes(reader, e)?;
+        validate_attributes(&attrs, &["x", "y", "z"], "vertex")?;
     }
-    if !y.is_finite() {
-        return Err(Error::InvalidXml(format!(
-            "Vertex y coordinate must be finite (got {})",
-            y
-        )));
-    }
-    if !z.is_finite() {
+
+    let x = x_opt.ok_or_else(|| Error::InvalidXml("Vertex missing x attribute".to_string()))?;
+    let y = y_opt.ok_or_else(|| Error::InvalidXml("Vertex missing y attribute".to_string()))?;
+    let z = z_opt.ok_or_else(|| Error::InvalidXml("Vertex missing z attribute".to_string()))?;
+
+    // Validate numeric values - reject NaN and Infinity (combined check for better branch prediction)
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+        if !x.is_finite() {
+            return Err(Error::InvalidXml(format!(
+                "Vertex x coordinate must be finite (got {})",
+                x
+            )));
+        }
+        if !y.is_finite() {
+            return Err(Error::InvalidXml(format!(
+                "Vertex y coordinate must be finite (got {})",
+                y
+            )));
+        }
         return Err(Error::InvalidXml(format!(
             "Vertex z coordinate must be finite (got {})",
             z
@@ -2773,53 +2797,58 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
     reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
-    let attrs = parse_attributes(reader, e)?;
+    // Optimized: parse attributes directly without building HashMap
+    let mut v1_opt: Option<usize> = None;
+    let mut v2_opt: Option<usize> = None;
+    let mut v3_opt: Option<usize> = None;
+    let mut pid_opt: Option<usize> = None;
+    let mut pindex_opt: Option<usize> = None;
+    let mut p1_opt: Option<usize> = None;
+    let mut p2_opt: Option<usize> = None;
+    let mut p3_opt: Option<usize> = None;
+    let mut has_invalid_attrs = false;
+
+    for attr_result in e.attributes() {
+        let attr = attr_result?;
+        let key = attr.key.as_ref();
+        
+        let value_str = std::str::from_utf8(&attr.value)
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        
+        match key {
+            b"v1" => v1_opt = Some(value_str.parse::<usize>()?),
+            b"v2" => v2_opt = Some(value_str.parse::<usize>()?),
+            b"v3" => v3_opt = Some(value_str.parse::<usize>()?),
+            b"pid" => pid_opt = Some(value_str.parse::<usize>()?),
+            b"pindex" => pindex_opt = Some(value_str.parse::<usize>()?),
+            b"p1" => p1_opt = Some(value_str.parse::<usize>()?),
+            b"p2" => p2_opt = Some(value_str.parse::<usize>()?),
+            b"p3" => p3_opt = Some(value_str.parse::<usize>()?),
+            _ => has_invalid_attrs = true,
+        }
+    }
 
     // Validate only allowed attributes are present
-    // Per 3MF Core spec: v1, v2, v3, pid
-    // Per Materials Extension: pindex (for entire triangle), p1, p2, p3 (for per-vertex properties)
-    validate_attributes(
-        &attrs,
-        &["v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3"],
-        "triangle",
-    )?;
+    if has_invalid_attrs {
+        // Fall back to full validation for error reporting
+        let attrs = parse_attributes(reader, e)?;
+        validate_attributes(
+            &attrs,
+            &["v1", "v2", "v3", "pid", "pindex", "p1", "p2", "p3"],
+            "triangle",
+        )?;
+    }
 
-    let v1 = attrs
-        .get("v1")
-        .ok_or_else(|| Error::InvalidXml("Triangle missing v1 attribute".to_string()))?
-        .parse::<usize>()?;
-
-    let v2 = attrs
-        .get("v2")
-        .ok_or_else(|| Error::InvalidXml("Triangle missing v2 attribute".to_string()))?
-        .parse::<usize>()?;
-
-    let v3 = attrs
-        .get("v3")
-        .ok_or_else(|| Error::InvalidXml("Triangle missing v3 attribute".to_string()))?
-        .parse::<usize>()?;
+    let v1 = v1_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v1 attribute".to_string()))?;
+    let v2 = v2_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v2 attribute".to_string()))?;
+    let v3 = v3_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v3 attribute".to_string()))?;
 
     let mut triangle = Triangle::new(v1, v2, v3);
-
-    if let Some(pid) = attrs.get("pid") {
-        triangle.pid = Some(pid.parse::<usize>()?);
-    }
-
-    if let Some(pindex) = attrs.get("pindex") {
-        triangle.pindex = Some(pindex.parse::<usize>()?);
-    }
-
-    if let Some(p1) = attrs.get("p1") {
-        triangle.p1 = Some(p1.parse::<usize>()?);
-    }
-
-    if let Some(p2) = attrs.get("p2") {
-        triangle.p2 = Some(p2.parse::<usize>()?);
-    }
-
-    if let Some(p3) = attrs.get("p3") {
-        triangle.p3 = Some(p3.parse::<usize>()?);
-    }
+    triangle.pid = pid_opt;
+    triangle.pindex = pindex_opt;
+    triangle.p1 = p1_opt;
+    triangle.p2 = p2_opt;
+    triangle.p3 = p3_opt;
 
     Ok(triangle)
 }
