@@ -60,7 +60,7 @@
       "file": "N_EPX_2606_02.3mf",
       "suite": "suite8_secure",
       "test_type": "negative",
-      "reason": "EPX-2606: Missing/Invalid Keystore Elements. This test requires validation of complex structural requirements in the SecureContent keystore that go beyond simple attribute checking. The specific validation rules needed are not clearly documented in available specifications. Implementing these validations requires significant parser refactoring to track parent-child element relationships and context-dependent validation. See issue #162.",
+      "reason": "EPX-2606: Missing/Invalid Keystore Elements. This test requires validation of complex structural requirements in the SecureContent keystore. Unlike N_EPX_2606_01 which is missing the EncryptedFile relationship, this test has all expected relationships but fails due to other structural validation rules not clearly documented in available specifications. Implementing these validations requires significant parser refactoring to track parent-child element relationships and context-dependent validation. See issue #162.",
       "issue_url": "https://github.com/telecos/lib3mf_rust/issues/162",
       "date_added": "2026-01-23"
     },
@@ -68,7 +68,7 @@
       "file": "N_EPX_2606_03.3mf",
       "suite": "suite8_secure",
       "test_type": "negative",
-      "reason": "EPX-2606: Missing/Invalid Keystore Elements. This test requires validation of complex structural requirements in the SecureContent keystore that go beyond simple attribute checking. The specific validation rules needed are not clearly documented in available specifications. Implementing these validations requires significant parser refactoring to track parent-child element relationships and context-dependent validation. See issue #162.",
+      "reason": "EPX-2606: Missing/Invalid Keystore Elements. Similar to N_EPX_2606_02, this test requires validation of complex structural requirements in the SecureContent keystore that go beyond simple attribute checking. The test has all expected relationships and elements, but fails validation for reasons not clearly documented in available specifications. Implementing these validations requires significant parser refactoring to track parent-child element relationships and context-dependent validation. See issue #162.",
       "issue_url": "https://github.com/telecos/lib3mf_rust/issues/162",
       "date_added": "2026-01-23"
     }
