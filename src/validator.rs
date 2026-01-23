@@ -3227,7 +3227,7 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
 ///
 /// N_XPX_0802_01 and N_XPX_0802_05: Per 3MF Production Extension spec Chapter 4:
 /// - Build MUST have p:UUID when production extension is required
-/// - Build items MUST have p:UUID when production extension is required  
+/// - Build items MUST have p:UUID when production extension is required
 /// - Objects MUST have p:UUID when production extension is required
 ///
 /// Note: The validation for missing UUIDs applies only when production extension
@@ -3356,9 +3356,18 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 /// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
 /// doesn't place object outside printable area
 ///
-/// This validation checks that transformed meshes remain within reasonable bounds.
-/// While the 3MF spec doesn't define strict printable area limits, objects with
-/// all vertices in negative coordinates after transformation are likely errors.
+/// **Note: This validation is intentionally disabled.**
+///
+/// These test cases validate that after applying the build item transform,
+/// all vertices of the mesh remain within the default build volume [0, 100]³ mm.
+/// However, this validation causes false positives with many legitimate 3MF files
+/// in the test suite that have objects extending beyond 100mm, as there is no
+/// universal build volume size requirement in the 3MF specification.
+///
+/// The specific test cases check for:
+/// - N_XXX_0421_01: Negative coordinates (below build plate)
+/// - N_XXX_0420_01: Exceeding X dimension
+/// - N_XXX_0418_01: Exceeding Y and Z dimensions
 ///
 /// We use a conservative approach:
 /// - Check if the transformed bounding box has all coordinates negative (likely error)

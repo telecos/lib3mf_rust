@@ -1474,7 +1474,7 @@ pub struct Component {
     ///
     /// The last 3 values are translation components:
     /// - tx (index 9): translation along X axis
-    /// - ty (index 10): translation along Y axis  
+    /// - ty (index 10): translation along Y axis
     /// - tz (index 11): translation along Z axis
     pub transform: Option<[f64; 12]>,
     /// Optional path to external model file (Production extension: p:path attribute)
@@ -1554,7 +1554,7 @@ pub enum ObjectType {
     Support,
     /// A solid support structure
     SolidSupport,
-    /// A surface object  
+    /// A surface object
     Surface,
     /// Other types
     Other,
