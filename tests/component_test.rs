@@ -1,76 +1,9 @@
 //! Integration tests for component validation
 
+mod common;
+
 use lib3mf::Model;
-use std::collections::HashSet;
 use std::fs::File;
-
-/// Helper to parse and validate XML for testing component errors
-/// Since parse_model_xml doesn't validate, we need to check manually
-fn parse_and_validate_components(xml: &str) -> Result<lib3mf::Model, lib3mf::Error> {
-    let model = lib3mf::parser::parse_model_xml(xml)?;
-    
-    // Check that all component references are valid
-    let valid_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
-    for obj in &model.resources.objects {
-        for comp in &obj.components {
-            if !valid_ids.contains(&comp.objectid) {
-                return Err(lib3mf::Error::InvalidModel(format!(
-                    "Component references non-existent object {}",
-                    comp.objectid
-                )));
-            }
-        }
-    }
-    
-    // Check for circular component references
-    for obj in &model.resources.objects {
-        if !obj.components.is_empty() {
-            let mut visited = HashSet::new();
-            let mut path = Vec::new();
-            if has_circular_component(&model, obj.id, &mut visited, &mut path) {
-                return Err(lib3mf::Error::InvalidModel(format!(
-                    "Circular component reference detected starting from object {}",
-                    obj.id
-                )));
-            }
-        }
-    }
-    
-    Ok(model)
-}
-
-fn has_circular_component(
-    model: &lib3mf::Model,
-    object_id: usize,
-    visited: &mut HashSet<usize>,
-    path: &mut Vec<usize>,
-) -> bool {
-    // If already in current path, we have a cycle
-    if path.contains(&object_id) {
-        return true;
-    }
-    
-    // If already fully processed, skip
-    if visited.contains(&object_id) {
-        return false;
-    }
-    
-    visited.insert(object_id);
-    path.push(object_id);
-    
-    // Check components of this object
-    if let Some(obj) = model.resources.objects.iter().find(|o| o.id == object_id) {
-        for comp in &obj.components {
-            if has_circular_component(model, comp.objectid, visited, path) {
-                return true;
-            }
-        }
-    }
-    
-    path.pop();
-    visited.remove(&object_id);
-    false
-}
 
 #[test]
 fn test_parse_components_from_file() {
@@ -150,7 +83,7 @@ fn test_component_validation_invalid_reference() {
   </build>
 </model>"#;
 
-    let result = parse_and_validate_components(xml);
+    let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -180,7 +113,7 @@ fn test_component_validation_circular_reference() {
   </build>
 </model>"#;
 
-    let result = parse_and_validate_components(xml);
+    let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
