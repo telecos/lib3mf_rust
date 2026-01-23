@@ -1621,7 +1621,11 @@ fn validate_production_extension_with_config(model: &Model, config: &ParserConfi
     // UNLESS the parser config explicitly supports production extension (for backward compatibility)
     if has_production_attrs && !has_production && !config_supports_production {
         return Err(Error::InvalidModel(
-            "Production extension attributes (p:UUID, p:path) are used but production extension is not declared in requiredextensions"
+            "Production extension attributes (p:UUID, p:path) are used but production extension \
+             is not declared in requiredextensions.\n\
+             Per 3MF Production Extension specification, when using production attributes, \
+             you must add 'p' to the requiredextensions attribute in the <model> element.\n\
+             Example: requiredextensions=\"p\" or requiredextensions=\"m p\" for materials and production."
                 .to_string(),
         ));
     }
@@ -1932,10 +1936,34 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
                 )));
             }
 
-            // Note: We cannot validate that the referenced slicestack doesn't contain slicerefs
-            // because the referenced slicestack is in an external file that was loaded separately.
-            // The parser already handles loading external slice files, so we trust that validation
-            // is performed during parsing of those files.
+            // Note: We cannot validate that the referenced slicestack exists in the external file
+            // because the external file may not be loaded. We only validate the path format here.
+            // However, per 3MF spec, the slicestackid in SliceRef should reference a valid slicestack.
+            // We rely on the consumer of the 3MF file to load and validate external files.
+        }
+    }
+
+    // Build a set of valid slicestack IDs for reference validation
+    let valid_slicestack_ids: std::collections::HashSet<usize> = model
+        .resources
+        .slice_stacks
+        .iter()
+        .map(|stack| stack.id)
+        .collect();
+
+    // Validate that objects reference existing slicestacks
+    for object in &model.resources.objects {
+        if let Some(slicestackid) = object.slicestackid {
+            if !valid_slicestack_ids.contains(&slicestackid) {
+                let available_ids = sorted_ids_from_set(&valid_slicestack_ids);
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: References non-existent slicestackid {}.\n\
+                     Per 3MF Slice Extension spec, the slicestackid attribute must reference \
+                     a valid <slicestack> resource defined in the model.\n\
+                     Available slicestack IDs: {:?}",
+                    object.id, slicestackid, available_ids
+                )));
+            }
         }
     }
 
@@ -3213,9 +3241,11 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
 fn validate_triangle_properties(_model: &Model) -> Result<()> {
-    // Per-vertex properties (p1/p2/p3) can be partially specified
-    // This is valid usage in real-world 3MF files per Materials Extension spec
-    // No specific validation needed here - the parser already validates property references
+    // Per 3MF Materials Extension spec:
+    // - Triangles can have triangle-level properties (pid and/or pindex)
+    // - Triangles can have per-vertex properties (p1, p2, p3) which work WITH pid for interpolation
+    // - Having both pid and p1/p2/p3 is ALLOWED and is used for per-vertex material interpolation
+    // No validation needed here - the parser already validates property references
     Ok(())
 }
 

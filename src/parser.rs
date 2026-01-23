@@ -293,6 +293,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 }
                                 "xmlns" => model.xmlns = value.to_string(),
                                 "requiredextensions" => {
+                                    // Per 3MF spec, requiredextensions can be empty string (means no extensions)
+                                    // or contain space-separated extension prefixes/namespaces
                                     required_ext_value = Some(value.to_string());
                                 }
                                 "recommendedextensions" => {
