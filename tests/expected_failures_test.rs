@@ -126,3 +126,31 @@ fn test_expected_failures_cloneable() {
 
     assert_eq!(result1, result2, "Cloned manager should behave identically");
 }
+
+#[test]
+fn test_expected_failure_for_p_spx_0313_01() {
+    let manager = ExpectedFailuresManager::load();
+
+    // This specific file should be marked as an expected failure
+    assert!(
+        manager.is_expected_failure("suite1_core_slice_prod", "P_SPX_0313_01.3mf", "positive"),
+        "P_SPX_0313_01.3mf should be marked as an expected positive test failure"
+    );
+
+    // Verify the reason is documented
+    let reason = manager.get_reason("suite1_core_slice_prod", "P_SPX_0313_01.3mf");
+    assert!(
+        reason.is_some(),
+        "P_SPX_0313_01.3mf should have a documented reason"
+    );
+
+    let reason_text = reason.unwrap();
+    assert!(
+        reason_text.contains("content type"),
+        "Reason should mention content type issue"
+    );
+    assert!(
+        reason_text.contains("PNG"),
+        "Reason should mention PNG extension"
+    );
+}

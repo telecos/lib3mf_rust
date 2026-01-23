@@ -1370,8 +1370,12 @@ fn detect_circular_components(
         }
     }
 
-    // Done processing this object, remove from path
+    // Done processing this object, remove from path and visited set
+    // We need to remove from visited to allow the node to be visited from other paths
+    // This is necessary for proper cycle detection when the same node can be reached
+    // via different paths in the component graph (e.g., checking if A→B→C→A forms a cycle)
     path.pop();
+    visited.remove(&object_id);
     Ok(None)
 }
 
@@ -1649,9 +1653,25 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
             )));
         }
 
+        // Check if this displacement map is encrypted (Secure Content extension)
+        // For encrypted files, skip strict path validation as they may use non-standard paths
+        let is_encrypted = model
+            .secure_content
+            .as_ref()
+            .map(|sc| {
+                sc.encrypted_files.iter().any(|encrypted_path| {
+                    // Compare normalized paths (both without leading slash)
+                    let disp_normalized = disp_map.path.trim_start_matches('/');
+                    let enc_normalized = encrypted_path.trim_start_matches('/');
+                    enc_normalized == disp_normalized
+                })
+            })
+            .unwrap_or(false);
+
         // Per 3MF Displacement Extension spec 3.1, displacement texture paths should be in /3D/Textures/
+        // Skip this check for encrypted files as they may use non-standard paths
         // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
-        if !disp_map.path.to_lowercase().starts_with("/3d/textures/") {
+        if !is_encrypted && !disp_map.path.to_lowercase().starts_with("/3d/textures/") {
             return Err(Error::InvalidModel(format!(
                 "Displacement2D resource {}: Path '{}' is not in /3D/Textures/ directory (case-insensitive).\n\
                  Per 3MF Displacement Extension spec 3.1, displacement texture files must be stored in /3D/Textures/ \
@@ -2718,6 +2738,21 @@ fn validate_beam_lattice(model: &Model) -> Result<()> {
 /// Non-ASCII characters (like Unicode) in texture paths are not allowed.
 fn validate_texture_paths(model: &Model) -> Result<()> {
     for texture in &model.resources.texture2d_resources {
+        // Check if this texture is encrypted (Secure Content extension)
+        // For encrypted files, skip strict path validation as they may use non-standard paths
+        let is_encrypted = model
+            .secure_content
+            .as_ref()
+            .map(|sc| {
+                sc.encrypted_files.iter().any(|encrypted_path| {
+                    // Compare normalized paths (both without leading slash)
+                    let texture_normalized = texture.path.trim_start_matches('/');
+                    let enc_normalized = encrypted_path.trim_start_matches('/');
+                    enc_normalized == texture_normalized
+                })
+            })
+            .unwrap_or(false);
+
         // Check that the path contains only ASCII characters
         if !texture.path.is_ascii() {
             return Err(Error::InvalidModel(format!(
@@ -2729,10 +2764,11 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
         }
 
         // Per 3MF spec, texture paths should be in /3D/Texture/ or /3D/Textures/ directory
+        // Skip this check for encrypted files as they may use non-standard paths
         // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
         // Accept both singular (/3D/Texture/) and plural (/3D/Textures/) forms
         let path_lower = texture.path.to_lowercase();
-        if !path_lower.starts_with("/3d/texture/") && !path_lower.starts_with("/3d/textures/") {
+        if !is_encrypted && !path_lower.starts_with("/3d/texture/") && !path_lower.starts_with("/3d/textures/") {
             return Err(Error::InvalidModel(format!(
                 "Texture2D resource {}: Path '{}' is not in /3D/Texture/ or /3D/Textures/ directory (case-insensitive).\n\
                  Per 3MF Material Extension spec, texture files must be stored in /3D/Texture/ or /3D/Textures/ \
@@ -2923,8 +2959,28 @@ fn validate_production_paths(model: &Model) -> Result<()> {
 /// Per 3MF spec, transform matrices must have a non-negative determinant.
 /// A negative determinant indicates a mirror transformation which would
 /// invert the object's orientation (inside-out).
+///
+/// Exception: For sliced objects (objects with slicestackid), the transform
+/// restrictions are different per the 3MF Slice Extension spec. Sliced objects
+/// must have planar transforms (validated separately in validate_slice_extension),
+/// but can have negative determinants (mirror transformations).
 fn validate_transform_matrices(model: &Model) -> Result<()> {
+    // Build a set of object IDs that have slicestacks
+    let sliced_object_ids: std::collections::HashSet<usize> = model
+        .resources
+        .objects
+        .iter()
+        .filter_map(|obj| obj.slicestackid.map(|_| obj.id))
+        .collect();
+
     for (idx, item) in model.build.items.iter().enumerate() {
+        // Skip validation for build items that reference sliced objects
+        // Per 3MF Slice Extension spec, sliced objects have different transform
+        // restrictions (planar transforms) which are validated in validate_slice_extension
+        if sliced_object_ids.contains(&item.objectid) {
+            continue;
+        }
+
         if let Some(ref transform) = item.transform {
             // Calculate the determinant of the 3x3 rotation/scale portion
             // Transform is stored as 12 values: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
@@ -3221,6 +3277,14 @@ fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> 
 /// N_XPX_0416_01: Validate mesh has positive volume
 fn validate_mesh_volume(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
+        // Skip mesh volume validation for sliced objects
+        // Per 3MF Slice Extension spec, when an object has a slicestack,
+        // the mesh is not used for printing (slices are used instead),
+        // so mesh orientation doesn't matter
+        if object.slicestackid.is_some() {
+            continue;
+        }
+
         if let Some(ref mesh) = object.mesh {
             // Calculate signed volume using divergence theorem
             let mut volume = 0.0_f64;
@@ -3948,5 +4012,164 @@ mod tests {
         // Should pass validation (texture2d group is a valid property group)
         let result = validate_material_references(&model);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sliced_object_allows_negative_volume_mesh() {
+        use crate::model::SliceStack;
+
+        let mut model = Model::new();
+
+        // Add a slicestack
+        let slice_stack = SliceStack::new(1, 0.0);
+        model.resources.slice_stacks.push(slice_stack);
+
+        // Create an object with negative volume (inverted mesh) but with slicestackid
+        let mut object = Object::new(1);
+        object.slicestackid = Some(1); // References the slicestack
+
+        // Create a mesh with inverted triangles (negative volume)
+        // This is a simple inverted tetrahedron
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0));
+
+        // Deliberately inverted winding order to create negative volume
+        mesh.triangles.push(Triangle::new(0, 2, 1)); // Inverted
+        mesh.triangles.push(Triangle::new(0, 3, 2)); // Inverted
+        mesh.triangles.push(Triangle::new(0, 1, 3)); // Inverted
+        mesh.triangles.push(Triangle::new(1, 2, 3)); // Inverted
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation because object has slicestackid
+        let result = validate_mesh_volume(&model);
+        assert!(
+            result.is_ok(),
+            "Sliced object should allow negative volume mesh"
+        );
+    }
+
+    #[test]
+    fn test_non_sliced_object_rejects_negative_volume() {
+        let mut model = Model::new();
+
+        // Create an object WITHOUT slicestackid
+        let mut object = Object::new(1);
+
+        // Create a box mesh with ALL triangles in inverted winding order
+        // Based on the standard box from test_files/core/box.3mf but with reversed winding
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(10.0, 20.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 20.0, 0.0)); // 3
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 30.0)); // 4
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 30.0)); // 5
+        mesh.vertices.push(Vertex::new(10.0, 20.0, 30.0)); // 6
+        mesh.vertices.push(Vertex::new(0.0, 20.0, 30.0)); // 7
+
+        // Correct winding from box.3mf:
+        // <triangle v1="3" v2="2" v3="1" />
+        // For negative volume, swap the first and third vertex indices: v1="1" v2="2" v3="3"
+        // All triangles with INVERTED winding (first and third indices swapped)
+        mesh.triangles.push(Triangle::new(1, 2, 3)); // Was (3, 2, 1)
+        mesh.triangles.push(Triangle::new(3, 0, 1)); // Was (1, 0, 3)
+        mesh.triangles.push(Triangle::new(6, 5, 4)); // Was (4, 5, 6)
+        mesh.triangles.push(Triangle::new(4, 7, 6)); // Was (6, 7, 4)
+        mesh.triangles.push(Triangle::new(5, 1, 0)); // Was (0, 1, 5)
+        mesh.triangles.push(Triangle::new(0, 4, 5)); // Was (5, 4, 0)
+        mesh.triangles.push(Triangle::new(6, 2, 1)); // Was (1, 2, 6)
+        mesh.triangles.push(Triangle::new(1, 5, 6)); // Was (6, 5, 1)
+        mesh.triangles.push(Triangle::new(7, 3, 2)); // Was (2, 3, 7)
+        mesh.triangles.push(Triangle::new(2, 6, 7)); // Was (7, 6, 2)
+        mesh.triangles.push(Triangle::new(4, 0, 3)); // Was (3, 0, 4)
+        mesh.triangles.push(Triangle::new(3, 7, 4)); // Was (4, 7, 3)
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation for non-sliced object
+        let result = validate_mesh_volume(&model);
+        assert!(
+            result.is_err(),
+            "Non-sliced object should reject negative volume mesh"
+        );
+        assert!(result.unwrap_err().to_string().contains("negative volume"));
+    }
+
+    #[test]
+    fn test_sliced_object_allows_mirror_transform() {
+        use crate::model::SliceStack;
+
+        let mut model = Model::new();
+
+        // Add a slicestack
+        let slice_stack = SliceStack::new(1, 0.0);
+        model.resources.slice_stacks.push(slice_stack);
+
+        // Create an object with slicestackid
+        let mut object = Object::new(1);
+        object.slicestackid = Some(1);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with mirror transformation (negative determinant)
+        // Transform with -1 scale in X axis (mirror): [-1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+        let mut item = BuildItem::new(1);
+        item.transform = Some([-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]);
+        model.build.items.push(item);
+
+        // Should pass validation because object has slicestackid
+        let result = validate_transform_matrices(&model);
+        assert!(
+            result.is_ok(),
+            "Sliced object should allow mirror transformation"
+        );
+    }
+
+    #[test]
+    fn test_non_sliced_object_rejects_mirror_transform() {
+        let mut model = Model::new();
+
+        // Create an object WITHOUT slicestackid
+        let mut object = Object::new(1);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with mirror transformation (negative determinant)
+        let mut item = BuildItem::new(1);
+        item.transform = Some([-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]);
+        model.build.items.push(item);
+
+        // Should fail validation for non-sliced object
+        let result = validate_transform_matrices(&model);
+        assert!(
+            result.is_err(),
+            "Non-sliced object should reject mirror transformation"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("negative determinant"));
     }
 }
