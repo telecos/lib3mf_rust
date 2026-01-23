@@ -3639,6 +3639,44 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
     Ok(())
 }
 
+/// Validate that an encrypted file can be loaded and decrypted
+///
+/// This function attempts to load and decrypt an encrypted external file to ensure:
+/// 1. The file exists in the package
+/// 2. The keystore has a valid consumer that can decrypt it
+/// 3. The decryption succeeds with the test keys
+///
+/// This is crucial for negative test validation - files that can't be decrypted
+/// should fail during parsing, not be silently skipped.
+fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    normalized_path: &str,
+    display_path: &str,
+    model: &Model,
+    context: &str,
+) -> Result<()> {
+    // Check if file exists
+    if !package.has_file(normalized_path) {
+        return Err(Error::InvalidModel(format!(
+            "{}: References non-existent encrypted file: {}\n\
+             The p:path attribute must reference a valid encrypted file in the 3MF package.",
+            context, display_path
+        )));
+    }
+
+    // Attempt to load and decrypt the file
+    // This will fail if:
+    // - The consumer doesn't match test keys (consumerid != "test3mf01")
+    // - The keyid doesn't match (keyid != "test3mfkek01")
+    // - The consumer has no keyid when one is required
+    // - Any other decryption-related issue
+    let _decrypted_content =
+        load_file_with_decryption(package, normalized_path, display_path, model)?;
+
+    // If we got here, decryption succeeded - the file is valid
+    Ok(())
+}
+
 /// Validate production extension external file references
 ///
 /// Per 3MF Production Extension spec:
@@ -3673,7 +3711,15 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 .unwrap_or(false);
 
             if is_encrypted {
-                // Skip validation for encrypted files - they can't be parsed
+                // For encrypted files, attempt to validate that we can decrypt them
+                // This ensures the keystore has valid consumers/keys
+                validate_encrypted_file_can_be_loaded(
+                    package,
+                    normalized_path,
+                    path,
+                    model,
+                    &format!("Build item {}", idx),
+                )?;
                 continue;
             }
 
@@ -3726,7 +3772,15 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         .unwrap_or(false);
 
                     if is_encrypted {
-                        // Skip validation for encrypted files - they can't be parsed
+                        // For encrypted files, attempt to validate that we can decrypt them
+                        // This ensures the keystore has valid consumers/keys
+                        validate_encrypted_file_can_be_loaded(
+                            package,
+                            normalized_path,
+                            path,
+                            model,
+                            &format!("Object {}, Component {}", object.id, comp_idx),
+                        )?;
                         continue;
                     }
 
