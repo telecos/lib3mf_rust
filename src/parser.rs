@@ -20,6 +20,10 @@ const VALID_WRAPPING_ALGORITHM_2001: &str = "http://www.w3.org/2001/04/xmlenc#rs
 
 /// Valid wrapping algorithm for SecureContent (2009 version)  
 const VALID_WRAPPING_ALGORITHM_2009: &str = "http://www.w3.org/2009/xmlenc11#rsa-oaep";
+
+/// Default compression value for SecureContent CEK params
+const DEFAULT_COMPRESSION: &str = "none";
+
 /// Maximum number of object IDs to display in error messages
 const MAX_DISPLAYED_OBJECT_IDS: usize = 20;
 
@@ -1897,7 +1901,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                             path,
                             cek_params: CEKParams {
                                 encryption_algorithm: String::new(),
-                                compression: "none".to_string(),
+                                compression: DEFAULT_COMPRESSION.to_string(),
                                 iv: None,
                                 tag: None,
                                 aad: None,
@@ -1906,7 +1910,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                     }
                     "cekparams" => {
                         let mut encryption_algorithm = String::new();
-                        let mut compression = "none".to_string();
+                        let mut compression = DEFAULT_COMPRESSION.to_string();
 
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {

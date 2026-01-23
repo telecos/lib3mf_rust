@@ -8,6 +8,9 @@
 
 use lib3mf::{Extension, Model, ParserConfig};
 
+/// Test file path for Suite 8 secure content tests
+const SUITE8_TEST_FILE: &str = "test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf";
+
 /// Test that the SecureContent extension is recognized in validation
 #[test]
 fn test_secure_content_extension_recognized() {
@@ -178,8 +181,7 @@ fn test_keystore_parsing() {
 
     // Use a positive test case that has keystore but doesn't fail validation
     // This file has encrypted texture but the model itself is valid
-    let file =
-        File::open("test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf");
+    let file = File::open(SUITE8_TEST_FILE);
     
     if file.is_err() {
         // Skip test if file doesn't exist (test files not available)
@@ -277,8 +279,7 @@ fn test_keystore_full_structure_parsing() {
     use std::fs::File;
 
     // Use the same test file that has a complete keystore structure
-    let file =
-        File::open("test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf");
+    let file = File::open(SUITE8_TEST_FILE);
     
     if file.is_err() {
         // Skip test if file doesn't exist (test files not available)
