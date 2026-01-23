@@ -7,14 +7,14 @@
 //! embedded and should NOT be used in production environments.
 
 use crate::error::{Error, Result};
-use crate::model::{AccessRight, CEKParams, SecureContentInfo};
+use crate::model::{AccessRight, CEKParams, KEKParams, SecureContentInfo};
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use flate2::read::DeflateDecoder;
-use rsa::{pkcs1::DecodeRsaPrivateKey, Pkcs1v15Encrypt, RsaPrivateKey};
+use rsa::{pkcs1::DecodeRsaPrivateKey, RsaPrivateKey};
 use std::io::Read;
 
 /// Test consumer ID from Suite 8 test specification
@@ -60,18 +60,21 @@ eMADI7JuelOqfKBxXrp8IlzVlU8Mk0VQRw6hjq1zNKLJtD4EFq4=
 /// test keys from Suite 8 Appendix D. It will only work if the content
 /// was encrypted with the corresponding test public key.
 ///
+/// The ciphertext must be in the 3MF cipher file format as described in
+/// Appendix D of the SecureContent specification (magic number '%3McF').
+///
 /// # Arguments
 ///
-/// * `ciphertext` - The encrypted data
+/// * `cipher_file_data` - The complete encrypted file data (including cipher file header)
 /// * `cek_params` - Content encryption parameters (algorithm, IV, tag, AAD, compression)
-/// * `access_right` - Access right containing wrapped CEK
+/// * `access_right` - Access right containing wrapped CEK and KEK parameters
 /// * `secure_content` - Secure content info containing consumer definitions
 ///
 /// # Returns
 ///
 /// Decrypted plaintext data, or error if decryption fails
 pub fn decrypt_with_test_key(
-    ciphertext: &[u8],
+    cipher_file_data: &[u8],
     cek_params: &CEKParams,
     access_right: &AccessRight,
     secure_content: &SecureContentInfo,
@@ -91,11 +94,14 @@ pub fn decrypt_with_test_key(
         )));
     }
 
-    // Unwrap the CEK using RSA-OAEP
-    let cek = unwrap_cek_with_test_key(&access_right.cipher_value)?;
+    // Parse the cipher file format to extract the actual ciphertext
+    let ciphertext = parse_cipher_file_format(cipher_file_data)?;
+
+    // Unwrap the CEK using RSA-OAEP (with appropriate digest method)
+    let cek = unwrap_cek_with_test_key(&access_right.cipher_value, &access_right.kek_params)?;
 
     // Decrypt the content using AES-GCM
-    let plaintext = decrypt_aes_gcm(ciphertext, &cek, cek_params)?;
+    let plaintext = decrypt_aes_gcm(&ciphertext, &cek, cek_params)?;
 
     // Decompress if needed
     if cek_params.compression == "deflate" {
@@ -105,8 +111,69 @@ pub fn decrypt_with_test_key(
     }
 }
 
+/// Parse the 3MF cipher file format (Appendix D of SecureContent spec)
+///
+/// The cipher file format:
+/// - Octets 0-4: '%3McF' magic number
+/// - Octet 5: Version major (0x00)
+/// - Octet 6: Version minor (0x00)
+/// - Octet 7: Unused (0x00)
+/// - Octets 8-11: Header length (little-endian u32)
+/// - Octets 12-(Header length-1): Reserved header data
+/// - Octets (Header length)-EOF: Crypto content (actual ciphertext)
+fn parse_cipher_file_format(data: &[u8]) -> Result<Vec<u8>> {
+    // Check minimum size for header
+    if data.len() < 12 {
+        return Err(Error::InvalidSecureContent(
+            "Cipher file too small (minimum 12 bytes for header)".to_string(),
+        ));
+    }
+
+    // Check magic number
+    if &data[0..5] != b"%3McF" {
+        return Err(Error::InvalidSecureContent(format!(
+            "Invalid cipher file magic number. Expected '%3McF', got '{}'",
+            String::from_utf8_lossy(&data[0..5])
+        )));
+    }
+
+    // Check version (should be 0.0)
+    if data[5] != 0x00 || data[6] != 0x00 {
+        return Err(Error::InvalidSecureContent(format!(
+            "Unsupported cipher file version {}.{}",
+            data[5], data[6]
+        )));
+    }
+
+    // Parse header length (little-endian u32)
+    let header_len = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
+
+    // Validate header length
+    if header_len < 12 {
+        return Err(Error::InvalidSecureContent(format!(
+            "Invalid header length {} (minimum 12)",
+            header_len
+        )));
+    }
+
+    if header_len > data.len() {
+        return Err(Error::InvalidSecureContent(format!(
+            "Header length {} exceeds file size {}",
+            header_len,
+            data.len()
+        )));
+    }
+
+    // Extract the ciphertext (everything after the header)
+    Ok(data[header_len..].to_vec())
+}
+
 /// Unwrap (decrypt) the CEK using the test RSA private key
-fn unwrap_cek_with_test_key(wrapped_cek_base64: &str) -> Result<Vec<u8>> {
+fn unwrap_cek_with_test_key(wrapped_cek_base64: &str, kek_params: &KEKParams) -> Result<Vec<u8>> {
+    use rsa::Oaep;
+    use sha1::Sha1;
+    use sha2::Sha256;
+
     // Decode base64-encoded wrapped CEK
     let wrapped_cek = BASE64
         .decode(wrapped_cek_base64)
@@ -115,10 +182,26 @@ fn unwrap_cek_with_test_key(wrapped_cek_base64: &str) -> Result<Vec<u8>> {
     // Parse the test private key
     let private_key = parse_test_private_key()?;
 
-    // Decrypt using RSA-OAEP (PKCS#1 v1.5 padding)
-    let cek = private_key
-        .decrypt(Pkcs1v15Encrypt, &wrapped_cek)
-        .map_err(|e| Error::InvalidSecureContent(format!("RSA decryption failed: {}", e)))?;
+    // Determine which digest method to use based on KEK params
+    // Default is SHA-1 if not specified
+    let use_sha256 = kek_params
+        .digest_method
+        .as_ref()
+        .map(|dm: &String| dm.contains("sha256"))
+        .unwrap_or(false);
+
+    // Decrypt using RSA-OAEP with appropriate digest method
+    let cek = if use_sha256 {
+        let padding = Oaep::new::<Sha256>();
+        private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
+            Error::InvalidSecureContent(format!("RSA-OAEP SHA256 decryption failed: {}", e))
+        })?
+    } else {
+        let padding = Oaep::new::<Sha1>();
+        private_key.decrypt(padding, &wrapped_cek).map_err(|e| {
+            Error::InvalidSecureContent(format!("RSA-OAEP SHA1 decryption failed: {}", e))
+        })?
+    };
 
     Ok(cek)
 }
@@ -141,6 +224,8 @@ fn parse_test_private_key() -> Result<RsaPrivateKey> {
 
 /// Decrypt content using AES-256-GCM
 fn decrypt_aes_gcm(ciphertext: &[u8], cek: &[u8], params: &CEKParams) -> Result<Vec<u8>> {
+    use aes_gcm::aead::Payload;
+
     // Verify algorithm
     if !params.encryption_algorithm.contains("aes256-gcm") {
         return Err(Error::InvalidSecureContent(format!(
@@ -166,6 +251,19 @@ fn decrypt_aes_gcm(ciphertext: &[u8], cek: &[u8], params: &CEKParams) -> Result<
         .decode(tag)
         .map_err(|e| Error::InvalidSecureContent(format!("Invalid tag: {}", e)))?;
 
+    // Parse AAD if present
+    let aad_bytes = if let Some(ref aad) = params.aad {
+        if !aad.is_empty() {
+            BASE64
+                .decode(aad)
+                .map_err(|e| Error::InvalidSecureContent(format!("Invalid AAD: {}", e)))?
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
     // Combine ciphertext and tag for AES-GCM
     let mut combined = ciphertext.to_vec();
     combined.extend_from_slice(&tag_bytes);
@@ -176,9 +274,15 @@ fn decrypt_aes_gcm(ciphertext: &[u8], cek: &[u8], params: &CEKParams) -> Result<
 
     let nonce = Nonce::from_slice(&iv_bytes);
 
+    // Create payload with AAD
+    let payload = Payload {
+        msg: &combined,
+        aad: &aad_bytes,
+    };
+
     // Decrypt
     let plaintext = cipher
-        .decrypt(nonce, combined.as_ref())
+        .decrypt(nonce, payload)
         .map_err(|e| Error::InvalidSecureContent(format!("AES-GCM decryption failed: {}", e)))?;
 
     Ok(plaintext)

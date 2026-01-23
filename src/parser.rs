@@ -1616,11 +1616,17 @@ fn load_keystore<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
-    // Try to load the keystore file - it's OK if it doesn't exist
+    // Try to load the keystore file - check both standard locations
     // Use get_file_binary() to handle files that may contain encrypted/binary data
     let keystore_bytes = match package.get_file_binary("Secure/keystore.xml") {
         Ok(bytes) => bytes,
-        Err(_) => return Ok(()), // No keystore file, not an error
+        Err(_) => {
+            // Try alternate location (info.store used in some test files)
+            match package.get_file_binary("Secure/info.store") {
+                Ok(bytes) => bytes,
+                Err(_) => return Ok(()), // No keystore file, not an error
+            }
+        }
     };
 
     // Initialize secure_content if not already present
@@ -1851,6 +1857,14 @@ fn load_keystore<R: Read + std::io::Seek>(
                             mgf_algorithm,
                             digest_method,
                         });
+
+                        // Assign immediately to current_access_right if this is an Empty element
+                        // (self-closing tag like <kekparams ... />)
+                        if let Some(kek_params) = current_kek_params.take() {
+                            if let Some(ref mut access_right) = current_access_right {
+                                access_right.kek_params = kek_params;
+                            }
+                        }
                     }
                     "cipherdata" => {
                         // cipherdata contains xenc:CipherValue
@@ -3198,6 +3212,7 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                     object.id,
                     "booleanshape base",
                     &mut external_file_cache,
+                    model,
                 )?;
             }
 
@@ -3227,6 +3242,7 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                         object.id,
                         "boolean operand",
                         &mut external_file_cache,
+                        model,
                     )?;
                 }
             }
@@ -3246,11 +3262,12 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
     referring_object_id: usize,
     reference_type: &str,
     cache: &mut HashMap<String, Vec<usize>>,
+    model: &Model,
 ) -> Result<()> {
     // Check cache first and load if needed
     if !cache.contains_key(file_path) {
-        // Load and parse the external model file
-        let external_xml = package.get_file(file_path)?;
+        // Load and parse the external model file (decrypt if encrypted)
+        let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
 
         // Parse just enough to extract object IDs
         let mut reader = Reader::from_str(&external_xml);
@@ -3363,6 +3380,7 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 &item.production_uuid,
                 &format!("Build item {}", idx),
                 &mut external_file_cache,
+                model,
             )?;
         }
     }
@@ -3396,6 +3414,7 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         &prod_info.uuid,
                         &format!("Object {}, Component {}", object.id, comp_idx),
                         &mut external_file_cache,
+                        model,
                     )?;
                 }
             }
@@ -3416,11 +3435,12 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     _expected_uuid: &Option<String>,
     reference_context: &str,
     cache: &mut HashMap<String, Vec<(usize, Option<String>)>>,
+    model: &Model,
 ) -> Result<()> {
     // Check cache first and get object info
     if !cache.contains_key(file_path) {
-        // Load and parse the external model file
-        let external_xml = package.get_file(file_path)?;
+        // Load and parse the external model file (decrypt if encrypted)
+        let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
 
         // Parse to extract object IDs and UUIDs
         let mut reader = Reader::from_str(&external_xml);
