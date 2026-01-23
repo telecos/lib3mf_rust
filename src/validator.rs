@@ -3226,7 +3226,7 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
 ///
 /// N_XPX_0802_01 and N_XPX_0802_05: Per 3MF Production Extension spec Chapter 4:
 /// - Build MUST have p:UUID when production extension is required
-/// - Build items MUST have p:UUID when production extension is required  
+/// - Build items MUST have p:UUID when production extension is required
 /// - Objects MUST have p:UUID when production extension is required
 ///
 /// Note: The validation for missing UUIDs applies only when production extension

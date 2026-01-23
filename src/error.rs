@@ -10,7 +10,7 @@
 //!
 //! Categories:
 //! - **E1xxx**: I/O and archive errors
-//! - **E2xxx**: XML parsing and structure errors  
+//! - **E2xxx**: XML parsing and structure errors
 //! - **E3xxx**: Model validation errors
 //! - **E4xxx**: Unsupported features
 //!
