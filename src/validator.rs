@@ -2921,8 +2921,34 @@ fn validate_production_paths(model: &Model) -> Result<()> {
 /// Per 3MF spec, transform matrices must have a non-negative determinant.
 /// A negative determinant indicates a mirror transformation which would
 /// invert the object's orientation (inside-out).
+///
+/// Exception: For sliced objects (objects with slicestackid), the transform
+/// restrictions are different per the 3MF Slice Extension spec. Sliced objects
+/// must have planar transforms (validated separately in validate_slice_extension),
+/// but can have negative determinants (mirror transformations).
 fn validate_transform_matrices(model: &Model) -> Result<()> {
+    // Build a set of object IDs that have slicestacks
+    let sliced_object_ids: std::collections::HashSet<usize> = model
+        .resources
+        .objects
+        .iter()
+        .filter_map(|obj| {
+            if obj.slicestackid.is_some() {
+                Some(obj.id)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     for (idx, item) in model.build.items.iter().enumerate() {
+        // Skip validation for build items that reference sliced objects
+        // Per 3MF Slice Extension spec, sliced objects have different transform
+        // restrictions (planar transforms) which are validated in validate_slice_extension
+        if sliced_object_ids.contains(&item.objectid) {
+            continue;
+        }
+
         if let Some(ref transform) = item.transform {
             // Calculate the determinant of the 3x3 rotation/scale portion
             // Transform is stored as 12 values: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
@@ -3219,6 +3245,14 @@ fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> 
 /// N_XPX_0416_01: Validate mesh has positive volume
 fn validate_mesh_volume(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
+        // Skip mesh volume validation for sliced objects
+        // Per 3MF Slice Extension spec, when an object has a slicestack,
+        // the mesh is not used for printing (slices are used instead),
+        // so mesh orientation doesn't matter
+        if object.slicestackid.is_some() {
+            continue;
+        }
+
         if let Some(ref mesh) = object.mesh {
             // Calculate signed volume using divergence theorem
             let mut volume = 0.0_f64;
