@@ -531,8 +531,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             // If d2 or d3 specified without d1, that's invalid
                             if (triangle.d2.is_some() || triangle.d3.is_some()) && triangle.d1.is_none() {
                                 return Err(Error::InvalidXml(
-                                    "Displacement triangle: d2 or d3 specified without d1. \
-                                     If d1 is unspecified, no displacement is applied to the triangle."
+                                    "Displacement triangle: d2 or d3 displacement coordinate index specified without d1. \
+                                     If d1 is unspecified, no displacement coordinate indices can be used."
                                         .to_string()
                                 ));
                             }
@@ -545,7 +545,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             // If d1 is specified, did MUST be specified (either on triangle or triangles)
                             if triangle.d1.is_some() && triangle.did.is_none() {
                                 return Err(Error::InvalidXml(
-                                    "Displacement triangle: d1 is specified but 'did' attribute is not. \
+                                    "Displacement triangle: d1 displacement coordinate index is specified but 'did' attribute is not. \
                                      The 'did' must be specified either on the <triangle> or <triangles> element."
                                         .to_string()
                                 ));
