@@ -1644,7 +1644,7 @@ fn load_keystore<R: Read + std::io::Seek>(
     let mut current_resource_data: Option<ResourceData> = None;
     let mut current_kek_params: Option<KEKParams> = None;
     let mut current_cek_params: Option<CEKParams> = None;
-    let mut text_buffer = String::new();
+    let mut text_buffer = String::with_capacity(512); // Typical size for base64-encoded values
 
     loop {
         match reader.read_event_into(&mut buf) {

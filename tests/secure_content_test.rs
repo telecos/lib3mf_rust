@@ -6,7 +6,8 @@
 //! **Note**: These tests do NOT implement cryptographic operations.
 //! See SECURE_CONTENT_SUPPORT.md for security considerations.
 
-use lib3mf::{Extension, Model, ParserConfig};
+use lib3mf::{CEKParams, Consumer, Extension, KEKParams, Model, ParserConfig};
+use std::fs::File;
 
 /// Test file path for Suite 8 secure content tests
 const SUITE8_TEST_FILE: &str = "test_suites/suite8_secure/positive_test_cases/P_EPX_2102_01_materialExt.3mf";
@@ -177,8 +178,6 @@ fn test_parse_without_secure_content() {
 /// Test parsing keystore.xml from a 3MF package
 #[test]
 fn test_keystore_parsing() {
-    use std::fs::File;
-
     // Use a positive test case that has keystore but doesn't fail validation
     // This file has encrypted texture but the model itself is valid
     let file = File::open(SUITE8_TEST_FILE);
@@ -276,8 +275,6 @@ fn test_keystore_handles_binary_data() {
 /// Test comprehensive keystore parsing with full structure
 #[test]
 fn test_keystore_full_structure_parsing() {
-    use std::fs::File;
-
     // Use the same test file that has a complete keystore structure
     let file = File::open(SUITE8_TEST_FILE);
     
@@ -355,8 +352,6 @@ fn test_consumer_keyvalue_parsing() {
     // Create a minimal keystore XML with a consumer that has a keyvalue
     // We'll test this by creating a complete 3MF structure
     // For now, just verify the structure is available
-    
-    use lib3mf::{Consumer, KEKParams, CEKParams};
     
     // Verify structures can be created programmatically
     let consumer = Consumer {
