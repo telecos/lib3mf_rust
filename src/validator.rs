@@ -4375,11 +4375,11 @@ mod tests {
         // Add build item with singular transformation (determinant = 0)
         // This matches test case P_XXX_0326_03.3mf
         // Transform: [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]
-        // The 3x3 rotation/scale portion has:
+        // The 3x3 rotation/scale portion (stored in row-major order):
         //   row0: [0, 0.6667, -0.3333]
         //   row1: [1, -0.6667, 0.3333]  
         //   row2: [1, 0.6667, -0.3333]
-        // Note: row2 = -row1, making the matrix rank-deficient (det = 0)
+        // Note: row2 = 2*row0 + row1, making the matrix rank-deficient (det = 0)
         let mut item = BuildItem::new(1);
         item.transform = Some([
             0.0, 0.6667, -0.3333, 1.0, -0.6667, 0.3333, 1.0, 0.6667, -0.3333, 65.101, 80.1025,
