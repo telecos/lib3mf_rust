@@ -15,7 +15,7 @@ fn main() {
     let files = vec![
         ("N_EPX_2602_01.3mf", true),  // Should fail
         ("N_EPX_2602_02.3mf", true),  // Should fail
-        ("N_EPX_2602_03.3mf", true),  // Should fail  
+        ("N_EPX_2602_03.3mf", true), // Should fail  
         ("N_EPX_2602_04.3mf", true),  // Should fail
     ];
 
