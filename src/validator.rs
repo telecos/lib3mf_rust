@@ -2763,14 +2763,19 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
             )));
         }
 
-        // Per 3MF spec, texture paths should be in /3D/Textures/ directory
+        // Per 3MF spec, texture paths should be in /3D/Texture/ or /3D/Textures/ directory
         // Skip this check for encrypted files as they may use non-standard paths
         // Use case-insensitive comparison as 3MF paths are case-insensitive per OPC spec
-        if !is_encrypted && !texture.path.to_lowercase().starts_with("/3d/textures/") {
+        // Accept both singular (/3D/Texture/) and plural (/3D/Textures/) forms
+        let path_lower = texture.path.to_lowercase();
+        if !is_encrypted
+            && !path_lower.starts_with("/3d/texture/")
+            && !path_lower.starts_with("/3d/textures/")
+        {
             return Err(Error::InvalidModel(format!(
-                "Texture2D resource {}: Path '{}' is not in /3D/Textures/ directory (case-insensitive).\n\
-                 Per 3MF Material Extension spec, texture files must be stored in /3D/Textures/ \
-                 (any case variation like /3D/textures/ is also accepted).\n\
+                "Texture2D resource {}: Path '{}' is not in /3D/Texture/ or /3D/Textures/ directory (case-insensitive).\n\
+                 Per 3MF Material Extension spec, texture files must be stored in /3D/Texture/ or /3D/Textures/ \
+                 (any case variation is accepted).\n\
                  Move the texture file to the appropriate directory and update the path.",
                 texture.id, texture.path
             )));
