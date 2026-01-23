@@ -1849,6 +1849,84 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 )));
             }
 
+            // Validate mesh volume (DPX 3314_02)
+            // Calculate signed volume to detect negative volume (inverted meshes)
+            let mut volume = 0.0_f64;
+            for triangle in &disp_mesh.triangles {
+                if triangle.v1 >= disp_mesh.vertices.len()
+                    || triangle.v2 >= disp_mesh.vertices.len()
+                    || triangle.v3 >= disp_mesh.vertices.len()
+                {
+                    continue; // Skip invalid triangles (caught by other validation)
+                }
+
+                let v1 = &disp_mesh.vertices[triangle.v1];
+                let v2 = &disp_mesh.vertices[triangle.v2];
+                let v3 = &disp_mesh.vertices[triangle.v3];
+
+                // Signed volume contribution of this triangle
+                volume += v1.x * (v2.y * v3.z - v2.z * v3.y)
+                    + v2.x * (v3.y * v1.z - v3.z * v1.y)
+                    + v3.x * (v1.y * v2.z - v1.z * v2.y);
+            }
+            volume /= 6.0;
+
+            // Use small epsilon for floating-point comparison
+            const EPSILON: f64 = 1e-10;
+            if volume < -EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Displacement mesh has negative volume ({:.6}), indicating inverted or incorrectly oriented triangles.\n\
+                     Hint: Check triangle vertex winding order - vertices should be ordered counter-clockwise when viewed from outside.",
+                    object.id, volume
+                )));
+            }
+
+            // Validate manifold mesh and check for duplicate vertices (DPX 3314_06)
+            // Check for duplicate vertices (exact same position)
+            for i in 0..disp_mesh.vertices.len() {
+                for j in (i + 1)..disp_mesh.vertices.len() {
+                    let v1 = &disp_mesh.vertices[i];
+                    let v2 = &disp_mesh.vertices[j];
+                    let dist_sq = (v1.x - v2.x).powi(2) + (v1.y - v2.y).powi(2) + (v1.z - v2.z).powi(2);
+                    if dist_sq < EPSILON {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Displacement mesh has duplicate vertices at indices {} and {} \
+                             with same position ({}, {}, {}).\n\
+                             Hint: Remove duplicate vertices or merge them properly.",
+                            object.id, i, j, v1.x, v1.y, v1.z
+                        )));
+                    }
+                }
+            }
+
+            // Check for manifold mesh - each edge should be shared by exactly 2 triangles
+            // Build edge map: edge -> count
+            use std::collections::HashMap;
+            let mut edge_count: HashMap<(usize, usize), usize> = HashMap::new();
+            for triangle in &disp_mesh.triangles {
+                // Add all three edges (use sorted indices for undirected edges)
+                let edges = [
+                    (triangle.v1.min(triangle.v2), triangle.v1.max(triangle.v2)),
+                    (triangle.v2.min(triangle.v3), triangle.v2.max(triangle.v3)),
+                    (triangle.v3.min(triangle.v1), triangle.v3.max(triangle.v1)),
+                ];
+                for edge in &edges {
+                    *edge_count.entry(*edge).or_insert(0) += 1;
+                }
+            }
+
+            // Check for non-manifold edges (shared by != 2 triangles)
+            for (edge, count) in &edge_count {
+                if *count != 2 {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement mesh is non-manifold. \
+                         Edge between vertices {} and {} is used by {} triangles (should be exactly 2).\n\
+                         Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
+                        object.id, edge.0, edge.1, count
+                    )));
+                }
+            }
+
             // Validate that displacement triangles have valid vertex references
             for (tri_idx, triangle) in disp_mesh.triangles.iter().enumerate() {
                 // Check vertex indices
