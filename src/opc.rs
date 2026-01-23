@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Read;
+use urlencoding::decode;
 use zip::ZipArchive;
 
 /// Main 3D model file path within the 3MF archive
@@ -431,11 +432,21 @@ impl<R: Read + std::io::Seek> Package<R> {
                                 Self::validate_opc_part_name(&t)?;
 
                                 // Remove leading slash if present
-                                let path = if let Some(stripped) = t.strip_prefix('/') {
+                                let path_with_slash = if let Some(stripped) = t.strip_prefix('/') {
                                     stripped.to_string()
                                 } else {
-                                    t
+                                    t.clone()
                                 };
+
+                                // URL-decode the path to match ZIP file names
+                                // Per OPC spec, XML relationships use percent-encoding for non-ASCII,
+                                // but ZIP file names use UTF-8 directly
+                                let path = decode(&path_with_slash)
+                                    .map_err(|e| Error::InvalidFormat(format!(
+                                        "Invalid percent-encoding in part name '{}': {}",
+                                        path_with_slash, e
+                                    )))?
+                                    .into_owned();
 
                                 // Verify the target file exists
                                 if !self.has_file(&path) {
@@ -585,11 +596,21 @@ impl<R: Read + std::io::Seek> Package<R> {
                         if let (Some(t), Some(rt)) = (target, rel_type) {
                             if rt == MODEL_REL_TYPE {
                                 // Remove leading slash if present
-                                let path = if let Some(stripped) = t.strip_prefix('/') {
+                                let path_with_slash = if let Some(stripped) = t.strip_prefix('/') {
                                     stripped.to_string()
                                 } else {
                                     t
                                 };
+                                
+                                // URL-decode the path to match ZIP file names
+                                // Per OPC spec, XML relationships use percent-encoding for non-ASCII,
+                                // but ZIP file names use UTF-8 directly
+                                let path = decode(&path_with_slash)
+                                    .map_err(|e| Error::InvalidFormat(format!(
+                                        "Invalid percent-encoding in model path '{}': {}",
+                                        path_with_slash, e
+                                    )))?
+                                    .into_owned();
                                 return Ok(path);
                             }
                         }
@@ -1142,5 +1163,142 @@ mod tests {
             result.is_err(),
             "Expected package validation to fail for empty ZIP"
         );
+    }
+
+    #[test]
+    fn test_percent_encoded_part_names() {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        use zip::ZipWriter;
+
+        // Create a 3MF file with percent-encoded part name in XML relationships
+        // and UTF-8 character in ZIP file name (correct per OPC spec)
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        let options = SimpleFileOptions::default();
+
+        // [Content_Types].xml
+        zip.start_file("[Content_Types].xml", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>
+</Types>",
+        )
+        .unwrap();
+
+        // _rels/.rels with percent-encoded target (%C3%86 = Æ)
+        zip.start_file("_rels/.rels", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">
+  <Relationship Target=\"/2D/test%C3%86file.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>
+</Relationships>",
+        )
+        .unwrap();
+
+        // Actual ZIP file with UTF-8 character (Æ)
+        zip.start_file("2D/testÆfile.model", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">
+  <resources>
+    <object id=\"1\" type=\"model\">
+      <mesh>
+        <vertices>
+          <vertex x=\"0\" y=\"0\" z=\"0\"/>
+          <vertex x=\"100\" y=\"0\" z=\"0\"/>
+          <vertex x=\"0\" y=\"100\" z=\"0\"/>
+        </vertices>
+        <triangles>
+          <triangle v1=\"0\" v2=\"1\" v3=\"2\"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid=\"1\"/>
+  </build>
+</model>",
+        )
+        .unwrap();
+
+        let cursor = zip.finish().unwrap();
+
+        // This should succeed: percent-encoded in XML, UTF-8 in ZIP
+        let result = Package::open(cursor);
+        assert!(
+            result.is_ok(),
+            "Package with percent-encoded part names should open successfully"
+        );
+    }
+
+    #[test]
+    fn test_utf8_in_xml_rejected() {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        use zip::ZipWriter;
+
+        // Create a 3MF file with UTF-8 character directly in XML (incorrect)
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        let options = SimpleFileOptions::default();
+
+        zip.start_file("[Content_Types].xml", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>
+</Types>",
+        )
+        .unwrap();
+
+        zip.start_file("_rels/.rels", options).unwrap();
+        let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">
+  <Relationship Target=\"/2D/testÆfile.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>
+</Relationships>";
+        zip.write_all(rels.as_bytes()).unwrap();
+
+        zip.start_file("2D/testÆfile.model", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">
+  <resources>
+    <object id=\"1\" type=\"model\">
+      <mesh>
+        <vertices>
+          <vertex x=\"0\" y=\"0\" z=\"0\"/>
+          <vertex x=\"100\" y=\"0\" z=\"0\"/>
+          <vertex x=\"0\" y=\"100\" z=\"0\"/>
+        </vertices>
+        <triangles>
+          <triangle v1=\"0\" v2=\"1\" v3=\"2\"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid=\"1\"/>
+  </build>
+</model>",
+        )
+        .unwrap();
+
+        let cursor = zip.finish().unwrap();
+
+        // This should fail: UTF-8 character directly in XML is not allowed
+        let result = Package::open(cursor);
+        assert!(
+            result.is_err(),
+            "Package with non-ASCII characters in XML should be rejected"
+        );
+        
+        if let Err(err) = result {
+            assert!(
+                err.to_string().contains("non-ASCII"),
+                "Error should mention non-ASCII characters"
+            );
+        }
     }
 }
