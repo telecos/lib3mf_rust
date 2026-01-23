@@ -490,6 +490,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "displacementmesh" if in_resources && current_object.is_some() => {
                         current_displacement_mesh = Some(DisplacementMesh::new());
                         in_displacement_mesh = true;
+                        has_displacement_triangles = false; // Reset for new displacementmesh
                         // Mark object as having extension shapes
                         if let Some(ref mut obj) = current_object {
                             obj.has_extension_shapes = true;
@@ -522,6 +523,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             disp_mesh.vertices.push(vertex);
                         }
                     }
+                    // Displacement mesh triangles must be checked BEFORE regular mesh triangles
+                    // because an object can have both <mesh> and <d:displacementmesh>, and
+                    // current_mesh stays Some() even when processing displacement elements.
+                    // If we check current_mesh.is_some() first, displacement triangles would be
+                    // parsed as regular triangles and d1/d2/d3 attributes would be rejected.
                     "triangles" if in_displacement_mesh => {
                         // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
                         if has_displacement_triangles {
@@ -538,8 +544,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             attrs.get("did").and_then(|s| s.parse::<usize>().ok());
                     }
                     "triangles" if current_mesh.is_some() => {
-                        // Triangles will be parsed as individual triangle elements
+                        // Regular mesh triangles - parsed as individual triangle elements
                     }
+                    // Displacement triangle must be checked BEFORE regular triangle for same reason
                     "triangle" if in_displacement_triangles => {
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let mut triangle = parse_displacement_triangle(&reader, e)?;
@@ -1641,8 +1648,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "displacementmesh" => {
                         in_displacement_mesh = false;
-                        has_displacement_triangles = false; // Reset for next displacementmesh
-                                                            // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
+                        // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
                         if let Some(ref obj) = current_object {
                             if obj.object_type != ObjectType::Model {
                                 return Err(Error::InvalidXml(format!(
