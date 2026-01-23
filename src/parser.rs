@@ -2001,8 +2001,16 @@ fn load_keystore<R: Read + std::io::Seek>(
                     if let Some(ref mut access_right) = current_access_right {
                         access_right.kek_params = KEKParams {
                             wrapping_algorithm,
-                            mgf_algorithm: if mgf_algorithm.is_empty() { None } else { Some(mgf_algorithm) },
-                            digest_method: if digest_method.is_empty() { None } else { Some(digest_method) },
+                            mgf_algorithm: if mgf_algorithm.is_empty() {
+                                None
+                            } else {
+                                Some(mgf_algorithm)
+                            },
+                            digest_method: if digest_method.is_empty() {
+                                None
+                            } else {
+                                Some(digest_method)
+                            },
                         };
                     }
                 }
@@ -2734,15 +2742,14 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
 
     // Helper closure to parse f64 from byte slice
     let parse_f64 = |value: &[u8]| -> Result<f64> {
-        let value_str = std::str::from_utf8(value)
-            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let value_str = std::str::from_utf8(value).map_err(|e| Error::InvalidXml(e.to_string()))?;
         Ok(value_str.parse::<f64>()?)
     };
 
     for attr_result in e.attributes() {
         let attr = attr_result?;
         let key = attr.key.as_ref();
-        
+
         match key {
             b"x" => x_opt = Some(parse_f64(&attr.value)?),
             b"y" => y_opt = Some(parse_f64(&attr.value)?),
@@ -2753,7 +2760,7 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
                     invalid_attr_name = Some(
                         std::str::from_utf8(key)
                             .unwrap_or("<invalid UTF-8>")
-                            .to_string()
+                            .to_string(),
                     );
                 }
             }
@@ -2815,14 +2822,14 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
     for attr_result in e.attributes() {
         let attr = attr_result?;
         let key = attr.key.as_ref();
-        
+
         match key {
             b"v1" | b"v2" | b"v3" | b"pid" | b"pindex" | b"p1" | b"p2" | b"p3" => {
                 // Only parse UTF-8 for known attributes
                 let value_str = std::str::from_utf8(&attr.value)
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 let value = value_str.parse::<usize>()?;
-                
+
                 match key {
                     b"v1" => v1_opt = Some(value),
                     b"v2" => v2_opt = Some(value),
@@ -2841,7 +2848,7 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
                     invalid_attr_name = Some(
                         std::str::from_utf8(key)
                             .unwrap_or("<invalid UTF-8>")
-                            .to_string()
+                            .to_string(),
                     );
                 }
             }
@@ -2856,9 +2863,12 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
         )));
     }
 
-    let v1 = v1_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v1 attribute".to_string()))?;
-    let v2 = v2_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v2 attribute".to_string()))?;
-    let v3 = v3_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v3 attribute".to_string()))?;
+    let v1 =
+        v1_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v1 attribute".to_string()))?;
+    let v2 =
+        v2_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v2 attribute".to_string()))?;
+    let v3 =
+        v3_opt.ok_or_else(|| Error::InvalidXml("Triangle missing v3 attribute".to_string()))?;
 
     let mut triangle = Triangle::new(v1, v2, v3);
     triangle.pid = pid_opt;
