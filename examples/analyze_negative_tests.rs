@@ -4,12 +4,18 @@ use walkdir::WalkDir;
 
 fn main() {
     let suites = vec![
-        ("suite3_core", "negative_test_cases"),
         ("suite1_core_slice_prod", "negative_test_cases"),
         ("suite2_core_prod_matl", "negative_test_cases"),
+        ("suite3_core", "negative_test_cases"),
         ("suite4_core_slice", "negative_test_cases"),
         ("suite5_core_prod", "negative_test_cases"),
+        ("suite5_core_prod", "negative_test_cases_prod_alt"),
         ("suite6_core_matl", "negative_test_cases"),
+        ("suite7_beam", "negative_test_cases"),
+        ("suite8_secure", "negative_test_cases"),
+        ("suite9_core_ext", "Negative Tests"),
+        ("suite10_boolean", "Negative Tests"),
+        ("suite11_Displacement", "Negative Tests"),
     ];
 
     let mut total_passed = 0;
@@ -55,10 +61,7 @@ fn main() {
     println!("Passed (correctly rejected): {}", total_passed);
     println!("Failed (incorrectly accepted): {}", total_failed);
     println!("\nFiles that should be rejected but were accepted:");
-    for (i, file) in failed_files.iter().enumerate().take(20) {
+    for (i, file) in failed_files.iter().enumerate() {
         println!("  {}. {}", i + 1, file);
-    }
-    if failed_files.len() > 20 {
-        println!("  ... and {} more", failed_files.len() - 20);
     }
 }

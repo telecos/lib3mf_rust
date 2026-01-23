@@ -1,5 +1,7 @@
 //! Additional component validation edge case tests
 
+mod common;
+
 use lib3mf::parser::parse_model_xml;
 
 #[test]
@@ -29,7 +31,7 @@ fn test_component_three_way_circular_reference() {
   </build>
 </model>"#;
 
-    let result = parse_model_xml(xml);
+    let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("Circular component reference"));

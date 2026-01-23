@@ -211,6 +211,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut in_displacement_mesh = false;
     let mut current_displacement_triangles_did: Option<usize> = None; // did attribute on <d:triangles>
     let mut in_displacement_triangles = false;
+    let mut has_displacement_triangles = false; // Track if we've seen triangles element (DPX 3314)
+
+    // Track declared displacement resources for forward-reference validation (DPX 3312)
+    let mut declared_displacement2d_ids = std::collections::HashSet::<usize>::new();
+    let mut declared_normvectorgroup_ids = std::collections::HashSet::<usize>::new();
 
     // Materials extension state for advanced features
     let mut current_texture2dgroup: Option<Texture2DGroup> = None;
@@ -292,6 +297,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 }
                                 "xmlns" => model.xmlns = value.to_string(),
                                 "requiredextensions" => {
+                                    // Per 3MF spec, requiredextensions can be empty string (means no extensions)
+                                    // or contain space-separated extension prefixes/namespaces
                                     required_ext_value = Some(value.to_string());
                                 }
                                 "recommendedextensions" => {
@@ -503,6 +510,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Triangles will be parsed as individual triangle elements
                     }
                     "triangles" if in_displacement_mesh => {
+                        // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
+                        if has_displacement_triangles {
+                            return Err(Error::InvalidXml(
+                                "Displacement mesh can only have one <triangles> element"
+                                    .to_string(),
+                            ));
+                        }
+                        has_displacement_triangles = true;
                         in_displacement_triangles = true;
                         // Parse did attribute from triangles element
                         let attrs = parse_attributes(&reader, e)?;
@@ -518,10 +533,33 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "triangle" if in_displacement_triangles => {
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let mut triangle = parse_displacement_triangle(&reader, e)?;
+
+                            // Per DPX spec 4.1.2.1: Validate displacement attribute consistency
+                            // If d2 or d3 specified without d1, that's invalid
+                            if (triangle.d2.is_some() || triangle.d3.is_some())
+                                && triangle.d1.is_none()
+                            {
+                                return Err(Error::InvalidXml(
+                                    "Displacement triangle: d2 or d3 displacement coordinate index specified without d1. \
+                                     If d1 is unspecified, no displacement coordinate indices can be used."
+                                        .to_string()
+                                ));
+                            }
+
                             // If did not specified on triangle, use the one from triangles element
                             if triangle.did.is_none() {
                                 triangle.did = current_displacement_triangles_did;
                             }
+
+                            // If d1 is specified, did MUST be specified (either on triangle or triangles)
+                            if triangle.d1.is_some() && triangle.did.is_none() {
+                                return Err(Error::InvalidXml(
+                                    "Displacement triangle: d1 displacement coordinate index is specified but 'did' attribute is not. \
+                                     The 'did' must be specified either on the <triangle> or <triangles> element."
+                                        .to_string()
+                                ));
+                            }
+
                             disp_mesh.triangles.push(triangle);
                         }
                     }
@@ -579,9 +617,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         if let Some(ref mut colorgroup) = current_colorgroup {
                             let attrs = parse_attributes(&reader, e)?;
                             if let Some(color_str) = attrs.get("color") {
-                                if let Some(color) = parse_color(color_str) {
-                                    colorgroup.colors.push(color);
-                                }
+                                let color = parse_color(color_str).ok_or_else(|| {
+                                    Error::InvalidXml(format!(
+                                        "Invalid color format '{}' in colorgroup {}.\n\
+                                         Colors must be in format #RRGGBB or #RRGGBBAA where each component is a hexadecimal value (0-9, A-F).\n\
+                                         Examples: #FF0000 (red), #00FF0080 (semi-transparent green)",
+                                        color_str, colorgroup.id
+                                    ))
+                                })?;
+                                colorgroup.colors.push(color);
                             }
                         }
                     }
@@ -795,6 +839,22 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "displacement2d" if in_resources => {
                         let attrs = parse_attributes(&reader, e)?;
+
+                        // Validate only allowed attributes are present
+                        // Per Displacement Extension spec 3.1: id, path, channel, tilestyleu, tilestylev, filter
+                        validate_attributes(
+                            &attrs,
+                            &[
+                                "id",
+                                "path",
+                                "channel",
+                                "tilestyleu",
+                                "tilestylev",
+                                "filter",
+                            ],
+                            "displacement2d",
+                        )?;
+
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
@@ -813,14 +873,19 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         let mut disp = Displacement2D::new(id, path);
 
                         // Parse optional attributes with spec-defined defaults
-                        // If attribute value is invalid, fall back to spec default (lenient parsing)
+                        // Strict validation: reject invalid enum values per DPX 3316
                         if let Some(channel_str) = attrs.get("channel") {
                             disp.channel = match channel_str.to_uppercase().as_str() {
                                 "R" => Channel::R,
                                 "G" => Channel::G,
                                 "B" => Channel::B,
                                 "A" => Channel::A,
-                                _ => Channel::G, // Spec default is 'G', fall back on invalid value
+                                _ => {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Invalid channel value '{}'. Valid values are: R, G, B, A",
+                                        channel_str
+                                    )))
+                                }
                             };
                         }
 
@@ -830,7 +895,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "mirror" => TileStyle::Mirror,
                                 "clamp" => TileStyle::Clamp,
                                 "none" => TileStyle::None,
-                                _ => TileStyle::Wrap, // Spec default is 'wrap', fall back on invalid value
+                                _ => return Err(Error::InvalidXml(format!(
+                                    "Invalid tilestyleu value '{}'. Valid values are: wrap, mirror, clamp, none",
+                                    tileu_str
+                                ))),
                             };
                         }
 
@@ -840,7 +908,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "mirror" => TileStyle::Mirror,
                                 "clamp" => TileStyle::Clamp,
                                 "none" => TileStyle::None,
-                                _ => TileStyle::Wrap, // Spec default is 'wrap', fall back on invalid value
+                                _ => return Err(Error::InvalidXml(format!(
+                                    "Invalid tilestylev value '{}'. Valid values are: wrap, mirror, clamp, none",
+                                    tilev_str
+                                ))),
                             };
                         }
 
@@ -849,11 +920,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "auto" => FilterMode::Auto,
                                 "linear" => FilterMode::Linear,
                                 "nearest" => FilterMode::Nearest,
-                                _ => FilterMode::Auto, // Spec default is 'auto', fall back on invalid value
+                                _ => return Err(Error::InvalidXml(format!(
+                                    "Invalid filter value '{}'. Valid values are: auto, linear, nearest",
+                                    filter_str
+                                ))),
                             };
                         }
 
                         model.resources.displacement_maps.push(disp);
+                        declared_displacement2d_ids.insert(id); // Track for forward-reference validation
                     }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
@@ -1094,6 +1169,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
+
+                        // Validate only allowed attributes are present
+                        // Per Displacement Extension spec 3.2: id
+                        validate_attributes(&attrs, &["id"], "normvectorgroup")?;
+
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
@@ -1107,6 +1187,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "normvector" if in_normvectorgroup => {
                         if let Some(ref mut nvgroup) = current_normvectorgroup {
                             let attrs = parse_attributes(&reader, e)?;
+
+                            // Validate only allowed attributes are present
+                            // Per Displacement Extension spec 3.2.1: x, y, z
+                            validate_attributes(&attrs, &["x", "y", "z"], "normvector")?;
+
                             let x = attrs
                                 .get("x")
                                 .ok_or_else(|| {
@@ -1125,12 +1210,30 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                     Error::InvalidXml("normvector missing z attribute".to_string())
                                 })?
                                 .parse::<f64>()?;
+
+                            // Validate values are finite
+                            if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+                                return Err(Error::InvalidXml(format!(
+                                    "NormVector has non-finite values: x={}, y={}, z={}",
+                                    x, y, z
+                                )));
+                            }
+
                             nvgroup.vectors.push(NormVector::new(x, y, z));
                         }
                     }
                     "disp2dgroup" if in_resources => {
                         in_disp2dgroup = true;
                         let attrs = parse_attributes(&reader, e)?;
+
+                        // Validate only allowed attributes are present
+                        // Per Displacement Extension spec 3.3: id, dispid, nid, height, offset
+                        validate_attributes(
+                            &attrs,
+                            &["id", "dispid", "nid", "height", "offset"],
+                            "disp2dgroup",
+                        )?;
+
                         let id = attrs
                             .get("id")
                             .ok_or_else(|| {
@@ -1145,12 +1248,31 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 )
                             })?
                             .parse::<usize>()?;
+
+                        // Per DPX spec 3.3: Validate dispid references declared Displacement2D resource
+                        if !declared_displacement2d_ids.contains(&dispid) {
+                            return Err(Error::InvalidXml(format!(
+                                "Disp2DGroup references Displacement2D with ID {} which has not been declared yet. \
+                                 Resources must be declared before they are referenced.",
+                                dispid
+                            )));
+                        }
+
                         let nid = attrs
                             .get("nid")
                             .ok_or_else(|| {
                                 Error::InvalidXml("disp2dgroup missing nid attribute".to_string())
                             })?
                             .parse::<usize>()?;
+
+                        // Per DPX spec 3.3: Validate nid references declared NormVectorGroup resource
+                        if !declared_normvectorgroup_ids.contains(&nid) {
+                            return Err(Error::InvalidXml(format!(
+                                "Disp2DGroup references NormVectorGroup with ID {} which has not been declared yet. \
+                                 Resources must be declared before they are referenced.",
+                                nid
+                            )));
+                        }
                         let height = attrs
                             .get("height")
                             .ok_or_else(|| {
@@ -1160,11 +1282,26 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             })?
                             .parse::<f64>()?;
 
+                        // Validate height is finite
+                        if !height.is_finite() {
+                            return Err(Error::InvalidXml(format!(
+                                "Disp2DGroup height must be finite, got: {}",
+                                height
+                            )));
+                        }
+
                         let mut disp2dgroup = Disp2DGroup::new(id, dispid, nid, height);
 
                         // Parse optional offset
                         if let Some(offset_str) = attrs.get("offset") {
-                            disp2dgroup.offset = offset_str.parse::<f64>()?;
+                            let offset = offset_str.parse::<f64>()?;
+                            if !offset.is_finite() {
+                                return Err(Error::InvalidXml(format!(
+                                    "Disp2DGroup offset must be finite, got: {}",
+                                    offset
+                                )));
+                            }
+                            disp2dgroup.offset = offset;
                         }
 
                         current_disp2dgroup = Some(disp2dgroup);
@@ -1172,6 +1309,11 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "disp2dcoord" if in_disp2dgroup => {
                         if let Some(ref mut d2dgroup) = current_disp2dgroup {
                             let attrs = parse_attributes(&reader, e)?;
+
+                            // Validate only allowed attributes are present
+                            // Per Displacement Extension spec 3.3.1: u, v, n, f
+                            validate_attributes(&attrs, &["u", "v", "n", "f"], "disp2dcoord")?;
+
                             let u = attrs
                                 .get("u")
                                 .ok_or_else(|| {
@@ -1197,11 +1339,26 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 })?
                                 .parse::<usize>()?;
 
+                            // Validate u,v are finite
+                            if !u.is_finite() || !v.is_finite() {
+                                return Err(Error::InvalidXml(format!(
+                                    "Disp2DCoords u and v must be finite, got: u={}, v={}",
+                                    u, v
+                                )));
+                            }
+
                             let mut coords = Disp2DCoords::new(u, v, n);
 
                             // Parse optional f attribute
                             if let Some(f_str) = attrs.get("f") {
-                                coords.f = f_str.parse::<f64>()?;
+                                let f = f_str.parse::<f64>()?;
+                                if !f.is_finite() {
+                                    return Err(Error::InvalidXml(format!(
+                                        "Disp2DCoords f must be finite, got: {}",
+                                        f
+                                    )));
+                                }
+                                coords.f = f;
                             }
 
                             d2dgroup.coords.push(coords);
@@ -1468,6 +1625,23 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "displacementmesh" => {
                         in_displacement_mesh = false;
+                        has_displacement_triangles = false; // Reset for next displacementmesh
+                                                            // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
+                        if let Some(ref obj) = current_object {
+                            if obj.object_type != ObjectType::Model {
+                                return Err(Error::InvalidXml(format!(
+                                    "Object {} with displacementmesh must have type=\"model\", found type=\"{}\"",
+                                    obj.id,
+                                    match obj.object_type {
+                                        ObjectType::Model => "model",
+                                        ObjectType::Support => "support",
+                                        ObjectType::SolidSupport => "solidsupport",
+                                        ObjectType::Surface => "surface",
+                                        ObjectType::Other => "other",
+                                    }
+                                )));
+                            }
+                        }
                     }
                     "triangles" if in_displacement_triangles => {
                         in_displacement_triangles = false;
@@ -1508,6 +1682,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "normvectorgroup" => {
                         if let Some(nvgroup) = current_normvectorgroup.take() {
+                            declared_normvectorgroup_ids.insert(nvgroup.id); // Track for forward-reference validation
                             model.resources.norm_vector_groups.push(nvgroup);
                         }
                         in_normvectorgroup = false;
@@ -1589,7 +1764,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     }
 
     // Note: Model validation is performed in parse_3mf_with_config after
-    // keystore and slice files are loaded
+    // keystore and slice files are loaded, not here
     Ok(model)
 }
 
@@ -1624,10 +1799,29 @@ fn load_keystore<R: Read + std::io::Seek>(
             // Try alternate location (info.store used in some test files)
             match package.get_file_binary("Secure/info.store") {
                 Ok(bytes) => bytes,
-                Err(_) => return Ok(()), // No keystore file, not an error
+                Err(_) => return Ok(()), // No keystore file, not an error              
             }
         }
     };
+              
+    // Discover keystore file path from relationships
+    // Per 3MF SecureContent spec, the keystore is identified by a relationship of type
+    // http://schemas.microsoft.com/3dmanufacturing/{version}/keystore
+    let keystore_path = match package.discover_keystore_path()? {
+        Some(path) => path,
+        None => {
+            // Try fallback to default path for backward compatibility
+            if package.has_file("Secure/keystore.xml") {
+                "Secure/keystore.xml".to_string()
+            } else {
+                return Ok(()); // No keystore file, not an error
+            }
+        }
+    };
+
+    // Load the keystore file
+    // Use get_file_binary() to handle files that may contain encrypted/binary data
+    let keystore_bytes = package.get_file_binary(&keystore_path)?;
 
     // Initialize secure_content if not already present
     if model.secure_content.is_none() {
@@ -3192,6 +3386,25 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                 // Normalize path: remove leading slash if present
                 let normalized_path = path.trim_start_matches('/');
 
+                // Skip validation for encrypted files (Secure Content extension)
+                // Encrypted files cannot be parsed, so we can't validate object IDs
+                let is_encrypted = model
+                    .secure_content
+                    .as_ref()
+                    .map(|sc| {
+                        sc.encrypted_files.iter().any(|encrypted_path| {
+                            // Compare normalized paths (both without leading slash)
+                            let enc_normalized = encrypted_path.trim_start_matches('/');
+                            enc_normalized == normalized_path
+                        })
+                    })
+                    .unwrap_or(false);
+
+                if is_encrypted {
+                    // Skip validation for encrypted files - they can't be parsed
+                    continue;
+                }
+
                 if !package.has_file(normalized_path) {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Boolean shape references non-existent external file: {}\n\
@@ -3221,6 +3434,25 @@ fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                 if let Some(ref path) = operand.path {
                     // Normalize path: remove leading slash if present
                     let normalized_path = path.trim_start_matches('/');
+
+                    // Skip validation for encrypted files (Secure Content extension)
+                    // Encrypted files cannot be parsed, so we can't validate object IDs
+                    let is_encrypted = model
+                        .secure_content
+                        .as_ref()
+                        .map(|sc| {
+                            sc.encrypted_files.iter().any(|encrypted_path| {
+                                // Compare normalized paths (both without leading slash)
+                                let enc_normalized = encrypted_path.trim_start_matches('/');
+                                enc_normalized == normalized_path
+                            })
+                        })
+                        .unwrap_or(false);
+
+                    if is_encrypted {
+                        // Skip validation for encrypted files - they can't be parsed
+                        continue;
+                    }
 
                     if !package.has_file(normalized_path) {
                         return Err(Error::InvalidModel(format!(
@@ -3359,6 +3591,25 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
             // Normalize path: remove leading slash if present
             let normalized_path = path.trim_start_matches('/');
 
+            // Skip validation for encrypted files (Secure Content extension)
+            // Encrypted files cannot be parsed, so we can't validate object IDs
+            let is_encrypted = model
+                .secure_content
+                .as_ref()
+                .map(|sc| {
+                    sc.encrypted_files.iter().any(|encrypted_path| {
+                        // Compare normalized paths (both without leading slash)
+                        let enc_normalized = encrypted_path.trim_start_matches('/');
+                        enc_normalized == normalized_path
+                    })
+                })
+                .unwrap_or(false);
+
+            if is_encrypted {
+                // Skip validation for encrypted files - they can't be parsed
+                continue;
+            }
+
             // Check if file exists
             if !package.has_file(normalized_path) {
                 return Err(Error::InvalidModel(format!(
@@ -3392,6 +3643,25 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 if let Some(ref path) = prod_info.path {
                     // Normalize path: remove leading slash if present
                     let normalized_path = path.trim_start_matches('/');
+
+                    // Skip validation for encrypted files (Secure Content extension)
+                    // Encrypted files cannot be parsed, so we can't validate object IDs
+                    let is_encrypted = model
+                        .secure_content
+                        .as_ref()
+                        .map(|sc| {
+                            sc.encrypted_files.iter().any(|encrypted_path| {
+                                // Compare normalized paths (both without leading slash)
+                                let enc_normalized = encrypted_path.trim_start_matches('/');
+                                enc_normalized == normalized_path
+                            })
+                        })
+                        .unwrap_or(false);
+
+                    if is_encrypted {
+                        // Skip validation for encrypted files - they can't be parsed
+                        continue;
+                    }
 
                     // Check if file exists
                     if !package.has_file(normalized_path) {

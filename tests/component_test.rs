@@ -1,5 +1,7 @@
 //! Integration tests for component validation
 
+mod common;
+
 use lib3mf::Model;
 use std::fs::File;
 
@@ -81,7 +83,7 @@ fn test_component_validation_invalid_reference() {
   </build>
 </model>"#;
 
-    let result = lib3mf::parser::parse_model_xml(xml);
+    let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -111,7 +113,7 @@ fn test_component_validation_circular_reference() {
   </build>
 </model>"#;
 
-    let result = lib3mf::parser::parse_model_xml(xml);
+    let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()

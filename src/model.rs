@@ -69,6 +69,10 @@ impl Extension {
             "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" => {
                 Some(Extension::SecureContent)
             }
+            // Also accept the earlier 2019/04 namespace for backward compatibility
+            "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04" => {
+                Some(Extension::SecureContent)
+            }
             "http://schemas.3mf.io/3dmanufacturing/booleanoperations/2023/07" => {
                 Some(Extension::BooleanOperations)
             }
