@@ -46,27 +46,43 @@ This document describes the implementation and security considerations for the 3
    - EPX-2605: Encrypted file path validation
    - EPX-2607: File existence validation
 
+4. **Test-Only Decryption**: Decryption using Suite 8 test keys
+   - RSA-OAEP key unwrapping with test private key (consumerid="test3mf01")
+   - AES-256-GCM content decryption
+   - DEFLATE decompression support
+   - Automatic decryption of encrypted files during parsing
+   - **For Suite 8 conformance testing only**
+
 ### What is NOT Supported ❌
 
-1. **No Cryptographic Operations**
+1. **Production Decryption**
+   - No configurable key provider
+   - No production key management
+   - Only test keys from Suite 8 Appendix D are embedded
+   - Not suitable for production use with real encrypted content
+
+2. **Advanced Cryptographic Features**
    - No signature verification
-   - No decryption of encrypted content
-   - No certificate/key management
-   - No cryptographic primitives implementation
-   - No actual key unwrapping or content decryption
+   - No certificate/key management beyond test keys
+   - No PKI integration
 
-2. **No Content Access**
-   - Encrypted OPC parts are not decrypted
-   - Cannot read encrypted model files
-   - Cannot access encrypted resources
-   - Applications must implement their own decryption logic
+## Scope of Support: Test-Only Decryption + Metadata Extraction
 
-## Scope of Support: Metadata Extraction for External Decryption
+This implementation provides two levels of support:
 
-This implementation provides **complete metadata extraction** to enable applications
-to implement their own decryption using external cryptographic libraries:
+1. **Test-Only Decryption** (Suite 8 Conformance):
+   - Automatic decryption of files encrypted with Suite 8 test keys
+   - Enables conformance validation against test suite
+   - Uses hardcoded test keys from Appendix D
+   - **Not for production use**
 
-### Design Decision: Parse Structure, Delegate Cryptography
+2. **Complete Metadata Extraction** (Production Applications):
+   - Full keystore structure parsing
+   - All encryption parameters exposed
+   - Applications implement their own decryption
+   - Choose their own cryptographic libraries and key management
+
+### Design Decision: Test Keys for Conformance, Metadata for Production
 
 **Rationale:**
 1. **Complexity**: Full cryptographic support requires:
@@ -95,6 +111,28 @@ to implement their own decryption using external cryptographic libraries:
    - Require regulatory compliance (ITAR, GDPR)
 
 ### What This Implementation Provides
+
+#### For Suite 8 Conformance Testing
+
+Files encrypted with the test keys are **automatically decrypted** during parsing:
+
+```rust
+use lib3mf::Model;
+
+// Parse a 3MF file with encrypted content (Suite 8 test files)
+// Files encrypted with consumerid="test3mf01" are automatically decrypted
+let model = Model::from_reader(file)?;
+
+// Encrypted files are transparently decrypted and accessible
+// This enables Suite 8 conformance validation
+```
+
+The decryption happens automatically in the background. Test keys are from Suite 8 Appendix D:
+- Consumer ID: `test3mf01`
+- Key ID: `test3mfkek01`
+- RSA-2048 private key (embedded)
+
+#### For Production Applications (Metadata Access)
 
 ```rust
 use lib3mf::Model;
@@ -341,25 +379,27 @@ fn decrypt_resource(resource: &ResourceData, cek: &[u8]) -> Result<Vec<u8>> {
 
 ### ⚠️ Important Security Warnings
 
-1. **NO DECRYPTION**: This library does NOT decrypt secure content
-   - Encrypted files remain encrypted
-   - No access to encrypted resources
-   - No cryptographic key handling
+1. **TEST-ONLY DECRYPTION**: Decryption uses hardcoded test keys
+   - Private key is embedded in the source code
+   - Only works for Suite 8 test files (consumerid="test3mf01")
+   - **NEVER use for production encrypted content**
+   - Test keys are publicly known (Suite 8 Appendix D)
 
-2. **NO SIGNATURE VERIFICATION**: Digital signatures are NOT verified
+2. **NO PRODUCTION KEY MANAGEMENT**: 
+   - No configurable key provider
+   - No secure key storage
+   - No key rotation
+   - Production applications must implement their own key management
+
+3. **NO SIGNATURE VERIFICATION**: Digital signatures are NOT verified
    - Cannot validate authenticity
    - Cannot detect tampering
    - Cannot verify signer identity
 
-3. **NO CERTIFICATE VALIDATION**: Certificates/keys are NOT validated
+4. **NO CERTIFICATE VALIDATION**: Certificates/keys are NOT validated beyond test keys
    - No PKI integration
    - No certificate chain validation
    - No revocation checking
-
-4. **METADATA ONLY**: Only structural parsing
-   - Can identify encrypted parts
-   - Can read unencrypted metadata
-   - Cannot access protected content
 
 ### Recommended Security Practices
 
@@ -381,7 +421,7 @@ For applications requiring secure content support:
    - Consult security professionals for production use
 
 4. **Key Management**:
-   - Never embed keys in source code
+   - **NEVER embed keys in source code** (except for testing)
    - Use secure key storage (HSM, TPM, key vaults)
    - Implement proper key rotation
    - Follow principle of least privilege
@@ -522,7 +562,11 @@ This "parse structure, delegate cryptography" approach provides maximum flexibil
 maintaining security by leaving actual cryptographic operations to specialized, well-audited
 libraries chosen by the application developer.
 
-**For decryption implementation**: Applications must use external cryptographic libraries.
+**For Suite 8 conformance testing**: Files encrypted with test keys (consumerid="test3mf01")
+are automatically decrypted during parsing. This enables complete conformance validation.
+
+**For production applications**: Use the metadata extraction APIs to access encryption
+parameters and implement your own decryption using external cryptographic libraries.
 See the "Implementing Decryption" section above for conceptual workflow.
 
-**Security is hard. When in doubt, consult experts.**
+**Security is hard. When in doubt, consult experts. Never use test keys in production.**
