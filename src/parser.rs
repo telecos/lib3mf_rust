@@ -2732,26 +2732,21 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
     let mut z_opt: Option<f64> = None;
     let mut invalid_attr_name: Option<String> = None;
 
+    // Helper closure to parse f64 from byte slice
+    let parse_f64 = |value: &[u8]| -> Result<f64> {
+        let value_str = std::str::from_utf8(value)
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        Ok(value_str.parse::<f64>()?)
+    };
+
     for attr_result in e.attributes() {
         let attr = attr_result?;
         let key = attr.key.as_ref();
         
         match key {
-            b"x" => {
-                let value = std::str::from_utf8(&attr.value)
-                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                x_opt = Some(value.parse::<f64>()?);
-            }
-            b"y" => {
-                let value = std::str::from_utf8(&attr.value)
-                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                y_opt = Some(value.parse::<f64>()?);
-            }
-            b"z" => {
-                let value = std::str::from_utf8(&attr.value)
-                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                z_opt = Some(value.parse::<f64>()?);
-            }
+            b"x" => x_opt = Some(parse_f64(&attr.value)?),
+            b"y" => y_opt = Some(parse_f64(&attr.value)?),
+            b"z" => z_opt = Some(parse_f64(&attr.value)?),
             _ => {
                 // Store first invalid attribute for error reporting
                 if invalid_attr_name.is_none() {
@@ -2777,20 +2772,21 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
     let y = y_opt.ok_or_else(|| Error::InvalidXml("Vertex missing y attribute".to_string()))?;
     let z = z_opt.ok_or_else(|| Error::InvalidXml("Vertex missing z attribute".to_string()))?;
 
-    // Validate numeric values - reject NaN and Infinity (combined check for better branch prediction)
-    if !x.is_finite() || !y.is_finite() || !z.is_finite() {
-        if !x.is_finite() {
-            return Err(Error::InvalidXml(format!(
-                "Vertex x coordinate must be finite (got {})",
-                x
-            )));
-        }
-        if !y.is_finite() {
-            return Err(Error::InvalidXml(format!(
-                "Vertex y coordinate must be finite (got {})",
-                y
-            )));
-        }
+    // Validate numeric values - reject NaN and Infinity
+    // Check efficiently: if any is not finite, identify which one
+    if !x.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex x coordinate must be finite (got {})",
+            x
+        )));
+    }
+    if !y.is_finite() {
+        return Err(Error::InvalidXml(format!(
+            "Vertex y coordinate must be finite (got {})",
+            y
+        )));
+    }
+    if !z.is_finite() {
         return Err(Error::InvalidXml(format!(
             "Vertex z coordinate must be finite (got {})",
             z
@@ -2820,18 +2816,25 @@ pub(crate) fn parse_triangle<R: std::io::BufRead>(
         let attr = attr_result?;
         let key = attr.key.as_ref();
         
-        let value_str = std::str::from_utf8(&attr.value)
-            .map_err(|e| Error::InvalidXml(e.to_string()))?;
-        
         match key {
-            b"v1" => v1_opt = Some(value_str.parse::<usize>()?),
-            b"v2" => v2_opt = Some(value_str.parse::<usize>()?),
-            b"v3" => v3_opt = Some(value_str.parse::<usize>()?),
-            b"pid" => pid_opt = Some(value_str.parse::<usize>()?),
-            b"pindex" => pindex_opt = Some(value_str.parse::<usize>()?),
-            b"p1" => p1_opt = Some(value_str.parse::<usize>()?),
-            b"p2" => p2_opt = Some(value_str.parse::<usize>()?),
-            b"p3" => p3_opt = Some(value_str.parse::<usize>()?),
+            b"v1" | b"v2" | b"v3" | b"pid" | b"pindex" | b"p1" | b"p2" | b"p3" => {
+                // Only parse UTF-8 for known attributes
+                let value_str = std::str::from_utf8(&attr.value)
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let value = value_str.parse::<usize>()?;
+                
+                match key {
+                    b"v1" => v1_opt = Some(value),
+                    b"v2" => v2_opt = Some(value),
+                    b"v3" => v3_opt = Some(value),
+                    b"pid" => pid_opt = Some(value),
+                    b"pindex" => pindex_opt = Some(value),
+                    b"p1" => p1_opt = Some(value),
+                    b"p2" => p2_opt = Some(value),
+                    b"p3" => p3_opt = Some(value),
+                    _ => unreachable!(),
+                }
+            }
             _ => {
                 // Store first invalid attribute for error reporting
                 if invalid_attr_name.is_none() {
