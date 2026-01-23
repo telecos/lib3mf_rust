@@ -1791,28 +1791,18 @@ fn load_keystore<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
 ) -> Result<()> {
-    // Try to load the keystore file - check both standard locations
-    // Use get_file_binary() to handle files that may contain encrypted/binary data
-    let keystore_bytes = match package.get_file_binary("Secure/keystore.xml") {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            // Try alternate location (info.store used in some test files)
-            match package.get_file_binary("Secure/info.store") {
-                Ok(bytes) => bytes,
-                Err(_) => return Ok(()), // No keystore file, not an error              
-            }
-        }
-    };
-              
     // Discover keystore file path from relationships
     // Per 3MF SecureContent spec, the keystore is identified by a relationship of type
     // http://schemas.microsoft.com/3dmanufacturing/{version}/keystore
     let keystore_path = match package.discover_keystore_path()? {
         Some(path) => path,
         None => {
-            // Try fallback to default path for backward compatibility
+            // Try fallback to default paths for backward compatibility
+            // Check both Secure/keystore.xml and Secure/info.store
             if package.has_file("Secure/keystore.xml") {
                 "Secure/keystore.xml".to_string()
+            } else if package.has_file("Secure/info.store") {
+                "Secure/info.store".to_string()
             } else {
                 return Ok(()); // No keystore file, not an error
             }

@@ -3382,7 +3382,7 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform 
+/// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
 /// doesn't place object outside printable area
 ///
 /// **Note: This validation is intentionally disabled.**
@@ -3395,7 +3395,7 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 ///
 /// The specific test cases check for:
 /// - N_XXX_0421_01: Negative coordinates (below build plate)
-/// - N_XXX_0420_01: Exceeding X dimension 
+/// - N_XXX_0420_01: Exceeding X dimension
 /// - N_XXX_0418_01: Exceeding Y and Z dimensions
 ///
 /// These tests are added to the expected failures list in tests/expected_failures.json
