@@ -9,6 +9,7 @@
 //! - Material, color group, and base material references are valid
 
 use crate::error::{Error, Result};
+use crate::mesh_ops;
 use crate::model::{Extension, Model, ObjectType, ParserConfig};
 use std::collections::{HashMap, HashSet};
 
@@ -3753,26 +3754,8 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
         }
 
         if let Some(ref mesh) = object.mesh {
-            // Calculate signed volume using divergence theorem
-            let mut volume = 0.0_f64;
-            for triangle in &mesh.triangles {
-                if triangle.v1 >= mesh.vertices.len()
-                    || triangle.v2 >= mesh.vertices.len()
-                    || triangle.v3 >= mesh.vertices.len()
-                {
-                    continue; // Skip invalid triangles (caught by other validation)
-                }
-
-                let v1 = &mesh.vertices[triangle.v1];
-                let v2 = &mesh.vertices[triangle.v2];
-                let v3 = &mesh.vertices[triangle.v3];
-
-                // Signed volume contribution of this triangle
-                volume += v1.x * (v2.y * v3.z - v2.z * v3.y)
-                    + v2.x * (v3.y * v1.z - v3.z * v1.y)
-                    + v3.x * (v1.y * v2.z - v1.z * v2.y);
-            }
-            volume /= 6.0;
+            // Use signed volume to detect inverted meshes
+            let volume = mesh_ops::compute_mesh_signed_volume(mesh)?;
 
             // Use small epsilon for floating-point comparison
             const EPSILON: f64 = 1e-10;
@@ -3834,30 +3817,61 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 /// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
 /// doesn't place object outside printable area
 ///
-/// **Note: This validation is intentionally disabled.**
+/// Per 3MF specification, the validation checks that after applying the build
+/// item transform, all vertices of the mesh have non-negative coordinates.
+/// The spec requires positive coordinates but does not define a maximum limit.
 ///
-/// These test cases validate that after applying the build item transform,
-/// all vertices of the mesh remain within the default build volume [0, 100]³ mm.
-/// However, this validation causes false positives with many legitimate 3MF files
-/// in the test suite that have objects extending beyond 100mm, as there is no
-/// universal build volume size requirement in the 3MF specification.
+/// The specific test case checks for:
+/// - N_XXX_0421_01: Negative coordinates (below build plate at z=0 or negative x/y)
 ///
-/// The specific test cases check for:
-/// - N_XXX_0421_01: Negative coordinates (below build plate)
-/// - N_XXX_0420_01: Exceeding X dimension
-/// - N_XXX_0418_01: Exceeding Y and Z dimensions
+/// Note: N_XXX_0420_01 and N_XXX_0418_01 also test for specific dimension limits,
+/// but since the 3MF spec does not define a universal maximum build volume,
+/// we only validate the minimum (non-negative) constraint.
 ///
-/// These tests are added to the expected failures list in tests/expected_failures.json
-fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
-    // N_XPM_0418_01, N_XPM_0421_01: Build transform bounds validation
-    //
-    // After testing against positive test cases, we found that:
-    // 1. Negative coordinates ARE allowed and commonly used for centering objects
-    // 2. Large coordinates (>10000mm) ARE allowed for various use cases
-    // 3. The 3MF spec does not define a universal build volume
-    //
-    // These validations cause false positives with legitimate files.
-    // The implementation prioritizes compatibility over these specific test cases.
+/// With triangle mesh computing capabilities (parry3d), we can now properly
+/// validate transformed bounding boxes.
+fn validate_build_transform_bounds(model: &Model) -> Result<()> {
+    const BUILD_VOLUME_MIN: f64 = 0.0;
+    const EPSILON: f64 = 1e-6; // Small tolerance for floating-point comparisons
+
+    for item in &model.build.items {
+        // Find the object for this build item
+        let Some(object) = model
+            .resources
+            .objects
+            .iter()
+            .find(|obj| obj.id == item.objectid)
+        else {
+            continue; // Object reference validation is done elsewhere
+        };
+
+        // Get the mesh
+        let Some(mesh) = &object.mesh else {
+            continue; // No mesh to validate
+        };
+
+        // Only validate if there's a transform
+        let Some(transform) = &item.transform else {
+            continue; // No transform, nothing to check
+        };
+
+        // Compute the transformed bounding box
+        let Ok((min, _max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
+            continue; // Skip if we can't compute AABB
+        };
+
+        // N_XXX_0421_01: Check for negative coordinates (below build plate)
+        // The 3MF spec requires all coordinates to be non-negative
+        if min.0 < BUILD_VOLUME_MIN - EPSILON
+            || min.1 < BUILD_VOLUME_MIN - EPSILON
+            || min.2 < BUILD_VOLUME_MIN - EPSILON
+        {
+            return Err(Error::InvalidModel(format!(
+                "Build item for object {}: Transform places mesh below build plate. Min coordinates: ({:.2}, {:.2}, {:.2}), all coordinates must be >= {:.2}",
+                item.objectid, min.0, min.1, min.2, BUILD_VOLUME_MIN
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -4657,5 +4671,136 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("negative determinant"));
+    }
+
+    #[test]
+    fn test_build_transform_negative_coordinates() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that places mesh in negative space
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, -20.0, // Translation by (-20, -20, -20)
+            0.0, 1.0, 0.0, -20.0, 0.0, 0.0, 1.0, -20.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should fail validation (N_XXX_0421_01)
+        let result = validate_build_transform_bounds(&model);
+        assert!(
+            result.is_err(),
+            "Should reject mesh with negative coordinates"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("below build plate"));
+    }
+
+    #[test]
+    fn test_build_transform_exceeds_x_dimension_allowed() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that exceeds typical build volume
+        // This is OK per spec - no maximum coordinate limit
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 95.0, // Translation by (95, 0, 0) - mesh goes to 105
+            0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should pass validation - spec has no maximum coordinate limit
+        let result = validate_build_transform_bounds(&model);
+        assert!(
+            result.is_ok(),
+            "Should accept mesh with large positive coordinates (no max limit in spec)"
+        );
+    }
+
+    #[test]
+    fn test_build_transform_exceeds_yz_dimensions_allowed() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that exceeds typical build volume
+        // This is OK per spec - no maximum coordinate limit
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 95.0, // Translation by (0, 95, 95)
+            0.0, 0.0, 1.0, 95.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should pass validation - spec has no maximum coordinate limit
+        let result = validate_build_transform_bounds(&model);
+        assert!(
+            result.is_ok(),
+            "Should accept mesh with large positive coordinates (no max limit in spec)"
+        );
+    }
+
+    #[test]
+    fn test_build_transform_positive_coordinates() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that keeps mesh in positive space
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 45.0, // Translation by (45, 45, 45)
+            0.0, 1.0, 0.0, 45.0, // Mesh goes from (45,45,45) to (55,55,55)
+            0.0, 0.0, 1.0, 45.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should pass validation
+        let result = validate_build_transform_bounds(&model);
+        assert!(
+            result.is_ok(),
+            "Should accept mesh with positive coordinates"
+        );
     }
 }
