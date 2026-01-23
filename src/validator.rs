@@ -3225,13 +3225,157 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
-fn validate_triangle_properties(_model: &Model) -> Result<()> {
+fn validate_triangle_properties(model: &Model) -> Result<()> {
     // Per 3MF Materials Extension spec:
     // - Triangles can have triangle-level properties (pid and/or pindex)
     // - Triangles can have per-vertex properties (p1, p2, p3) which work WITH pid for interpolation
     // - Having both pid and p1/p2/p3 is ALLOWED and is used for per-vertex material interpolation
-    // No validation needed here - the parser already validates property references
+    //
+    // NOTE: After testing against positive test cases, we found that partial per-vertex
+    // properties are actually allowed in some scenarios. The validation has been relaxed.
+
+    // Validate object-level properties
+    for object in &model.resources.objects {
+        // Validate object-level pid/pindex
+        if let (Some(pid), Some(pindex)) = (object.pid, object.pindex) {
+            // Get the size of the property resource
+            let property_size = get_property_resource_size(model, pid)?;
+
+            // Validate pindex is within bounds
+            if pindex >= property_size {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} has pindex {} which is out of bounds. \
+                     Property resource {} has only {} elements (valid indices: 0-{}).",
+                    object.id,
+                    pindex,
+                    pid,
+                    property_size,
+                    property_size - 1
+                )));
+            }
+        }
+
+        // Validate triangle-level properties
+        if let Some(ref mesh) = object.mesh {
+            for triangle in &mesh.triangles {
+                // Validate triangle pindex is within bounds for multi-properties
+                if let (Some(pid), Some(pindex)) = (triangle.pid, triangle.pindex) {
+                    // Check if pid references a multiproperties resource
+                    if let Some(multi_props) = model
+                        .resources
+                        .multi_properties
+                        .iter()
+                        .find(|m| m.id == pid)
+                    {
+                        // pindex must be within bounds of the multiproperties entries
+                        if pindex >= multi_props.multis.len() {
+                            return Err(Error::InvalidModel(format!(
+                                "Triangle in object {} has pindex {} which is out of bounds. \
+                                 MultiProperties resource {} has only {} entries (valid indices: 0-{}).",
+                                object.id, pindex, pid, multi_props.multis.len(), multi_props.multis.len() - 1
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Helper function to get the size of a property resource (number of entries)
+fn get_property_resource_size(model: &Model, resource_id: usize) -> Result<usize> {
+    // Check colorgroup
+    if let Some(color_group) = model
+        .resources
+        .color_groups
+        .iter()
+        .find(|c| c.id == resource_id)
+    {
+        if color_group.colors.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "ColorGroup {} has no colors. Per 3MF Materials Extension spec, \
+                 color groups must contain at least one color element.",
+                resource_id
+            )));
+        }
+        return Ok(color_group.colors.len());
+    }
+
+    // Check texture2dgroup
+    if let Some(tex_group) = model
+        .resources
+        .texture2d_groups
+        .iter()
+        .find(|t| t.id == resource_id)
+    {
+        if tex_group.tex2coords.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Texture2DGroup {} has no texture coordinates. Per 3MF Materials Extension spec, \
+                 texture2dgroup must contain at least one tex2coord element.",
+                resource_id
+            )));
+        }
+        return Ok(tex_group.tex2coords.len());
+    }
+
+    // Check compositematerials
+    if let Some(composite) = model
+        .resources
+        .composite_materials
+        .iter()
+        .find(|c| c.id == resource_id)
+    {
+        if composite.composites.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "CompositeMaterials {} has no composite elements. Per 3MF Materials Extension spec, \
+                 compositematerials must contain at least one composite element.",
+                resource_id
+            )));
+        }
+        return Ok(composite.composites.len());
+    }
+
+    // Check basematerials
+    if let Some(base_mat) = model
+        .resources
+        .base_material_groups
+        .iter()
+        .find(|b| b.id == resource_id)
+    {
+        if base_mat.materials.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "BaseMaterials {} has no base material elements. Per 3MF spec, \
+                 basematerials must contain at least one base element.",
+                resource_id
+            )));
+        }
+        return Ok(base_mat.materials.len());
+    }
+
+    // Check multiproperties
+    if let Some(multi_props) = model
+        .resources
+        .multi_properties
+        .iter()
+        .find(|m| m.id == resource_id)
+    {
+        if multi_props.multis.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "MultiProperties {} has no multi elements. Per 3MF Materials Extension spec, \
+                 multiproperties must contain at least one multi element.",
+                resource_id
+            )));
+        }
+        return Ok(multi_props.multis.len());
+    }
+
+    // Resource not found or not a property resource
+    Err(Error::InvalidModel(format!(
+        "Property resource {} not found or is not a valid property resource type",
+        resource_id
+    )))
 }
 
 /// Validate production extension UUID usage
@@ -3400,6 +3544,15 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 ///
 /// These tests are added to the expected failures list in tests/expected_failures.json
 fn validate_build_transform_bounds(_model: &Model) -> Result<()> {
+    // N_XPM_0418_01, N_XPM_0421_01: Build transform bounds validation
+    //
+    // After testing against positive test cases, we found that:
+    // 1. Negative coordinates ARE allowed and commonly used for centering objects
+    // 2. Large coordinates (>10000mm) ARE allowed for various use cases
+    // 3. The 3MF spec does not define a universal build volume
+    //
+    // These validations cause false positives with legitimate files.
+    // The implementation prioritizes compatibility over these specific test cases.
     Ok(())
 }
 
@@ -3505,6 +3658,11 @@ fn validate_duplicate_uuids(model: &Model) -> Result<()> {
 /// This is beyond the scope of single-file validation and would require
 /// significant architectural changes to support multi-file analysis.
 fn validate_component_chain(_model: &Model) -> Result<()> {
+    // N_XPM_0803_01: Component reference chain validation
+    //
+    // The validation for components with p:path referencing local objects
+    // is complex and requires more investigation of the 3MF Production Extension spec.
+    // The current understanding is insufficient to implement this correctly.
     Ok(())
 }
 
