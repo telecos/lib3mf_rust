@@ -583,7 +583,9 @@ impl<R: Read + std::io::Seek> Package<R> {
         };
 
         // Now read the file
-        let mut file = self.archive.by_name(&path_to_use)
+        let mut file = self
+            .archive
+            .by_name(&path_to_use)
             .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
