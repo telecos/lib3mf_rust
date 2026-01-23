@@ -2973,7 +2973,7 @@ fn validate_resource_ordering(model: &Model) -> Result<()> {
 ///
 /// Per 3MF spec:
 /// - Object IDs must be unique among objects
-/// - Property resource IDs (basematerials, colorgroups, texture2d, texture2dgroups, 
+/// - Property resource IDs (basematerials, colorgroups, texture2d, texture2dgroups,
 ///   compositematerials, multiproperties) must be unique among property resources
 /// - Objects and property resources have SEPARATE ID namespaces and can reuse IDs
 fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
