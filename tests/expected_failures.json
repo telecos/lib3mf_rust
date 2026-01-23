@@ -180,7 +180,7 @@
       "file": "P_EPX_2102_01_materialExt.3mf",
       "suite": "suite8_secure",
       "test_type": "positive",
-      "reason": "File has extreme negative Z-axis coordinates (min: -23568.06) that place the mesh far below the build plate. While this implementation intentionally allows negative coordinates for compatibility, this file appears to have incorrect transform data. The test suite validator reports this as error E3001 for build item object 3. Marked as expected failure because the file is in positive_test_cases but contains problematic geometry.",
+      "reason": "File contains extreme negative Z-axis coordinates (min: -23568.06) in build item object 3 transform, causing error E3001. Appears to contain incorrect transform data despite being in positive test cases.",
       "issue_url": "",
       "date_added": "2026-01-23"
     }
