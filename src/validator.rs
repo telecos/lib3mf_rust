@@ -1789,6 +1789,10 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
     // Validate NormVectorGroup - vectors must point outward
     // Per DPX 3302: Normalized displacement vectors MUST point to the outer hemisphere of the triangle
     // The scalar product of a normalized displacement vector to the triangle normal MUST be greater than 0
+    
+    // Epsilon for zero-length vector detection
+    const NORMVECTOR_ZERO_EPSILON: f64 = 0.000001;
+    
     for norm_group in &model.resources.norm_vector_groups {
         for (idx, norm_vec) in norm_group.vectors.iter().enumerate() {
             // Calculate the magnitude of the vector
@@ -1796,7 +1800,7 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 norm_vec.x * norm_vec.x + norm_vec.y * norm_vec.y + norm_vec.z * norm_vec.z;
 
             // Check if vector has zero length
-            if length_squared < 0.000001 {
+            if length_squared < NORMVECTOR_ZERO_EPSILON {
                 return Err(Error::InvalidModel(format!(
                     "NormVectorGroup {}: Normvector {} has near-zero length (x={}, y={}, z={}). \
                      Normal vectors must have non-zero length.",
@@ -1900,7 +1904,6 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
 
             // Check for manifold mesh - each edge should be shared by exactly 2 triangles
             // Build edge map: edge -> count
-            use std::collections::HashMap;
             let mut edge_count: HashMap<(usize, usize), usize> = HashMap::new();
             for triangle in &disp_mesh.triangles {
                 // Add all three edges (use sorted indices for undirected edges)
@@ -2111,7 +2114,9 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                                                 + normal_z * norm_vec.z;
 
                                             // Per DPX spec: scalar product must be > 0
-                                            if dot_product <= 0.0 {
+                                            // Use epsilon for floating-point comparison
+                                            const DOT_PRODUCT_EPSILON: f64 = 1e-10;
+                                            if dot_product <= DOT_PRODUCT_EPSILON {
                                                 return Err(Error::InvalidModel(format!(
                                                     "Object {}: Displacement triangle {} uses normvector {} from group {} \
                                                      that points inward (scalar product with triangle normal = {:.6} <= 0).\n\

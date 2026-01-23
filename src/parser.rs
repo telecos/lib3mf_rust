@@ -149,6 +149,31 @@ pub(crate) fn get_local_name(name_str: &str) -> &str {
     }
 }
 
+/// Validate that an element uses the displacement namespace prefix
+///
+/// Per 3MF Displacement Extension spec 4.1, all elements under displacementmesh
+/// MUST use the displacement namespace prefix (e.g., d:vertex, d:triangle).
+///
+/// # Arguments
+/// * `name_str` - The full element name with potential namespace prefix
+/// * `element_type` - Human-readable element type for error messages
+///
+/// # Returns
+/// Ok(()) if element has displacement prefix, Err otherwise
+fn validate_displacement_namespace_prefix(name_str: &str, element_type: &str) -> Result<()> {
+    let has_displacement_prefix =
+        name_str.starts_with("d:") || name_str.starts_with("displacement:");
+    if !has_displacement_prefix {
+        return Err(Error::InvalidXml(format!(
+            "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:{}>). \
+             Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
+             the displacement namespace prefix.",
+            name_str, element_type
+        )));
+    }
+    Ok(())
+}
+
 /// Get an attribute value by its local name, regardless of namespace prefix
 ///
 /// This is useful for extension attributes that can use different prefixes.
@@ -514,16 +539,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "vertex" if in_displacement_mesh => {
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
-                        let has_displacement_prefix =
-                            name_str.starts_with("d:") || name_str.starts_with("displacement:");
-                        if !has_displacement_prefix {
-                            return Err(Error::InvalidXml(format!(
-                                "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:vertex>). \
-                                 Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
-                                 the displacement namespace prefix.",
-                                name_str
-                            )));
-                        }
+                        validate_displacement_namespace_prefix(name_str, "vertex")?;
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let vertex = parse_vertex(&reader, e)?;
                             disp_mesh.vertices.push(vertex);
@@ -542,16 +558,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     // parsed as regular triangles and d1/d2/d3 attributes would be rejected.
                     "triangles" if in_displacement_mesh => {
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
-                        let has_displacement_prefix =
-                            name_str.starts_with("d:") || name_str.starts_with("displacement:");
-                        if !has_displacement_prefix {
-                            return Err(Error::InvalidXml(format!(
-                                "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:triangles>). \
-                                 Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
-                                 the displacement namespace prefix.",
-                                name_str
-                            )));
-                        }
+                        validate_displacement_namespace_prefix(name_str, "triangles")?;
                         // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
                         if has_displacement_triangles {
                             return Err(Error::InvalidXml(
@@ -584,16 +591,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     // Displacement triangle must be checked BEFORE regular triangle for same reason
                     "triangle" if in_displacement_triangles => {
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
-                        let has_displacement_prefix =
-                            name_str.starts_with("d:") || name_str.starts_with("displacement:");
-                        if !has_displacement_prefix {
-                            return Err(Error::InvalidXml(format!(
-                                "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:triangle>). \
-                                 Per 3MF Displacement Extension spec 4.1, all elements under <displacementmesh> MUST specify \
-                                 the displacement namespace prefix.",
-                                name_str
-                            )));
-                        }
+                        validate_displacement_namespace_prefix(name_str, "triangle")?;
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
                             let mut triangle = parse_displacement_triangle(&reader, e)?;
 
