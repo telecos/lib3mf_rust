@@ -3981,4 +3981,157 @@ mod tests {
         let result = validate_material_references(&model);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_sliced_object_allows_negative_volume_mesh() {
+        use crate::model::SliceStack;
+
+        let mut model = Model::new();
+
+        // Add a slicestack
+        let slice_stack = SliceStack::new(1, 0.0);
+        model.resources.slice_stacks.push(slice_stack);
+
+        // Create an object with negative volume (inverted mesh) but with slicestackid
+        let mut object = Object::new(1);
+        object.slicestackid = Some(1); // References the slicestack
+
+        // Create a mesh with inverted triangles (negative volume)
+        // This is a simple inverted tetrahedron
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0));
+
+        // Deliberately inverted winding order to create negative volume
+        mesh.triangles.push(Triangle::new(0, 2, 1)); // Inverted
+        mesh.triangles.push(Triangle::new(0, 3, 2)); // Inverted
+        mesh.triangles.push(Triangle::new(0, 1, 3)); // Inverted
+        mesh.triangles.push(Triangle::new(1, 2, 3)); // Inverted
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should pass validation because object has slicestackid
+        let result = validate_mesh_volume(&model);
+        assert!(result.is_ok(), "Sliced object should allow negative volume mesh");
+    }
+
+    #[test]
+    fn test_non_sliced_object_rejects_negative_volume() {
+        let mut model = Model::new();
+
+        // Create an object WITHOUT slicestackid
+        let mut object = Object::new(1);
+
+        // Create a box mesh with ALL triangles in inverted winding order
+        // Based on the standard box from test_files/core/box.3mf but with reversed winding
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(10.0, 20.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 20.0, 0.0)); // 3
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 30.0)); // 4
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 30.0)); // 5
+        mesh.vertices.push(Vertex::new(10.0, 20.0, 30.0)); // 6
+        mesh.vertices.push(Vertex::new(0.0, 20.0, 30.0)); // 7
+
+        // Correct winding from box.3mf:
+        // <triangle v1="3" v2="2" v3="1" />
+        // For negative volume, swap to: v1="1" v2="2" v3="3"
+        // All triangles with INVERTED winding (swap v1 and v3)
+        mesh.triangles.push(Triangle::new(1, 2, 3)); // Was (3, 2, 1)
+        mesh.triangles.push(Triangle::new(3, 0, 1)); // Was (1, 0, 3)
+        mesh.triangles.push(Triangle::new(6, 5, 4)); // Was (4, 5, 6)
+        mesh.triangles.push(Triangle::new(4, 7, 6)); // Was (6, 7, 4)
+        mesh.triangles.push(Triangle::new(5, 1, 0)); // Was (0, 1, 5)
+        mesh.triangles.push(Triangle::new(0, 4, 5)); // Was (5, 4, 0)
+        mesh.triangles.push(Triangle::new(6, 2, 1)); // Was (1, 2, 6)
+        mesh.triangles.push(Triangle::new(1, 5, 6)); // Was (6, 5, 1)
+        mesh.triangles.push(Triangle::new(7, 3, 2)); // Was (2, 3, 7)
+        mesh.triangles.push(Triangle::new(2, 6, 7)); // Was (7, 6, 2)
+        mesh.triangles.push(Triangle::new(4, 0, 3)); // Was (3, 0, 4)
+        mesh.triangles.push(Triangle::new(3, 7, 4)); // Was (4, 7, 3)
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation for non-sliced object
+        let result = validate_mesh_volume(&model);
+        assert!(
+            result.is_err(),
+            "Non-sliced object should reject negative volume mesh"
+        );
+        assert!(result.unwrap_err().to_string().contains("negative volume"));
+    }
+
+    #[test]
+    fn test_sliced_object_allows_mirror_transform() {
+        use crate::model::SliceStack;
+
+        let mut model = Model::new();
+
+        // Add a slicestack
+        let slice_stack = SliceStack::new(1, 0.0);
+        model.resources.slice_stacks.push(slice_stack);
+
+        // Create an object with slicestackid
+        let mut object = Object::new(1);
+        object.slicestackid = Some(1);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with mirror transformation (negative determinant)
+        // Transform with -1 scale in X axis (mirror): [-1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+        let mut item = BuildItem::new(1);
+        item.transform = Some([-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]);
+        model.build.items.push(item);
+
+        // Should pass validation because object has slicestackid
+        let result = validate_transform_matrices(&model);
+        assert!(
+            result.is_ok(),
+            "Sliced object should allow mirror transformation"
+        );
+    }
+
+    #[test]
+    fn test_non_sliced_object_rejects_mirror_transform() {
+        let mut model = Model::new();
+
+        // Create an object WITHOUT slicestackid
+        let mut object = Object::new(1);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with mirror transformation (negative determinant)
+        let mut item = BuildItem::new(1);
+        item.transform = Some([-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]);
+        model.build.items.push(item);
+
+        // Should fail validation for non-sliced object
+        let result = validate_transform_matrices(&model);
+        assert!(
+            result.is_err(),
+            "Non-sliced object should reject mirror transformation"
+        );
+        assert!(result.unwrap_err().to_string().contains("negative determinant"));
+    }
 }
