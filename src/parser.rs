@@ -2723,7 +2723,7 @@ pub(crate) fn parse_object<R: std::io::BufRead>(
 
 /// Parse vertex element attributes
 pub(crate) fn parse_vertex<R: std::io::BufRead>(
-    reader: &Reader<R>,
+    _reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Vertex> {
     // Optimized: parse attributes directly without building HashMap
@@ -2798,7 +2798,7 @@ pub(crate) fn parse_vertex<R: std::io::BufRead>(
 
 /// Parse triangle element attributes
 pub(crate) fn parse_triangle<R: std::io::BufRead>(
-    reader: &Reader<R>,
+    _reader: &Reader<R>,
     e: &quick_xml::events::BytesStart,
 ) -> Result<Triangle> {
     // Optimized: parse attributes directly without building HashMap
