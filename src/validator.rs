@@ -2969,54 +2969,69 @@ fn validate_resource_ordering(model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// Validate that resource IDs are unique across all resource types
+/// Validate that resource IDs are unique within their namespaces
 ///
-/// Per 3MF spec, all resource IDs must be unique within the entire resources section,
-/// regardless of resource type.
+/// Per 3MF spec:
+/// - Object IDs must be unique among objects
+/// - Property resource IDs (basematerials, colorgroups, texture2d, texture2dgroups, 
+///   compositematerials, multiproperties) must be unique among property resources
+/// - Objects and property resources have SEPARATE ID namespaces and can reuse IDs
 fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
-    let mut seen_ids: HashSet<usize> = HashSet::new();
-
-    // Helper to check and add ID
-    let mut check_id = |id: usize, resource_type: &str| -> Result<()> {
-        if seen_ids.contains(&id) {
+    // Check object IDs for duplicates (separate namespace)
+    let mut seen_object_ids: HashSet<usize> = HashSet::new();
+    for obj in &model.resources.objects {
+        if !seen_object_ids.insert(obj.id) {
             return Err(Error::InvalidModel(format!(
-                "Duplicate resource ID {}: {} resource uses an ID that is already in use.\n\
-                 Per 3MF spec, all resource IDs must be unique across the entire <resources> section.\n\
-                 Each resource (object, basematerials, colorgroup, texture2d, etc.) must have a unique ID.",
+                "Duplicate object ID {}: Multiple objects use the same ID.\n\
+                 Per 3MF spec, each object must have a unique ID within the objects namespace.\n\
+                 Change the ID to a unique value.",
+                obj.id
+            )));
+        }
+    }
+
+    // Check property resource IDs for duplicates (separate namespace from objects)
+    // Property resources include: basematerials, colorgroups, texture2d, texture2dgroups,
+    // compositematerials, and multiproperties
+    let mut seen_property_ids: HashSet<usize> = HashSet::new();
+
+    // Helper to check and add property resource ID
+    let mut check_property_id = |id: usize, resource_type: &str| -> Result<()> {
+        if !seen_property_ids.insert(id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate property resource ID {}: {} resource uses an ID that is already in use by another property resource.\n\
+                 Per 3MF spec, property resource IDs must be unique among all property resources \
+                 (basematerials, colorgroups, texture2d, texture2dgroups, compositematerials, multiproperties).\n\
+                 Note: Objects have a separate ID namespace and can reuse property resource IDs.",
                 id, resource_type
             )));
         }
-        seen_ids.insert(id);
         Ok(())
     };
 
-    // Check all resource types
-    for obj in &model.resources.objects {
-        check_id(obj.id, "Object")?;
-    }
-
+    // Check all property resource types
     for base_mat in &model.resources.base_material_groups {
-        check_id(base_mat.id, "BaseMaterials")?;
+        check_property_id(base_mat.id, "BaseMaterials")?;
     }
 
     for color_group in &model.resources.color_groups {
-        check_id(color_group.id, "ColorGroup")?;
+        check_property_id(color_group.id, "ColorGroup")?;
     }
 
     for texture in &model.resources.texture2d_resources {
-        check_id(texture.id, "Texture2D")?;
+        check_property_id(texture.id, "Texture2D")?;
     }
 
     for tex_group in &model.resources.texture2d_groups {
-        check_id(tex_group.id, "Texture2DGroup")?;
+        check_property_id(tex_group.id, "Texture2DGroup")?;
     }
 
     for composite in &model.resources.composite_materials {
-        check_id(composite.id, "CompositeMaterials")?;
+        check_property_id(composite.id, "CompositeMaterials")?;
     }
 
     for multi in &model.resources.multi_properties {
-        check_id(multi.id, "MultiProperties")?;
+        check_property_id(multi.id, "MultiProperties")?;
     }
 
     Ok(())
