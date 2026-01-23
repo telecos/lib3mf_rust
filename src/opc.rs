@@ -252,17 +252,15 @@ impl<R: Read + std::io::Seek> Package<R> {
     fn validate_model_relationship(&mut self) -> Result<()> {
         let model_path = self.discover_model_path()?;
 
-        // N_XXX_0208_01: Validate that the model filename doesn't have non-ASCII characters
-        // before the standard model filename pattern
+        // N_XXX_0208_01: Validate model filename structure
+        // The 3MF spec expects model files to be named "3dmodel.model" or similar with
+        // ASCII characters. We reject files that try to masquerade as standard model files
+        // by using non-ASCII lookalike characters (e.g., Cyrillic letters that look like Latin).
         if let Some((_dir, filename)) = model_path.rsplit_once('/') {
-            // The filename should follow the pattern for model files
-            // It typically should be "3dmodel.model" or variants with ASCII characters
-            // We check that if the filename appears to be trying to be "3dmodel", it actually
-            // uses ASCII characters, not lookalike Unicode characters
             if filename.contains("3dmodel") {
-                // Find where "3dmodel" appears
+                // If the filename contains "3dmodel", check that any prefix uses ASCII
+                // This catches cases like "Ԫ3dmodel.model" (Cyrillic character before "3dmodel")
                 if let Some(pos) = filename.find("3dmodel") {
-                    // Everything before "3dmodel" should be either empty or ASCII
                     let prefix = &filename[..pos];
                     if !prefix.is_empty() && !prefix.is_ascii() {
                         return Err(Error::InvalidFormat(format!(
