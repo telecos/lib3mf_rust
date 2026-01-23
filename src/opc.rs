@@ -252,8 +252,17 @@ impl<R: Read + std::io::Seek> Package<R> {
     fn validate_model_relationship(&mut self) -> Result<()> {
         let model_path = self.discover_model_path()?;
 
-        // Verify the model file actually exists
-        if !self.has_file(&model_path) {
+        // Verify the model file actually exists (try both encoded and decoded paths)
+        let file_exists = self.has_file(&model_path) || {
+            if let Ok(decoded) = decode(&model_path) {
+                let decoded_path = decoded.into_owned();
+                decoded_path != model_path && self.has_file(&decoded_path)
+            } else {
+                false
+            }
+        };
+
+        if !file_exists {
             return Err(Error::InvalidFormat(format!(
                 "Model relationship points to non-existent file: {}",
                 model_path
@@ -438,21 +447,33 @@ impl<R: Read + std::io::Seek> Package<R> {
                                     t.clone()
                                 };
 
-                                // URL-decode the path to match ZIP file names
-                                // Per OPC spec, XML relationships use percent-encoding for non-ASCII,
-                                // but ZIP file names use UTF-8 directly
-                                let path = decode(&path_with_slash)
-                                    .map_err(|e| Error::InvalidFormat(format!(
-                                        "Invalid percent-encoding in part name '{}': {}",
-                                        path_with_slash, e
-                                    )))?
-                                    .into_owned();
+                                // Try to find the file in the ZIP archive.
+                                // Per OPC spec, Target attributes should use percent-encoding for non-ASCII,
+                                // but in practice, we may encounter:
+                                // 1. Percent-encoded in XML, percent-encoded in ZIP (%C3%86 in both)
+                                // 2. Percent-encoded in XML, UTF-8 in ZIP (%C3%86 in XML, Æ in ZIP)
+                                // 3. UTF-8 in XML, UTF-8 in ZIP (Æ in both)
+                                // We try both the original name and the URL-decoded name.
+                                let file_exists = if self.has_file(&path_with_slash) {
+                                    true
+                                } else {
+                                    // Try URL-decoding in case ZIP has UTF-8 but XML has percent-encoding
+                                    if let Ok(decoded) = decode(&path_with_slash) {
+                                        let decoded_path = decoded.into_owned();
+                                        if decoded_path != path_with_slash {
+                                            self.has_file(&decoded_path)
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                };
 
-                                // Verify the target file exists
-                                if !self.has_file(&path) {
+                                if !file_exists {
                                     return Err(Error::InvalidFormat(format!(
                                         "Relationship in '{}' points to non-existent file: {}",
-                                        rels_file, path
+                                        rels_file, path_with_slash
                                     )));
                                 }
                             }
@@ -472,22 +493,20 @@ impl<R: Read + std::io::Seek> Package<R> {
     /// Validate OPC part name according to OPC specification
     ///
     /// Part names must not contain:
-    /// - Non-ASCII characters (per OPC spec, part names must be ASCII)
     /// - Fragment identifiers (#)
     /// - Query strings (?)
     /// - Path segments that are "." or ".."
     /// - Empty path segments (consecutive slashes)
     /// - Segments ending with "." (like "3D.")
+    ///
+    /// Note: Per OPC spec (ECMA-376), Target attributes should use percent-encoding
+    /// for non-ASCII characters. However, for compatibility with real-world files,
+    /// we accept both percent-encoded and UTF-8 characters.
     fn validate_opc_part_name(part_name: &str) -> Result<()> {
-        // Check for non-ASCII characters
-        // Per OPC spec and 3MF spec, part names must contain only ASCII characters
-        if !part_name.is_ascii() {
-            return Err(Error::InvalidFormat(format!(
-                "Part name cannot contain non-ASCII characters: {}. \
-                 Per OPC and 3MF specifications, part names must contain only ASCII characters.",
-                part_name
-            )));
-        }
+        // Note: We don't strictly enforce ASCII-only here for compatibility.
+        // Per OPC spec, non-ASCII should be percent-encoded, but many real-world
+        // files include UTF-8 characters directly. We accept both and handle
+        // URL-decoding when looking up files.
 
         // Check for fragment identifiers
         if part_name.contains('#') {
@@ -546,11 +565,26 @@ impl<R: Read + std::io::Seek> Package<R> {
         // Discover model path from relationships (validation already done in open())
         let model_path = self.discover_model_path()?;
 
-        // Read the model file
-        let mut file = self
-            .archive
-            .by_name(&model_path)
-            .map_err(|_| Error::MissingFile(model_path.clone()))?;
+        // Determine which path to use: try the original first, then decoded
+        let path_to_use = if self.has_file(&model_path) {
+            model_path.clone()
+        } else {
+            // If the direct path fails, try URL-decoding
+            if let Ok(decoded) = decode(&model_path) {
+                let decoded_path = decoded.into_owned();
+                if decoded_path != model_path && self.has_file(&decoded_path) {
+                    decoded_path
+                } else {
+                    return Err(Error::MissingFile(model_path));
+                }
+            } else {
+                return Err(Error::MissingFile(model_path));
+            }
+        };
+        
+        // Now read the file
+        let mut file = self.archive.by_name(&path_to_use)
+            .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
@@ -596,21 +630,14 @@ impl<R: Read + std::io::Seek> Package<R> {
                         if let (Some(t), Some(rt)) = (target, rel_type) {
                             if rt == MODEL_REL_TYPE {
                                 // Remove leading slash if present
-                                let path_with_slash = if let Some(stripped) = t.strip_prefix('/') {
+                                let path = if let Some(stripped) = t.strip_prefix('/') {
                                     stripped.to_string()
                                 } else {
                                     t
                                 };
                                 
-                                // URL-decode the path to match ZIP file names
-                                // Per OPC spec, XML relationships use percent-encoding for non-ASCII,
-                                // but ZIP file names use UTF-8 directly
-                                let path = decode(&path_with_slash)
-                                    .map_err(|e| Error::InvalidFormat(format!(
-                                        "Invalid percent-encoding in model path '{}': {}",
-                                        path_with_slash, e
-                                    )))?
-                                    .into_owned();
+                                // Return the path as-is. The caller will handle trying both
+                                // percent-encoded and decoded versions when accessing the file.
                                 return Ok(path);
                             }
                         }
@@ -1234,12 +1261,14 @@ mod tests {
     }
 
     #[test]
-    fn test_utf8_in_xml_rejected() {
+    fn test_utf8_in_xml_accepted_for_compatibility() {
         use std::io::Write;
         use zip::write::SimpleFileOptions;
         use zip::ZipWriter;
 
-        // Create a 3MF file with UTF-8 character directly in XML (incorrect)
+        // Per OPC spec, non-ASCII should be percent-encoded in XML Target attributes.
+        // However, for compatibility with real-world files (including official test suites),
+        // we accept UTF-8 characters directly in the Target attribute.
         let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default();
 
@@ -1287,18 +1316,11 @@ mod tests {
 
         let cursor = zip.finish().unwrap();
 
-        // This should fail: UTF-8 character directly in XML is not allowed
+        // This should now succeed for compatibility
         let result = Package::open(cursor);
         assert!(
-            result.is_err(),
-            "Package with non-ASCII characters in XML should be rejected"
+            result.is_ok(),
+            "Package with UTF-8 characters in XML should be accepted for compatibility"
         );
-        
-        if let Err(err) = result {
-            assert!(
-                err.to_string().contains("non-ASCII"),
-                "Error should mention non-ASCII characters"
-            );
-        }
     }
 }
