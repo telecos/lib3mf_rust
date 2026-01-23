@@ -3160,7 +3160,7 @@ fn validate_triangle_properties(_model: &Model) -> Result<()> {
 
 /// Validate production extension UUID usage
 ///
-/// N_XPX_0802_01: Per 3MF Production Extension spec Chapter 4:
+/// N_XPX_0802_01 and N_XPX_0802_05: Per 3MF Production Extension spec Chapter 4:
 /// - Build MUST have p:UUID when production extension is required
 /// - Build items MUST have p:UUID when production extension is required  
 /// - Objects MUST have p:UUID when production extension is required
@@ -3178,10 +3178,11 @@ fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> 
     }
 
     // When production extension is required:
-    // 1. Build MUST have UUID (Chapter 4.1)
-    if model.build.production_uuid.is_none() && !model.build.items.is_empty() {
+    // 1. Build MUST have UUID (Chapter 4.1) if it has items
+    // Per spec, the build UUID is required to identify builds across devices/jobs
+    if !model.build.items.is_empty() && model.build.production_uuid.is_none() {
         return Err(Error::InvalidModel(
-            "Production extension requires build to have p:UUID attribute".to_string(),
+            "Production extension requires build to have p:UUID attribute when build items are present".to_string(),
         ));
     }
 
@@ -3197,14 +3198,14 @@ fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> 
 
     // 3. Objects MUST have UUID (Chapter 4.2)
     for object in &model.resources.objects {
-        if let Some(ref production) = object.production {
-            if production.uuid.is_none() {
-                return Err(Error::InvalidModel(format!(
-                    "Production extension requires object {} to have p:UUID attribute",
-                    object.id
-                )));
-            }
-        } else {
+        // Check if object has production info with UUID
+        let has_uuid = object
+            .production
+            .as_ref()
+            .and_then(|p| p.uuid.as_ref())
+            .is_some();
+
+        if !has_uuid {
             return Err(Error::InvalidModel(format!(
                 "Production extension requires object {} to have p:UUID attribute",
                 object.id
