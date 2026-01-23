@@ -581,7 +581,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                 return Err(Error::MissingFile(model_path));
             }
         };
-        
+
         // Now read the file
         let mut file = self.archive.by_name(&path_to_use)
             .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
@@ -635,7 +635,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                                 } else {
                                     t
                                 };
-                                
+
                                 // Return the path as-is. The caller will handle trying both
                                 // percent-encoded and decoded versions when accessing the file.
                                 return Ok(path);
@@ -1169,6 +1169,9 @@ pub fn create_package_with_thumbnail<W: std::io::Write + std::io::Seek>(
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
 
     #[test]
     fn test_package_constants() {
@@ -1181,7 +1184,7 @@ mod tests {
         // Create an empty ZIP archive
         let buffer = Vec::new();
         let cursor = Cursor::new(buffer);
-        let zip = zip::ZipWriter::new(cursor);
+        let zip = ZipWriter::new(cursor);
         let cursor = zip.finish().unwrap();
 
         // Should fail validation because it's missing required files
@@ -1194,10 +1197,6 @@ mod tests {
 
     #[test]
     fn test_percent_encoded_part_names() {
-        use std::io::Write;
-        use zip::write::SimpleFileOptions;
-        use zip::ZipWriter;
-
         // Create a 3MF file with percent-encoded part name in XML relationships
         // and UTF-8 character in ZIP file name (correct per OPC spec)
         let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
@@ -1262,10 +1261,6 @@ mod tests {
 
     #[test]
     fn test_utf8_in_xml_accepted_for_compatibility() {
-        use std::io::Write;
-        use zip::write::SimpleFileOptions;
-        use zip::ZipWriter;
-
         // Per OPC spec, non-ASCII should be percent-encoded in XML Target attributes.
         // However, for compatibility with real-world files (including official test suites),
         // we accept UTF-8 characters directly in the Target attribute.
