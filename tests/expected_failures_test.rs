@@ -154,3 +154,35 @@ fn test_expected_failure_for_p_spx_0313_01() {
         "Reason should mention PNG extension"
     );
 }
+
+#[test]
+fn test_expected_failure_for_p_sxx_0313_01() {
+    let manager = ExpectedFailuresManager::load();
+
+    // This specific file should be marked as an expected failure in suite4
+    assert!(
+        manager.is_expected_failure("suite4_core_slice", "P_SXX_0313_01.3mf", "positive"),
+        "P_SXX_0313_01.3mf should be marked as an expected positive test failure"
+    );
+
+    // Verify the reason is documented
+    let reason = manager.get_reason("suite4_core_slice", "P_SXX_0313_01.3mf");
+    assert!(
+        reason.is_some(),
+        "P_SXX_0313_01.3mf should have a documented reason"
+    );
+
+    let reason_text = reason.unwrap();
+    assert!(
+        reason_text.contains("content type"),
+        "Reason should mention content type issue"
+    );
+    assert!(
+        reason_text.contains("PNG"),
+        "Reason should mention PNG extension"
+    );
+    assert!(
+        reason_text.contains("E2004"),
+        "Reason should mention error code E2004"
+    );
+}
