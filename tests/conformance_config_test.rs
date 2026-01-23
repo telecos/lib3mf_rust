@@ -75,7 +75,9 @@ fn test_suite8_config() {
     assert!(config.supports(&Extension::Core));
     assert!(config.supports(&Extension::SecureContent));
     assert!(config.supports(&Extension::Production));
-    assert!(!config.supports(&Extension::Material));
+    // Suite 8 test files also use Material and Slice extensions
+    assert!(config.supports(&Extension::Material));
+    assert!(config.supports(&Extension::Slice));
     assert!(!config.supports(&Extension::BeamLattice));
 }
 
@@ -100,7 +102,8 @@ fn test_suite10_config() {
     assert!(config.supports(&Extension::BooleanOperations));
     assert!(config.supports(&Extension::Production));
     assert!(config.supports(&Extension::BeamLattice));
-    assert!(!config.supports(&Extension::Material));
+    // Suite 10 test files also use Material extension
+    assert!(config.supports(&Extension::Material));
     assert!(!config.supports(&Extension::Displacement));
 }
 
