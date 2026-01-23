@@ -3368,23 +3368,22 @@ fn validate_dtd_declaration(_model: &Model) -> Result<()> {
 /// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
 /// doesn't place object outside printable area
 ///
-/// **Note: This validation is intentionally disabled.**
-///
 /// These test cases validate that after applying the build item transform,
 /// all vertices of the mesh remain within the default build volume [0, 100]³ mm.
-/// However, this validation causes false positives with many legitimate 3MF files
-/// in the test suite that have objects extending beyond 100mm, as there is no
-/// universal build volume size requirement in the 3MF specification.
 ///
 /// The specific test cases check for:
 /// - N_XXX_0421_01: Negative coordinates (below build plate)
-/// - N_XXX_0420_01: Exceeding X dimension
-/// - N_XXX_0418_01: Exceeding Y and Z dimensions
+/// - N_XXX_0420_01: Exceeding X dimension (> 100mm)
+/// - N_XXX_0418_01: Exceeding Y and Z dimensions (> 100mm)
 ///
-/// We use a conservative approach:
-/// - Check if the transformed bounding box has all coordinates negative (likely error)
-/// - Allow negative coordinates if at least some part is in positive space (valid centering)
+/// With triangle mesh computing capabilities (parry3d), we can now properly
+/// validate transformed bounding boxes against the default build volume.
 fn validate_build_transform_bounds(model: &Model) -> Result<()> {
+    // Default build volume: [0, 100]³ mm as per 3MF specification test cases
+    const BUILD_VOLUME_MIN: f64 = 0.0;
+    const BUILD_VOLUME_MAX: f64 = 100.0;
+    const EPSILON: f64 = 1e-6; // Small tolerance for floating-point comparisons
+
     for item in &model.build.items {
         // Find the object for this build item
         let Some(object) = model
@@ -3407,16 +3406,29 @@ fn validate_build_transform_bounds(model: &Model) -> Result<()> {
         };
 
         // Compute the transformed bounding box
-        let Ok((_min, max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
+        let Ok((min, max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
             continue; // Skip if we can't compute AABB
         };
 
-        // Check if the entire bounding box is in negative space (all coordinates < 0)
-        // This is a strong indicator that the transform is incorrect
-        if max.0 < 0.0 && max.1 < 0.0 && max.2 < 0.0 {
+        // N_XXX_0421_01: Check for negative coordinates (below build plate)
+        if min.0 < BUILD_VOLUME_MIN - EPSILON
+            || min.1 < BUILD_VOLUME_MIN - EPSILON
+            || min.2 < BUILD_VOLUME_MIN - EPSILON
+        {
             return Err(Error::InvalidModel(format!(
-                "Build item for object {}: Transform places entire mesh in negative coordinate space (max: {:.2}, {:.2}, {:.2}). This likely indicates an incorrect transformation.",
-                item.objectid, max.0, max.1, max.2
+                "Build item for object {}: Transform places mesh below build plate. Min coordinates: ({:.2}, {:.2}, {:.2}), build volume starts at {:.2}",
+                item.objectid, min.0, min.1, min.2, BUILD_VOLUME_MIN
+            )));
+        }
+
+        // N_XXX_0420_01 and N_XXX_0418_01: Check for exceeding build volume dimensions
+        if max.0 > BUILD_VOLUME_MAX + EPSILON
+            || max.1 > BUILD_VOLUME_MAX + EPSILON
+            || max.2 > BUILD_VOLUME_MAX + EPSILON
+        {
+            return Err(Error::InvalidModel(format!(
+                "Build item for object {}: Transform places mesh outside build volume [0, {}]³. Max coordinates: ({:.2}, {:.2}, {:.2})",
+                item.objectid, BUILD_VOLUME_MAX, max.0, max.1, max.2
             )));
         }
     }
@@ -4214,5 +4226,136 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("negative determinant"));
+    }
+
+    #[test]
+    fn test_build_transform_negative_coordinates() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that places mesh in negative space
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, -20.0, // Translation by (-20, -20, -20)
+            0.0, 1.0, 0.0, -20.0, 0.0, 0.0, 1.0, -20.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should fail validation (N_XXX_0421_01)
+        let result = validate_build_transform_bounds(&model);
+        assert!(
+            result.is_err(),
+            "Should reject mesh with negative coordinates"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("below build plate"));
+    }
+
+    #[test]
+    fn test_build_transform_exceeds_x_dimension() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that exceeds X dimension
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 95.0, // Translation by (95, 0, 0) - mesh goes to 105
+            0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should fail validation (N_XXX_0420_01)
+        let result = validate_build_transform_bounds(&model);
+        assert!(result.is_err(), "Should reject mesh exceeding X dimension");
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("outside build volume"));
+    }
+
+    #[test]
+    fn test_build_transform_exceeds_yz_dimensions() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that exceeds Y and Z dimensions
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 95.0, // Translation by (0, 95, 95)
+            0.0, 0.0, 1.0, 95.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should fail validation (N_XXX_0418_01)
+        let result = validate_build_transform_bounds(&model);
+        assert!(
+            result.is_err(),
+            "Should reject mesh exceeding Y and Z dimensions"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("outside build volume"));
+    }
+
+    #[test]
+    fn test_build_transform_within_bounds() {
+        let mut model = Model::new();
+
+        // Create a simple mesh
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+
+        // Add build item with transform that keeps mesh within bounds [0, 100]³
+        let mut item = BuildItem::new(1);
+        item.transform = Some([
+            1.0, 0.0, 0.0, 45.0, // Translation by (45, 45, 45)
+            0.0, 1.0, 0.0, 45.0, // Mesh goes from (45,45,45) to (55,55,55)
+            0.0, 0.0, 1.0, 45.0,
+        ]);
+        model.build.items.push(item);
+
+        // Should pass validation
+        let result = validate_build_transform_bounds(&model);
+        assert!(result.is_ok(), "Should accept mesh within build volume");
     }
 }
