@@ -28,6 +28,15 @@ pub const MODEL_REL_TYPE: &str = "http://schemas.microsoft.com/3dmanufacturing/2
 pub const THUMBNAIL_REL_TYPE: &str =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
 
+/// Keystore relationship type (Secure Content extension) - 2019/04 namespace
+/// Note: The namespace changed from 2019/04 to 2019/07, but both are valid
+pub const KEYSTORE_REL_TYPE_2019_04: &str =
+    "http://schemas.microsoft.com/3dmanufacturing/2019/04/keystore";
+
+/// Keystore relationship type (Secure Content extension) - 2019/07 namespace
+pub const KEYSTORE_REL_TYPE_2019_07: &str =
+    "http://schemas.microsoft.com/3dmanufacturing/2019/07/keystore";
+
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {
     archive: ZipArchive<R>,
@@ -782,6 +791,65 @@ impl<R: Read + std::io::Seek> Package<R> {
         // We accept all content types but prefer image/* types.
 
         Ok(Some(crate::model::Thumbnail::new(thumb_path, content_type)))
+    }
+
+    /// Discover keystore file path from package relationships
+    ///
+    /// Returns the path to the keystore file if one exists, or None if no keystore is found.
+    /// The keystore is identified by relationship type for the Secure Content extension.
+    pub fn discover_keystore_path(&mut self) -> Result<Option<String>> {
+        let rels_content = self.get_file(RELS_PATH)?;
+        let mut reader = Reader::from_str(&rels_content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                    if name_str.ends_with("Relationship") {
+                        let mut target = None;
+                        let mut rel_type = None;
+
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            match key {
+                                "Target" => target = Some(value.to_string()),
+                                "Type" => rel_type = Some(value.to_string()),
+                                _ => {}
+                            }
+                        }
+
+                        // Check if this is a keystore relationship (support both 2019/04 and 2019/07)
+                        if let (Some(t), Some(rt)) = (target, rel_type) {
+                            if rt == KEYSTORE_REL_TYPE_2019_04 || rt == KEYSTORE_REL_TYPE_2019_07 {
+                                // Remove leading slash if present
+                                let path = if let Some(stripped) = t.strip_prefix('/') {
+                                    stripped.to_string()
+                                } else {
+                                    t
+                                };
+                                return Ok(Some(path));
+                            }
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::Xml(e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok(None)
     }
 
     /// Get content type for a file from [Content_Types].xml
