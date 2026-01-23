@@ -13,6 +13,13 @@ categories = ["parser-implementations", "encoding"]
 zip = "2.3"
 quick-xml = "0.37"
 thiserror = "2.0"
+# Cryptographic dependencies for SecureContent decryption
+rsa = "0.9"
+aes-gcm = "0.10"
+base64 = "0.22"
+flate2 = "1.0"
+sha1 = "0.10"
+sha2 = "0.10"
 urlencoding = "2.1"
 clipper2 = "0.2"
 
