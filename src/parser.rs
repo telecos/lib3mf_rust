@@ -1758,7 +1758,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     }
 
     // Note: Model validation is performed in parse_3mf_with_config after
-    // keystore and slice files are loaded
+    // keystore and slice files are loaded, not here
     Ok(model)
 }
 
