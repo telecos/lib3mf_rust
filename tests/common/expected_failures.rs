@@ -85,11 +85,13 @@ impl ExpectedFailuresManager {
     }
     
     /// Get the expected failure details for a test file
+    #[allow(dead_code)]
     pub fn get_failure(&self, suite: &str, filename: &str) -> Option<&ExpectedFailure> {
         self.failures.get(&(suite.to_string(), filename.to_string()))
     }
     
     /// Get the reason for an expected failure
+    #[allow(dead_code)]
     pub fn get_reason(&self, suite: &str, filename: &str) -> Option<String> {
         self.get_failure(suite, filename).map(|f| f.reason.clone())
     }
@@ -97,19 +99,19 @@ impl ExpectedFailuresManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    
     #[test]
     fn test_load_expected_failures() {
+        use super::*;
         let manager = ExpectedFailuresManager::load();
         
         // Should be able to load without panicking
         // The actual content depends on the configuration file
-        assert!(manager.failures.len() >= 0);
+        let _ = manager.failures.len();
     }
     
     #[test]
     fn test_expected_failure_check() {
+        use super::*;
         let manager = ExpectedFailuresManager::load();
         
         // Check a known expected failure if it exists

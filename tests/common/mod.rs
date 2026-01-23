@@ -7,6 +7,8 @@ pub mod expected_failures;
 
 use lib3mf::{Extension, ParserConfig};
 
+// Re-export for convenience
+#[allow(unused_imports)]
 pub use expected_failures::ExpectedFailuresManager;
 
 /// Get parser configuration for a specific test suite
