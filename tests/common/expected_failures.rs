@@ -17,20 +17,20 @@ use std::path::Path;
 pub struct ExpectedFailure {
     /// The filename of the test file (e.g., "P_XXX_2202_01.3mf")
     pub file: String,
-    
+
     /// The suite this file belongs to (e.g., "suite9_core_ext")
     pub suite: String,
-    
+
     /// Whether this is a "positive" or "negative" test
     pub test_type: String,
-    
+
     /// Detailed explanation of why this test is expected to fail
     pub reason: String,
-    
+
     /// Optional URL to issue tracker or documentation
     #[serde(default)]
     pub issue_url: String,
-    
+
     /// Date when this expected failure was added (YYYY-MM-DD)
     pub date_added: String,
 }
@@ -52,68 +52,70 @@ impl ExpectedFailuresManager {
     /// Load expected failures from the configuration file
     pub fn load() -> Self {
         let config_path = "tests/expected_failures.json";
-        
+
         if !Path::new(config_path).exists() {
             // No expected failures file, return empty manager
             return Self {
                 failures: HashMap::new(),
             };
         }
-        
-        let content = fs::read_to_string(config_path)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Failed to read expected_failures.json at {}: {}",
-                    Path::new(config_path)
-                        .canonicalize()
-                        .unwrap_or_else(|_| Path::new(config_path).to_path_buf())
-                        .display(),
-                    e
-                )
-            });
-        
-        let config: ExpectedFailuresConfig = serde_json::from_str(&content)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Failed to parse expected_failures.json at {} (current dir: {:?}): {}. Content: {}",
-                    Path::new(config_path)
-                        .canonicalize()
-                        .unwrap_or_else(|_| Path::new(config_path).to_path_buf())
-                        .display(),
-                    std::env::current_dir().ok(),
-                    e,
-                    if content.len() > 200 {
-                        format!("{}... ({} bytes total)", &content[..200], content.len())
-                    } else {
-                        content
-                    }
-                )
-            });
-        
+
+        let content = fs::read_to_string(config_path).unwrap_or_else(|e| {
+            panic!(
+                "Failed to read expected_failures.json at {}: {}",
+                Path::new(config_path)
+                    .canonicalize()
+                    .unwrap_or_else(|_| Path::new(config_path).to_path_buf())
+                    .display(),
+                e
+            )
+        });
+
+        let config: ExpectedFailuresConfig = serde_json::from_str(&content).unwrap_or_else(|e| {
+            panic!(
+                "Failed to parse expected_failures.json at {} (current dir: {:?}): {}. Content: {}",
+                Path::new(config_path)
+                    .canonicalize()
+                    .unwrap_or_else(|_| Path::new(config_path).to_path_buf())
+                    .display(),
+                std::env::current_dir().ok(),
+                e,
+                if content.len() > 200 {
+                    format!("{}... ({} bytes total)", &content[..200], content.len())
+                } else {
+                    content
+                }
+            )
+        });
+
         let mut failures = HashMap::new();
         for failure in config.expected_failures {
             let key = (failure.suite.clone(), failure.file.clone());
             failures.insert(key, failure);
         }
-        
+
         Self { failures }
     }
-    
+
     /// Check if a test file is expected to fail
     pub fn is_expected_failure(&self, suite: &str, filename: &str, test_type: &str) -> bool {
-        if let Some(failure) = self.failures.get(&(suite.to_string(), filename.to_string())) {
+        if let Some(failure) = self
+            .failures
+            .get(&(suite.to_string(), filename.to_string()))
+        {
             failure.test_type == test_type
         } else {
             false
         }
     }
-    
+
     /// Get the expected failure details for a test file
     #[allow(dead_code)]
     pub fn get_failure(&self, suite: &str, filename: &str) -> Option<&ExpectedFailure> {
-        self.failures.get(&(suite.to_string(), filename.to_string()))
+        self.failures
+            .get(&(suite.to_string(), filename.to_string()))
     }
-    
+
     /// Get the reason for an expected failure
     #[allow(dead_code)]
     pub fn get_reason(&self, suite: &str, filename: &str) -> Option<String> {
@@ -127,25 +129,22 @@ mod tests {
     fn test_load_expected_failures() {
         use super::*;
         let manager = ExpectedFailuresManager::load();
-        
+
         // Should be able to load without panicking
         // The actual content depends on the configuration file
         let _ = manager.failures.len();
     }
-    
+
     #[test]
     fn test_expected_failure_check() {
         use super::*;
         let manager = ExpectedFailuresManager::load();
-        
+
         // Check a known expected failure if it exists
         // This test will pass even if there are no expected failures
-        let is_expected = manager.is_expected_failure(
-            "suite9_core_ext",
-            "P_XXX_2202_01.3mf",
-            "positive"
-        );
-        
+        let is_expected =
+            manager.is_expected_failure("suite9_core_ext", "P_XXX_2202_01.3mf", "positive");
+
         // We don't assert the result since it depends on the config
         // Just verify the method works
         let _ = is_expected;
