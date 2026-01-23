@@ -1971,6 +1971,45 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                     )));
                 }
 
+                // Check for zero-area triangles - collinear vertices (DPX 3314_07, 3314_08)
+                // Even if indices are distinct, vertices might be at same position or collinear
+                let v1 = &disp_mesh.vertices[triangle.v1];
+                let v2 = &disp_mesh.vertices[triangle.v2];
+                let v3 = &disp_mesh.vertices[triangle.v3];
+
+                let edge1_x = v2.x - v1.x;
+                let edge1_y = v2.y - v1.y;
+                let edge1_z = v2.z - v1.z;
+                let edge2_x = v3.x - v1.x;
+                let edge2_y = v3.y - v1.y;
+                let edge2_z = v3.z - v1.z;
+
+                // Cross product magnitude squared = (2 * area)^2
+                let cross_x = edge1_y * edge2_z - edge1_z * edge2_y;
+                let cross_y = edge1_z * edge2_x - edge1_x * edge2_z;
+                let cross_z = edge1_x * edge2_y - edge1_y * edge2_x;
+                let cross_mag_sq = cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
+
+                const AREA_EPSILON: f64 = 1e-20;
+                if cross_mag_sq < AREA_EPSILON {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Displacement triangle {} has zero or near-zero area (vertices are collinear).\n\
+                         Vertices: v1=({:.6}, {:.6}, {:.6}), v2=({:.6}, {:.6}, {:.6}), v3=({:.6}, {:.6}, {:.6})\n\
+                         Hint: Ensure triangle vertices form a non-degenerate triangle with non-zero area.",
+                        object.id,
+                        tri_idx,
+                        v1.x,
+                        v1.y,
+                        v1.z,
+                        v2.x,
+                        v2.y,
+                        v2.z,
+                        v3.x,
+                        v3.y,
+                        v3.z
+                    )));
+                }
+
                 // Validate did reference
                 if let Some(did) = triangle.did {
                     if !disp2d_group_ids.contains(&did) {
