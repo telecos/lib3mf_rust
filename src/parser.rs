@@ -1814,10 +1814,100 @@ fn load_keystore<R: Read + std::io::Seek>(
 
     let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
     let mut consumer_indices = Vec::new(); // Track consumer indices referenced in accessright
+    let mut has_resourcedatagroup = false; // Track if we have any resourcedatagroup elements
+    let mut encrypted_paths = HashSet::new(); // Track resourcedata paths for duplicate detection
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+            Ok(Event::Empty(ref e)) => {
+                // Handle self-closing tags
+                let name = e.name();
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let local_name = get_local_name(name_str);
+
+                // Handle self-closing elements that need validation or tracking
+                match local_name {
+                    "resourcedatagroup" => {
+                        has_resourcedatagroup = true;
+                    }
+                    "kekparams" => {
+                        // EPX-2603: Validate wrapping algorithm and related attributes
+                        let mut wrapping_algorithm = String::new();
+                        let mut mgf_algorithm = String::new();
+                        let mut digest_method = String::new();
+
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| {
+                                Error::InvalidXml(format!("Invalid attribute in kekparams: {}", e))
+                            })?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                .to_string();
+
+                            match attr_name {
+                                "wrappingalgorithm" => wrapping_algorithm = attr_value,
+                                "mgfalgorithm" => mgf_algorithm = attr_value,
+                                "digestmethod" => digest_method = attr_value,
+                                _ => {}
+                            }
+                        }
+
+                        // EPX-2603: Validate wrapping algorithm
+                        if !wrapping_algorithm.is_empty() {
+                            let is_valid = wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2001
+                                || wrapping_algorithm == VALID_WRAPPING_ALGORITHM_2009;
+
+                            if !is_valid {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid wrapping algorithm '{}'. Must be either '{}' or '{}' (EPX-2603)",
+                                    wrapping_algorithm, VALID_WRAPPING_ALGORITHM_2001, VALID_WRAPPING_ALGORITHM_2009
+                                )));
+                            }
+
+                            if let Some(ref mut sc) = model.secure_content {
+                                sc.wrapping_algorithms.push(wrapping_algorithm.clone());
+                            }
+                        }
+
+                        // EPX-2603: Validate mgfalgorithm if present
+                        if !mgf_algorithm.is_empty() {
+                            let valid_mgf_algs = [
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha1",
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha256",
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha384",
+                                "http://www.w3.org/2009/xmlenc11#mgf1sha512",
+                            ];
+                            if !valid_mgf_algs.contains(&mgf_algorithm.as_str()) {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
+                                    mgf_algorithm
+                                )));
+                            }
+                        }
+
+                        // EPX-2603: Validate digestmethod if present
+                        if !digest_method.is_empty() {
+                            let valid_digest_methods = [
+                                "http://www.w3.org/2000/09/xmldsig#sha1",
+                                "http://www.w3.org/2001/04/xmlenc#sha256",
+                                "http://www.w3.org/2001/04/xmlenc#sha384",
+                                "http://www.w3.org/2001/04/xmlenc#sha512",
+                            ];
+                            if !valid_digest_methods.contains(&digest_method.as_str()) {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid digestmethod '{}'. Must be one of sha1, sha256, sha384, or sha512 (EPX-2603)",
+                                    digest_method
+                                )));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Start(ref e)) => {
                 let name = e.name();
                 let name_str = std::str::from_utf8(name.as_ref())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
@@ -1879,6 +1969,8 @@ fn load_keystore<R: Read + std::io::Seek>(
                     }
                     "accessright" => {
                         // EPX-2601: Track and validate consumer index
+                        // EPX-2606: Track accessright elements that have kekparams
+                        // We'll check if they have cipherdata in a subsequent Text event
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!(
@@ -1900,6 +1992,10 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 consumer_indices.push(index);
                             }
                         }
+                    }
+                    "resourcedatagroup" => {
+                        // EPX-2602: Track that we have at least one resourcedatagroup
+                        has_resourcedatagroup = true;
                     }
                     "kekparams" => {
                         // EPX-2603: Validate wrapping algorithm and related attributes
@@ -2013,6 +2109,14 @@ fn load_keystore<R: Read + std::io::Seek>(
                                     )));
                                 }
 
+                                // EPX-2607: Validate resourcedata paths are unique (no duplicates)
+                                if !encrypted_paths.insert(path.clone()) {
+                                    return Err(Error::InvalidSecureContent(format!(
+                                        "Duplicate resourcedata path '{}' in keystore (EPX-2607)",
+                                        path
+                                    )));
+                                }
+
                                 // EPX-2607: Validate referenced file exists in package
                                 // Remove leading slash for package lookup
                                 let lookup_path = path.trim_start_matches('/');
@@ -2026,6 +2130,52 @@ fn load_keystore<R: Read + std::io::Seek>(
                                 if let Some(ref mut sc) = model.secure_content {
                                     sc.encrypted_files.push(path);
                                 }
+                            }
+                        }
+                    }
+                    "cekparams" => {
+                        // EPX-2603: Validate encryption algorithm
+                        // EPX-2605: Validate compression attribute
+                        let mut encryption_algorithm = String::new();
+                        let mut compression = String::new();
+
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| {
+                                Error::InvalidXml(format!("Invalid attribute in cekparams: {}", e))
+                            })?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?
+                                .to_string();
+
+                            match attr_name {
+                                "encryptionalgorithm" => encryption_algorithm = attr_value,
+                                "compression" => compression = attr_value,
+                                _ => {}
+                            }
+                        }
+
+                        // EPX-2603: Validate encryption algorithm is valid
+                        if !encryption_algorithm.is_empty() {
+                            // Valid encryption algorithm per 3MF SecureContent spec
+                            let valid_algorithm = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
+                            if encryption_algorithm != valid_algorithm {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid encryption algorithm '{}'. Must be '{}' (EPX-2603)",
+                                    encryption_algorithm, valid_algorithm
+                                )));
+                            }
+                        }
+
+                        // EPX-2605: Validate compression attribute if present
+                        if !compression.is_empty() {
+                            // Valid compression values: "deflate", "none", or empty
+                            if compression != "deflate" && compression != "none" {
+                                return Err(Error::InvalidSecureContent(format!(
+                                    "Invalid compression attribute '{}'. Must be 'deflate' or 'none' (EPX-2605)",
+                                    compression
+                                )));
                             }
                         }
                     }
@@ -2046,6 +2196,13 @@ fn load_keystore<R: Read + std::io::Seek>(
 
     // After parsing, perform final validation
     if let Some(ref sc) = model.secure_content {
+        // EPX-2602: If we have resourcedatagroups, at least one consumer must be defined
+        if has_resourcedatagroup && sc.consumer_count == 0 {
+            return Err(Error::InvalidSecureContent(
+                "Keystore has resourcedatagroup elements but no consumer elements (EPX-2602)".to_string(),
+            ));
+        }
+
         // EPX-2602: If we have accessrights but no consumers, that's an error
         if !consumer_indices.is_empty() && sc.consumer_count == 0 {
             return Err(Error::InvalidSecureContent(
