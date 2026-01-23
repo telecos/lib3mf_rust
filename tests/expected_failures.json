@@ -175,6 +175,14 @@
       "reason": "Negative coordinates in build transform. This test expects negative coordinates to fail, but many valid positive test cases use negative coordinates for centering objects. The 3MF spec allows negative coordinates, so this validation is not enforced.",
       "issue_url": "",
       "date_added": "2026-01-23"
+    },
+    {
+      "file": "P_EPX_2102_01_materialExt.3mf",
+      "suite": "suite8_secure",
+      "test_type": "positive",
+      "reason": "File is incorrect per error E3001. The build item for object 3 has a transform that places the mesh below the build plate with min coordinates (-77.99, -77.99, -23568.06). All coordinates must be >= 0.00. This appears to be an error in the official test suite as the file is marked as a positive test case but contains invalid geometry placement.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
     }
   ]
 }
