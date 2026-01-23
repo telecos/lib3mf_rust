@@ -383,6 +383,47 @@ The parser supports the following extensions:
 - `Extension::BooleanOperations` - Volumetric design
 - `Extension::Displacement` - Surface displacement maps
 
+### Polygon Clipping for Slice Self-Intersection Resolution
+
+The library includes polygon clipping operations for resolving self-intersections in slice data:
+
+```rust
+use lib3mf::polygon_clipping::resolve_self_intersections;
+use lib3mf::model::{SlicePolygon, SliceSegment, Vertex2D};
+
+// Create a slice polygon
+let vertices = vec![
+    Vertex2D::new(0.0, 0.0),
+    Vertex2D::new(100.0, 0.0),
+    Vertex2D::new(100.0, 100.0),
+    Vertex2D::new(0.0, 100.0),
+];
+
+let mut polygon = SlicePolygon::new(0);
+polygon.segments.push(SliceSegment::new(1));
+polygon.segments.push(SliceSegment::new(2));
+polygon.segments.push(SliceSegment::new(3));
+
+// Resolve any self-intersections
+let mut result_vertices = Vec::new();
+let clean_polygons = resolve_self_intersections(
+    &polygon,
+    &vertices,
+    &mut result_vertices
+).expect("Failed to resolve self-intersections");
+```
+
+The polygon clipping module provides:
+- **Self-intersection resolution** - Clean up invalid slice polygons
+- **Union operations** - Combine overlapping slice regions
+- **Intersection operations** - Find overlapping areas
+- **Difference operations** - Subtract one region from another
+
+Based on the Clipper2 library (successor to polyclipping used in C++ lib3mf).
+
+See [POLYGON_CLIPPING.md](POLYGON_CLIPPING.md) for detailed documentation and examples.
+
+
 ### Custom Extension Support
 
 You can register and handle custom/proprietary 3MF extensions with callback handlers:
