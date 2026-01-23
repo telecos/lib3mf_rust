@@ -1989,6 +1989,12 @@ fn load_keystore<R: Read + std::io::Seek>(
                                     .to_string(),
                             ));
                         }
+                        if !has_consumer_id && has_key_id {
+                            return Err(Error::InvalidSecureContent(
+                                "Consumer element is missing required 'consumerid' attribute (EPX-2602)"
+                                    .to_string(),
+                            ));
+                        }
 
                         if has_consumer_id {
                             if let Some(ref mut sc) = model.secure_content {
