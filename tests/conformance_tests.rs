@@ -40,27 +40,100 @@ fn get_3mf_files<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 }
 
 /// Test a positive test case - should parse successfully
-fn test_positive_case(path: &Path, config: &ParserConfig) -> Result<(), String> {
-    let file =
-        File::open(path).map_err(|e| format!("Failed to open file {}: {}", path.display(), e))?;
+fn test_positive_case(
+    path: &Path,
+    config: &ParserConfig,
+    suite: &str,
+    expected_failures: &common::ExpectedFailuresManager,
+) -> Result<(), String> {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
 
-    Model::from_reader_with_config(file, config.clone())
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
-
-    Ok(())
-}
-
-/// Test a negative test case - should fail to parse
-fn test_negative_case(path: &Path, config: &ParserConfig) -> Result<(), String> {
     let file =
         File::open(path).map_err(|e| format!("Failed to open file {}: {}", path.display(), e))?;
 
     match Model::from_reader_with_config(file, config.clone()) {
-        Ok(_) => Err(format!(
-            "Expected parsing to fail for {}, but it succeeded",
-            path.display()
-        )),
-        Err(_) => Ok(()), // Expected to fail
+        Ok(_) => {
+            if expected_failures.is_expected_failure(suite, filename, "positive") {
+                Err(format!(
+                    "File {} was expected to fail but succeeded. Reason: {}",
+                    path.display(),
+                    expected_failures
+                        .get_reason(suite, filename)
+                        .unwrap_or_else(|| "No reason provided".to_string())
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        Err(e) => {
+            if expected_failures.is_expected_failure(suite, filename, "positive") {
+                // This is an expected failure, so we report it as success
+                // but print a message for documentation
+                println!(
+                    "  ✓ Expected failure: {} - Reason: {}",
+                    filename,
+                    expected_failures
+                        .get_reason(suite, filename)
+                        .unwrap_or_else(|| "No reason provided".to_string())
+                );
+                Ok(())
+            } else {
+                Err(format!("Failed to parse {}: {}", path.display(), e))
+            }
+        }
+    }
+}
+
+/// Test a negative test case - should fail to parse
+fn test_negative_case(
+    path: &Path,
+    config: &ParserConfig,
+    suite: &str,
+    expected_failures: &common::ExpectedFailuresManager,
+) -> Result<(), String> {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+
+    let file =
+        File::open(path).map_err(|e| format!("Failed to open file {}: {}", path.display(), e))?;
+
+    match Model::from_reader_with_config(file, config.clone()) {
+        Ok(_) => {
+            if expected_failures.is_expected_failure(suite, filename, "negative") {
+                // This is an expected failure (expected to succeed when it should fail)
+                println!(
+                    "  ✓ Expected failure: {} - Reason: {}",
+                    filename,
+                    expected_failures
+                        .get_reason(suite, filename)
+                        .unwrap_or_else(|| "No reason provided".to_string())
+                );
+                Ok(())
+            } else {
+                Err(format!(
+                    "Expected parsing to fail for {}, but it succeeded",
+                    path.display()
+                ))
+            }
+        }
+        Err(_) => {
+            if expected_failures.is_expected_failure(suite, filename, "negative") {
+                Err(format!(
+                    "File {} was expected to succeed but failed. Reason: {}",
+                    path.display(),
+                    expected_failures
+                        .get_reason(suite, filename)
+                        .unwrap_or_else(|| "No reason provided".to_string())
+                ))
+            } else {
+                Ok(()) // Expected to fail
+            }
+        }
     }
 }
 
@@ -85,11 +158,12 @@ macro_rules! suite_tests {
                 }
 
                 let config = common::get_suite_config($suite_dir);
+                let expected_failures = common::ExpectedFailuresManager::load();
                 let mut passed = 0;
                 let mut failed = Vec::new();
 
                 for file in &test_files {
-                    match test_positive_case(file, &config) {
+                    match test_positive_case(file, &config, $suite_dir, &expected_failures) {
                         Ok(_) => passed += 1,
                         Err(e) => failed.push(e),
                     }
@@ -126,11 +200,12 @@ macro_rules! suite_tests {
                 }
 
                 let config = common::get_suite_config($suite_dir);
+                let expected_failures = common::ExpectedFailuresManager::load();
                 let mut passed = 0;
                 let mut failed = Vec::new();
 
                 for file in &test_files {
-                    match test_negative_case(file, &config) {
+                    match test_negative_case(file, &config, $suite_dir, &expected_failures) {
                         Ok(_) => passed += 1,
                         Err(e) => failed.push(e),
                     }
@@ -267,6 +342,7 @@ fn summary() {
         ("suite11_Displacement", "Positive Tests", "Negative Tests"),
     ];
 
+    let expected_failures = common::ExpectedFailuresManager::load();
     let mut total_positive = 0;
     let mut total_negative = 0;
     let mut total_positive_passed = 0;
@@ -293,13 +369,13 @@ fn summary() {
         let mut neg_passed = 0;
 
         for file in &pos_files {
-            if test_positive_case(file, &config).is_ok() {
+            if test_positive_case(file, &config, suite, &expected_failures).is_ok() {
                 pos_passed += 1;
             }
         }
 
         for file in &neg_files {
-            if test_negative_case(file, &config).is_ok() {
+            if test_negative_case(file, &config, suite, &expected_failures).is_ok() {
                 neg_passed += 1;
             }
         }

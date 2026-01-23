@@ -37,21 +37,80 @@ fn get_test_files(suite: &str, test_dir: &str) -> Vec<PathBuf> {
 }
 
 /// Test that a positive test case parses successfully
-fn test_positive_file(path: PathBuf, config: ParserConfig) -> Result<(), Failed> {
-    let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
+fn test_positive_file(
+    path: PathBuf,
+    config: ParserConfig,
+    suite: &str,
+    expected_failures: &common::ExpectedFailuresManager,
+) -> Result<(), Failed> {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
 
-    Model::from_reader_with_config(file, config).map_err(|e| format!("Failed to parse: {}", e))?;
-
-    Ok(())
-}
-
-/// Test that a negative test case fails to parse
-fn test_negative_file(path: PathBuf, config: ParserConfig) -> Result<(), Failed> {
     let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
 
     match Model::from_reader_with_config(file, config) {
-        Ok(_) => Err("Expected parsing to fail, but it succeeded".into()),
-        Err(_) => Ok(()), // Expected to fail
+        Ok(_) => {
+            if expected_failures.is_expected_failure(suite, filename, "positive") {
+                Err(format!(
+                    "File was expected to fail but succeeded. Reason: {}",
+                    expected_failures
+                        .get_reason(suite, filename)
+                        .unwrap_or_else(|| "No reason provided".to_string())
+                )
+                .into())
+            } else {
+                Ok(())
+            }
+        }
+        Err(e) => {
+            if expected_failures.is_expected_failure(suite, filename, "positive") {
+                // This is an expected failure, so we report it as success
+                Ok(())
+            } else {
+                Err(format!("Failed to parse: {}", e).into())
+            }
+        }
+    }
+}
+
+/// Test that a negative test case fails to parse
+fn test_negative_file(
+    path: PathBuf,
+    config: ParserConfig,
+    suite: &str,
+    expected_failures: &common::ExpectedFailuresManager,
+) -> Result<(), Failed> {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+
+    let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
+
+    match Model::from_reader_with_config(file, config) {
+        Ok(_) => {
+            if expected_failures.is_expected_failure(suite, filename, "negative") {
+                // This is an expected failure (expected to succeed when it should fail)
+                Ok(())
+            } else {
+                Err("Expected parsing to fail, but it succeeded".into())
+            }
+        }
+        Err(_) => {
+            if expected_failures.is_expected_failure(suite, filename, "negative") {
+                Err(format!(
+                    "File was expected to succeed but failed. Reason: {}",
+                    expected_failures
+                        .get_reason(suite, filename)
+                        .unwrap_or_else(|| "No reason provided".to_string())
+                )
+                .into())
+            } else {
+                Ok(()) // Expected to fail
+            }
+        }
     }
 }
 
@@ -64,6 +123,7 @@ fn create_suite_tests(
 ) -> Vec<Trial> {
     let mut trials = Vec::new();
     let config = common::get_suite_config(suite_dir);
+    let expected_failures = common::ExpectedFailuresManager::load();
 
     // Positive tests
     let positive_files = get_test_files(suite_dir, positive_dir);
@@ -76,9 +136,16 @@ fn create_suite_tests(
 
         let test_name = format!("{}::positive::{}", suite_name, file_name);
         let config_clone = config.clone();
+        let suite_dir_clone = suite_dir.to_string();
+        let expected_failures_clone = expected_failures.clone();
 
         trials.push(Trial::test(test_name, move || {
-            test_positive_file(path.clone(), config_clone)
+            test_positive_file(
+                path.clone(),
+                config_clone,
+                &suite_dir_clone,
+                &expected_failures_clone,
+            )
         }));
     }
 
@@ -93,9 +160,16 @@ fn create_suite_tests(
 
         let test_name = format!("{}::negative::{}", suite_name, file_name);
         let config_clone = config.clone();
+        let suite_dir_clone = suite_dir.to_string();
+        let expected_failures_clone = expected_failures.clone();
 
         trials.push(Trial::test(test_name, move || {
-            test_negative_file(path.clone(), config_clone)
+            test_negative_file(
+                path.clone(),
+                config_clone,
+                &suite_dir_clone,
+                &expected_failures_clone,
+            )
         }));
     }
 

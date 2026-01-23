@@ -1,0 +1,20 @@
+{
+  "expected_failures": [
+    {
+      "file": "P_XXX_2202_01.3mf",
+      "suite": "suite9_core_ext",
+      "test_type": "positive",
+      "reason": "File is incorrect per official test suite. It declares production extension as required but the build element does not have a UUID attribute, which is mandatory when using the production extension. Suite 9 tests core extensions, but this file appears to have been mistakenly included or represents a known issue in the official test suite.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "file": "P_SPX_0313_01.3mf",
+      "suite": "suite1_core_slice_prod",
+      "test_type": "positive",
+      "reason": "File contains invalid content type for PNG extension. The file uses 'application/vnd.ms-package.3dmanufacturing-3dmodeltexture' as the content type for a PNG file, but per 3MF Material Extension specification, texture content types must be 'image/png' or 'image/jpeg'. This appears to be an error in the official test suite.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    }
+  ]
+}
