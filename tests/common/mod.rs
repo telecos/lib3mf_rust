@@ -3,7 +3,11 @@
 //! This module provides common functionality used across multiple conformance test files,
 //! particularly for configuring parser settings based on test suite requirements.
 
+pub mod expected_failures;
+
 use lib3mf::{Extension, ParserConfig};
+
+pub use expected_failures::ExpectedFailuresManager;
 
 /// Get parser configuration for a specific test suite
 ///
