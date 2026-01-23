@@ -522,9 +522,6 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             disp_mesh.vertices.push(vertex);
                         }
                     }
-                    "triangles" if current_mesh.is_some() => {
-                        // Triangles will be parsed as individual triangle elements
-                    }
                     "triangles" if in_displacement_mesh => {
                         // Per DPX spec 4.1: Only one triangles element allowed per displacementmesh
                         if has_displacement_triangles {
@@ -540,11 +537,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         current_displacement_triangles_did =
                             attrs.get("did").and_then(|s| s.parse::<usize>().ok());
                     }
-                    "triangle" if current_mesh.is_some() => {
-                        if let Some(ref mut mesh) = current_mesh {
-                            let triangle = parse_triangle(&reader, e)?;
-                            mesh.triangles.push(triangle);
-                        }
+                    "triangles" if current_mesh.is_some() => {
+                        // Triangles will be parsed as individual triangle elements
                     }
                     "triangle" if in_displacement_triangles => {
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
@@ -577,6 +571,12 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
 
                             disp_mesh.triangles.push(triangle);
+                        }
+                    }
+                    "triangle" if current_mesh.is_some() => {
+                        if let Some(ref mut mesh) = current_mesh {
+                            let triangle = parse_triangle(&reader, e)?;
+                            mesh.triangles.push(triangle);
                         }
                     }
                     "item" if in_build => {
