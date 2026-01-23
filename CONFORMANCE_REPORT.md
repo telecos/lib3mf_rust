@@ -9,8 +9,10 @@ This library has been validated against the official [3MF Consortium test suites
 ### Key Metrics
 
 - ✅ **100% Positive Test Compliance**: All 1,719 valid 3MF files parse successfully
-- ✅ **~90% Negative Test Compliance**: Approximately 496 out of 552 invalid files are correctly rejected  
-- 📊 **~97.6% Overall Conformance**: Approximately 2,215 out of 2,271 total tests pass
+- ✅ **Negative Test Compliance**: Estimated ~90% based on strict color validation improvements
+- 📊 **Overall Conformance**: Estimated ~97.6% (improved from 77.4% baseline)
+
+**Note:** Exact negative test metrics require cloning the test_suites repository and running `cargo run --example analyze_negative_tests`. The estimates are based on the color format validation improvement which fixed multiple test cases.
 
 ### Test Suite Coverage
 
