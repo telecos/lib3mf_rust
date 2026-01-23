@@ -1659,12 +1659,9 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
             .required_extensions
             .iter()
             .any(|ext| matches!(ext, Extension::Displacement))
-            || model
-                .required_custom_extensions
-                .iter()
-                .any(|ns| {
-                    ns.contains("displacement/2022/07") || ns.contains("displacement/2023/10")
-                });
+            || model.required_custom_extensions.iter().any(|ns| {
+                ns.contains("displacement/2022/07") || ns.contains("displacement/2023/10")
+            });
 
         if !has_displacement_required {
             return Err(Error::InvalidModel(
@@ -1795,8 +1792,9 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
     for norm_group in &model.resources.norm_vector_groups {
         for (idx, norm_vec) in norm_group.vectors.iter().enumerate() {
             // Calculate the magnitude of the vector
-            let length_squared = norm_vec.x * norm_vec.x + norm_vec.y * norm_vec.y + norm_vec.z * norm_vec.z;
-            
+            let length_squared =
+                norm_vec.x * norm_vec.x + norm_vec.y * norm_vec.y + norm_vec.z * norm_vec.z;
+
             // Check if vector has zero length
             if length_squared < 0.000001 {
                 return Err(Error::InvalidModel(format!(
@@ -1887,7 +1885,8 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 for j in (i + 1)..disp_mesh.vertices.len() {
                     let v1 = &disp_mesh.vertices[i];
                     let v2 = &disp_mesh.vertices[j];
-                    let dist_sq = (v1.x - v2.x).powi(2) + (v1.y - v2.y).powi(2) + (v1.z - v2.z).powi(2);
+                    let dist_sq =
+                        (v1.x - v2.x).powi(2) + (v1.y - v2.y).powi(2) + (v1.z - v2.z).powi(2);
                     if dist_sq < EPSILON {
                         return Err(Error::InvalidModel(format!(
                             "Object {}: Displacement mesh has duplicate vertices at indices {} and {} \
@@ -1963,7 +1962,10 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
 
                 // Check for degenerate triangles (DPX 3310)
                 // All three vertices must be distinct
-                if triangle.v1 == triangle.v2 || triangle.v2 == triangle.v3 || triangle.v1 == triangle.v3 {
+                if triangle.v1 == triangle.v2
+                    || triangle.v2 == triangle.v3
+                    || triangle.v1 == triangle.v3
+                {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Displacement triangle {} is degenerate (v1={}, v2={}, v3={}). \
                          All three vertex indices must be distinct.",
@@ -2094,12 +2096,8 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                             .find(|n| n.id == disp_group.nid)
                         {
                             // Check normvectors for each displacement coordinate used
-                            for (_coord_idx, disp_coord_idx) in [
-                                (1, triangle.d1),
-                                (2, triangle.d2),
-                                (3, triangle.d3),
-                            ]
-                            .iter()
+                            for (_coord_idx, disp_coord_idx) in
+                                [(1, triangle.d1), (2, triangle.d2), (3, triangle.d3)].iter()
                             {
                                 if let Some(d_idx) = disp_coord_idx {
                                     if *d_idx < disp_group.coords.len() {

@@ -514,7 +514,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "vertex" if in_displacement_mesh => {
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
-                        let has_displacement_prefix = name_str.starts_with("d:") || name_str.starts_with("displacement:");
+                        let has_displacement_prefix =
+                            name_str.starts_with("d:") || name_str.starts_with("displacement:");
                         if !has_displacement_prefix {
                             return Err(Error::InvalidXml(format!(
                                 "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:vertex>). \
@@ -541,7 +542,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     // parsed as regular triangles and d1/d2/d3 attributes would be rejected.
                     "triangles" if in_displacement_mesh => {
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
-                        let has_displacement_prefix = name_str.starts_with("d:") || name_str.starts_with("displacement:");
+                        let has_displacement_prefix =
+                            name_str.starts_with("d:") || name_str.starts_with("displacement:");
                         if !has_displacement_prefix {
                             return Err(Error::InvalidXml(format!(
                                 "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:triangles>). \
@@ -582,7 +584,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     // Displacement triangle must be checked BEFORE regular triangle for same reason
                     "triangle" if in_displacement_triangles => {
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
-                        let has_displacement_prefix = name_str.starts_with("d:") || name_str.starts_with("displacement:");
+                        let has_displacement_prefix =
+                            name_str.starts_with("d:") || name_str.starts_with("displacement:");
                         if !has_displacement_prefix {
                             return Err(Error::InvalidXml(format!(
                                 "Element <{}> under displacementmesh must use the displacement namespace prefix (e.g., <d:triangle>). \
