@@ -1,0 +1,19 @@
+[package]
+name = "lib3mf-viewer"
+version = "0.1.0"
+edition = "2021"
+authors = ["lib3mf_rust contributors"]
+description = "3MF file viewer and analyzer using lib3mf_rust"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "lib3mf-viewer"
+path = "src/main.rs"
+
+[dependencies]
+lib3mf = { path = "../.." }
+clap = { version = "4.5", features = ["derive"] }
+image = "0.25"
+
+[lints.rust]
+unsafe_code = "forbid"
