@@ -74,16 +74,6 @@
       "date_added": "2026-01-25"
     },
     {
-      "test_case_id": "0601_02",
-      "suites": [
-        "suite2_core_prod_matl"
-      ],
-      "test_type": "negative",
-      "reason": "Empty resources section with external reference via p:path. While unusual, this is technically valid per 3MF Production Extension spec when all model content is in external files. The validation may require stricter checking of external file references which is not currently implemented.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
       "test_case_id": "2202_01",
       "suites": [
         "suite9_core_ext"

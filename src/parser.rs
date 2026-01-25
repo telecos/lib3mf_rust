@@ -3937,6 +3937,8 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
 ) -> Result<()> {
     // Cache to avoid re-parsing the same external file multiple times
     let mut external_file_cache: HashMap<String, Vec<(usize, Option<String>)>> = HashMap::new();
+    // Track which external files we've validated for triangles
+    let mut validated_files: HashSet<String> = HashSet::new();
 
     // Validate build item external references
     for (idx, item) in model.build.items.iter().enumerate() {
@@ -3993,6 +3995,14 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 &format!("Build item {}", idx),
                 &mut external_file_cache,
                 model,
+            )?;
+
+            // N_XXM_0601_02: Validate triangle material properties in external model file
+            validate_external_model_triangles(
+                package,
+                normalized_path,
+                model,
+                &mut validated_files,
             )?;
         }
     }
@@ -4054,6 +4064,14 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         &format!("Object {}, Component {}", object.id, comp_idx),
                         &mut external_file_cache,
                         model,
+                    )?;
+
+                    // N_XXM_0601_02: Validate triangle material properties in external model file
+                    validate_external_model_triangles(
+                        package,
+                        normalized_path,
+                        model,
+                        &mut validated_files,
                     )?;
                 }
             }
@@ -4257,6 +4275,115 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     }
     */
 
+    Ok(())
+}
+
+/// Validate an external model file's triangles for material property consistency
+///
+/// N_XXM_0601_02: External model files (non-root) must have proper material properties
+/// When an object has some triangles with material properties and some without,
+/// the object must have a default pid to provide material for unmaterialized triangles
+fn validate_external_model_triangles<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    file_path: &str,
+    model: &Model,
+    validated_files: &mut HashSet<String>,
+) -> Result<()> {
+    // Skip if already validated or is encrypted
+    if validated_files.contains(file_path) {
+        return Ok(());
+    }
+
+    let is_encrypted = model
+        .secure_content
+        .as_ref()
+        .map(|sc| {
+            sc.encrypted_files.iter().any(|encrypted_path| {
+                let enc_normalized = encrypted_path.trim_start_matches('/');
+                enc_normalized == file_path
+            })
+        })
+        .unwrap_or(false);
+
+    if is_encrypted {
+        // Skip validation for encrypted files
+        validated_files.insert(file_path.to_string());
+        return Ok(());
+    }
+
+    // Load and fully parse the external model file
+    let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
+    
+    // Parse the external model file with the same config as the main model
+    // We need to create a minimal config that has the same extensions
+    let config = ParserConfig::new()
+        .with_extension(Extension::Production)
+        .with_extension(Extension::Material);
+    
+    // Parse the external model
+    let external_model = match parse_model_xml_with_config(&external_xml, config) {
+        Ok(model) => model,
+        Err(e) => {
+            return Err(Error::InvalidModel(format!(
+                "External model file '{}' failed to parse: {}",
+                file_path, e
+            )));
+        }
+    };
+
+    // Validate triangle properties in the external model
+    // This applies the same validation as the main model
+    for object in &external_model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            // N_XXM_0601_02: Check if object has mixed material assignment
+            let mut has_triangles_with_material = false;
+            let mut has_triangles_without_material = false;
+
+            for triangle in &mesh.triangles {
+                let triangle_has_material = triangle.pid.is_some()
+                    || triangle.p1.is_some()
+                    || triangle.p2.is_some()
+                    || triangle.p3.is_some();
+
+                if triangle_has_material {
+                    has_triangles_with_material = true;
+                } else {
+                    has_triangles_without_material = true;
+                }
+            }
+
+            // If we have mixed material assignment and no default pid on object, this is invalid
+            if has_triangles_with_material && has_triangles_without_material && object.pid.is_none() {
+                return Err(Error::InvalidModel(format!(
+                    "External model file '{}': Object {} has some triangles with material properties and some without. \
+                     When triangles in an object have mixed material assignment, \
+                     the object must have a default pid attribute to provide material \
+                     for triangles without explicit material properties. \
+                     Add a pid attribute to object {}.",
+                    file_path, object.id, object.id
+                )));
+            }
+
+            // N_XXM_0601_01: Check per-vertex properties validation
+            for triangle in &mesh.triangles {
+                let has_per_vertex_properties =
+                    triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
+
+                if has_per_vertex_properties && triangle.pid.is_none() && object.pid.is_none() {
+                    return Err(Error::InvalidModel(format!(
+                        "External model file '{}': Triangle in object {} has per-vertex material properties (p1/p2/p3) \
+                         but neither the triangle nor the object has a pid to provide material context.\n\
+                         Per 3MF Material Extension spec, per-vertex properties require a pid, \
+                         either on the triangle or as a default on the object.\n\
+                         Add a pid attribute to either the triangle or object {}.",
+                        file_path, object.id, object.id
+                    )));
+                }
+            }
+        }
+    }
+
+    validated_files.insert(file_path.to_string());
     Ok(())
 }
 
