@@ -87,6 +87,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // This checks that external files exist and referenced objects/UUIDs are valid
     validate_production_external_paths(&mut package, &model)?;
 
+    // Validate texture paths exist in the package (N_XPM_0610_01)
+    // This must be done before general validation since it requires package access
+    validate_texture_file_paths(&mut package, &model)?;
+
     // Validate the model AFTER loading keystore and slices
     // This ensures validation can check encrypted file references correctly
     validator::validate_model_with_config(&model, &config_clone)?;
@@ -1719,6 +1723,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             if let Some(disp_mesh) = current_displacement_mesh.take() {
                                 obj.displacement_mesh = Some(disp_mesh);
                             }
+                            // Set parse order for resource ordering validation
+                            obj.parse_order = resource_parse_order;
+                            resource_parse_order += 1;
                             model.resources.objects.push(obj);
                         }
                     }
@@ -4050,6 +4057,54 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                     )?;
                 }
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that all texture2d resources reference files that exist in the package
+///
+/// Per 3MF Materials Extension spec, texture paths must point to valid files in the package.
+/// This function checks that the file referenced by each texture2d resource actually exists.
+///
+/// N_XPM_0610_01: Texture path must reference an existing file in the package
+fn validate_texture_file_paths<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    model: &Model,
+) -> Result<()> {
+    // Get list of encrypted files to skip validation for them
+    let encrypted_files: Vec<String> = model
+        .secure_content
+        .as_ref()
+        .map(|sc| sc.encrypted_files.clone())
+        .unwrap_or_default();
+
+    for texture in &model.resources.texture2d_resources {
+        // Skip validation for encrypted files (they may not follow standard paths)
+        if encrypted_files.contains(&texture.path) {
+            continue;
+        }
+
+        // Normalize path: remove leading slash if present for lookup
+        // The path in the model may start with "/" but the ZIP file paths typically don't
+        let normalized_path = texture.path.trim_start_matches('/');
+
+        // Check if file exists in the package
+        // Try both with and without leading slash as different 3MF implementations vary
+        let file_exists = package.has_file(normalized_path) || package.has_file(&texture.path);
+
+        if !file_exists {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' references a file that does not exist in the 3MF package.\n\
+                 Per 3MF Material Extension spec, texture paths must reference valid files in the package.\n\
+                 Check that:\n\
+                 - The texture file is included in the 3MF package\n\
+                 - The path is correct (case-sensitive)\n\
+                 - The path format follows 3MF conventions\n\
+                 Available files can be checked using ZIP archive tools.",
+                texture.id, texture.path
+            )));
         }
     }
 

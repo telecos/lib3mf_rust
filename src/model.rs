@@ -1667,6 +1667,9 @@ pub struct Object {
     /// Tracks if object has extension-specific shape elements (beamlattice, displacement, etc.)
     /// Used for validation - per Boolean Operations spec, operands must be simple meshes only
     pub(crate) has_extension_shapes: bool,
+    /// Parse order (for validation of resource ordering)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 /// Type of 3D object
@@ -1702,6 +1705,7 @@ impl Object {
             components: Vec::new(),
             has_thumbnail_attribute: false,
             has_extension_shapes: false,
+            parse_order: 0,
         }
     }
 }
