@@ -3649,10 +3649,10 @@ fn validate_resource_ordering(model: &Model) -> Result<()> {
                         .find(|(_, _, order)| *order > *obj_order) {
                         return Err(Error::InvalidModel(format!(
                             "Invalid resource ordering: Object {} appears between property resources.\n\
-                             Object {} is at position {}, between {} {} (position {}) and {} {} (position {}).\n\
+                             The object is at position {}, between {} {} (position {}) and {} {} (position {}).\n\
                              Per 3MF specification, objects must not be intermingled with property resources.\n\
                              Either place all objects after all property resources, or all property resources after all objects.",
-                            obj_id, obj_id, obj_order, prop_type, prop_id, prop_order, 
+                            obj_id, obj_order, prop_type, prop_id, prop_order, 
                             later_prop_type, later_prop_id, later_prop_order
                         )));
                     }
