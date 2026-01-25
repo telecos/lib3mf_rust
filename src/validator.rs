@@ -3727,11 +3727,11 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
                 // Per 3MF Material Extension spec, basematerials must be in the first two layers
                 if idx >= 2 {
                     return Err(Error::InvalidModel(format!(
-                        "MultiProperties {}: basematerials group {} referenced at layer {} (index {}).\n\
+                        "MultiProperties {}: basematerials group {} referenced at layer {}.\n\
                          Per 3MF Material Extension spec, basematerials can only be referenced in layers 0 or 1 \
-                         (indices 0 or 1) of multiproperties pids.\n\
+                         of multiproperties pids.\n\
                          Move the basematerials reference to layer 0 or 1.",
-                        multi_props.id, pid, idx, idx
+                        multi_props.id, pid, idx
                     )));
                 }
             }
@@ -3817,9 +3817,13 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
             for triangle in &mesh.triangles {
                 // N_XXM_0601_01: If triangle has material properties but object has no default,
                 // this is invalid per 3MF Material Extension spec
-                if (triangle.pid.is_some() || triangle.pindex.is_some() 
-                    || triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some())
-                    && object.pid.is_none() {
+                let triangle_has_material_properties = triangle.pid.is_some() 
+                    || triangle.pindex.is_some() 
+                    || triangle.p1.is_some() 
+                    || triangle.p2.is_some() 
+                    || triangle.p3.is_some();
+                
+                if triangle_has_material_properties && object.pid.is_none() {
                     return Err(Error::InvalidModel(format!(
                         "Triangle in object {} has material properties (pid/pindex/p1/p2/p3) \
                          but the object has no default material property (pid).\n\
