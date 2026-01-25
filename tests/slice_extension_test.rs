@@ -36,7 +36,10 @@ fn test_slice_extension_parsing() {
 
     // Verify first slice has proper structure
     let first_slice = &slice_stack.slices[0];
-    assert!(first_slice.ztop > 0.0, "First slice should have positive ztop");
+    assert!(
+        first_slice.ztop > 0.0,
+        "First slice should have positive ztop"
+    );
     assert!(
         !first_slice.vertices.is_empty(),
         "First slice should have vertices"

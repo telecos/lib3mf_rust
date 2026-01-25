@@ -1,6 +1,6 @@
 //! Test for suite2 positive test case fixes
-//! 
-//! Note: These tests require external conformance test files that are not 
+//!
+//! Note: These tests require external conformance test files that are not
 //! included in the repository. They are marked as #[ignore] and can be run
 //! manually when the test_suites folder is available.
 

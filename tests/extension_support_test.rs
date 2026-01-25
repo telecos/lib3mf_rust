@@ -48,7 +48,7 @@ fn create_test_3mf(required_extensions: &str) -> Vec<u8> {
 
     // Check if Production extension is required
     let needs_production = required_extensions.contains("production/2015/06");
-    
+
     let model_xml = if required_extensions.is_empty() {
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">

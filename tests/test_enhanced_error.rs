@@ -29,7 +29,7 @@ fn test_circular_reference_error_shows_path() {
 
     // First parse the XML (parsing doesn't validate circular references)
     let model = parse_model_xml(xml).expect("Parsing should succeed");
-    
+
     // Then validate the model (this detects circular references)
     let result = validate_model(&model);
     assert!(result.is_err());

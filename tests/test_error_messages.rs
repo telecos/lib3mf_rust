@@ -26,7 +26,7 @@ fn test_error_message_for_circular_reference() {
 
     // First parse the XML (parsing doesn't validate circular references)
     let model = parse_model_xml(xml).expect("Parsing should succeed");
-    
+
     // Then validate the model (this detects circular references)
     let result = validate_model(&model);
     assert!(result.is_err());
@@ -54,7 +54,7 @@ fn test_error_message_for_invalid_reference() {
 
     // First parse the XML (parsing doesn't validate invalid references)
     let model = parse_model_xml(xml).expect("Parsing should succeed");
-    
+
     // Then validate the model (this detects invalid references)
     let result = validate_model(&model);
     assert!(result.is_err());
