@@ -306,3 +306,75 @@ fn test_empty_model() {
     assert_eq!(model.resources.objects.len(), 0);
     assert_eq!(model.build.items.len(), 0);
 }
+
+/// Test N_XPX_0420_01: DTD declarations should be rejected for security reasons
+#[test]
+fn test_dtd_declaration_rejected() {
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    let mut zip = ZipWriter::new(cursor);
+
+    let options = SimpleFileOptions::default();
+
+    // Add [Content_Types].xml
+    let content_types = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"##;
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.as_bytes()).unwrap();
+
+    // Add _rels/.rels
+    let rels = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"##;
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.as_bytes()).unwrap();
+
+    // Add 3D/3dmodel.model with DTD declaration (should be rejected)
+    let model = r##"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE model SYSTEM "model.dtd">
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0.0" y="0.0" z="0.0"/>
+          <vertex x="10.0" y="0.0" z="0.0"/>
+          <vertex x="5.0" y="10.0" z="0.0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"##;
+
+    zip.start_file("3D/3dmodel.model", options).unwrap();
+    zip.write_all(model.as_bytes()).unwrap();
+
+    let cursor = zip.finish().unwrap();
+    let buffer = cursor.into_inner();
+
+    // Try to parse - should fail due to DTD declaration
+    let result = Model::from_reader(Cursor::new(buffer));
+    
+    assert!(result.is_err(), "Expected parsing to fail due to DTD declaration");
+    
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+    
+    assert!(
+        err_msg.contains("DTD") || err_msg.contains("security"),
+        "Error message should mention DTD or security, got: {}",
+        err_msg
+    );
+}
