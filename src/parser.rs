@@ -1903,6 +1903,7 @@ fn validate_kekparams_attributes(
 /// - EPX-2603: Validates encryption algorithms are valid
 /// - EPX-2604: Validates consumer IDs are unique
 /// - EPX-2605: Validates encrypted file paths are valid (not OPC .rels files)
+/// - EPX-2606: Validates encrypted files have required EncryptedFile relationships
 /// - EPX-2607: Validates referenced files exist in the package
 fn load_keystore<R: Read + std::io::Seek>(
     package: &mut Package<R>,
@@ -2240,6 +2241,18 @@ fn load_keystore<R: Read + std::io::Seek>(
                                         "Referenced encrypted file '{}' does not exist in package (EPX-2607)",
                                         path
                                     )));
+                        }
+
+                        // EPX-2606: Validate encrypted files have required EncryptedFile relationship
+                        // Per 3MF SecureContent spec: "All encrypted files referenced by a resource data
+                        // element MUST have a EncryptedFile relationship"
+                        if !package.has_relationship_for_target(&path, crate::opc::ENCRYPTEDFILE_REL_TYPE) {
+                            return Err(Error::InvalidSecureContent(format!(
+                                "Encrypted file '{}' missing required EncryptedFile relationship (EPX-2606). \
+                                Per 3MF SecureContent specification, all encrypted files must have an \
+                                EncryptedFile relationship of type 'http://schemas.openxmlformats.org/package/2006/relationships/encryptedfile'",
+                                path
+                            )));
                         }
 
                         // Add to encrypted_files list (for backward compatibility)

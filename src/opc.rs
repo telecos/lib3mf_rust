@@ -38,19 +38,40 @@ pub const KEYSTORE_REL_TYPE_2019_04: &str =
 pub const KEYSTORE_REL_TYPE_2019_07: &str =
     "http://schemas.microsoft.com/3dmanufacturing/2019/07/keystore";
 
+/// Encrypted file relationship type (OPC standard for encrypted files)
+pub const ENCRYPTEDFILE_REL_TYPE: &str =
+    "http://schemas.openxmlformats.org/package/2006/relationships/encryptedfile";
+
+/// Represents a relationship in an OPC package
+#[derive(Debug, Clone)]
+pub struct Relationship {
+    /// Relationship identifier
+    pub id: String,
+    /// Target path of the relationship
+    pub target: String,
+    /// Relationship type (URI)
+    pub rel_type: String,
+}
+
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {
     archive: ZipArchive<R>,
+    /// Cached relationships from all .rels files (key is the .rels file path)
+    relationships: std::collections::HashMap<String, Vec<Relationship>>,
 }
 
 impl<R: Read + std::io::Seek> Package<R> {
     /// Open a 3MF package from a reader
     pub fn open(reader: R) -> Result<Self> {
         let archive = ZipArchive::new(reader)?;
-        let mut package = Self { archive };
+        let mut package = Self {
+            archive,
+            relationships: std::collections::HashMap::new(),
+        };
 
-        // Validate required OPC structure
+        // Validate required OPC structure and load relationships
         package.validate_opc_structure()?;
+        package.load_all_relationships()?;
 
         Ok(package)
     }
@@ -589,6 +610,111 @@ impl<R: Read + std::io::Seek> Package<R> {
         }
 
         Ok(())
+    }
+
+    /// Load all relationships from .rels files in the archive
+    fn load_all_relationships(&mut self) -> Result<()> {
+        // Collect all .rels files in the archive
+        let mut rels_files = Vec::new();
+        for i in 0..self.archive.len() {
+            if let Ok(file) = self.archive.by_index(i) {
+                let name = file.name().to_string();
+                if name.ends_with(".rels") {
+                    rels_files.push(name);
+                }
+            }
+        }
+
+        // Parse each .rels file and store relationships
+        for rels_file in rels_files {
+            let content = self.get_file(&rels_file)?;
+            let relationships = self.parse_relationships_content(&content)?;
+            self.relationships.insert(rels_file, relationships);
+        }
+
+        Ok(())
+    }
+
+    /// Parse relationships from XML content
+    fn parse_relationships_content(&self, content: &str) -> Result<Vec<Relationship>> {
+        let mut reader = Reader::from_str(content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        let mut relationships = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let name = e.name();
+                    let name_str = std::str::from_utf8(name.as_ref())
+                        .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                    if name_str.ends_with("Relationship") {
+                        let mut id = None;
+                        let mut target = None;
+                        let mut rel_type = None;
+
+                        for attr in e.attributes() {
+                            let attr = attr?;
+                            let key = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = std::str::from_utf8(&attr.value)
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            match key {
+                                "Id" => id = Some(value.to_string()),
+                                "Target" => target = Some(value.to_string()),
+                                "Type" => rel_type = Some(value.to_string()),
+                                _ => {}
+                            }
+                        }
+
+                        if let (Some(id), Some(target), Some(rel_type)) = (id, target, rel_type) {
+                            relationships.push(Relationship {
+                                id,
+                                target,
+                                rel_type,
+                            });
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(Error::InvalidXml(e.to_string())),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok(relationships)
+    }
+
+    /// Check if a specific file has a relationship of a given type
+    /// This is useful for validating SecureContent encrypted files
+    pub fn has_relationship_for_target(&self, target_path: &str, rel_type: &str) -> bool {
+        // Normalize the target path (remove leading slash if present)
+        let normalized_target = if let Some(stripped) = target_path.strip_prefix('/') {
+            stripped
+        } else {
+            target_path
+        };
+
+        // Check all .rels files for a matching relationship
+        for relationships in self.relationships.values() {
+            for rel in relationships {
+                // Normalize the relationship target as well
+                let rel_target_normalized = if let Some(stripped) = rel.target.strip_prefix('/') {
+                    stripped
+                } else {
+                    rel.target.as_str()
+                };
+
+                if rel_target_normalized == normalized_target && rel.rel_type == rel_type {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Get the main 3D model file content
