@@ -3729,14 +3729,15 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
             if base_mat_ids.contains(&pid) {
                 *base_mat_count.entry(pid).or_insert(0) += 1;
 
-                // N_XXM_0604_03: basematerials can only be at layer 0 or 1
-                // Per 3MF Material Extension spec, basematerials must be in the first two layers
-                if idx >= 2 {
+                // N_XXM_0604_03: basematerials MUST be at layer 0 (first position) if included
+                // Per 3MF Material Extension spec Chapter 5: "A material, if included, MUST be
+                // positioned as the first element in the list forming the first layer"
+                if idx != 0 {
                     return Err(Error::InvalidModel(format!(
                         "MultiProperties {}: basematerials group {} referenced at layer {}.\n\
-                         Per 3MF Material Extension spec, basematerials can only be referenced in layers 0 or 1 \
-                         of multiproperties pids.\n\
-                         Move the basematerials reference to layer 0 or 1.",
+                         Per 3MF Material Extension spec, basematerials MUST be positioned as the first element \
+                         (layer 0) in multiproperties pids when included.\n\
+                         Move the basematerials reference to layer 0.",
                         multi_props.id, pid, idx
                     )));
                 }
@@ -3748,7 +3749,21 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
             }
         }
 
-        // N_XXM_0604_01: Check for duplicate colorgroup references
+        // N_XXM_0604_01: Check that at most one colorgroup is referenced
+        // Per 3MF Material Extension spec Chapter 5: "The pids list MUST NOT contain
+        // more than one reference to a colorgroup"
+        if color_group_count.len() > 1 {
+            let color_ids: Vec<usize> = color_group_count.keys().copied().collect();
+            return Err(Error::InvalidModel(format!(
+                "MultiProperties {}: References multiple colorgroups {:?} in pids.\n\
+                 Per 3MF Material Extension spec, multiproperties pids list MUST NOT contain \
+                 more than one reference to a colorgroup.\n\
+                 Remove all but one colorgroup reference from the pids list.",
+                multi_props.id, color_ids
+            )));
+        }
+
+        // Also check for duplicate references to the same colorgroup
         for (&color_id, &count) in &color_group_count {
             if count > 1 {
                 return Err(Error::InvalidModel(format!(
@@ -4976,6 +4991,104 @@ mod tests {
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("basematerials"));
         assert!(error_msg.contains("layer"));
+    }
+
+    #[test]
+    fn test_multiproperties_basematerials_at_layer_1() {
+        // Test case N_XXM_0604_03: basematerials at layer 1 (index 1) should be rejected
+        // Per spec, basematerials MUST be at layer 0 if included
+        use crate::model::{BaseMaterial, BaseMaterialGroup, ColorGroup};
+
+        let mut model = Model::new();
+
+        // Add a colorgroup for layer 0
+        let mut cg = ColorGroup::new(6);
+        cg.parse_order = 1;
+        cg.colors.push((255, 0, 0, 255));
+        model.resources.color_groups.push(cg);
+
+        // Add a basematerials group
+        let mut base_mat = BaseMaterialGroup::new(1);
+        base_mat.parse_order = 2;
+        base_mat
+            .materials
+            .push(BaseMaterial::new("Steel".to_string(), (128, 128, 128, 255)));
+        model.resources.base_material_groups.push(base_mat);
+
+        // Add multiproperties with basematerials at layer 1 (index 1) - INVALID
+        let mut multi = MultiProperties::new(12, vec![6, 1]); // colorgroup at 0, basematerials at 1
+        multi.parse_order = 3;
+        multi.multis.push(Multi::new(vec![0, 0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0604_03)
+        let result = validate_multiproperties_references(&model);
+        assert!(
+            result.is_err(),
+            "Should reject basematerials at layer 1 (must be at layer 0)"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("basematerials"));
+        assert!(error_msg.contains("layer 1"));
+        assert!(error_msg.contains("first element"));
+    }
+
+    #[test]
+    fn test_multiproperties_two_different_colorgroups() {
+        // Test case N_XXM_0604_01: multiple different colorgroups should be rejected
+        // Per spec, pids list MUST NOT contain more than one reference to a colorgroup
+        use crate::model::ColorGroup;
+
+        let mut model = Model::new();
+
+        // Add two different colorgroups
+        let mut cg1 = ColorGroup::new(5);
+        cg1.parse_order = 1;
+        cg1.colors.push((255, 0, 0, 255));
+        model.resources.color_groups.push(cg1);
+
+        let mut cg2 = ColorGroup::new(6);
+        cg2.parse_order = 2;
+        cg2.colors.push((0, 255, 0, 255));
+        model.resources.color_groups.push(cg2);
+
+        // Add multiproperties that references both colorgroups
+        let mut multi = MultiProperties::new(12, vec![5, 6]); // Two different colorgroups
+        multi.parse_order = 3;
+        multi.multis.push(Multi::new(vec![0, 0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0604_01)
+        let result = validate_multiproperties_references(&model);
+        assert!(
+            result.is_err(),
+            "Should reject multiproperties with multiple different colorgroups"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("multiple colorgroups"));
+        assert!(error_msg.contains("[5, 6]") || error_msg.contains("[6, 5]"));
     }
 
     #[test]
