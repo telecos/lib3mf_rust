@@ -20,6 +20,9 @@ use lib3mf::{Model, Object};
 use std::fs::File;
 use std::path::PathBuf;
 
+/// Formatting constant for output field width
+const FIELD_WIDTH: usize = 34;
+
 /// Command-line arguments for the 3MF viewer
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -93,30 +96,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Display basic model information
 fn display_model_info(model: &Model) {
     println!("┌─ Model Information ────────────────────────────────────┐");
-    println!("│ Unit:                 {:<34} │", model.unit);
-    let xmlns_display = if model.xmlns.len() > 34 {
-        format!("{}...", &model.xmlns[..31])
+    println!("│ Unit:                 {:<FIELD_WIDTH$} │", model.unit);
+    let xmlns_display = if model.xmlns.len() > FIELD_WIDTH {
+        format!("{}...", &model.xmlns[..(FIELD_WIDTH - 3)])
     } else {
         model.xmlns.clone()
     };
-    println!("│ XML Namespace:        {:<34} │", xmlns_display);
+    println!("│ XML Namespace:        {:<FIELD_WIDTH$} │", xmlns_display);
     if let Some(ref thumbnail) = model.thumbnail {
-        let thumb_display = if thumbnail.path.len() > 28 {
-            format!("{}...", &thumbnail.path[..25])
+        let thumb_display = if thumbnail.path.len() > FIELD_WIDTH - 6 {
+            format!("{}...", &thumbnail.path[..(FIELD_WIDTH - 9)])
         } else {
             thumbnail.path.clone()
         };
-        println!("│ Thumbnail:            {:<34} │", thumb_display);
+        println!("│ Thumbnail:            {:<FIELD_WIDTH$} │", thumb_display);
     }
     if !model.required_extensions.is_empty() {
         let ext_names: Vec<&str> = model.required_extensions.iter().map(|e| e.name()).collect();
         let ext_display = ext_names.join(", ");
-        let display = if ext_display.len() > 34 {
-            format!("{}...", &ext_display[..31])
+        let display = if ext_display.len() > FIELD_WIDTH {
+            format!("{}...", &ext_display[..(FIELD_WIDTH - 3)])
         } else {
             ext_display
         };
-        println!("│ Required Extensions:  {:<34} │", display);
+        println!("│ Required Extensions:  {:<FIELD_WIDTH$} │", display);
     }
     println!("└────────────────────────────────────────────────────────┘");
     println!();
@@ -137,15 +140,15 @@ fn display_metadata(model: &Model) {
     println!();
 }
 
-/// Display resource information
+/// Display resources
 fn display_resources(model: &Model, detailed: bool) {
     println!("┌─ Resources ────────────────────────────────────────────┐");
-    println!("│ Objects:              {:<34} │", model.resources.objects.len());
-    println!("│ Base Materials:       {:<34} │", model.resources.materials.len());
-    println!("│ Color Groups:         {:<34} │", model.resources.color_groups.len());
-    println!("│ Texture 2D Groups:    {:<34} │", model.resources.texture2d_groups.len());
-    println!("│ Composite Materials:  {:<34} │", model.resources.composite_materials.len());
-    println!("│ Multi-Properties:     {:<34} │", model.resources.multi_properties.len());
+    println!("│ Objects:              {:<FIELD_WIDTH$} │", model.resources.objects.len());
+    println!("│ Base Materials:       {:<FIELD_WIDTH$} │", model.resources.materials.len());
+    println!("│ Color Groups:         {:<FIELD_WIDTH$} │", model.resources.color_groups.len());
+    println!("│ Texture 2D Groups:    {:<FIELD_WIDTH$} │", model.resources.texture2d_groups.len());
+    println!("│ Composite Materials:  {:<FIELD_WIDTH$} │", model.resources.composite_materials.len());
+    println!("│ Multi-Properties:     {:<FIELD_WIDTH$} │", model.resources.multi_properties.len());
     println!("└────────────────────────────────────────────────────────┘");
     println!();
 
@@ -238,33 +241,33 @@ fn display_material_details(model: &Model) {
 /// Display build items
 fn display_build(model: &Model) {
     println!("┌─ Build Items ──────────────────────────────────────────┐");
-    println!("│ Total Items:          {:<34} │", model.build.items.len());
+    println!("│ Total Items:          {:<FIELD_WIDTH$} │", model.build.items.len());
 
     for (i, item) in model.build.items.iter().enumerate() {
         println!("│{:─<56}│", "");
-        println!("│ Item {}:               {:<34} │", i, "");
-        println!("│   Object ID:          {:<34} │", item.objectid);
+        println!("│ Item {}:               {:<FIELD_WIDTH$} │", i, "");
+        println!("│   Object ID:          {:<FIELD_WIDTH$} │", item.objectid);
 
         if let Some(ref uuid) = item.production_uuid {
-            let display = if uuid.len() > 34 {
-                format!("{}...", &uuid[..31])
+            let display = if uuid.len() > FIELD_WIDTH {
+                format!("{}...", &uuid[..(FIELD_WIDTH - 3)])
             } else {
                 uuid.clone()
             };
-            println!("│   UUID:               {:<34} │", display);
+            println!("│   UUID:               {:<FIELD_WIDTH$} │", display);
         }
 
         if let Some(ref path) = item.production_path {
-            let display = if path.len() > 34 {
-                format!("{}...", &path[..31])
+            let display = if path.len() > FIELD_WIDTH {
+                format!("{}...", &path[..(FIELD_WIDTH - 3)])
             } else {
                 path.clone()
             };
-            println!("│   Production Path:    {:<34} │", display);
+            println!("│   Production Path:    {:<FIELD_WIDTH$} │", display);
         }
 
         if item.transform.is_some() {
-            println!("│   Has Transform:      {:<34} │", "Yes");
+            println!("│   Has Transform:      {:<FIELD_WIDTH$} │", "Yes");
         }
     }
 
@@ -363,11 +366,18 @@ fn export_wireframe_preview(model: &Model, output_path: &PathBuf) -> Result<(), 
         return Ok(());
     }
 
-    // Calculate bounds
-    let min_x = all_vertices.iter().map(|v| v.0).fold(f64::MAX, f64::min);
-    let max_x = all_vertices.iter().map(|v| v.0).fold(f64::MIN, f64::max);
-    let min_y = all_vertices.iter().map(|v| v.1).fold(f64::MAX, f64::min);
-    let max_y = all_vertices.iter().map(|v| v.1).fold(f64::MIN, f64::max);
+    // Calculate bounds in a single pass
+    let (min_x, max_x, min_y, max_y) = all_vertices.iter().fold(
+        (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
+        |(min_x, max_x, min_y, max_y), v| {
+            (
+                min_x.min(v.0),
+                max_x.max(v.0),
+                min_y.min(v.1),
+                max_y.max(v.1),
+            )
+        },
+    );
 
     let range_x = max_x - min_x;
     let range_y = max_y - min_y;
@@ -382,7 +392,8 @@ fn export_wireframe_preview(model: &Model, output_path: &PathBuf) -> Result<(), 
         if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
             if let Some(ref mesh) = obj.mesh {
                 for tri in &mesh.triangles {
-                    if tri.v1 < mesh.vertices.len() && tri.v2 < mesh.vertices.len() && tri.v3 < mesh.vertices.len() {
+                    let vertex_count = mesh.vertices.len();
+                    if tri.v1 < vertex_count && tri.v2 < vertex_count && tri.v3 < vertex_count {
                         let v1 = &mesh.vertices[tri.v1];
                         let v2 = &mesh.vertices[tri.v2];
                         let v3 = &mesh.vertices[tri.v3];
