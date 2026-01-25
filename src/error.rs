@@ -350,6 +350,24 @@ pub enum Error {
     XmlWrite(String),
 }
 
+impl From<std::num::ParseFloatError> for Error {
+    fn from(err: std::num::ParseFloatError) -> Self {
+        Error::ParseError(format!("Failed to parse floating-point number: {}", err))
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(err: std::num::ParseIntError) -> Self {
+        Error::ParseError(format!("Failed to parse integer: {}", err))
+    }
+}
+
+impl From<quick_xml::events::attributes::AttrError> for Error {
+    fn from(err: quick_xml::events::attributes::AttrError) -> Self {
+        Error::XmlAttr(format!("Attribute parsing failed: {}", err))
+    }
+}
+
 impl Error {
     /// Get the error type as a string for matching against expected failures
     ///
@@ -373,27 +391,7 @@ impl Error {
             Error::XmlWrite(_) => "XmlWrite",
         }
     }
-}
 
-impl From<std::num::ParseFloatError> for Error {
-    fn from(err: std::num::ParseFloatError) -> Self {
-        Error::ParseError(format!("Failed to parse floating-point number: {}", err))
-    }
-}
-
-impl From<std::num::ParseIntError> for Error {
-    fn from(err: std::num::ParseIntError) -> Self {
-        Error::ParseError(format!("Failed to parse integer: {}", err))
-    }
-}
-
-impl From<quick_xml::events::attributes::AttrError> for Error {
-    fn from(err: quick_xml::events::attributes::AttrError) -> Self {
-        Error::XmlAttr(format!("Attribute parsing failed: {}", err))
-    }
-}
-
-impl Error {
     /// Create an InvalidXml error with element context
     ///
     /// # Arguments
