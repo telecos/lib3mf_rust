@@ -2,7 +2,6 @@
 ///
 /// This example verifies that the parser correctly rejects invalid multiproperties configurations
 /// according to the 3MF Material Extension specification.
-
 use lib3mf::{Extension, Model, ParserConfig};
 use std::fs::File;
 
