@@ -66,7 +66,7 @@ impl<R: Read + std::io::Seek> Package<R> {
         let archive = ZipArchive::new(reader)?;
         let mut package = Self {
             archive,
-            relationships: std::collections::HashMap::new(),
+            relationships: std::collections::HashMap::default(),
         };
 
         // Validate required OPC structure and load relationships
@@ -614,13 +614,14 @@ impl<R: Read + std::io::Seek> Package<R> {
 
     /// Load all relationships from .rels files in the archive
     fn load_all_relationships(&mut self) -> Result<()> {
-        // Collect all .rels files in the archive
+        // Collect all .rels file names in the archive
+        // We need to collect names first because we can't borrow archive while iterating
         let mut rels_files = Vec::new();
         for i in 0..self.archive.len() {
             if let Ok(file) = self.archive.by_index(i) {
-                let name = file.name().to_string();
+                let name = file.name();
                 if name.ends_with(".rels") {
-                    rels_files.push(name);
+                    rels_files.push(name.to_string());
                 }
             }
         }
@@ -688,25 +689,20 @@ impl<R: Read + std::io::Seek> Package<R> {
         Ok(relationships)
     }
 
+    /// Normalize a path by removing leading slash if present
+    fn normalize_target_path(path: &str) -> &str {
+        path.strip_prefix('/').unwrap_or(path)
+    }
+
     /// Check if a specific file has a relationship of a given type
     /// This is useful for validating SecureContent encrypted files
     pub fn has_relationship_for_target(&self, target_path: &str, rel_type: &str) -> bool {
-        // Normalize the target path (remove leading slash if present)
-        let normalized_target = if let Some(stripped) = target_path.strip_prefix('/') {
-            stripped
-        } else {
-            target_path
-        };
+        let normalized_target = Self::normalize_target_path(target_path);
 
         // Check all .rels files for a matching relationship
         for relationships in self.relationships.values() {
             for rel in relationships {
-                // Normalize the relationship target as well
-                let rel_target_normalized = if let Some(stripped) = rel.target.strip_prefix('/') {
-                    stripped
-                } else {
-                    rel.target.as_str()
-                };
+                let rel_target_normalized = Self::normalize_target_path(&rel.target);
 
                 if rel_target_normalized == normalized_target && rel.rel_type == rel_type {
                     return true;
