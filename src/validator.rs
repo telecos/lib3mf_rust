@@ -1952,10 +1952,10 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 }
                 checked_edges.insert((*v1, *v2));
                 checked_edges.insert((*v2, *v1));
-                
+
                 let reverse_edge = (*v2, *v1);
                 let reverse_tris = edge_to_triangles.get(&reverse_edge);
-                
+
                 match (tris.len(), reverse_tris) {
                     (1, Some(rev_tris)) if rev_tris.len() == 1 => {
                         // Perfect: edge traversed once in each direction - consistent orientation
