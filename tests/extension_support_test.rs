@@ -46,6 +46,9 @@ fn create_test_3mf(required_extensions: &str) -> Vec<u8> {
     )
     .unwrap();
 
+    // Check if Production extension is required
+    let needs_production = required_extensions.contains("production/2015/06");
+    
     let model_xml = if required_extensions.is_empty() {
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
@@ -68,6 +71,31 @@ fn create_test_3mf(required_extensions: &str) -> Vec<u8> {
   </build>
 </model>"#
             .to_string()
+    } else if needs_production {
+        // When Production extension is required, we need p:UUID on build and items
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="{}">
+  <resources>
+    <object id="1" type="model" p:UUID="f47ac10b-58cc-4372-a567-0e02b2c3d479">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build p:UUID="a47ac10b-58cc-4372-a567-0e02b2c3d479">
+    <item objectid="1" p:UUID="b47ac10b-58cc-4372-a567-0e02b2c3d479"/>
+  </build>
+</model>"#,
+            required_extensions
+        )
     } else {
         format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -353,9 +381,9 @@ fn test_displacement_extension_parsing() {
       <d:normvector x="1.0" y="0.0" z="0.0"/>
     </d:normvectorgroup>
     <d:disp2dgroup id="3" dispid="1" nid="2" height="5.0" offset="0.5">
-      <d:disp2dcoords u="0.0" v="0.0" n="0" f="1.0"/>
-      <d:disp2dcoords u="1.0" v="0.0" n="1" f="0.8"/>
-      <d:disp2dcoords u="0.5" v="1.0" n="2"/>
+      <d:disp2dcoord u="0.0" v="0.0" n="0" f="1.0"/>
+      <d:disp2dcoord u="1.0" v="0.0" n="1" f="0.8"/>
+      <d:disp2dcoord u="0.5" v="1.0" n="2"/>
     </d:disp2dgroup>
     <object id="10" type="model">
       <mesh>

@@ -2440,7 +2440,7 @@ fn validate_slice(
 /// m22 equal to one.
 ///
 /// Transform matrix layout (3x3 rotation + translation, stored in row-major order as 12 elements):
-/// ```
+/// ```text
 /// Matrix representation:
 /// [m00, m01, m02, tx,
 ///  m10, m11, m12, ty,
