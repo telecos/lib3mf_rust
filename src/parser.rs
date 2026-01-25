@@ -4331,55 +4331,16 @@ fn validate_external_model_triangles<R: Read + std::io::Seek>(
         }
     };
 
-    // Validate triangle properties in the external model
-    // This applies the same validation as the main model
+    // Validate triangle properties in the external model using the shared helper function
     for object in &external_model.resources.objects {
         if let Some(ref mesh) = object.mesh {
-            // N_XXM_0601_02: Check if object has mixed material assignment
-            let mut has_triangles_with_material = false;
-            let mut has_triangles_without_material = false;
-
-            for triangle in &mesh.triangles {
-                let triangle_has_material = triangle.pid.is_some()
-                    || triangle.p1.is_some()
-                    || triangle.p2.is_some()
-                    || triangle.p3.is_some();
-
-                if triangle_has_material {
-                    has_triangles_with_material = true;
-                } else {
-                    has_triangles_without_material = true;
-                }
-            }
-
-            // If we have mixed material assignment and no default pid on object, this is invalid
-            if has_triangles_with_material && has_triangles_without_material && object.pid.is_none() {
-                return Err(Error::InvalidModel(format!(
-                    "External model file '{}': Object {} has some triangles with material properties and some without. \
-                     When triangles in an object have mixed material assignment, \
-                     the object must have a default pid attribute to provide material \
-                     for triangles without explicit material properties. \
-                     Add a pid attribute to object {}.",
-                    file_path, object.id, object.id
-                )));
-            }
-
-            // N_XXM_0601_01: Check per-vertex properties validation
-            for triangle in &mesh.triangles {
-                let has_per_vertex_properties =
-                    triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
-
-                if has_per_vertex_properties && triangle.pid.is_none() && object.pid.is_none() {
-                    return Err(Error::InvalidModel(format!(
-                        "External model file '{}': Triangle in object {} has per-vertex material properties (p1/p2/p3) \
-                         but neither the triangle nor the object has a pid to provide material context.\n\
-                         Per 3MF Material Extension spec, per-vertex properties require a pid, \
-                         either on the triangle or as a default on the object.\n\
-                         Add a pid attribute to either the triangle or object {}.",
-                        file_path, object.id, object.id
-                    )));
-                }
-            }
+            // Use the shared validation function from validator module
+            crate::validator::validate_object_triangle_materials(
+                object.id,
+                object.pid,
+                mesh,
+                &format!("External model file '{}': Object {}", file_path, object.id),
+            )?;
         }
     }
 
