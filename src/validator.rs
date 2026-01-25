@@ -3814,21 +3814,21 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
         // Validate triangle-level properties
         if let Some(ref mesh) = object.mesh {
             for triangle in &mesh.triangles {
-                // N_XXM_0601_01: If triangle has material properties but object has no default,
-                // this is invalid per 3MF Material Extension spec
-                let triangle_has_material_properties = triangle.pid.is_some() 
-                    || triangle.pindex.is_some() 
-                    || triangle.p1.is_some() 
+                // N_XXM_0601_01: If triangle has per-vertex material properties (p1/p2/p3)
+                // but no triangle-level pid AND object has no default pid, this is invalid
+                // Per 3MF Material Extension spec, per-vertex properties need a pid context,
+                // either from the triangle itself or from the object's default
+                let has_per_vertex_properties = triangle.p1.is_some() 
                     || triangle.p2.is_some() 
                     || triangle.p3.is_some();
                 
-                if triangle_has_material_properties && object.pid.is_none() {
+                if has_per_vertex_properties && triangle.pid.is_none() && object.pid.is_none() {
                     return Err(Error::InvalidModel(format!(
-                        "Triangle in object {} has material properties (pid/pindex/p1/p2/p3) \
-                         but the object has no default material property (pid).\n\
-                         Per 3MF Material Extension spec, when triangles have material properties, \
-                         the object must have a default material property defined via the pid attribute.\n\
-                         Add a pid attribute to object {} to specify the default material property.",
+                        "Triangle in object {} has per-vertex material properties (p1/p2/p3) \
+                         but neither the triangle nor the object has a pid to provide material context.\n\
+                         Per 3MF Material Extension spec, per-vertex properties require a pid, \
+                         either on the triangle or as a default on the object.\n\
+                         Add a pid attribute to either the triangle or object {}.",
                         object.id, object.id
                     )));
                 }
@@ -4999,10 +4999,10 @@ mod tests {
         let result = validate_triangle_properties(&model);
         assert!(
             result.is_err(),
-            "Should reject triangle with material properties when object has no default pid"
+            "Should reject triangle with per-vertex properties when neither triangle nor object has pid"
         );
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("default material property"));
+        assert!(error_msg.contains("per-vertex material properties"));
     }
 
     #[test]
