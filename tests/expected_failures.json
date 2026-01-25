@@ -46,17 +46,7 @@
         "suite3_core"
       ],
       "test_type": "negative",
-      "reason": "Build transform bounds validation. The file tests for objects exceeding Y and Z dimensions beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "test_case_id": "0420_01",
-      "suites": [
-        "suite3_core"
-      ],
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. The file tests for objects exceeding X dimension beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
+      "reason": "Reversed vertex order (inward-pointing normals). The file contains triangles with vertices ordered such that the normals point inward. Detecting this reliably requires sophisticated mesh analysis algorithms (ray casting, winding numbers, topological analysis) that are computationally expensive and prone to false positives on non-convex shapes and complex topologies. The implementation intentionally does not validate vertex order. See validator.rs::validate_vertex_order() for detailed explanation.",
       "issue_url": "",
       "date_added": "2026-01-23"
     },
