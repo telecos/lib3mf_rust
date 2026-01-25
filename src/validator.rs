@@ -2251,26 +2251,10 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
             )));
         }
 
-        // Validate each sliceref
-        for sliceref in &stack.slice_refs {
-            // Rule: SliceRef slicepath must be in /2D/ folder
-            // Per spec: "For package readability and organization, slice models SHOULD be stored
-            // in the 2D folder UNLESS they are part of the root model part."
-            // We enforce this as a MUST for external slice files to catch common packaging errors.
-            if !sliceref.slicepath.starts_with("/2D/") {
-                return Err(Error::InvalidModel(format!(
-                    "SliceStack {}: SliceRef references invalid path '{}'.\n\
-                     Per 3MF Slice Extension spec, external slice models must be stored in the /2D/ folder. \
-                     Slicepath must start with '/2D/'.",
-                    stack.id, sliceref.slicepath
-                )));
-            }
-
-            // Note: We cannot validate that the referenced slicestack exists in the external file
-            // because the external file may not be loaded. We only validate the path format here.
-            // However, per 3MF spec, the slicestackid in SliceRef should reference a valid slicestack.
-            // We rely on the consumer of the 3MF file to load and validate external files.
-        }
+        // Note: SliceRef validation happens during loading in parser.rs::load_slice_references()
+        // because slice_refs are cleared after loading. Validation includes:
+        // - SliceRef slicepath must start with "/2D/"
+        // - Referenced slicestackid must exist in external file
     }
 
     // Build a set of valid slicestack IDs for reference validation

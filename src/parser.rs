@@ -2561,6 +2561,20 @@ fn load_slice_references<R: Read + std::io::Seek>(
     for (stack_idx, slice_stack) in model.resources.slice_stacks.iter().enumerate() {
         let mut refs_for_stack = Vec::new();
         for slice_ref in &slice_stack.slice_refs {
+            // Validate slicepath starts with /2D/
+            // Per 3MF Slice Extension spec: "For package readability and organization, 
+            // slice models SHOULD be stored in the 2D folder UNLESS they are part of 
+            // the root model part."
+            // We enforce this as a MUST for all external slice files to catch packaging errors.
+            if !slice_ref.slicepath.starts_with("/2D/") {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: SliceRef references invalid path '{}'.\n\
+                     Per 3MF Slice Extension spec, external slice models must be stored in the /2D/ folder. \
+                     Slicepath must start with '/2D/'.",
+                    slice_stack.id, slice_ref.slicepath
+                )));
+            }
+            
             let normalized_path = if slice_ref.slicepath.starts_with('/') {
                 slice_ref.slicepath[1..].to_string()
             } else {
@@ -2628,7 +2642,23 @@ fn parse_slice_file_with_objects(
         .iter_mut()
         .find(|stack| stack.id == expected_stack_id)
         .map(|stack| std::mem::take(&mut stack.slices))
-        .unwrap_or_else(Vec::new);
+        .ok_or_else(|| {
+            // Collect available IDs for error message
+            let available_ids: Vec<usize> = external_model
+                .resources
+                .slice_stacks
+                .iter()
+                .map(|s| s.id)
+                .collect();
+            
+            Error::InvalidModel(format!(
+                "SliceRef references non-existent slicestackid {}.\n\
+                 Per 3MF Slice Extension spec, the slicestackid attribute in a <sliceref> element \
+                 must reference a valid <slicestack> defined in the external slice file.\n\
+                 Available slicestack IDs in external file: {:?}",
+                expected_stack_id, available_ids
+            ))
+        })?;
 
     // Extract all objects from the external model
     let objects = std::mem::take(&mut external_model.resources.objects);
