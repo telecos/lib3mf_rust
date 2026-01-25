@@ -1939,7 +1939,7 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                     (triangle.v3, triangle.v1),
                 ];
                 for edge in &edges {
-                    edge_to_triangles.entry(*edge).or_insert_with(Vec::new).push(tri_idx);
+                    edge_to_triangles.entry(*edge).or_default().push(tri_idx);
                 }
             }
 
