@@ -194,6 +194,51 @@
       "issue_url": "",
       "date_added": "2026-01-25",
       "expected_error_type": "OutsidePositiveOctant"
+    },
+    {
+      "file": "P_XXX_0910_03.3mf",
+      "suite": "suite3_core",
+      "test_type": "positive",
+      "reason": "File violates 3MF specification coordinate requirements. Object 2 has geometry outside the positive octant with min coordinates: (-22.37, -0.57, 97.25). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
+      "issue_url": "",
+      "date_added": "2026-01-25",
+      "expected_error_type": "OutsidePositiveOctant"
+    },
+    {
+      "file": "P_XXX_0910_05.3mf",
+      "suite": "suite3_core",
+      "test_type": "positive",
+      "reason": "File violates 3MF specification coordinate requirements. Object 78 has geometry outside the positive octant with min coordinates: (-11.90, -0.31, -259.48). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
+      "issue_url": "",
+      "date_added": "2026-01-25",
+      "expected_error_type": "OutsidePositiveOctant"
+    },
+    {
+      "file": "P_XXX_0326_03.3mf",
+      "suite": "suite3_core",
+      "test_type": "positive",
+      "reason": "File contains a build item transform matrix with zero determinant, indicating a singular (non-invertible) transformation. Build item 0 has transform [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
+      "issue_url": "",
+      "date_added": "2026-01-25",
+      "expected_error_type": "InvalidModel"
+    },
+    {
+      "file": "P_XXX_0910_01.3mf",
+      "suite": "suite3_core",
+      "test_type": "positive",
+      "reason": "File violates 3MF specification coordinate requirements. Object 2 has geometry outside the positive octant with min coordinates: (0.00, -0.57, 85.10). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
+      "issue_url": "",
+      "date_added": "2026-01-25",
+      "expected_error_type": "OutsidePositiveOctant"
+    },
+    {
+      "file": "P_XXX_0338_01.3mf",
+      "suite": "suite3_core",
+      "test_type": "positive",
+      "reason": "File contains a build item transform matrix with zero determinant, indicating a singular (non-invertible) transformation. Build item 0 has a degenerate transform matrix. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
+      "issue_url": "",
+      "date_added": "2026-01-25",
+      "expected_error_type": "InvalidModel"
     }
   ]
 }
