@@ -1947,11 +1947,10 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
             // For each directed edge, check if its reverse also exists with exactly one triangle
             let mut checked_edges = HashSet::new();
             for ((v1, v2), tris) in &edge_to_triangles {
-                let edge = (*v1, *v2);
-                if checked_edges.contains(&edge) {
+                if checked_edges.contains(&(*v1, *v2)) {
                     continue;
                 }
-                checked_edges.insert(edge);
+                checked_edges.insert((*v1, *v2));
                 checked_edges.insert((*v2, *v1));
                 
                 let reverse_edge = (*v2, *v1);
@@ -1976,7 +1975,7 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                             "Object {}: Displacement mesh is non-manifold. \
                              Edge between vertices {} and {} is used by {} triangles (should be exactly 2).\n\
                              Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
-                            object.id, (*v1).min(*v2), (*v1).max(*v2), tris.len() + rev_tris.len()
+                            object.id, v1.min(v2), v1.max(v2), tris.len() + rev_tris.len()
                         )));
                     }
                     (count, _) if count > 1 => {

@@ -86,9 +86,11 @@ Also validates requiredextensions declaration when using displacement resources.
 **Description**: Reversed vertex order (normals pointing inward)  
 **Implementation**: `src/validator.rs` - validate_displacement_extension()  
 **Logic**:
-- Caught by negative volume validation
-- Reversed winding causes negative volume
-- No separate check needed
+- Check edge orientation consistency in manifold mesh
+- For each directed edge in a triangle (v1->v2, v2->v3, v3->v1), verify it appears exactly once
+- Verify the reverse edge (v2->v1, v3->v2, v1->v3) also appears exactly once from another triangle
+- If a directed edge appears multiple times in the same direction, it indicates reversed triangle winding
+- This is more reliable than total volume check since a single reversed triangle may not cause negative volume
 
 ### DPX 3314_06: Non-Manifold Mesh and Duplicate Vertices
 **Test**: N_DPX_3314_06  
