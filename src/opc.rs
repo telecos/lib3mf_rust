@@ -43,6 +43,11 @@ pub const KEYSTORE_REL_TYPE_2019_07: &str =
 pub const ENCRYPTEDFILE_REL_TYPE: &str =
     "http://schemas.openxmlformats.org/package/2006/relationships/encryptedfile";
 
+/// 3D Texture relationship type (Materials extension)
+/// Per 3MF Materials Extension spec, texture resources must have this relationship type
+pub const TEXTURE_REL_TYPE: &str =
+    "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dtexture";
+
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {
     archive: ZipArchive<R>,
@@ -439,6 +444,25 @@ impl<R: Read + std::io::Seek> Package<R> {
                                         "Incorrect thumbnail relationship Type '{}' in root .rels",
                                         rt
                                     )));
+                                }
+
+                                // N_XXM_0605_01: For 3dmodel.model.rels, check for incorrect texture relationship type
+                                // If relationship target appears to be an image file (png/jpeg), it should use
+                                // TEXTURE_REL_TYPE, not MODEL_REL_TYPE
+                                if rels_file.contains("3dmodel.model.rels") {
+                                    if let Some(ref t) = target {
+                                        let target_lower = t.to_lowercase();
+                                        if (target_lower.ends_with(".png") || target_lower.ends_with(".jpeg") 
+                                            || target_lower.ends_with(".jpg"))
+                                            && rt == MODEL_REL_TYPE
+                                        {
+                                            return Err(Error::InvalidFormat(format!(
+                                                "Incorrect relationship Type '{}' for texture file '{}' in 3dmodel.model.rels.\n\
+                                                 Per 3MF Material Extension spec, texture files must use relationship type '{}'.",
+                                                rt, t, TEXTURE_REL_TYPE
+                                            )));
+                                        }
+                                    }
                                 }
 
                                 // Validate relationship Type - must not contain query strings or fragments

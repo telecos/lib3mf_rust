@@ -3168,6 +3168,33 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
             continue;
         }
 
+        // N_XXM_0610_01: Check for empty or invalid texture paths
+        if texture.path.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path is empty.\n\
+                 Per 3MF Material Extension spec, texture path must reference a valid file in the package.",
+                texture.id
+            )));
+        }
+
+        // Check for obviously invalid path patterns (e.g., paths with null bytes, backslashes)
+        if texture.path.contains('\0') {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' contains null bytes.\n\
+                 Per 3MF Material Extension spec, texture paths must be valid OPC part names.",
+                texture.id, texture.path
+            )));
+        }
+
+        // Per OPC spec, part names should use forward slashes, not backslashes
+        if texture.path.contains('\\') {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' contains backslashes.\n\
+                 Per OPC specification, part names must use forward slashes ('/') as path separators, not backslashes ('\\').",
+                texture.id, texture.path
+            )));
+        }
+
         // Check that the path contains only ASCII characters
         if !texture.path.is_ascii() {
             return Err(Error::InvalidModel(format!(
@@ -4698,6 +4725,7 @@ mod tests {
             pids: vec![6, 9],
             blendmethods: vec![],
             multis: vec![],
+            parse_order: 0,
         };
         multi_props.multis.push(Multi {
             pindices: vec![0, 0],
