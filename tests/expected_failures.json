@@ -1,188 +1,24 @@
 {
   "expected_failures": [
     {
-      "file": "P_SPX_0313_01.3mf",
-      "suite": "suite1_core_slice_prod",
-      "test_type": "positive",
-      "reason": "File contains invalid content type for PNG extension. The file uses 'application/vnd.ms-package.3dmanufacturing-3dmodeltexture' as the content type for a PNG file, but per 3MF Material Extension specification, texture content types must be 'image/png' or 'image/jpeg'. This appears to be an error in the official test suite.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0418_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. Similar to N_XXX_0418_01, this tests build volume bounds which are not strictly defined in the 3MF spec. The implementation prioritizes compatibility with real-world files that may have various coordinate systems and build volumes.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0421_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
-      "issue_url": "",
-      "date_added": "2026-01-25"
-    },
-    {
-      "file": "N_XPM_0601_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Partial per-vertex property specification. While the 3MF spec suggests all three (p1, p2, p3) should be specified together, many valid positive test cases use partial specifications. The implementation prioritizes compatibility with real-world files.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0601_02.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Empty resources section with external reference via p:path. While unusual, this is technically valid per 3MF Production Extension spec when all model content is in external files. The validation may require stricter checking of external file references which is not currently implemented.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0604_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Complex multi-property validation. This test may check advanced scenarios with multi-properties that combine multiple property groups. The specific validation rule being tested requires detailed analysis of the 3MF test specification document.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0604_03.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Multi-property pindex bounds validation. The specific validation scenario conflicts with valid positive test cases that use similar structures. Requires detailed spec analysis to implement correctly without false positives.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0605_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0605) requires detailed analysis of the 3MF Materials Extension test specification. The file structure appears valid based on standard parsing rules.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0606_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0606) requires detailed analysis of the 3MF Materials Extension test specification. May relate to resource ordering or texture coordinate validation.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0606_02.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01, testing resource declaration order which may require stricter validation of when resources can be referenced.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0606_03.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01 and N_XPM_0606_02, testing resource declaration order scenarios.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0607_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Multi-properties and texture coordinate validation. The specific validation rule being tested (test code 0607) requires detailed analysis of the 3MF test specification.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0610_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Material property validation. The specific validation rule being tested (test code 0610) requires detailed analysis of the 3MF test specification. May relate to texture path validation or property group combinations.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0803_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Component reference chain with external path. Tests whether components can reference external objects via p:path when those objects don't exist locally. The validation implemented checks for local objects, but may need refinement for external reference scenarios.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "P_XPM_0326_03.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "positive",
-      "reason": "File contains a build item transform matrix with zero determinant (0.000000), indicating a singular (non-invertible) transformation. Build item 0 has transform [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "InvalidModel"
-    },
-    {
-      "file": "P_XPM_0338_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "positive",
-      "reason": "File contains a build item transform matrix with zero determinant (0.000000), indicating a singular (non-invertible) transformation. Build item 0 has transform [0.0001 0 0 0 0.0001 0 0 0 0.0001 50 50 50]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "InvalidModel"
-    },
-    {
-      "file": "N_XXX_0418_01.3mf",
-      "suite": "suite3_core",
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. The file tests for objects exceeding Y and Z dimensions beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XXX_0420_01.3mf",
-      "suite": "suite3_core",
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. The file tests for objects exceeding X dimension beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XXX_0421_01.3mf",
-      "suite": "suite3_core",
-      "test_type": "negative",
-      "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
-      "issue_url": "",
-      "date_added": "2026-01-25"
-    },
-    {
-      "file": "P_XXX_0326_03.3mf",
-      "suite": "suite3_core",
-      "test_type": "positive",
-      "reason": "File contains a build item transform matrix with zero determinant, indicating a singular (non-invertible) transformation. Build item 0 has transform [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "InvalidModel"
-    },
-    {
-      "file": "P_XXX_0338_01.3mf",
-      "suite": "suite3_core",
-      "test_type": "positive",
-      "reason": "File contains a build item transform matrix with zero determinant, indicating a singular (non-invertible) transformation. Build item 0 has a degenerate transform matrix. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "InvalidModel"
-    },
-    {
-      "file": "P_SXX_0313_01.3mf",
-      "suite": "suite4_core_slice",
+      "test_case_id": "0313_01",
+      "suites": [
+        "suite1_core_slice_prod",
+        "suite4_core_slice"
+      ],
       "test_type": "positive",
       "reason": "File contains invalid content type for PNG extension. The file uses 'application/vnd.ms-package.3dmanufacturing-3dmodeltexture' as the content type for a PNG file, but per 3MF specification, texture content types must be 'image/png' or 'image/jpeg'. This is error E2004 in the parser. This appears to be an error in the official test suite.",
       "issue_url": "",
       "date_added": "2026-01-23"
     },
     {
-      "file": "P_XPX_0326_03.3mf",
-      "suite": "suite5_core_prod",
+      "test_case_id": "0326_03",
+      "suites": [
+        "suite2_core_prod_matl",
+        "suite3_core",
+        "suite5_core_prod",
+        "suite6_core_matl"
+      ],
       "test_type": "positive",
       "reason": "File contains a build item transform matrix with zero determinant (0.000000), indicating a singular (non-invertible) transformation. Build item 0 has transform [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
       "issue_url": "",
@@ -190,8 +26,13 @@
       "expected_error_type": "InvalidModel"
     },
     {
-      "file": "P_XPX_0338_01.3mf",
-      "suite": "suite5_core_prod",
+      "test_case_id": "0338_01",
+      "suites": [
+        "suite2_core_prod_matl",
+        "suite3_core",
+        "suite5_core_prod",
+        "suite6_core_matl"
+      ],
       "test_type": "positive",
       "reason": "File contains a build item transform matrix with zero determinant (0.000000), indicating a singular (non-invertible) transformation. Build item 0 has transform [0.0001 0 0 0 0.0001 0 0 0 0.0001 50 50 50]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
       "issue_url": "",
@@ -199,26 +40,152 @@
       "expected_error_type": "InvalidModel"
     },
     {
-      "file": "P_XXM_0326_03.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File contains a build item transform matrix with zero determinant (0.000000), indicating a singular (non-invertible) transformation. Build item 0 has transform [0 0.6667 -0.3333 1 -0.6667 0.3333 1 0.6667 -0.3333 65.101 80.1025 110.1]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
+      "test_case_id": "0418_01",
+      "suites": [
+        "suite2_core_prod_matl",
+        "suite3_core"
+      ],
+      "test_type": "negative",
+      "reason": "Build transform bounds validation. The file tests for objects exceeding Y and Z dimensions beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
       "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "InvalidModel"
+      "date_added": "2026-01-23"
     },
     {
-      "file": "P_XXM_0338_01.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File contains a build item transform matrix with zero determinant (0.000000), indicating a singular (non-invertible) transformation. Build item 0 has transform [0.0001 0 0 0 0.0001 0 0 0 0.0001 50 50 50]. Per 3MF spec, transform matrices must be valid and non-degenerate. The file appears to be non-compliant with the core specification requirement for valid transformations.",
+      "test_case_id": "0420_01",
+      "suites": [
+        "suite3_core"
+      ],
+      "test_type": "negative",
+      "reason": "Build transform bounds validation. The file tests for objects exceeding X dimension beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
       "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "InvalidModel"
+      "date_added": "2026-01-23"
     },
     {
-      "file": "P_XXX_2202_01.3mf",
-      "suite": "suite9_core_ext",
+      "test_case_id": "0421_01",
+      "suites": [
+        "suite2_core_prod_matl",
+        "suite3_core"
+      ],
+      "test_type": "negative",
+      "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
+      "issue_url": "",
+      "date_added": "2026-01-25"
+    },
+    {
+      "test_case_id": "0601_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Partial per-vertex property specification. While the 3MF spec suggests all three (p1, p2, p3) should be specified together, many valid positive test cases use partial specifications. The implementation prioritizes compatibility with real-world files.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0601_02",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Empty resources section with external reference via p:path. While unusual, this is technically valid per 3MF Production Extension spec when all model content is in external files. The validation may require stricter checking of external file references which is not currently implemented.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0604_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Complex multi-property validation. This test may check advanced scenarios with multi-properties that combine multiple property groups. The specific validation rule being tested requires detailed analysis of the 3MF test specification document.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0604_03",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Multi-property pindex bounds validation. The specific validation scenario conflicts with valid positive test cases that use similar structures. Requires detailed spec analysis to implement correctly without false positives.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0605_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0605) requires detailed analysis of the 3MF Materials Extension test specification. The file structure appears valid based on standard parsing rules.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0606_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0606) requires detailed analysis of the 3MF Materials Extension test specification. May relate to resource ordering or texture coordinate validation.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0606_02",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01, testing resource declaration order which may require stricter validation of when resources can be referenced.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0606_03",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01 and N_XPM_0606_02, testing resource declaration order scenarios.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0607_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Multi-properties and texture coordinate validation. The specific validation rule being tested (test code 0607) requires detailed analysis of the 3MF test specification.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0610_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Material property validation. The specific validation rule being tested (test code 0610) requires detailed analysis of the 3MF test specification. May relate to texture path validation or property group combinations.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0803_01",
+      "suites": [
+        "suite2_core_prod_matl"
+      ],
+      "test_type": "negative",
+      "reason": "Component reference chain with external path. Tests whether components can reference external objects via p:path when those objects don't exist locally. The validation implemented checks for local objects, but may need refinement for external reference scenarios.",
+      "issue_url": "",
+      "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "2202_01",
+      "suites": [
+        "suite9_core_ext"
+      ],
       "test_type": "positive",
       "reason": "File is incorrect per official test suite. It declares production extension as required but the build element does not have a UUID attribute, which is mandatory when using the production extension. Suite 9 tests core extensions, but this file appears to have been mistakenly included or represents a known issue in the official test suite.",
       "issue_url": "",

@@ -17,6 +17,31 @@ Expected failures are configured in `tests/expected_failures.json`. The file use
 
 ### Structure
 
+The configuration supports two formats for backward compatibility:
+
+#### New Format (Recommended)
+
+Use this format when the same test case appears in multiple suites:
+
+```json
+{
+  "expected_failures": [
+    {
+      "test_case_id": "0421_01",
+      "suites": ["suite2_core_prod_matl", "suite3_core"],
+      "test_type": "negative",
+      "reason": "Detailed explanation of why this test is expected to fail",
+      "issue_url": "https://github.com/example/issue/123",
+      "date_added": "2026-01-23"
+    }
+  ]
+}
+```
+
+#### Old Format (Still Supported)
+
+Legacy format for backward compatibility:
+
 ```json
 {
   "expected_failures": [
@@ -34,17 +59,44 @@ Expected failures are configured in `tests/expected_failures.json`. The file use
 
 ### Fields
 
-- **file** (required): The exact filename of the test file (e.g., `P_XXX_2202_01.3mf`)
-- **suite** (required): The suite directory name (e.g., `suite9_core_ext`, `suite3_core`)
+#### New Format Fields
+
+- **test_case_id** (required): The test case identifier extracted from the filename (e.g., `"0421_01"`, `"2202_01"`)
+  - Extracted from filenames like `P_XXX_0421_01.3mf` → `0421_01`
+  - The same test case ID appears across different suites with different file prefixes
+- **suites** (required): Array of suite directory names where this test case appears (e.g., `["suite2_core_prod_matl", "suite3_core"]`)
 - **test_type** (required): Either `"positive"` or `"negative"`
   - `"positive"`: The file is in the "Positive Tests" folder but is expected to fail parsing
   - `"negative"`: The file is in the "Negative Tests" folder but is expected to succeed parsing
-- **reason** (required): A detailed explanation of why this file is expected to fail. Should include:
+- **reason** (required): A detailed explanation of why this test is expected to fail. Should include:
   - What is wrong with the file
   - Why it cannot be fixed on our side
   - Any relevant context about the issue
 - **issue_url** (optional): URL to an issue tracker or documentation about this problem
 - **date_added** (required): ISO date (YYYY-MM-DD) when this expected failure was added
+- **expected_error_type** (optional): Expected error type string (e.g., `"InvalidModel"`, `"OutsidePositiveOctant"`)
+
+#### Old Format Fields (Deprecated)
+
+- **file** (required): The exact filename of the test file (e.g., `P_XXX_2202_01.3mf`)
+- **suite** (required): The suite directory name (e.g., `suite9_core_ext`, `suite3_core`)
+- Other fields same as new format
+
+### Test Case Naming Convention
+
+Test files follow this naming pattern: `[P/N]_[PREFIX]_[test_case_id].3mf`
+
+- `P` = Positive test, `N` = Negative test
+- PREFIX indicates enabled extensions:
+  - `XXX` = Core only (suite3)
+  - `XPM` = Core + Production + Materials (suite2)
+  - `SPX` = Slice + Production (suite1)
+  - `SXX` = Slice only (suite4)
+  - `XPX` = Production only (suite5)
+  - `XXM` = Materials only (suite6)
+- test_case_id is the numeric identifier (e.g., `0421_01`)
+
+The same test case ID may appear in multiple suites with different prefixes to test the same scenario with different extension combinations.
 
 ## How It Works
 
@@ -66,33 +118,95 @@ When marked as an expected failure:
 
 ## Adding a New Expected Failure
 
+### For a Single Suite
+
 1. Identify the failing test file and understand why it's failing
 2. Determine if it's a problem with the test file itself (not our implementation)
-3. Add an entry to `tests/expected_failures.json`:
+3. Add an entry to `tests/expected_failures.json` using the new format:
 
 ```json
 {
-  "file": "your_file_name.3mf",
-  "suite": "suite_directory_name",
-  "test_type": "positive",
+  "test_case_id": "0420_01",
+  "suites": ["suite3_core"],
+  "test_type": "negative",
   "reason": "Your detailed explanation here",
   "issue_url": "",
   "date_added": "YYYY-MM-DD"
 }
 ```
 
+### For Multiple Suites
+
+If the same test case appears in multiple suites (identified by the test case ID like `0421_01`), add a single entry with all suites:
+
+```json
+{
+  "test_case_id": "0421_01",
+  "suites": ["suite2_core_prod_matl", "suite3_core"],
+  "test_type": "negative",
+  "reason": "Build transform bounds validation. The file tests for negative coordinates...",
+  "issue_url": "",
+  "date_added": "2026-01-25"
+}
+```
+
+This will automatically match:
+- `N_XPM_0421_01.3mf` in suite2_core_prod_matl
+- `N_XXX_0421_01.3mf` in suite3_core
+
+### Migration from Old Format
+
+If you have old format entries that need to be combined, use the migration script:
+
+```bash
+python3 migrate_expected_failures.py
+```
+
+This will automatically:
+- Group test cases by their test case ID
+- Merge entries with the same test case ID and reason
+- Generate the new format with multiple suites
+
 4. Run the tests to verify the expected failure is handled correctly
 5. Commit the changes with a descriptive message
 
-## Example: P_XXX_2202_01.3mf
+## Examples
 
-This file in suite 9 (Core Extensions) is marked as an expected failure because:
+### Example 1: Multiple Suites
 
-- The file declares the production extension as a required extension
-- However, the build element does not have a UUID attribute
-- UUID is mandatory when using the production extension
-- Suite 9 is meant to test core extensions, and this appears to be a mistake in the official test suite
-- Since we cannot modify the official test suite files, we document this as an expected failure
+Test case `0421_01` appears in multiple suites testing the same issue - negative coordinates below build plate. Instead of duplicating the configuration, we use a single entry:
+
+```json
+{
+  "test_case_id": "0421_01",
+  "suites": ["suite2_core_prod_matl", "suite3_core"],
+  "test_type": "negative",
+  "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
+  "issue_url": "",
+  "date_added": "2026-01-25"
+}
+```
+
+This automatically handles:
+- `N_XPM_0421_01.3mf` in suite2_core_prod_matl
+- `N_XXX_0421_01.3mf` in suite3_core
+
+### Example 2: Single Suite (Old Format Compatible)
+
+For a test case that only appears in one suite, you can still use the new format:
+
+```json
+{
+  "test_case_id": "2202_01",
+  "suites": ["suite9_core_ext"],
+  "test_type": "positive",
+  "reason": "File is incorrect per official test suite. It declares production extension as required but the build element does not have a UUID attribute, which is mandatory when using the production extension.",
+  "issue_url": "",
+  "date_added": "2026-01-23"
+}
+```
+
+This handles `P_XXX_2202_01.3mf` in suite9_core_ext.
 
 ## Running Tests
 

@@ -42,8 +42,8 @@ fn test_expected_failure_reason() {
     assert!(failure.is_some(), "Expected failure details should exist");
 
     let failure = failure.unwrap();
-    assert_eq!(failure.file, "P_XXX_2202_01.3mf");
-    assert_eq!(failure.suite, "suite9_core_ext");
+    assert_eq!(failure.test_case_id, "2202_01");
+    assert!(failure.suites.contains(&"suite9_core_ext".to_string()));
     assert_eq!(failure.test_type, "positive");
     assert!(!failure.reason.is_empty(), "Reason should not be empty");
     assert!(
@@ -92,14 +92,29 @@ fn test_expected_failures_json_valid() {
 
     // Validate each entry has required fields
     for failure in failures {
-        assert!(
-            failure["file"].is_string(),
-            "Each failure should have a file field"
-        );
-        assert!(
-            failure["suite"].is_string(),
-            "Each failure should have a suite field"
-        );
+        // New format requires test_case_id and suites
+        if failure["test_case_id"].is_string() && !failure["test_case_id"].as_str().unwrap().is_empty() {
+            assert!(
+                failure["suites"].is_array(),
+                "Each failure with test_case_id should have a suites array"
+            );
+            assert!(
+                !failure["suites"].as_array().unwrap().is_empty(),
+                "suites array should not be empty"
+            );
+        }
+        // Old format uses file and suite fields
+        else {
+            assert!(
+                failure["file"].is_string(),
+                "Each old-format failure should have a file field"
+            );
+            assert!(
+                failure["suite"].is_string(),
+                "Each old-format failure should have a suite field"
+            );
+        }
+        
         assert!(
             failure["test_type"].is_string(),
             "Each failure should have a test_type field"
@@ -185,4 +200,69 @@ fn test_expected_failure_for_p_sxx_0313_01() {
         reason_text.contains("E2004"),
         "Reason should mention error code E2004"
     );
+}
+
+#[test]
+fn test_multi_suite_test_case() {
+    let manager = ExpectedFailuresManager::load();
+
+    // Test case 0421_01 should be an expected failure in both suite2 and suite3
+    assert!(
+        manager.is_expected_failure("suite2_core_prod_matl", "N_XPM_0421_01.3mf", "negative"),
+        "N_XPM_0421_01.3mf should be marked as expected failure in suite2"
+    );
+    
+    assert!(
+        manager.is_expected_failure("suite3_core", "N_XXX_0421_01.3mf", "negative"),
+        "N_XXX_0421_01.3mf should be marked as expected failure in suite3"
+    );
+    
+    // Both should have the same reason
+    let reason_suite2 = manager.get_reason("suite2_core_prod_matl", "N_XPM_0421_01.3mf");
+    let reason_suite3 = manager.get_reason("suite3_core", "N_XXX_0421_01.3mf");
+    
+    assert!(reason_suite2.is_some(), "suite2 should have a reason");
+    assert!(reason_suite3.is_some(), "suite3 should have a reason");
+    assert_eq!(
+        reason_suite2.unwrap(),
+        reason_suite3.unwrap(),
+        "Both suites should have the same reason for the same test case"
+    );
+}
+
+#[test]
+fn test_multi_suite_test_case_0326_03() {
+    let manager = ExpectedFailuresManager::load();
+
+    // Test case 0326_03 appears in 4 different suites
+    let test_cases = vec![
+        ("suite2_core_prod_matl", "P_XPM_0326_03.3mf"),
+        ("suite3_core", "P_XXX_0326_03.3mf"),
+        ("suite5_core_prod", "P_XPX_0326_03.3mf"),
+        ("suite6_core_matl", "P_XXM_0326_03.3mf"),
+    ];
+    
+    for (suite, filename) in test_cases {
+        assert!(
+            manager.is_expected_failure(suite, filename, "positive"),
+            "{} should be marked as expected failure in {}",
+            filename,
+            suite
+        );
+        
+        let reason = manager.get_reason(suite, filename);
+        assert!(
+            reason.is_some(),
+            "{} should have a reason in {}",
+            filename,
+            suite
+        );
+        
+        let reason_text = reason.unwrap();
+        assert!(
+            reason_text.contains("zero determinant"),
+            "Reason should mention zero determinant for {}",
+            filename
+        );
+    }
 }

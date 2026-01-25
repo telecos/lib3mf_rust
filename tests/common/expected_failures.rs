@@ -15,10 +15,24 @@ use std::path::Path;
 /// Configuration for an expected test failure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpectedFailure {
+    /// The test case ID (e.g., "0420_01", "2202_01")
+    /// This identifies the test case across all suites
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub test_case_id: String,
+
     /// The filename of the test file (e.g., "P_XXX_2202_01.3mf")
+    /// For backward compatibility with old format, but will be deprecated
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub file: String,
 
+    /// List of suites this test case appears in (e.g., ["suite9_core_ext", "suite3_core"])
+    /// If empty, falls back to single suite field for backward compatibility
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suites: Vec<String>,
+
     /// The suite this file belongs to (e.g., "suite9_core_ext")
+    /// Deprecated in favor of suites array, kept for backward compatibility
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub suite: String,
 
     /// Whether this is a "positive" or "negative" test
@@ -95,30 +109,84 @@ impl ExpectedFailuresManager {
 
         let mut failures = HashMap::new();
         for failure in config.expected_failures {
-            let key = (failure.suite.clone(), failure.file.clone());
-            failures.insert(key, failure);
+            // New format: test_case_id + suites array
+            if !failure.test_case_id.is_empty() && !failure.suites.is_empty() {
+                // For each suite, we need to match by test case ID pattern
+                // Store the failure under a special key that includes the test case ID
+                for suite in &failure.suites {
+                    // Create a key with the test_case_id pattern
+                    // We'll match this during lookup
+                    let key = (suite.clone(), format!("*{}*", failure.test_case_id));
+                    failures.insert(key, failure.clone());
+                }
+            }
+            // Old format: single suite and file  
+            else if !failure.suite.is_empty() && !failure.file.is_empty() {
+                let key = (failure.suite.clone(), failure.file.clone());
+                failures.insert(key, failure);
+            }
         }
 
         Self { failures }
     }
 
+    /// Extract test case ID from filename
+    /// E.g., "P_XXX_0420_01.3mf" -> "0420_01"
+    fn extract_test_case_id(filename: &str) -> Option<String> {
+        // Pattern: [P/N]_[PREFIX]_[test_case_id].3mf
+        // We want to extract the test_case_id part
+        let without_ext = filename.strip_suffix(".3mf")?;
+        let parts: Vec<&str> = without_ext.split('_').collect();
+        
+        // Expected format: P/N _ PREFIX _ NNNN _ NN
+        // e.g., P_XXX_0420_01 -> parts = ["P", "XXX", "0420", "01"]
+        if parts.len() >= 4 {
+            // Join last two parts for test case ID
+            Some(format!("{}_{}", parts[parts.len() - 2], parts[parts.len() - 1]))
+        } else {
+            None
+        }
+    }
+
     /// Check if a test file is expected to fail
     pub fn is_expected_failure(&self, suite: &str, filename: &str, test_type: &str) -> bool {
+        // First try exact match (old format)
         if let Some(failure) = self
             .failures
             .get(&(suite.to_string(), filename.to_string()))
         {
-            failure.test_type == test_type
-        } else {
-            false
+            return failure.test_type == test_type;
         }
+        
+        // Try pattern match by test case ID (new format)
+        if let Some(test_case_id) = Self::extract_test_case_id(filename) {
+            let pattern_key = (suite.to_string(), format!("*{}*", test_case_id));
+            if let Some(failure) = self.failures.get(&pattern_key) {
+                return failure.test_type == test_type;
+            }
+        }
+        
+        false
     }
 
     /// Get the expected failure details for a test file
     #[allow(dead_code)]
     pub fn get_failure(&self, suite: &str, filename: &str) -> Option<&ExpectedFailure> {
-        self.failures
+        // First try exact match (old format)
+        if let Some(failure) = self
+            .failures
             .get(&(suite.to_string(), filename.to_string()))
+        {
+            return Some(failure);
+        }
+        
+        // Try pattern match by test case ID (new format)
+        if let Some(test_case_id) = Self::extract_test_case_id(filename) {
+            let pattern_key = (suite.to_string(), format!("*{}*", test_case_id));
+            return self.failures.get(&pattern_key);
+        }
+        
+        None
     }
 
     /// Get the reason for an expected failure
