@@ -22,6 +22,9 @@ pub const CONTENT_TYPES_PATH: &str = "[Content_Types].xml";
 /// Relationships file path
 pub const RELS_PATH: &str = "_rels/.rels";
 
+/// Model relationships file path
+pub const MODEL_RELS_PATH: &str = "3D/_rels/3dmodel.model.rels";
+
 /// 3D model relationship type
 pub const MODEL_REL_TYPE: &str = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel";
 
@@ -905,10 +908,46 @@ impl<R: Read + std::io::Seek> Package<R> {
     ///
     /// Test cases: N_SPX_0417_01, N_SPX_0419_01
     pub fn validate_no_model_level_thumbnails(&mut self) -> Result<()> {
-        // First, check if there's a package-level thumbnail
+        // First, check if there's a package-level thumbnail using proper XML parsing
         let has_package_thumbnail = if self.has_file(RELS_PATH) {
             let rels_content = self.get_file(RELS_PATH)?;
-            rels_content.contains(THUMBNAIL_REL_TYPE)
+            let mut reader = Reader::from_str(&rels_content);
+            reader.config_mut().trim_text(true);
+            let mut buf = Vec::new();
+            let mut found = false;
+
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                        let name = e.name();
+                        let name_str = std::str::from_utf8(name.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                        if name_str.ends_with("Relationship") {
+                            for attr in e.attributes() {
+                                let attr = attr?;
+                                let key = std::str::from_utf8(attr.key.as_ref())
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                let value = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                if key == "Type" && value == THUMBNAIL_REL_TYPE {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => return Err(Error::Xml(e)),
+                    _ => {}
+                }
+                buf.clear();
+                if found {
+                    break;
+                }
+            }
+            found
         } else {
             false
         };
@@ -920,18 +959,45 @@ impl<R: Read + std::io::Seek> Package<R> {
 
         // No package-level thumbnail - check if any model-level thumbnails exist
         // Only need to check the main model relationships file
-        let model_rels_path = "3D/_rels/3dmodel.model.rels";
-        if self.has_file(model_rels_path) {
-            let rels_content = self.get_file(model_rels_path)?;
-            if rels_content.contains(THUMBNAIL_REL_TYPE) {
-                return Err(Error::InvalidFormat(format!(
-                    "Thumbnail relationship found in model-level relationship file '{}' \
-                     but no thumbnail relationship exists at the package level. \
-                     Per 3MF Core Specification and OPC standard, if thumbnail relationships \
-                     are defined at the part/model level, a thumbnail relationship \
-                     MUST also be defined at the package level (_rels/.rels).",
-                    model_rels_path
-                )));
+        if self.has_file(MODEL_RELS_PATH) {
+            let rels_content = self.get_file(MODEL_RELS_PATH)?;
+            let mut reader = Reader::from_str(&rels_content);
+            reader.config_mut().trim_text(true);
+            let mut buf = Vec::new();
+
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                        let name = e.name();
+                        let name_str = std::str::from_utf8(name.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                        if name_str.ends_with("Relationship") {
+                            for attr in e.attributes() {
+                                let attr = attr?;
+                                let key = std::str::from_utf8(attr.key.as_ref())
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                let value = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                                if key == "Type" && value == THUMBNAIL_REL_TYPE {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Thumbnail relationship found in model-level relationship file '{}' \
+                                         but no thumbnail relationship exists at the package level. \
+                                         Per 3MF Core Specification and OPC standard, if thumbnail relationships \
+                                         are defined at the part/model level, a thumbnail relationship \
+                                         MUST also be defined at the package level (_rels/.rels).",
+                                        MODEL_RELS_PATH
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => return Err(Error::Xml(e)),
+                    _ => {}
+                }
+                buf.clear();
             }
         }
 
