@@ -13,9 +13,9 @@ fn main() {
         );
 
     let files = vec![
-        ("N_EPX_2606_01.3mf", true), // Should fail
-        ("N_EPX_2606_02.3mf", true), // Should fail
-        ("N_EPX_2606_03.3mf", true), // Should fail
+        ("N_EPX_2606_01.3mf", true), // Should fail - missing EncryptedFile relationship ✓ IMPLEMENTED
+        ("N_EPX_2606_02.3mf", true), // Should fail - keystore relationship missing from root .rels ✓ IMPLEMENTED
+        ("N_EPX_2606_03.3mf", true), // Should fail - keystore content type missing ✓ IMPLEMENTED
     ];
 
     for (filename, should_fail) in files {
