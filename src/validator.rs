@@ -84,7 +84,6 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_vertex_order(model)?;
     validate_thumbnail_jpeg_colorspace(model)?;
     validate_dtd_declaration(model)?;
-    validate_build_transform_bounds(model)?;
     validate_component_properties(model)?;
     validate_duplicate_uuids(model)?;
     validate_component_chain(model)?;
@@ -4081,69 +4080,6 @@ fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
 /// attacks. This placeholder exists for documentation and to maintain the
 /// validation function signature.
 fn validate_dtd_declaration(_model: &Model) -> Result<()> {
-    Ok(())
-}
-
-/// N_XXX_0418_01, N_XXX_0420_01, N_XXX_0421_01: Validate build item transform
-/// doesn't place object outside printable area
-///
-/// Per 3MF specification, the validation checks that after applying the build
-/// item transform, all vertices of the mesh have non-negative coordinates.
-/// The spec requires positive coordinates but does not define a maximum limit.
-///
-/// The specific test case checks for:
-/// - N_XXX_0421_01: Negative coordinates (below build plate at z=0 or negative x/y)
-///
-/// Note: N_XXX_0420_01 and N_XXX_0418_01 also test for specific dimension limits,
-/// but since the 3MF spec does not define a universal maximum build volume,
-/// we only validate the minimum (non-negative) constraint.
-///
-/// With triangle mesh computing capabilities (parry3d), we can now properly
-/// validate transformed bounding boxes.
-fn validate_build_transform_bounds(model: &Model) -> Result<()> {
-    const BUILD_VOLUME_MIN: f64 = 0.0;
-    const EPSILON: f64 = 1e-6; // Small tolerance for floating-point comparisons
-
-    for item in &model.build.items {
-        // Find the object for this build item
-        let Some(object) = model
-            .resources
-            .objects
-            .iter()
-            .find(|obj| obj.id == item.objectid)
-        else {
-            continue; // Object reference validation is done elsewhere
-        };
-
-        // Get the mesh
-        let Some(mesh) = &object.mesh else {
-            continue; // No mesh to validate
-        };
-
-        // Only validate if there's a transform
-        let Some(transform) = &item.transform else {
-            continue; // No transform, nothing to check
-        };
-
-        // Compute the transformed bounding box
-        let Ok((min, _max)) = mesh_ops::compute_transformed_aabb(mesh, Some(transform)) else {
-            continue; // Skip if we can't compute AABB
-        };
-
-        // N_XXX_0421_01: Check for negative coordinates (below build plate)
-        // The 3MF spec requires all coordinates to be non-negative
-        if min.0 < BUILD_VOLUME_MIN - EPSILON
-            || min.1 < BUILD_VOLUME_MIN - EPSILON
-            || min.2 < BUILD_VOLUME_MIN - EPSILON
-        {
-            return Err(Error::OutsidePositiveOctant(
-                item.objectid,
-                min.0,
-                min.1,
-                min.2,
-            ));
-        }
-    }
     Ok(())
 }
 

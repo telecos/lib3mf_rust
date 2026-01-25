@@ -59,6 +59,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
 
+    // N_SPX_0417_01, N_SPX_0419_01: Validate thumbnails are not in model-level relationships
+    // Per 3MF spec, thumbnails MUST be at package level, not part/model level
+    package.validate_no_model_level_thumbnails()?;
+
     // Clone config before moving it to parse_model_xml_with_config
     let config_clone = config.clone();
     let model_xml = package.get_model()?;
