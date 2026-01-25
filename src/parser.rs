@@ -2560,6 +2560,19 @@ fn load_slice_references<R: Read + std::io::Seek>(
 
     for (stack_idx, slice_stack) in model.resources.slice_stacks.iter().enumerate() {
         let mut refs_for_stack = Vec::new();
+        
+        // Rule: SliceStack must contain either slices OR slicerefs, not both
+        // Per 3MF Slice Extension spec, a slicestack MUST contain either <slice> elements 
+        // or <sliceref> elements, but MUST NOT contain both element types concurrently.
+        if !slice_stack.slices.is_empty() && !slice_stack.slice_refs.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "SliceStack {}: Contains both <slice> and <sliceref> elements.\n\
+                 Per 3MF Slice Extension spec, a slicestack MUST contain either \
+                 <slice> elements or <sliceref> elements, but MUST NOT contain both element types concurrently.",
+                slice_stack.id
+            )));
+        }
+        
         for slice_ref in &slice_stack.slice_refs {
             // Validate slicepath starts with /2D/
             // Per 3MF Slice Extension spec: "For package readability and organization, 
