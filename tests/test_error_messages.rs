@@ -1,6 +1,7 @@
 //! Test to verify error message quality
 
 use lib3mf::parser::parse_model_xml;
+use lib3mf::validator::validate_model;
 
 #[test]
 fn test_error_message_for_circular_reference() {
@@ -23,7 +24,11 @@ fn test_error_message_for_circular_reference() {
   </build>
 </model>"#;
 
-    let result = parse_model_xml(xml);
+    // First parse the XML (parsing doesn't validate circular references)
+    let model = parse_model_xml(xml).expect("Parsing should succeed");
+
+    // Then validate the model (this detects circular references)
+    let result = validate_model(&model);
     assert!(result.is_err());
     let err = result.unwrap_err();
     println!("Error message: {}", err);
@@ -47,7 +52,11 @@ fn test_error_message_for_invalid_reference() {
   </build>
 </model>"#;
 
-    let result = parse_model_xml(xml);
+    // First parse the XML (parsing doesn't validate invalid references)
+    let model = parse_model_xml(xml).expect("Parsing should succeed");
+
+    // Then validate the model (this detects invalid references)
+    let result = validate_model(&model);
     assert!(result.is_err());
     let err = result.unwrap_err();
     println!("Error message: {}", err);

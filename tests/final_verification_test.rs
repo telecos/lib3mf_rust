@@ -1,6 +1,7 @@
 //! Final verification that all acceptance criteria are met
 
 use lib3mf::parser::parse_model_xml;
+use lib3mf::validator::validate_model;
 
 #[test]
 fn verify_circular_path_in_error_message() {
@@ -29,7 +30,11 @@ fn verify_circular_path_in_error_message() {
   </build>
 </model>"#;
 
-    let result = parse_model_xml(xml);
+    // First parse the XML (parsing doesn't validate circular references)
+    let model = parse_model_xml(xml).expect("Parsing should succeed");
+
+    // Then validate the model (this detects circular references)
+    let result = validate_model(&model);
     assert!(result.is_err(), "Should detect circular reference");
 
     let err = result.unwrap_err();
