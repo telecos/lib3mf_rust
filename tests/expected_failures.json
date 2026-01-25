@@ -17,6 +17,14 @@
       "date_added": "2026-01-23"
     },
     {
+      "file": "N_XPM_0421_01.3mf",
+      "suite": "suite2_core_prod_matl",
+      "test_type": "negative",
+      "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
+      "issue_url": "",
+      "date_added": "2026-01-25"
+    },
+    {
       "file": "N_XPM_0601_01.3mf",
       "suite": "suite2_core_prod_matl",
       "test_type": "negative",
