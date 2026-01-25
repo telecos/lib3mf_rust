@@ -2499,7 +2499,7 @@ fn validate_slice(
 /// m22 equal to one.
 ///
 /// Transform matrix layout (3x3 rotation + translation, stored in row-major order as 12 elements):
-/// ```
+/// ```text
 /// Matrix representation:
 /// [m00, m01, m02, tx,
 ///  m10, m11, m12, ty,
@@ -3167,6 +3167,33 @@ fn validate_texture_paths(model: &Model) -> Result<()> {
             continue;
         }
 
+        // N_XXM_0610_01: Check for empty or invalid texture paths
+        if texture.path.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path is empty.\n\
+                 Per 3MF Material Extension spec, texture path must reference a valid file in the package.",
+                texture.id
+            )));
+        }
+
+        // Check for obviously invalid path patterns (e.g., paths with null bytes, backslashes)
+        if texture.path.contains('\0') {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' contains null bytes.\n\
+                 Per 3MF Material Extension spec, texture paths must be valid OPC part names.",
+                texture.id, texture.path
+            )));
+        }
+
+        // Per OPC spec, part names should use forward slashes, not backslashes
+        if texture.path.contains('\\') {
+            return Err(Error::InvalidModel(format!(
+                "Texture2D resource {}: Path '{}' contains backslashes.\n\
+                 Per OPC specification, part names must use forward slashes ('/') as path separators, not backslashes ('\\').",
+                texture.id, texture.path
+            )));
+        }
+
         // Check that the path contains only ASCII characters
         if !texture.path.is_ascii() {
             return Err(Error::InvalidModel(format!(
@@ -3459,24 +3486,104 @@ fn validate_transform_matrices(model: &Model) -> Result<()> {
 ///
 /// Per 3MF spec, resources must be defined before they are referenced.
 /// For example, texture2d must be defined before texture2dgroup that references it.
+/// This validation checks for forward references using parse order.
 fn validate_resource_ordering(model: &Model) -> Result<()> {
-    // Build a set of defined texture2d IDs
-    let texture2d_ids: HashSet<usize> = model
-        .resources
-        .texture2d_resources
-        .iter()
-        .map(|t| t.id)
-        .collect();
-
-    // Validate that texture2dgroups reference existing texture2d resources
+    // N_XXM_0606_01: Texture2dgroup must not reference texture2d that appears later in XML
     for tex_group in &model.resources.texture2d_groups {
-        if !texture2d_ids.contains(&tex_group.texid) {
+        if let Some(tex2d) = model
+            .resources
+            .texture2d_resources
+            .iter()
+            .find(|t| t.id == tex_group.texid)
+        {
+            if tex_group.parse_order < tex2d.parse_order {
+                return Err(Error::InvalidModel(format!(
+                    "Texture2DGroup {}: Forward reference to texture2d {} which appears later in the resources.\n\
+                     Per 3MF Material Extension spec, texture2d resources must be defined before \
+                     texture2dgroups that reference them.\n\
+                     Move the texture2d element before the texture2dgroup element in the resources section.",
+                    tex_group.id, tex_group.texid
+                )));
+            }
+        } else {
             return Err(Error::InvalidModel(format!(
                 "Texture2DGroup {}: References texture2d with ID {} which is not defined.\n\
                  Per 3MF spec, texture2d resources must be defined before texture2dgroups that reference them.\n\
                  Ensure texture2d with ID {} exists in the <resources> section before this texture2dgroup.",
                 tex_group.id, tex_group.texid, tex_group.texid
             )));
+        }
+    }
+
+    // N_XXM_0606_02, N_XXM_0606_03, N_XXM_0607_01: Multiproperties must not have forward references
+    for multi_props in &model.resources.multi_properties {
+        for &pid in &multi_props.pids {
+            // Check if PID references a texture2dgroup
+            if let Some(tex_group) = model
+                .resources
+                .texture2d_groups
+                .iter()
+                .find(|t| t.id == pid)
+            {
+                if multi_props.parse_order < tex_group.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to texture2dgroup {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the texture2dgroup element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a colorgroup
+            if let Some(color_group) = model.resources.color_groups.iter().find(|c| c.id == pid) {
+                if multi_props.parse_order < color_group.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to colorgroup {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the colorgroup element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a basematerials group
+            if let Some(base_mat) = model
+                .resources
+                .base_material_groups
+                .iter()
+                .find(|b| b.id == pid)
+            {
+                if multi_props.parse_order < base_mat.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to basematerials group {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the basematerials element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a compositematerials group
+            if let Some(composite) = model
+                .resources
+                .composite_materials
+                .iter()
+                .find(|c| c.id == pid)
+            {
+                if multi_props.parse_order < composite.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to compositematerials group {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the compositematerials element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
         }
     }
 
@@ -3590,8 +3697,9 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 
     // Validate each multiproperties group
     for multi_props in &model.resources.multi_properties {
-        // Track basematerials IDs to detect duplicates
+        // Track basematerials and colorgroup IDs to detect duplicates
         let mut base_mat_count: HashMap<usize, usize> = HashMap::new();
+        let mut color_group_count: HashMap<usize, usize> = HashMap::new();
 
         for (idx, &pid) in multi_props.pids.iter().enumerate() {
             // Check if PID references a valid resource
@@ -3613,6 +3721,35 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
             // Track basematerials references
             if base_mat_ids.contains(&pid) {
                 *base_mat_count.entry(pid).or_insert(0) += 1;
+
+                // N_XXM_0604_03: basematerials can only be at layer 0 or 1
+                // Per 3MF Material Extension spec, basematerials must be in the first two layers
+                if idx >= 2 {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: basematerials group {} referenced at layer {}.\n\
+                         Per 3MF Material Extension spec, basematerials can only be referenced in layers 0 or 1 \
+                         of multiproperties pids.\n\
+                         Move the basematerials reference to layer 0 or 1.",
+                        multi_props.id, pid, idx
+                    )));
+                }
+            }
+
+            // Track colorgroup references
+            if color_group_ids.contains(&pid) {
+                *color_group_count.entry(pid).or_insert(0) += 1;
+            }
+        }
+
+        // N_XXM_0604_01: Check for duplicate colorgroup references
+        for (&color_id, &count) in &color_group_count {
+            if count > 1 {
+                return Err(Error::InvalidModel(format!(
+                    "MultiProperties {}: References colorgroup {} multiple times in pids.\n\
+                     Per 3MF Material Extension spec, multiproperties cannot reference the same colorgroup \
+                     more than once in the pids list.",
+                    multi_props.id, color_id
+                )));
             }
         }
 
@@ -3677,6 +3814,24 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
         // Validate triangle-level properties
         if let Some(ref mesh) = object.mesh {
             for triangle in &mesh.triangles {
+                // N_XXM_0601_01: If triangle has per-vertex material properties (p1/p2/p3)
+                // but no triangle-level pid AND object has no default pid, this is invalid
+                // Per 3MF Material Extension spec, per-vertex properties need a pid context,
+                // either from the triangle itself or from the object's default
+                let has_per_vertex_properties =
+                    triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
+
+                if has_per_vertex_properties && triangle.pid.is_none() && object.pid.is_none() {
+                    return Err(Error::InvalidModel(format!(
+                        "Triangle in object {} has per-vertex material properties (p1/p2/p3) \
+                         but neither the triangle nor the object has a pid to provide material context.\n\
+                         Per 3MF Material Extension spec, per-vertex properties require a pid, \
+                         either on the triangle or as a default on the object.\n\
+                         Add a pid attribute to either the triangle or object {}.",
+                        object.id, object.id
+                    )));
+                }
+
                 // Validate triangle pindex is within bounds for multi-properties
                 if let (Some(pid), Some(pindex)) = (triangle.pid, triangle.pindex) {
                     // Check if pid references a multiproperties resource
@@ -4056,7 +4211,7 @@ fn validate_thumbnail_format(_model: &Model) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{BuildItem, Mesh, Object, Triangle, Vertex};
+    use crate::model::{BuildItem, Mesh, Multi, MultiProperties, Object, Triangle, Vertex};
 
     #[test]
     fn test_validate_duplicate_object_ids() {
@@ -4509,6 +4664,7 @@ mod tests {
             pids: vec![6, 9],
             blendmethods: vec![],
             multis: vec![],
+            parse_order: 0,
         };
         multi_props.multis.push(Multi {
             pindices: vec![0, 0],
@@ -4723,5 +4879,272 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("negative determinant"));
+    }
+
+    #[test]
+    fn test_multiproperties_duplicate_colorgroup() {
+        use crate::model::ColorGroup;
+
+        let mut model = Model::new();
+
+        // Add a colorgroup
+        let mut color_group = ColorGroup::new(10);
+        color_group.parse_order = 1;
+        color_group.colors.push((255, 0, 0, 255)); // Red
+        model.resources.color_groups.push(color_group);
+
+        // Add multiproperties that references the same colorgroup twice
+        let mut multi = MultiProperties::new(20, vec![10, 10]); // Duplicate reference to colorgroup 10
+        multi.parse_order = 2;
+        multi.multis.push(Multi::new(vec![0, 0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0604_01)
+        let result = validate_multiproperties_references(&model);
+        assert!(
+            result.is_err(),
+            "Should reject multiproperties with duplicate colorgroup references"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("colorgroup"));
+        assert!(error_msg.contains("multiple times"));
+    }
+
+    #[test]
+    fn test_multiproperties_basematerials_at_layer_2() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup, ColorGroup};
+
+        let mut model = Model::new();
+
+        // Add a basematerials group
+        let mut base_mat = BaseMaterialGroup::new(5);
+        base_mat.parse_order = 1;
+        base_mat
+            .materials
+            .push(BaseMaterial::new("Steel".to_string(), (128, 128, 128, 255)));
+        model.resources.base_material_groups.push(base_mat);
+
+        // Add colorgroups for layers 0 and 1
+        let mut cg1 = ColorGroup::new(6);
+        cg1.parse_order = 2;
+        cg1.colors.push((255, 0, 0, 255));
+        model.resources.color_groups.push(cg1);
+
+        let mut cg2 = ColorGroup::new(7);
+        cg2.parse_order = 3;
+        cg2.colors.push((0, 255, 0, 255));
+        model.resources.color_groups.push(cg2);
+
+        // Add multiproperties with basematerials at layer 2 (index 2) - INVALID
+        let mut multi = MultiProperties::new(20, vec![6, 7, 5]); // basematerials at index 2
+        multi.parse_order = 4;
+        multi.multis.push(Multi::new(vec![0, 0, 0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0604_03)
+        let result = validate_multiproperties_references(&model);
+        assert!(result.is_err(), "Should reject basematerials at layer >= 2");
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("basematerials"));
+        assert!(error_msg.contains("layer"));
+    }
+
+    #[test]
+    fn test_triangle_material_without_object_default() {
+        let mut model = Model::new();
+
+        // Create object WITHOUT default material (no pid)
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+
+        // Triangle with material property but object has no default
+        let mut triangle = Triangle::new(0, 1, 2);
+        triangle.p1 = Some(0); // Triangle has material property
+        mesh.triangles.push(triangle);
+
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0601_01)
+        let result = validate_triangle_properties(&model);
+        assert!(
+            result.is_err(),
+            "Should reject triangle with per-vertex properties when neither triangle nor object has pid"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("per-vertex material properties"));
+    }
+
+    #[test]
+    fn test_forward_reference_texture2dgroup_to_texture2d() {
+        use crate::model::{Texture2D, Texture2DGroup};
+
+        let mut model = Model::new();
+
+        // Add texture2dgroup BEFORE texture2d (forward reference)
+        let mut tex_group = Texture2DGroup::new(10, 20);
+        tex_group.parse_order = 1; // Earlier in parse order
+        model.resources.texture2d_groups.push(tex_group);
+
+        // Add texture2d AFTER texture2dgroup
+        let mut texture = Texture2D::new(
+            20,
+            "/3D/Texture/image.png".to_string(),
+            "image/png".to_string(),
+        );
+        texture.parse_order = 2; // Later in parse order
+        model.resources.texture2d_resources.push(texture);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0606_01)
+        let result = validate_resource_ordering(&model);
+        assert!(
+            result.is_err(),
+            "Should reject forward reference from texture2dgroup to texture2d"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Forward reference"));
+        assert!(error_msg.contains("texture2d"));
+    }
+
+    #[test]
+    fn test_forward_reference_multiproperties_to_colorgroup() {
+        use crate::model::ColorGroup;
+
+        let mut model = Model::new();
+
+        // Add multiproperties BEFORE colorgroup (forward reference)
+        let mut multi = MultiProperties::new(10, vec![20]);
+        multi.parse_order = 1; // Earlier in parse order
+        multi.multis.push(Multi::new(vec![0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add colorgroup AFTER multiproperties
+        let mut color_group = ColorGroup::new(20);
+        color_group.parse_order = 2; // Later in parse order
+        color_group.colors.push((255, 0, 0, 255));
+        model.resources.color_groups.push(color_group);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0606_03)
+        let result = validate_resource_ordering(&model);
+        assert!(
+            result.is_err(),
+            "Should reject forward reference from multiproperties to colorgroup"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Forward reference"));
+        assert!(error_msg.contains("colorgroup"));
+    }
+
+    #[test]
+    fn test_texture_path_with_backslash() {
+        use crate::model::Texture2D;
+
+        let mut model = Model::new();
+
+        // Add texture with backslash in path (invalid per OPC spec)
+        let mut texture = Texture2D::new(
+            10,
+            "/3D\\Texture\\image.png".to_string(),
+            "image/png".to_string(),
+        );
+        texture.parse_order = 1;
+        model.resources.texture2d_resources.push(texture);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0610_01)
+        let result = validate_texture_paths(&model);
+        assert!(
+            result.is_err(),
+            "Should reject texture path with backslashes"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("backslash"));
+    }
+
+    #[test]
+    fn test_texture_path_empty() {
+        use crate::model::Texture2D;
+
+        let mut model = Model::new();
+
+        // Add texture with empty path
+        let mut texture = Texture2D::new(10, "".to_string(), "image/png".to_string());
+        texture.parse_order = 1;
+        model.resources.texture2d_resources.push(texture);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0610_01)
+        let result = validate_texture_paths(&model);
+        assert!(result.is_err(), "Should reject empty texture path");
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("empty"));
     }
 }

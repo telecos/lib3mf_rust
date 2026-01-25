@@ -71,7 +71,7 @@ pub mod opc;
 pub mod parser;
 pub mod polygon_clipping;
 pub mod streaming;
-mod validator;
+pub mod validator;
 mod writer;
 
 // Decryption support for SecureContent (test keys only, for Suite 8 validation)
