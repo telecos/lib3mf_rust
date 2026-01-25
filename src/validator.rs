@@ -3723,7 +3723,7 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
                 *base_mat_count.entry(pid).or_insert(0) += 1;
 
                 // N_XXM_0604_03: basematerials MUST be at layer 0 (first position) if included
-                // Per 3MF Material Extension spec Chapter 5: "A material, if included, MUST be 
+                // Per 3MF Material Extension spec Chapter 5: "A material, if included, MUST be
                 // positioned as the first element in the list forming the first layer"
                 if idx != 0 {
                     return Err(Error::InvalidModel(format!(
@@ -3743,7 +3743,7 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
         }
 
         // N_XXM_0604_01: Check that at most one colorgroup is referenced
-        // Per 3MF Material Extension spec Chapter 5: "The pids list MUST NOT contain 
+        // Per 3MF Material Extension spec Chapter 5: "The pids list MUST NOT contain
         // more than one reference to a colorgroup"
         if color_group_count.len() > 1 {
             let color_ids: Vec<usize> = color_group_count.keys().copied().collect();
