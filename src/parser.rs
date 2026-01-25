@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::*;
-use crate::opc::Package;
+use crate::opc::{Package, ENCRYPTEDFILE_REL_TYPE};
 use crate::validator;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -2420,6 +2420,32 @@ fn load_keystore<R: Read + std::io::Seek>(
                     return Err(Error::InvalidSecureContent(format!(
                         "Invalid consumer index {}. Only {} consumer(s) defined (EPX-2601)",
                         access_right.consumer_index, sc.consumer_count
+                    )));
+                }
+            }
+        }
+
+        // EPX-2606: Validate encrypted files have EncryptedFile relationships
+        // Per 3MF SecureContent specification, all encrypted files referenced by
+        // resourcedata elements MUST have an EncryptedFile relationship in the OPC package
+        for group in &sc.resource_data_groups {
+            for resource_data in &group.resource_data {
+                let encrypted_path = &resource_data.path;
+                
+                // Check if this encrypted file has an EncryptedFile relationship
+                // We don't specify a source file since the relationship could be in any .rels file
+                let has_encrypted_rel = package.has_relationship_to_target(
+                    encrypted_path,
+                    ENCRYPTEDFILE_REL_TYPE,
+                    None,
+                )?;
+                
+                if !has_encrypted_rel {
+                    return Err(Error::InvalidSecureContent(format!(
+                        "Encrypted file '{}' is missing required EncryptedFile relationship. \
+                         Per 3MF SecureContent specification, all encrypted files referenced in the keystore \
+                         must have a corresponding EncryptedFile relationship in the OPC package (EPX-2606)",
+                        encrypted_path
                     )));
                 }
             }
