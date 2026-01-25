@@ -2246,7 +2246,9 @@ fn load_keystore<R: Read + std::io::Seek>(
                         // EPX-2606: Validate encrypted files have required EncryptedFile relationship
                         // Per 3MF SecureContent spec: "All encrypted files referenced by a resource data
                         // element MUST have a EncryptedFile relationship"
-                        if !package.has_relationship_for_target(&path, crate::opc::ENCRYPTEDFILE_REL_TYPE) {
+                        if !package
+                            .has_relationship_for_target(&path, crate::opc::ENCRYPTEDFILE_REL_TYPE)
+                        {
                             return Err(Error::InvalidSecureContent(format!(
                                 "Encrypted file '{}' missing required EncryptedFile relationship (EPX-2606). \
                                 Per 3MF SecureContent specification, all encrypted files must have an \
