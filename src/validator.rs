@@ -3922,7 +3922,10 @@ pub(crate) fn validate_object_triangle_materials(
     }
 
     // If we have mixed material assignment and no default pid on object, this is invalid
-    if has_triangles_with_material && has_triangles_without_material && object_pid.is_none() {
+    let has_mixed_assignment_without_default_pid =
+        has_triangles_with_material && has_triangles_without_material && object_pid.is_none();
+    
+    if has_mixed_assignment_without_default_pid {
         return Err(Error::InvalidModel(format!(
             "{} has some triangles with material properties and some without. \
              When triangles in an object have mixed material assignment, \

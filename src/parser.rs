@@ -4314,8 +4314,12 @@ fn validate_external_model_triangles<R: Read + std::io::Seek>(
     // Load and fully parse the external model file
     let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
     
-    // Parse the external model file with the same config as the main model
-    // We need to create a minimal config that has the same extensions
+    // Parse the external model file with a minimal config
+    // TODO: Ideally we should use the same config as the main model, but we don't have
+    // access to it at this point. For now, we use Production and Material extensions which
+    // are the most common for files with external references. This works for suite2_core_prod_matl
+    // and similar suites. A future improvement would be to store the config in the Model
+    // or pass it through the validation chain.
     let config = ParserConfig::new()
         .with_extension(Extension::Production)
         .with_extension(Extension::Material);
