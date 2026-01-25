@@ -3591,8 +3591,9 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 
     // Validate each multiproperties group
     for multi_props in &model.resources.multi_properties {
-        // Track basematerials IDs to detect duplicates
+        // Track basematerials and colorgroup IDs to detect duplicates
         let mut base_mat_count: HashMap<usize, usize> = HashMap::new();
+        let mut color_group_count: HashMap<usize, usize> = HashMap::new();
 
         for (idx, &pid) in multi_props.pids.iter().enumerate() {
             // Check if PID references a valid resource
@@ -3614,6 +3615,35 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
             // Track basematerials references
             if base_mat_ids.contains(&pid) {
                 *base_mat_count.entry(pid).or_insert(0) += 1;
+                
+                // N_XXM_0604_03: basematerials can only be at layer 0 or 1
+                // Per 3MF Material Extension spec, basematerials must be in the first two layers
+                if idx >= 2 {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: basematerials group {} referenced at layer {} (index {}).\n\
+                         Per 3MF Material Extension spec, basematerials can only be referenced in layers 0 or 1 \
+                         (indices 0 or 1) of multiproperties pids.\n\
+                         Move the basematerials reference to layer 0 or 1.",
+                        multi_props.id, pid, idx, idx
+                    )));
+                }
+            }
+
+            // Track colorgroup references
+            if color_group_ids.contains(&pid) {
+                *color_group_count.entry(pid).or_insert(0) += 1;
+            }
+        }
+
+        // N_XXM_0604_01: Check for duplicate colorgroup references
+        for (&color_id, &count) in &color_group_count {
+            if count > 1 {
+                return Err(Error::InvalidModel(format!(
+                    "MultiProperties {}: References colorgroup {} multiple times in pids.\n\
+                     Per 3MF Material Extension spec, multiproperties cannot reference the same colorgroup \
+                     more than once in the pids list.",
+                    multi_props.id, color_id
+                )));
             }
         }
 
@@ -3678,6 +3708,21 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
         // Validate triangle-level properties
         if let Some(ref mesh) = object.mesh {
             for triangle in &mesh.triangles {
+                // N_XXM_0601_01: If triangle has material properties but object has no default,
+                // this is invalid per 3MF Material Extension spec
+                if (triangle.pid.is_some() || triangle.pindex.is_some() 
+                    || triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some())
+                    && object.pid.is_none() {
+                    return Err(Error::InvalidModel(format!(
+                        "Triangle in object {} has material properties (pid/pindex/p1/p2/p3) \
+                         but the object has no default material property (pid).\n\
+                         Per 3MF Material Extension spec, when triangles have material properties, \
+                         the object must have a default material property defined via the pid attribute.\n\
+                         Add a pid attribute to object {} to specify the default material property.",
+                        object.id, object.id
+                    )));
+                }
+                
                 // Validate triangle pindex is within bounds for multi-properties
                 if let (Some(pid), Some(pindex)) = (triangle.pid, triangle.pindex) {
                     // Check if pid references a multiproperties resource
