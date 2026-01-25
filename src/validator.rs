@@ -3460,24 +3460,104 @@ fn validate_transform_matrices(model: &Model) -> Result<()> {
 ///
 /// Per 3MF spec, resources must be defined before they are referenced.
 /// For example, texture2d must be defined before texture2dgroup that references it.
+/// This validation checks for forward references using parse order.
 fn validate_resource_ordering(model: &Model) -> Result<()> {
-    // Build a set of defined texture2d IDs
-    let texture2d_ids: HashSet<usize> = model
-        .resources
-        .texture2d_resources
-        .iter()
-        .map(|t| t.id)
-        .collect();
-
-    // Validate that texture2dgroups reference existing texture2d resources
+    // N_XXM_0606_01: Texture2dgroup must not reference texture2d that appears later in XML
     for tex_group in &model.resources.texture2d_groups {
-        if !texture2d_ids.contains(&tex_group.texid) {
+        if let Some(tex2d) = model
+            .resources
+            .texture2d_resources
+            .iter()
+            .find(|t| t.id == tex_group.texid)
+        {
+            if tex_group.parse_order < tex2d.parse_order {
+                return Err(Error::InvalidModel(format!(
+                    "Texture2DGroup {}: Forward reference to texture2d {} which appears later in the resources.\n\
+                     Per 3MF Material Extension spec, texture2d resources must be defined before \
+                     texture2dgroups that reference them.\n\
+                     Move the texture2d element before the texture2dgroup element in the resources section.",
+                    tex_group.id, tex_group.texid
+                )));
+            }
+        } else {
             return Err(Error::InvalidModel(format!(
                 "Texture2DGroup {}: References texture2d with ID {} which is not defined.\n\
                  Per 3MF spec, texture2d resources must be defined before texture2dgroups that reference them.\n\
                  Ensure texture2d with ID {} exists in the <resources> section before this texture2dgroup.",
                 tex_group.id, tex_group.texid, tex_group.texid
             )));
+        }
+    }
+
+    // N_XXM_0606_02, N_XXM_0606_03, N_XXM_0607_01: Multiproperties must not have forward references
+    for multi_props in &model.resources.multi_properties {
+        for &pid in &multi_props.pids {
+            // Check if PID references a texture2dgroup
+            if let Some(tex_group) = model
+                .resources
+                .texture2d_groups
+                .iter()
+                .find(|t| t.id == pid)
+            {
+                if multi_props.parse_order < tex_group.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to texture2dgroup {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the texture2dgroup element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a colorgroup
+            if let Some(color_group) = model.resources.color_groups.iter().find(|c| c.id == pid) {
+                if multi_props.parse_order < color_group.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to colorgroup {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the colorgroup element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a basematerials group
+            if let Some(base_mat) = model
+                .resources
+                .base_material_groups
+                .iter()
+                .find(|b| b.id == pid)
+            {
+                if multi_props.parse_order < base_mat.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to basematerials group {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the basematerials element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a compositematerials group
+            if let Some(composite) = model
+                .resources
+                .composite_materials
+                .iter()
+                .find(|c| c.id == pid)
+            {
+                if multi_props.parse_order < composite.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to compositematerials group {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the compositematerials element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
         }
     }
 

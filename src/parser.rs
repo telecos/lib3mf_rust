@@ -280,6 +280,9 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     // Track namespace declarations from model element
     let mut declared_namespaces: HashMap<String, String> = HashMap::new();
 
+    // Track parse order for resource ordering validation
+    let mut resource_parse_order: usize = 0;
+
     loop {
         let event_result = reader.read_event_into(&mut buf);
         let is_empty_element = matches!(&event_result, Ok(Event::Empty(_)));
@@ -655,7 +658,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .get("id")
                             .ok_or_else(|| Error::missing_attribute("basematerials", "id"))?
                             .parse::<usize>()?;
-                        current_basematerialgroup = Some(BaseMaterialGroup::new(id));
+                        let mut group = BaseMaterialGroup::new(id);
+                        group.parse_order = resource_parse_order;
+                        resource_parse_order += 1;
+                        current_basematerialgroup = Some(group);
                     }
                     "base" if in_basematerials => {
                         // Materials within basematerials group
@@ -691,7 +697,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .get("id")
                             .ok_or_else(|| Error::missing_attribute("colorgroup", "id"))?
                             .parse::<usize>()?;
-                        current_colorgroup = Some(ColorGroup::new(id));
+                        let mut group = ColorGroup::new(id);
+                        group.parse_order = resource_parse_order;
+                        resource_parse_order += 1;
+                        current_colorgroup = Some(group);
                     }
                     "color" if in_colorgroup => {
                         if let Some(ref mut colorgroup) = current_colorgroup {
@@ -729,6 +738,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .to_string();
 
                         let mut texture = Texture2D::new(id, path, contenttype);
+                        texture.parse_order = resource_parse_order;
+                        resource_parse_order += 1;
 
                         // Parse optional attributes with spec defaults
                         if let Some(tileu_str) = attrs.get("tilestyleu") {
@@ -773,7 +784,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             .get("texid")
                             .ok_or_else(|| Error::missing_attribute("texture2dgroup", "texid"))?
                             .parse::<usize>()?;
-                        current_texture2dgroup = Some(Texture2DGroup::new(id, texid));
+                        let mut group = Texture2DGroup::new(id, texid);
+                        group.parse_order = resource_parse_order;
+                        resource_parse_order += 1;
+                        current_texture2dgroup = Some(group);
                     }
                     "tex2coord" if in_texture2dgroup => {
                         if let Some(ref mut group) = current_texture2dgroup {
@@ -826,8 +840,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             ));
                         }
 
-                        current_compositematerials =
-                            Some(CompositeMaterials::new(id, matid, matindices));
+                        let mut group = CompositeMaterials::new(id, matid, matindices);
+                        group.parse_order = resource_parse_order;
+                        resource_parse_order += 1;
+                        current_compositematerials = Some(group);
                     }
                     "composite" if in_compositematerials => {
                         if let Some(ref mut group) = current_compositematerials {
@@ -879,6 +895,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
 
                         let mut multi = MultiProperties::new(id, pids);
+                        multi.parse_order = resource_parse_order;
+                        resource_parse_order += 1;
 
                         // Parse optional blendmethods
                         if let Some(blend_str) = attrs.get("blendmethods") {
