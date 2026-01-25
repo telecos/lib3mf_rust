@@ -84,26 +84,6 @@
       "date_added": "2026-01-23"
     },
     {
-      "test_case_id": "0604_01",
-      "suites": [
-        "suite2_core_prod_matl"
-      ],
-      "test_type": "negative",
-      "reason": "Complex multi-property validation. This test may check advanced scenarios with multi-properties that combine multiple property groups. The specific validation rule being tested requires detailed analysis of the 3MF test specification document.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "test_case_id": "0604_03",
-      "suites": [
-        "suite2_core_prod_matl"
-      ],
-      "test_type": "negative",
-      "reason": "Multi-property pindex bounds validation. The specific validation scenario conflicts with valid positive test cases that use similar structures. Requires detailed spec analysis to implement correctly without false positives.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
       "test_case_id": "2202_01",
       "suites": [
         "suite9_core_ext"
