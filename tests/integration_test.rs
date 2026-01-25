@@ -143,7 +143,7 @@ fn test_parse_3mf_with_materials() {
       <base name=\"Green\" displaycolor=\"#00FF00\"/>\n\
       <base name=\"Blue\" displaycolor=\"#0000FF\"/>\n\
     </basematerials>\n\
-    <object id=\"2\" type=\"model\">\n\
+    <object id=\"2\" type=\"model\" pid=\"1\">\n\
       <mesh>\n\
         <vertices>\n\
           <vertex x=\"0.0\" y=\"0.0\" z=\"0.0\"/>\n\
@@ -151,7 +151,7 @@ fn test_parse_3mf_with_materials() {
           <vertex x=\"0.5\" y=\"1.0\" z=\"0.0\"/>\n\
         </vertices>\n\
         <triangles>\n\
-          <triangle v1=\"0\" v2=\"1\" v3=\"2\" pid=\"0\"/>\n\
+          <triangle v1=\"0\" v2=\"1\" v3=\"2\" pid=\"1\" pindex=\"0\"/>\n\
         </triangles>\n\
       </mesh>\n\
     </object>\n\

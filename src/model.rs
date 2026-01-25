@@ -915,6 +915,9 @@ pub struct ColorGroup {
     pub id: usize,
     /// List of colors in this group
     pub colors: Vec<(u8, u8, u8, u8)>,
+    /// Parse order (for validation of forward references)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 /// Production extension information
@@ -932,6 +935,7 @@ impl ColorGroup {
         Self {
             id,
             colors: Vec::new(),
+            parse_order: 0,
         }
     }
 }
@@ -1345,6 +1349,9 @@ pub struct BaseMaterialGroup {
     pub id: usize,
     /// List of base materials in this group
     pub materials: Vec<BaseMaterial>,
+    /// Parse order (for validation of forward references)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 impl BaseMaterialGroup {
@@ -1353,6 +1360,7 @@ impl BaseMaterialGroup {
         Self {
             id,
             materials: Vec::new(),
+            parse_order: 0,
         }
     }
 }
@@ -1388,6 +1396,9 @@ pub struct Texture2D {
     pub tilestylev: TileStyle,
     /// Texture filter mode
     pub filter: FilterMode,
+    /// Parse order (for validation of forward references)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 impl Texture2D {
@@ -1400,6 +1411,7 @@ impl Texture2D {
             tilestyleu: TileStyle::Wrap,
             tilestylev: TileStyle::Wrap,
             filter: FilterMode::Auto,
+            parse_order: 0,
         }
     }
 }
@@ -1429,6 +1441,9 @@ pub struct Texture2DGroup {
     pub texid: usize,
     /// List of texture coordinates
     pub tex2coords: Vec<Tex2Coord>,
+    /// Parse order (for validation of forward references)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 impl Texture2DGroup {
@@ -1438,6 +1453,7 @@ impl Texture2DGroup {
             id,
             texid,
             tex2coords: Vec::new(),
+            parse_order: 0,
         }
     }
 }
@@ -1467,6 +1483,9 @@ pub struct CompositeMaterials {
     pub matindices: Vec<usize>,
     /// List of composite materials
     pub composites: Vec<Composite>,
+    /// Parse order (for validation of forward references)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 impl CompositeMaterials {
@@ -1477,6 +1496,7 @@ impl CompositeMaterials {
             matid,
             matindices,
             composites: Vec::new(),
+            parse_order: 0,
         }
     }
 }
@@ -1515,6 +1535,9 @@ pub struct MultiProperties {
     pub blendmethods: Vec<BlendMethod>,
     /// List of multi elements
     pub multis: Vec<Multi>,
+    /// Parse order (for validation of forward references)
+    #[doc(hidden)]
+    pub parse_order: usize,
 }
 
 impl MultiProperties {
@@ -1525,6 +1548,7 @@ impl MultiProperties {
             pids,
             blendmethods: Vec::new(),
             multis: Vec::new(),
+            parse_order: 0,
         }
     }
 }
