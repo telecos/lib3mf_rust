@@ -4117,6 +4117,31 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
                         if let Some(id) = obj_id {
                             info.push((id, obj_uuid));
                         }
+                    } else if local_name == "component" {
+                        // N_XPM_0803_01: Validate that non-root model files don't have components with p:path
+                        // Per 3MF Production Extension spec Chapter 2:
+                        // "Non-root model file components MUST only reference objects in the same model file"
+                        // This prevents component reference chains across multiple files
+                        for attr in e.attributes() {
+                            let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+
+                            // Check for p:path attribute (standard production extension namespace)
+                            // We check for the exact "p:path" attribute name
+                            if attr_name == "p:path" {
+                                let path_value = std::str::from_utf8(&attr.value)
+                                    .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                return Err(Error::InvalidModel(format!(
+                                    "External model file '{}' contains a component with p:path=\"{}\". \
+                                     Per 3MF Production Extension specification (Chapter 2), only components \
+                                     in the root model file may have p:path attributes. Non-root model files \
+                                     must only reference objects within the same file. This restriction \
+                                     prevents component reference chains across multiple files.",
+                                    file_path, path_value
+                                )));
+                            }
+                        }
                     }
                 }
                 Ok(Event::Eof) => break,

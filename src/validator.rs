@@ -1275,7 +1275,13 @@ fn validate_component_references(model: &Model) -> Result<()> {
             // Skip validation for components that reference external files (Production extension)
             // When a component has a p:path attribute, the referenced object is in an external
             // file (potentially encrypted in Secure Content scenarios) and doesn't need to exist
-            // in the current model's resources
+            // in the current model's resources.
+            //
+            // The external file validation is done separately in validate_production_external_paths
+            // which checks that:
+            // 1. The external file exists
+            // 2. The referenced object exists in that file
+            // 3. Non-root model files don't have components with p:path (N_XPM_0803_01)
             if component
                 .production
                 .as_ref()
@@ -1284,6 +1290,7 @@ fn validate_component_references(model: &Model) -> Result<()> {
                 continue;
             }
 
+            // For local component references (no p:path), verify the object exists
             if !valid_object_ids.contains(&component.objectid) {
                 let available_ids = sorted_ids_from_set(&valid_object_ids);
                 return Err(Error::InvalidModel(format!(
