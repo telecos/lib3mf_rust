@@ -29,26 +29,65 @@ This directory contains GitHub Actions workflows for automated testing and confo
 **Purpose**: Validate parser against official 3MF test suites
 
 **What it does**:
-- ✅ Clones 3MF Consortium test suites (~1.6GB)
+- ✅ Runs basic tests first (fast validation)
+- ✅ Clones 3MF Consortium test suites once (~1.6GB)
 - ✅ Caches test suites for faster subsequent runs
-- ✅ Runs conformance summary (2,241 test cases)
+- ✅ Distributes test suites as artifact to all parallel jobs
+- ✅ Runs 11 conformance suites in parallel (2,241 test cases)
 - ✅ Generates conformance report
 - ✅ Commits updated CONFORMANCE_REPORT.md (on push to main/develop)
 - ✅ Uploads report as artifact
 
-**Runtime**: ~10-15 minutes (first run), ~5 minutes (cached)
+**Runtime**: ~10-15 minutes (first run), ~3-5 minutes (cached)
 
-## Test Suite Caching
+**Optimization**: Uses a dedicated `setup-test-suites` job to clone test suites once and distribute via artifacts, avoiding 11 redundant git clone operations.
 
-The conformance workflow caches the test_suites directory to avoid re-downloading 1.6GB on every run:
+## Test Suite Caching and Distribution
+
+The conformance workflow optimizes test suite distribution using a two-tier approach:
+
+1. **GitHub Actions Cache**: Persists test suites across workflow runs
+2. **Artifact Distribution**: Shares test suites across parallel jobs within a single run
 
 ```yaml
-- name: Cache test suites
-  uses: actions/cache@v4
-  with:
-    path: test_suites
-    key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
+# Step 1: Single job clones and caches test suites
+setup-test-suites:
+  steps:
+    - name: Cache test suites
+      uses: actions/cache@v4
+      with:
+        path: test_suites
+        key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
+    
+    - name: Clone (only if cache miss)
+      if: steps.cache-test-suites.outputs.cache-hit != 'true'
+      run: git clone --depth 1 https://github.com/3MFConsortium/test_suites.git
+    
+    - name: Upload artifact for parallel jobs
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-suites
+        path: test_suites/
+
+# Step 2: Parallel jobs download artifact (faster than git clone)
+conformance:
+  needs: setup-test-suites
+  strategy:
+    matrix:
+      suite: [suite1, suite2, ..., suite11]
+  steps:
+    - name: Download test suites
+      uses: actions/download-artifact@v4.1.3
+      with:
+        name: test-suites
+        path: test_suites
 ```
+
+**Benefits**:
+- Test suites cloned only **once** per workflow run (not 11+ times)
+- Artifact download (~30 seconds) much faster than git clone (~2-3 minutes)
+- Reduces GitHub bandwidth usage
+- Improves reliability (fewer network operations)
 
 **Cache invalidation**: Cache is recreated when:
 - The workflow file changes
