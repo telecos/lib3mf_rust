@@ -25,14 +25,6 @@
       "date_added": "2026-01-25"
     },
     {
-      "file": "N_XPM_0601_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Partial per-vertex property specification. While the 3MF spec suggests all three (p1, p2, p3) should be specified together, many valid positive test cases use partial specifications. The implementation prioritizes compatibility with real-world files.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
       "file": "N_XPM_0601_02.3mf",
       "suite": "suite2_core_prod_matl",
       "test_type": "negative",
@@ -53,38 +45,6 @@
       "suite": "suite2_core_prod_matl",
       "test_type": "negative",
       "reason": "Multi-property pindex bounds validation. The specific validation scenario conflicts with valid positive test cases that use similar structures. Requires detailed spec analysis to implement correctly without false positives.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0605_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0605) requires detailed analysis of the 3MF Materials Extension test specification. The file structure appears valid based on standard parsing rules.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0606_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation. The specific validation rule being tested (test code 0606) requires detailed analysis of the 3MF Materials Extension test specification. May relate to resource ordering or texture coordinate validation.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0606_02.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01, testing resource declaration order which may require stricter validation of when resources can be referenced.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "N_XPM_0606_03.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Texture2DGroup validation with different resource ordering. Related to N_XPM_0606_01 and N_XPM_0606_02, testing resource declaration order scenarios.",
       "issue_url": "",
       "date_added": "2026-01-23"
     },
@@ -197,6 +157,14 @@
       "issue_url": "",
       "date_added": "2026-01-25",
       "expected_error_type": "InvalidModel"
+    },
+    {
+      "file": "N_XXM_0421_01.3mf",
+      "suite": "suite6_core_matl",
+      "test_type": "negative",
+      "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
+      "issue_url": "",
+      "date_added": "2026-01-25"
     },
     {
       "file": "P_XXM_0326_03.3mf",
