@@ -1280,7 +1280,7 @@ fn validate_component_references(model: &Model) -> Result<()> {
             // The external file validation is done separately in validate_production_external_paths
             // which checks that:
             // 1. The external file exists
-            // 2. The referenced object exists in that file  
+            // 2. The referenced object exists in that file
             // 3. Non-root model files don't have components with p:path (N_XPM_0803_01)
             if component
                 .production

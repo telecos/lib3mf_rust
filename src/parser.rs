@@ -4108,7 +4108,7 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
                             let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
                             let attr_name = std::str::from_utf8(attr.key.as_ref())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            
+
                             // Check for p:path attribute (standard production extension namespace)
                             // We check for the exact "p:path" attribute name
                             if attr_name == "p:path" {
