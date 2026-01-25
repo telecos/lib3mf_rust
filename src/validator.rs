@@ -4272,7 +4272,7 @@ fn validate_thumbnail_format(_model: &Model) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{BuildItem, Mesh, Object, Triangle, Vertex};
+    use crate::model::{BuildItem, Mesh, Multi, MultiProperties, Object, Triangle, Vertex};
 
     #[test]
     fn test_validate_duplicate_object_ids() {
@@ -5074,5 +5074,270 @@ mod tests {
             result.is_ok(),
             "Should accept mesh with positive coordinates"
         );
+    }
+
+    #[test]
+    fn test_multiproperties_duplicate_colorgroup() {
+        use crate::model::ColorGroup;
+
+        let mut model = Model::new();
+
+        // Add a colorgroup
+        let mut color_group = ColorGroup::new(10);
+        color_group.parse_order = 1;
+        color_group.colors.push((255, 0, 0, 255)); // Red
+        model.resources.color_groups.push(color_group);
+
+        // Add multiproperties that references the same colorgroup twice
+        let mut multi = MultiProperties::new(20, vec![10, 10]); // Duplicate reference to colorgroup 10
+        multi.parse_order = 2;
+        multi.multis.push(Multi::new(vec![0, 0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0604_01)
+        let result = validate_multiproperties_references(&model);
+        assert!(
+            result.is_err(),
+            "Should reject multiproperties with duplicate colorgroup references"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("colorgroup"));
+        assert!(error_msg.contains("multiple times"));
+    }
+
+    #[test]
+    fn test_multiproperties_basematerials_at_layer_2() {
+        use crate::model::{BaseMaterial, BaseMaterialGroup, ColorGroup};
+
+        let mut model = Model::new();
+
+        // Add a basematerials group
+        let mut base_mat = BaseMaterialGroup::new(5);
+        base_mat.parse_order = 1;
+        base_mat
+            .materials
+            .push(BaseMaterial::new("Steel".to_string(), (128, 128, 128, 255)));
+        model.resources.base_material_groups.push(base_mat);
+
+        // Add colorgroups for layers 0 and 1
+        let mut cg1 = ColorGroup::new(6);
+        cg1.parse_order = 2;
+        cg1.colors.push((255, 0, 0, 255));
+        model.resources.color_groups.push(cg1);
+
+        let mut cg2 = ColorGroup::new(7);
+        cg2.parse_order = 3;
+        cg2.colors.push((0, 255, 0, 255));
+        model.resources.color_groups.push(cg2);
+
+        // Add multiproperties with basematerials at layer 2 (index 2) - INVALID
+        let mut multi = MultiProperties::new(20, vec![6, 7, 5]); // basematerials at index 2
+        multi.parse_order = 4;
+        multi.multis.push(Multi::new(vec![0, 0, 0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0604_03)
+        let result = validate_multiproperties_references(&model);
+        assert!(
+            result.is_err(),
+            "Should reject basematerials at layer >= 2"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("basematerials"));
+        assert!(error_msg.contains("layer"));
+    }
+
+    #[test]
+    fn test_triangle_material_without_object_default() {
+        let mut model = Model::new();
+
+        // Create object WITHOUT default material (no pid)
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        
+        // Triangle with material property but object has no default
+        let mut triangle = Triangle::new(0, 1, 2);
+        triangle.p1 = Some(0); // Triangle has material property
+        mesh.triangles.push(triangle);
+        
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0601_01)
+        let result = validate_triangle_properties(&model);
+        assert!(
+            result.is_err(),
+            "Should reject triangle with material properties when object has no default pid"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("default material property"));
+    }
+
+    #[test]
+    fn test_forward_reference_texture2dgroup_to_texture2d() {
+        use crate::model::{Texture2D, Texture2DGroup};
+
+        let mut model = Model::new();
+
+        // Add texture2dgroup BEFORE texture2d (forward reference)
+        let mut tex_group = Texture2DGroup::new(10, 20);
+        tex_group.parse_order = 1; // Earlier in parse order
+        model.resources.texture2d_groups.push(tex_group);
+
+        // Add texture2d AFTER texture2dgroup
+        let mut texture = Texture2D::new(20, "/3D/Texture/image.png".to_string(), "image/png".to_string());
+        texture.parse_order = 2; // Later in parse order
+        model.resources.texture2d_resources.push(texture);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0606_01)
+        let result = validate_resource_ordering(&model);
+        assert!(
+            result.is_err(),
+            "Should reject forward reference from texture2dgroup to texture2d"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Forward reference"));
+        assert!(error_msg.contains("texture2d"));
+    }
+
+    #[test]
+    fn test_forward_reference_multiproperties_to_colorgroup() {
+        use crate::model::ColorGroup;
+
+        let mut model = Model::new();
+
+        // Add multiproperties BEFORE colorgroup (forward reference)
+        let mut multi = MultiProperties::new(10, vec![20]);
+        multi.parse_order = 1; // Earlier in parse order
+        multi.multis.push(Multi::new(vec![0]));
+        model.resources.multi_properties.push(multi);
+
+        // Add colorgroup AFTER multiproperties
+        let mut color_group = ColorGroup::new(20);
+        color_group.parse_order = 2; // Later in parse order
+        color_group.colors.push((255, 0, 0, 255));
+        model.resources.color_groups.push(color_group);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0606_03)
+        let result = validate_resource_ordering(&model);
+        assert!(
+            result.is_err(),
+            "Should reject forward reference from multiproperties to colorgroup"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Forward reference"));
+        assert!(error_msg.contains("colorgroup"));
+    }
+
+    #[test]
+    fn test_texture_path_with_backslash() {
+        use crate::model::Texture2D;
+
+        let mut model = Model::new();
+
+        // Add texture with backslash in path (invalid per OPC spec)
+        let mut texture = Texture2D::new(10, "/3D\\Texture\\image.png".to_string(), "image/png".to_string());
+        texture.parse_order = 1;
+        model.resources.texture2d_resources.push(texture);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0610_01)
+        let result = validate_texture_paths(&model);
+        assert!(
+            result.is_err(),
+            "Should reject texture path with backslashes"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("backslash"));
+    }
+
+    #[test]
+    fn test_texture_path_empty() {
+        use crate::model::Texture2D;
+
+        let mut model = Model::new();
+
+        // Add texture with empty path
+        let mut texture = Texture2D::new(10, "".to_string(), "image/png".to_string());
+        texture.parse_order = 1;
+        model.resources.texture2d_resources.push(texture);
+
+        // Add object and build item for basic structure
+        let mut object = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        // Should fail validation (N_XXM_0610_01)
+        let result = validate_texture_paths(&model);
+        assert!(
+            result.is_err(),
+            "Should reject empty texture path"
+        );
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("empty"));
     }
 }
