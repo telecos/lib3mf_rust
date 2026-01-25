@@ -2221,7 +2221,7 @@ fn validate_slices(model: &Model) -> Result<()> {
         // N_SPX_1606_01: Validate ztop values are >= zbottom
         // N_SPX_1607_01: Validate ztop values are strictly increasing
         let mut prev_ztop: Option<f64> = None;
-        
+
         for (slice_idx, slice) in slice_stack.slices.iter().enumerate() {
             // Check ztop >= zbottom
             if slice.ztop < slice_stack.zbottom {
@@ -2231,7 +2231,7 @@ fn validate_slices(model: &Model) -> Result<()> {
                     slice_stack.id, slice_idx, slice.ztop, slice_stack.zbottom
                 )));
             }
-            
+
             // Check ztop values are strictly increasing
             if let Some(prev) = prev_ztop {
                 if slice.ztop <= prev {
@@ -2243,7 +2243,7 @@ fn validate_slices(model: &Model) -> Result<()> {
                 }
             }
             prev_ztop = Some(slice.ztop);
-            
+
             validate_slice(slice_stack.id, slice_idx, slice)?;
         }
     }
@@ -2449,7 +2449,7 @@ fn validate_slice(
                     num_vertices - 1
                 )));
             }
-            
+
             // N_SPX_1608_01: Check for duplicate v2 in consecutive segments
             if let Some(prev) = prev_v2 {
                 if segment.v2 == prev {
@@ -2468,7 +2468,7 @@ fn validate_slice(
             }
             prev_v2 = Some(segment.v2);
         }
-        
+
         // N_SPX_1609_02: Validate polygon is closed (last segment v2 == startv)
         if let Some(last_segment) = polygon.segments.last() {
             if last_segment.v2 != polygon.startv {

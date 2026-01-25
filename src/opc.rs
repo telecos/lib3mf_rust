@@ -266,7 +266,7 @@ impl<R: Read + std::io::Seek> Package<R> {
                     filename
                 )));
             }
-            
+
             if filename.contains("3dmodel") {
                 // If the filename contains "3dmodel", check that any prefix uses ASCII
                 // This catches cases like "Ԫ3dmodel.model" (Cyrillic character before "3dmodel")
