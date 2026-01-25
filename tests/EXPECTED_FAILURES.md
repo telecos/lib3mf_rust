@@ -179,7 +179,7 @@ Test case `0421_01` appears in multiple suites testing the same issue - negative
 ```json
 {
   "test_case_id": "0421_01",
-  "suites": ["suite2_core_prod_matl", "suite3_core"],
+  "suites": ["suite2_core_prod_matl", "suite3_core", "suite5_core_prod", "suite6_core_matl"],
   "test_type": "negative",
   "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
   "issue_url": "",
@@ -190,6 +190,8 @@ Test case `0421_01` appears in multiple suites testing the same issue - negative
 This automatically handles:
 - `N_XPM_0421_01.3mf` in suite2_core_prod_matl
 - `N_XXX_0421_01.3mf` in suite3_core
+- `N_XPX_0421_01.3mf` in suite5_core_prod
+- `N_XXM_0421_01.3mf` in suite6_core_matl
 
 ### Example 2: Single Suite (Old Format Compatible)
 
