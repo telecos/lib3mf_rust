@@ -981,6 +981,8 @@ impl<R: Read + std::io::Seek> Package<R> {
             }
         } else {
             // No source file specified - check ALL .rels files in the package
+            // Note: This is only called during validation for encrypted files,
+            // which is infrequent, so performance impact is minimal
             for i in 0..self.archive.len() {
                 if let Ok(file) = self.archive.by_index(i) {
                     let name = file.name();
@@ -999,7 +1001,11 @@ impl<R: Read + std::io::Seek> Package<R> {
             
             let rels_content = match self.get_file(rels_file) {
                 Ok(content) => content,
-                Err(_) => continue, // Failed to read, skip
+                Err(_e) => {
+                    // Failed to read .rels file (e.g., permission error, corrupt file)
+                    // Skip this file and continue validation with other .rels files
+                    continue;
+                }
             };
             
             let mut reader = Reader::from_str(&rels_content);
