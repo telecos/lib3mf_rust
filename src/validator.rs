@@ -4051,6 +4051,14 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
 /// geometries where some triangles are legitimately oriented differently.
 fn validate_vertex_order(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
+        // Skip mesh volume validation for sliced objects
+        // Per 3MF Slice Extension spec, when an object has a slicestack,
+        // the mesh is not used for printing (slices are used instead),
+        // so mesh orientation doesn't matter
+        if object.slicestackid.is_some() {
+            continue;
+        }
+
         // Only validate model objects with meshes
         if object.object_type != ObjectType::Model {
             continue;
