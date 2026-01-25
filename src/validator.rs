@@ -3594,6 +3594,84 @@ fn validate_resource_ordering(model: &Model) -> Result<()> {
         }
     }
 
+    // N_XPM_0607_01: Objects must not be intermingled with property resources
+    // Per 3MF spec, the resources section should have a consistent ordering:
+    // either all property resources first then all objects, or vice versa.
+    // Intermingling objects between property resources is invalid.
+
+    // Get parse orders for all property resources
+    let mut property_resource_orders = Vec::new();
+
+    for tex2d in &model.resources.texture2d_resources {
+        property_resource_orders.push(("Texture2D", tex2d.id, tex2d.parse_order));
+    }
+    for tex_group in &model.resources.texture2d_groups {
+        property_resource_orders.push(("Texture2DGroup", tex_group.id, tex_group.parse_order));
+    }
+    for color_group in &model.resources.color_groups {
+        property_resource_orders.push(("ColorGroup", color_group.id, color_group.parse_order));
+    }
+    for base_mat in &model.resources.base_material_groups {
+        property_resource_orders.push(("BaseMaterials", base_mat.id, base_mat.parse_order));
+    }
+    for composite in &model.resources.composite_materials {
+        property_resource_orders.push(("CompositeMaterials", composite.id, composite.parse_order));
+    }
+    for multi_props in &model.resources.multi_properties {
+        property_resource_orders.push(("MultiProperties", multi_props.id, multi_props.parse_order));
+    }
+
+    // Get parse orders for all objects
+    let mut object_orders = Vec::new();
+    for obj in &model.resources.objects {
+        object_orders.push((obj.id, obj.parse_order));
+    }
+
+    // Check if there are objects intermingled with property resources
+    // This is only an issue if we have both objects and property resources
+    if !property_resource_orders.is_empty() && !object_orders.is_empty() {
+        // Find min and max parse order for property resources
+        let min_prop_order = property_resource_orders
+            .iter()
+            .map(|(_, _, order)| order)
+            .min()
+            .unwrap();
+        let max_prop_order = property_resource_orders
+            .iter()
+            .map(|(_, _, order)| order)
+            .max()
+            .unwrap();
+
+        // If property resources and objects have overlapping ranges, they're intermingled
+        // Valid: all properties [0-10], all objects [11-20] OR all objects [0-10], all properties [11-20]
+        // Invalid: properties [0-5], objects [6-10], properties [11-15] (intermingled)
+
+        // Check if there's an object between two property resources
+        for (prop_type, prop_id, prop_order) in &property_resource_orders {
+            for (obj_id, obj_order) in &object_orders {
+                // If an object appears between the min and max property resource orders,
+                // and there are property resources both before and after it
+                if *obj_order > *min_prop_order && *obj_order < *max_prop_order {
+                    // Find a property resource that comes after this object
+                    if let Some((later_prop_type, later_prop_id, later_prop_order)) =
+                        property_resource_orders
+                            .iter()
+                            .find(|(_, _, order)| *order > *obj_order)
+                    {
+                        return Err(Error::InvalidModel(format!(
+                            "Invalid resource ordering: Object {} appears between property resources.\n\
+                             The object is at position {}, between {} {} (position {}) and {} {} (position {}).\n\
+                             Per 3MF specification, objects must not be intermingled with property resources.\n\
+                             Either place all objects after all property resources, or all property resources after all objects.",
+                            obj_id, obj_order, prop_type, prop_id, prop_order,
+                            later_prop_type, later_prop_id, later_prop_order
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 

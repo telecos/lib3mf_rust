@@ -84,26 +84,6 @@
       "date_added": "2026-01-23"
     },
     {
-      "test_case_id": "0607_01",
-      "suites": [
-        "suite2_core_prod_matl"
-      ],
-      "test_type": "negative",
-      "reason": "Multi-properties and texture coordinate validation. The specific validation rule being tested (test code 0607) requires detailed analysis of the 3MF test specification.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "test_case_id": "0610_01",
-      "suites": [
-        "suite2_core_prod_matl"
-      ],
-      "test_type": "negative",
-      "reason": "Material property validation. The specific validation rule being tested (test code 0610) requires detailed analysis of the 3MF test specification. May relate to texture path validation or property group combinations.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
       "test_case_id": "2202_01",
       "suites": [
         "suite9_core_ext"
