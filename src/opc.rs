@@ -261,7 +261,17 @@ impl<R: Read + std::io::Seek> Package<R> {
         // The 3MF spec expects model files to be named "3dmodel.model" or similar with
         // ASCII characters. We reject files that try to masquerade as standard model files
         // by using non-ASCII lookalike characters (e.g., Cyrillic letters that look like Latin).
+        // N_SPX_0415_01: Also reject filenames with dot prefix (e.g., ".3dmodel.model")
         if let Some((_dir, filename)) = model_path.rsplit_once('/') {
+            // Check for dot prefix (hidden file)
+            if filename.starts_with('.') {
+                return Err(Error::InvalidFormat(format!(
+                    "Model filename '{}' starts with a dot (hidden file). \
+                     The 3MF specification requires standard naming for model files without dot prefix.",
+                    filename
+                )));
+            }
+
             if filename.contains("3dmodel") {
                 // If the filename contains "3dmodel", check that any prefix uses ASCII
                 // This catches cases like "Ԫ3dmodel.model" (Cyrillic character before "3dmodel")

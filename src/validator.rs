@@ -2218,8 +2218,32 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
 fn validate_slices(model: &Model) -> Result<()> {
     // Validate all slice stacks in resources
     for slice_stack in &model.resources.slice_stacks {
-        // Validate inline slices within the slice stack
+        // N_SPX_1606_01: Validate ztop values are >= zbottom
+        // N_SPX_1607_01: Validate ztop values are strictly increasing
+        let mut prev_ztop: Option<f64> = None;
+
         for (slice_idx, slice) in slice_stack.slices.iter().enumerate() {
+            // Check ztop >= zbottom
+            if slice.ztop < slice_stack.zbottom {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: Slice {} has ztop={} which is less than zbottom={}.\n\
+                     Per 3MF Slice Extension spec, each slice's ztop must be >= the slicestack's zbottom.",
+                    slice_stack.id, slice_idx, slice.ztop, slice_stack.zbottom
+                )));
+            }
+
+            // Check ztop values are strictly increasing
+            if let Some(prev) = prev_ztop {
+                if slice.ztop <= prev {
+                    return Err(Error::InvalidModel(format!(
+                        "SliceStack {}: Slice {} has ztop={} which is not greater than the previous slice's ztop={}.\n\
+                         Per 3MF Slice Extension spec, ztop values must be strictly increasing within a slicestack.",
+                        slice_stack.id, slice_idx, slice.ztop, prev
+                    )));
+                }
+            }
+            prev_ztop = Some(slice.ztop);
+
             validate_slice(slice_stack.id, slice_idx, slice)?;
         }
     }
@@ -2251,26 +2275,12 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
             )));
         }
 
-        // Validate each sliceref
-        for sliceref in &stack.slice_refs {
-            // Rule: SliceRef slicepath must be in /2D/ folder
-            // Per spec: "For package readability and organization, slice models SHOULD be stored
-            // in the 2D folder UNLESS they are part of the root model part."
-            // We enforce this as a MUST for external slice files to catch common packaging errors.
-            if !sliceref.slicepath.starts_with("/2D/") {
-                return Err(Error::InvalidModel(format!(
-                    "SliceStack {}: SliceRef references invalid path '{}'.\n\
-                     Per 3MF Slice Extension spec, external slice models must be stored in the /2D/ folder. \
-                     Slicepath must start with '/2D/'.",
-                    stack.id, sliceref.slicepath
-                )));
-            }
-
-            // Note: We cannot validate that the referenced slicestack exists in the external file
-            // because the external file may not be loaded. We only validate the path format here.
-            // However, per 3MF spec, the slicestackid in SliceRef should reference a valid slicestack.
-            // We rely on the consumer of the 3MF file to load and validate external files.
-        }
+        // Note: SliceRef validation happens during loading in parser.rs::load_slice_references()
+        // because slice_refs are cleared after loading external files are resolved.
+        // Validation performed during loading includes:
+        // - SliceRef slicepath must start with "/2D/"
+        // - Referenced slicestackid must exist in external file
+        // - SliceStack cannot contain both <slice> and <sliceref> elements (mixed elements)
     }
 
     // Build a set of valid slicestack IDs for reference validation
@@ -2407,7 +2417,22 @@ fn validate_slice(
             )));
         }
 
-        // Validate segment v2 indices
+        // N_SPX_1609_01: Validate polygon has at least 2 segments (not a single point)
+        // A valid polygon needs at least 2 segments to form a shape
+        if polygon.segments.len() < 2 {
+            return Err(Error::InvalidModel(format!(
+                "SliceStack {}: Slice {} (ztop={}), Polygon {} has only {} segment(s).\n\
+                 Per 3MF Slice Extension spec, a polygon must have at least 2 segments to form a valid shape.",
+                slice_stack_id,
+                slice_idx,
+                slice.ztop,
+                poly_idx,
+                polygon.segments.len()
+            )));
+        }
+
+        // Validate segment v2 indices and check for duplicates
+        let mut prev_v2: Option<usize> = None;
         for (seg_idx, segment) in polygon.segments.iter().enumerate() {
             if segment.v2 >= num_vertices {
                 return Err(Error::InvalidModel(format!(
@@ -2422,6 +2447,41 @@ fn validate_slice(
                     segment.v2,
                     num_vertices,
                     num_vertices - 1
+                )));
+            }
+
+            // N_SPX_1608_01: Check for duplicate v2 in consecutive segments
+            if let Some(prev) = prev_v2 {
+                if segment.v2 == prev {
+                    return Err(Error::InvalidModel(format!(
+                        "SliceStack {}: Slice {} (ztop={}), Polygon {}, Segments {} and {} have the same v2={}.\n\
+                         Per 3MF Slice Extension spec, consecutive segments cannot reference the same vertex.",
+                        slice_stack_id,
+                        slice_idx,
+                        slice.ztop,
+                        poly_idx,
+                        seg_idx - 1,
+                        seg_idx,
+                        segment.v2
+                    )));
+                }
+            }
+            prev_v2 = Some(segment.v2);
+        }
+
+        // N_SPX_1609_02: Validate polygon is closed (last segment v2 == startv)
+        if let Some(last_segment) = polygon.segments.last() {
+            if last_segment.v2 != polygon.startv {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: Slice {} (ztop={}), Polygon {} is not closed.\n\
+                     Last segment v2={} does not equal startv={}.\n\
+                     Per 3MF Slice Extension spec, polygons must be closed (last segment must connect back to start vertex).",
+                    slice_stack_id,
+                    slice_idx,
+                    slice.ztop,
+                    poly_idx,
+                    last_segment.v2,
+                    polygon.startv
                 )));
             }
         }
@@ -3487,6 +3547,12 @@ fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
 
     for multi in &model.resources.multi_properties {
         check_property_id(multi.id, "MultiProperties")?;
+    }
+
+    // Check slice stack IDs (Slice Extension)
+    // Slicestacks are extension resources but share the property resource ID namespace
+    for slice_stack in &model.resources.slice_stacks {
+        check_property_id(slice_stack.id, "SliceStack")?;
     }
 
     Ok(())
