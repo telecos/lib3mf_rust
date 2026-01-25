@@ -93,22 +93,21 @@ fn test_expected_failures_json_valid() {
     // Validate each entry has required fields
     for failure in failures {
         // New format requires test_case_id and suites
-        let has_test_case_id = failure.get("test_case_id")
+        let has_test_case_id = failure
+            .get("test_case_id")
             .and_then(|v| v.as_str())
             .map(|s| !s.is_empty())
             .unwrap_or(false);
-            
+
         if has_test_case_id {
             assert!(
                 failure["suites"].is_array(),
                 "Each failure with test_case_id should have a suites array"
             );
-            let suites_array = failure["suites"].as_array()
+            let suites_array = failure["suites"]
+                .as_array()
                 .expect("suites should be an array if is_array() returned true");
-            assert!(
-                !suites_array.is_empty(),
-                "suites array should not be empty"
-            );
+            assert!(!suites_array.is_empty(), "suites array should not be empty");
         } else {
             // Old format uses file and suite fields
             assert!(
@@ -120,7 +119,7 @@ fn test_expected_failures_json_valid() {
                 "Each old-format failure should have a suite field"
             );
         }
-        
+
         assert!(
             failure["test_type"].is_string(),
             "Each failure should have a test_type field"
@@ -217,16 +216,16 @@ fn test_multi_suite_test_case() {
         manager.is_expected_failure("suite2_core_prod_matl", "N_XPM_0421_01.3mf", "negative"),
         "N_XPM_0421_01.3mf should be marked as expected failure in suite2"
     );
-    
+
     assert!(
         manager.is_expected_failure("suite3_core", "N_XXX_0421_01.3mf", "negative"),
         "N_XXX_0421_01.3mf should be marked as expected failure in suite3"
     );
-    
+
     // Both should have the same reason
     let reason_suite2 = manager.get_reason("suite2_core_prod_matl", "N_XPM_0421_01.3mf");
     let reason_suite3 = manager.get_reason("suite3_core", "N_XXX_0421_01.3mf");
-    
+
     assert!(reason_suite2.is_some(), "suite2 should have a reason");
     assert!(reason_suite3.is_some(), "suite3 should have a reason");
     assert_eq!(
@@ -247,7 +246,7 @@ fn test_multi_suite_test_case_0326_03() {
         ("suite5_core_prod", "P_XPX_0326_03.3mf"),
         ("suite6_core_matl", "P_XXM_0326_03.3mf"),
     ];
-    
+
     for (suite, filename) in test_cases {
         assert!(
             manager.is_expected_failure(suite, filename, "positive"),
@@ -255,7 +254,7 @@ fn test_multi_suite_test_case_0326_03() {
             filename,
             suite
         );
-        
+
         let reason = manager.get_reason(suite, filename);
         assert!(
             reason.is_some(),
@@ -263,7 +262,7 @@ fn test_multi_suite_test_case_0326_03() {
             filename,
             suite
         );
-        
+
         let reason_text = reason.unwrap();
         assert!(
             reason_text.contains("zero determinant"),
@@ -277,7 +276,7 @@ fn test_multi_suite_test_case_0326_03() {
 fn test_test_case_id_extraction() {
     // Test the internal test case ID extraction logic indirectly
     let manager = ExpectedFailuresManager::load();
-    
+
     // These should all match because they have the same test case ID
     assert!(
         manager.is_expected_failure("suite2_core_prod_matl", "N_XPM_0421_01.3mf", "negative"),
@@ -287,13 +286,13 @@ fn test_test_case_id_extraction() {
         manager.is_expected_failure("suite3_core", "N_XXX_0421_01.3mf", "negative"),
         "Should match N_XXX_0421_01.3mf"
     );
-    
+
     // These should not match (wrong suite)
     assert!(
         !manager.is_expected_failure("suite1_core_slice_prod", "N_XPM_0421_01.3mf", "negative"),
         "Should not match in wrong suite"
     );
-    
+
     // Test with different prefix lengths shouldn't break
     // (even though these files don't exist in our config)
     assert!(

@@ -70,7 +70,10 @@ pub struct ExpectedFailuresManager {
 impl ExpectedFailuresManager {
     /// Create a pattern key for test case ID matching
     fn make_pattern_key(suite: &str, test_case_id: &str) -> (String, String) {
-        (suite.to_string(), format!("test_case_pattern:{}", test_case_id))
+        (
+            suite.to_string(),
+            format!("test_case_pattern:{}", test_case_id),
+        )
     }
 
     /// Load expected failures from the configuration file
@@ -124,7 +127,7 @@ impl ExpectedFailuresManager {
                     failures.insert(key, failure.clone());
                 }
             }
-            // Old format: single suite and file  
+            // Old format: single suite and file
             else if !failure.suite.is_empty() && !failure.file.is_empty() {
                 let key = (failure.suite.clone(), failure.file.clone());
                 failures.insert(key, failure);
@@ -141,14 +144,14 @@ impl ExpectedFailuresManager {
         // We want to extract the test_case_id part
         let without_ext = filename.strip_suffix(".3mf")?;
         let parts: Vec<&str> = without_ext.split('_').collect();
-        
+
         // Expected format: P/N _ PREFIX _ NNNN _ NN
         // e.g., P_XXX_0420_01 -> parts = ["P", "XXX", "0420", "01"]
         // The test case ID is always the last two parts joined by underscore
         if parts.len() >= 4 {
             // Always use the last two parts for test case ID
             let last_two = format!("{}_{}", parts[parts.len() - 2], parts[parts.len() - 1]);
-            
+
             // Validate that it matches the expected pattern (NNNN_NN)
             // Both parts should be numeric
             if parts[parts.len() - 2].chars().all(|c| c.is_ascii_digit())
@@ -172,7 +175,7 @@ impl ExpectedFailuresManager {
         {
             return failure.test_type == test_type;
         }
-        
+
         // Try pattern match by test case ID (new format)
         if let Some(test_case_id) = Self::extract_test_case_id(filename) {
             let pattern_key = Self::make_pattern_key(suite, &test_case_id);
@@ -180,7 +183,7 @@ impl ExpectedFailuresManager {
                 return failure.test_type == test_type;
             }
         }
-        
+
         false
     }
 
@@ -194,13 +197,13 @@ impl ExpectedFailuresManager {
         {
             return Some(failure);
         }
-        
+
         // Try pattern match by test case ID (new format)
         if let Some(test_case_id) = Self::extract_test_case_id(filename) {
             let pattern_key = Self::make_pattern_key(suite, &test_case_id);
             return self.failures.get(&pattern_key);
         }
-        
+
         None
     }
 
