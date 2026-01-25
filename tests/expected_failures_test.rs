@@ -242,15 +242,24 @@ fn test_multi_suite_test_case() {
     assert!(reason_suite3.is_some(), "suite3 should have a reason");
     assert!(reason_suite5.is_some(), "suite5 should have a reason");
     assert!(reason_suite6.is_some(), "suite6 should have a reason");
-    
+
     let reason2 = reason_suite2.unwrap();
     let reason3 = reason_suite3.unwrap();
     let reason5 = reason_suite5.unwrap();
     let reason6 = reason_suite6.unwrap();
-    
-    assert_eq!(reason2, reason3, "suite2 and suite3 should have the same reason");
-    assert_eq!(reason2, reason5, "suite2 and suite5 should have the same reason");
-    assert_eq!(reason2, reason6, "suite2 and suite6 should have the same reason");
+
+    assert_eq!(
+        reason2, reason3,
+        "suite2 and suite3 should have the same reason"
+    );
+    assert_eq!(
+        reason2, reason5,
+        "suite2 and suite5 should have the same reason"
+    );
+    assert_eq!(
+        reason2, reason6,
+        "suite2 and suite6 should have the same reason"
+    );
 }
 
 #[test]
