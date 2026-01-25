@@ -139,14 +139,6 @@
       "date_added": "2026-01-23"
     },
     {
-      "file": "N_EPX_2606_01.3mf",
-      "suite": "suite8_secure",
-      "test_type": "negative",
-      "reason": "EPX-2606: Missing/Invalid Keystore Elements. According to the 3MF SecureContent specification, encrypted files referenced in the keystore must have a corresponding EncryptedFile relationship in the OPC package. This test file is missing the required EncryptedFile relationship for /3D/3dmodel_encrypted.model. Implementing this validation requires cross-referencing keystore resource paths with OPC package relationships, which is not yet implemented. See issue #162.",
-      "issue_url": "https://github.com/telecos/lib3mf_rust/issues/162",
-      "date_added": "2026-01-23"
-    },
-    {
       "file": "N_EPX_2606_02.3mf",
       "suite": "suite8_secure",
       "test_type": "negative",
