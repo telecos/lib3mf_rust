@@ -48,8 +48,7 @@ pub const ENCRYPTEDFILE_REL_TYPE: &str =
 
 /// 3D Texture relationship type (Materials extension)
 /// Per 3MF Materials Extension spec, texture resources must have this relationship type
-pub const TEXTURE_REL_TYPE: &str =
-    "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dtexture";
+pub const TEXTURE_REL_TYPE: &str = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dtexture";
 
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {
@@ -455,7 +454,8 @@ impl<R: Read + std::io::Seek> Package<R> {
                                 if rels_file.contains("3dmodel.model.rels") {
                                     if let Some(ref t) = target {
                                         let target_lower = t.to_lowercase();
-                                        if (target_lower.ends_with(".png") || target_lower.ends_with(".jpeg") 
+                                        if (target_lower.ends_with(".png")
+                                            || target_lower.ends_with(".jpeg")
                                             || target_lower.ends_with(".jpg"))
                                             && rt == MODEL_REL_TYPE
                                         {

@@ -3721,7 +3721,7 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
             // Track basematerials references
             if base_mat_ids.contains(&pid) {
                 *base_mat_count.entry(pid).or_insert(0) += 1;
-                
+
                 // N_XXM_0604_03: basematerials can only be at layer 0 or 1
                 // Per 3MF Material Extension spec, basematerials must be in the first two layers
                 if idx >= 2 {
@@ -3818,10 +3818,9 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
                 // but no triangle-level pid AND object has no default pid, this is invalid
                 // Per 3MF Material Extension spec, per-vertex properties need a pid context,
                 // either from the triangle itself or from the object's default
-                let has_per_vertex_properties = triangle.p1.is_some() 
-                    || triangle.p2.is_some() 
-                    || triangle.p3.is_some();
-                
+                let has_per_vertex_properties =
+                    triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
+
                 if has_per_vertex_properties && triangle.pid.is_none() && object.pid.is_none() {
                     return Err(Error::InvalidModel(format!(
                         "Triangle in object {} has per-vertex material properties (p1/p2/p3) \
@@ -3832,7 +3831,7 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
                         object.id, object.id
                     )));
                 }
-                
+
                 // Validate triangle pindex is within bounds for multi-properties
                 if let (Some(pid), Some(pindex)) = (triangle.pid, triangle.pindex) {
                     // Check if pid references a multiproperties resource
@@ -4966,10 +4965,7 @@ mod tests {
 
         // Should fail validation (N_XXM_0604_03)
         let result = validate_multiproperties_references(&model);
-        assert!(
-            result.is_err(),
-            "Should reject basematerials at layer >= 2"
-        );
+        assert!(result.is_err(), "Should reject basematerials at layer >= 2");
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("basematerials"));
         assert!(error_msg.contains("layer"));
@@ -4985,12 +4981,12 @@ mod tests {
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
-        
+
         // Triangle with material property but object has no default
         let mut triangle = Triangle::new(0, 1, 2);
         triangle.p1 = Some(0); // Triangle has material property
         mesh.triangles.push(triangle);
-        
+
         object.mesh = Some(mesh);
         model.resources.objects.push(object);
         model.build.items.push(BuildItem::new(1));
@@ -5017,7 +5013,11 @@ mod tests {
         model.resources.texture2d_groups.push(tex_group);
 
         // Add texture2d AFTER texture2dgroup
-        let mut texture = Texture2D::new(20, "/3D/Texture/image.png".to_string(), "image/png".to_string());
+        let mut texture = Texture2D::new(
+            20,
+            "/3D/Texture/image.png".to_string(),
+            "image/png".to_string(),
+        );
         texture.parse_order = 2; // Later in parse order
         model.resources.texture2d_resources.push(texture);
 
@@ -5090,7 +5090,11 @@ mod tests {
         let mut model = Model::new();
 
         // Add texture with backslash in path (invalid per OPC spec)
-        let mut texture = Texture2D::new(10, "/3D\\Texture\\image.png".to_string(), "image/png".to_string());
+        let mut texture = Texture2D::new(
+            10,
+            "/3D\\Texture\\image.png".to_string(),
+            "image/png".to_string(),
+        );
         texture.parse_order = 1;
         model.resources.texture2d_resources.push(texture);
 
@@ -5139,10 +5143,7 @@ mod tests {
 
         // Should fail validation (N_XXM_0610_01)
         let result = validate_texture_paths(&model);
-        assert!(
-            result.is_err(),
-            "Should reject empty texture path"
-        );
+        assert!(result.is_err(), "Should reject empty texture path");
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("empty"));
     }
