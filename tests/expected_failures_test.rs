@@ -93,15 +93,19 @@ fn test_expected_failures_json_valid() {
     // Validate each entry has required fields
     for failure in failures {
         // New format requires test_case_id and suites
-        if failure["test_case_id"].is_string() && !failure["test_case_id"].as_str().unwrap().is_empty() {
-            assert!(
-                failure["suites"].is_array(),
-                "Each failure with test_case_id should have a suites array"
-            );
-            assert!(
-                !failure["suites"].as_array().unwrap().is_empty(),
-                "suites array should not be empty"
-            );
+        if let Some(test_case_id) = failure.get("test_case_id").and_then(|v| v.as_str()) {
+            if !test_case_id.is_empty() {
+                assert!(
+                    failure["suites"].is_array(),
+                    "Each failure with test_case_id should have a suites array"
+                );
+                let suites_array = failure["suites"].as_array()
+                    .expect("suites should be an array if is_array() returned true");
+                assert!(
+                    !suites_array.is_empty(),
+                    "suites array should not be empty"
+                );
+            }
         }
         // Old format uses file and suite fields
         else {
@@ -265,4 +269,33 @@ fn test_multi_suite_test_case_0326_03() {
             filename
         );
     }
+}
+
+#[test]
+fn test_test_case_id_extraction() {
+    // Test the internal test case ID extraction logic indirectly
+    let manager = ExpectedFailuresManager::load();
+    
+    // These should all match because they have the same test case ID
+    assert!(
+        manager.is_expected_failure("suite2_core_prod_matl", "N_XPM_0421_01.3mf", "negative"),
+        "Should match N_XPM_0421_01.3mf"
+    );
+    assert!(
+        manager.is_expected_failure("suite3_core", "N_XXX_0421_01.3mf", "negative"),
+        "Should match N_XXX_0421_01.3mf"
+    );
+    
+    // These should not match (wrong suite)
+    assert!(
+        !manager.is_expected_failure("suite1_core_slice_prod", "N_XPM_0421_01.3mf", "negative"),
+        "Should not match in wrong suite"
+    );
+    
+    // Test with different prefix lengths shouldn't break
+    // (even though these files don't exist in our config)
+    assert!(
+        !manager.is_expected_failure("suite3_core", "N_EXTRA_LONG_0999_99.3mf", "negative"),
+        "Should handle longer prefixes gracefully"
+    );
 }

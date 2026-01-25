@@ -140,9 +140,20 @@ impl ExpectedFailuresManager {
         
         // Expected format: P/N _ PREFIX _ NNNN _ NN
         // e.g., P_XXX_0420_01 -> parts = ["P", "XXX", "0420", "01"]
+        // The test case ID is always the last two parts joined by underscore
         if parts.len() >= 4 {
-            // Join last two parts for test case ID
-            Some(format!("{}_{}", parts[parts.len() - 2], parts[parts.len() - 1]))
+            // Always use the last two parts for test case ID
+            let last_two = format!("{}_{}", parts[parts.len() - 2], parts[parts.len() - 1]);
+            
+            // Validate that it matches the expected pattern (NNNN_NN)
+            // Both parts should be numeric
+            if parts[parts.len() - 2].chars().all(|c| c.is_ascii_digit())
+                && parts[parts.len() - 1].chars().all(|c| c.is_ascii_digit())
+            {
+                Some(last_two)
+            } else {
+                None
+            }
         } else {
             None
         }
