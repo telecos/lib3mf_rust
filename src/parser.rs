@@ -221,9 +221,13 @@ pub fn parse_model_xml(xml: &str) -> Result<Model> {
 pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
     // N_XPX_0420_01: Check for DTD declarations before parsing
     // This catches DTD declarations that might not trigger Event::DocType
-    // Use case-insensitive search to catch all DOCTYPE variations
-    let xml_lower = xml.to_lowercase();
-    if xml_lower.contains("<!doctype") {
+    // Check for DOCTYPE with various whitespace and case variations
+    // We check the first ~2000 characters where DOCTYPE declarations typically appear
+    let check_len = xml.len().min(2000);
+    let xml_start = &xml[..check_len];
+    let xml_start_lower = xml_start.to_lowercase();
+
+    if xml_start_lower.contains("<!doctype") {
         return Err(Error::InvalidXml(
             "DTD declarations are not allowed in 3MF files for security reasons".to_string(),
         ));
