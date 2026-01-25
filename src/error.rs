@@ -251,6 +251,25 @@ pub enum Error {
     #[error("[E3001] Invalid model: {0}")]
     InvalidModel(String),
 
+    /// Geometry placed outside the positive octant
+    ///
+    /// **Error Code**: E3003
+    ///
+    /// **Common Causes**:
+    /// - Build item transforms place mesh vertices with negative coordinates
+    /// - Object positioned below build plate (negative Z)
+    /// - Object positioned with negative X or Y coordinates
+    ///
+    /// **Suggestions**:
+    /// - Per 3MF spec, all coordinates must be non-negative (>= 0)
+    /// - Adjust build item transforms to ensure all geometry is in positive octant
+    /// - Check that final transformed coordinates (after applying transforms) are >= 0
+    ///
+    /// **Details**:
+    /// Object ID: {0}, Min coordinates: ({1:.2}, {2:.2}, {3:.2})
+    #[error("[E3003] Geometry outside positive octant - Object {0}: Min coordinates ({1:.2}, {2:.2}, {3:.2}), all coordinates must be >= 0")]
+    OutsidePositiveOctant(usize, f64, f64, f64),
+
     /// Parse error for numeric values
     ///
     /// **Error Code**: E3002
@@ -350,6 +369,29 @@ impl From<quick_xml::events::attributes::AttrError> for Error {
 }
 
 impl Error {
+    /// Get the error type as a string for matching against expected failures
+    ///
+    /// This returns a stable identifier for the error variant, useful for
+    /// testing and validation purposes.
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            Error::Io(_) => "Io",
+            Error::Zip(_) => "Zip",
+            Error::Xml(_) => "Xml",
+            Error::XmlAttr(_) => "XmlAttr",
+            Error::MissingFile(_) => "MissingFile",
+            Error::InvalidFormat(_) => "InvalidFormat",
+            Error::InvalidXml(_) => "InvalidXml",
+            Error::InvalidModel(_) => "InvalidModel",
+            Error::OutsidePositiveOctant(_, _, _, _) => "OutsidePositiveOctant",
+            Error::ParseError(_) => "ParseError",
+            Error::Unsupported(_) => "Unsupported",
+            Error::UnsupportedExtension(_) => "UnsupportedExtension",
+            Error::InvalidSecureContent(_) => "InvalidSecureContent",
+            Error::XmlWrite(_) => "XmlWrite",
+        }
+    }
+
     /// Create an InvalidXml error with element context
     ///
     /// # Arguments

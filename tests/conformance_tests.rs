@@ -70,15 +70,37 @@ fn test_positive_case(
         }
         Err(e) => {
             if expected_failures.is_expected_failure(suite, filename, "positive") {
-                // This is an expected failure, so we report it as success
-                // but print a message for documentation
-                println!(
-                    "  ✓ Expected failure: {} - Reason: {}",
-                    filename,
-                    expected_failures
-                        .get_reason(suite, filename)
-                        .unwrap_or_else(|| "No reason provided".to_string())
-                );
+                // This is an expected failure, validate the error type if specified
+                if let Some(expected_type) =
+                    expected_failures.get_expected_error_type(suite, filename)
+                {
+                    let actual_type = e.error_type();
+                    if actual_type != expected_type {
+                        return Err(format!(
+                            "File {} failed with wrong error type. Expected: {}, Actual: {}. Error: {}",
+                            path.display(),
+                            expected_type,
+                            actual_type,
+                            e
+                        ));
+                    }
+                    println!(
+                        "  ✓ Expected failure: {} - Error type: {} - Reason: {}",
+                        filename,
+                        actual_type,
+                        expected_failures
+                            .get_reason(suite, filename)
+                            .unwrap_or_else(|| "No reason provided".to_string())
+                    );
+                } else {
+                    println!(
+                        "  ✓ Expected failure: {} - Reason: {}",
+                        filename,
+                        expected_failures
+                            .get_reason(suite, filename)
+                            .unwrap_or_else(|| "No reason provided".to_string())
+                    );
+                }
                 Ok(())
             } else {
                 Err(format!("Failed to parse {}: {}", path.display(), e))

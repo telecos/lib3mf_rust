@@ -33,6 +33,11 @@ pub struct ExpectedFailure {
 
     /// Date when this expected failure was added (YYYY-MM-DD)
     pub date_added: String,
+
+    /// Optional expected error type (e.g., "OutsidePositiveOctant", "InvalidFormat")
+    /// When specified, the test will validate that the actual error matches this type
+    #[serde(default)]
+    pub expected_error_type: Option<String>,
 }
 
 /// Container for all expected failures
@@ -120,6 +125,13 @@ impl ExpectedFailuresManager {
     #[allow(dead_code)]
     pub fn get_reason(&self, suite: &str, filename: &str) -> Option<String> {
         self.get_failure(suite, filename).map(|f| f.reason.clone())
+    }
+
+    /// Get the expected error type for an expected failure
+    #[allow(dead_code)]
+    pub fn get_expected_error_type(&self, suite: &str, filename: &str) -> Option<String> {
+        self.get_failure(suite, filename)
+            .and_then(|f| f.expected_error_type.clone())
     }
 }
 
