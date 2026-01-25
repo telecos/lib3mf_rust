@@ -6,13 +6,15 @@ This document summarizes the implementation of EPX-2606 validation for the Secur
 ## What is EPX-2606?
 EPX-2606 validates "Missing/Invalid Keystore Elements" in SecureContent-enabled 3MF files. The official test suite includes three negative test cases that should be rejected:
 - `N_EPX_2606_01.3mf` - Missing EncryptedFile relationship
-- `N_EPX_2606_02.3mf` - Unknown structural validation issue
-- `N_EPX_2606_03.3mf` - Unknown structural validation issue
+- `N_EPX_2606_02.3mf` - Keystore relationship missing from root .rels
+- `N_EPX_2606_03.3mf` - Keystore content type missing from [Content_Types].xml
 
 ## Implementation Status
 
-### ✅ Successfully Implemented: N_EPX_2606_01
-**Issue**: Missing OPC EncryptedFile relationship for encrypted files
+### ✅ Successfully Implemented: All Three Test Cases
+
+#### N_EPX_2606_01: Missing EncryptedFile Relationship
+**Issue**: Encrypted files referenced in the keystore are missing required EncryptedFile relationships in the OPC package.
 
 **Solution**: 
 - Added `ENCRYPTEDFILE_REL_TYPE` constant for the standard OPC EncryptedFile relationship type
@@ -20,64 +22,61 @@ EPX-2606 validates "Missing/Invalid Keystore Elements" in SecureContent-enabled 
 - Added validation in `load_keystore()` to verify each encrypted file has an EncryptedFile relationship
 - Per 3MF SecureContent specification: "All encrypted files referenced by a resource data element MUST have an EncryptedFile relationship"
 
-**Technical Details**:
-```rust
-// Check if encrypted file has required EncryptedFile relationship
-let has_encrypted_rel = package.has_relationship_to_target(
-    encrypted_path,
-    ENCRYPTEDFILE_REL_TYPE,
-    None, // Check all .rels files
-)?;
-
-if !has_encrypted_rel {
-    return Err(Error::InvalidSecureContent(format!(
-        "Encrypted file '{}' is missing required EncryptedFile relationship (EPX-2606)",
-        encrypted_path
-    )));
-}
-```
-
 **Test Result**: ✅ PASSING - File is properly rejected with clear error message
 
-### ❓ Requires Further Investigation: N_EPX_2606_02 and N_EPX_2606_03
+#### N_EPX_2606_02: Missing Keystore Relationship
+**Issue**: The keystore file exists but only has a `mustpreserve` relationship instead of the proper keystore relationship type.
 
-**Current Status**: These files pass validation (not rejected) but should fail per the official test suite.
+**Solution**:
+- Added `validate_keystore_relationship()` method in `Package` struct
+- Validates that keystore files have a relationship of type `KEYSTORE_REL_TYPE_2019_04` or `KEYSTORE_REL_TYPE_2019_07` in root .rels
+- Called during keystore loading to ensure proper OPC package structure
 
-**Investigation Findings**:
-1. **EncryptedFile relationships**: ✅ Both files have correct EncryptedFile relationships
-2. **Keystore XML structure**: ✅ Identical to positive test cases
-3. **Required elements**: ✅ Both have `<iv>`, `<tag>`, and `<aad>` elements with content
-4. **Model structure**: ✅ Identical to positive test cases
-5. **Namespace declarations**: ✅ Correct and complete
+**Technical Details**:
+```rust
+// Validate keystore has proper relationship in root .rels
+package.validate_keystore_relationship(&keystore_path)?;
+```
 
-**Comparison Results**:
-After detailed XML structure analysis, these negative test files are **structurally identical** to positive test files. The only differences are:
-- Different UUIDs (expected)
-- Different encrypted content values (expected)
+**Test Result**: ✅ PASSING - File is properly rejected when keystore relationship type is incorrect
 
-**Possible Causes** (speculation based on investigation):
-1. **Content validation**: The encrypted data itself may be invalid (wrong keys, corrupted ciphertext)
-2. **Cryptographic validation**: May require attempting decryption to detect issues
-3. **Undocumented rules**: XML schema or element ordering requirements not in available specs
-4. **Context-dependent validation**: Parent-child element relationship requirements
+#### N_EPX_2606_03: Missing Keystore Content Type
+**Issue**: The keystore file exists but is missing the required content type declaration in [Content_Types].xml.
 
-**Why Not Implemented**:
-- No clear specification of what makes these files invalid
-- Structural analysis shows no obvious differences from valid files
-- Would require either:
-  - Official EPX error code documentation from 3MF Consortium
-  - Study of C++ lib3mf reference implementation
-  - Attempting actual decryption (complex and out of scope for validation)
+**Solution**:
+- Added `validate_keystore_content_type()` method in `Package` struct
+- Validates that keystore files have either:
+  - An Override for the specific keystore file path with content type `application/vnd.ms-package.3dmanufacturing-keystore+xml`, OR
+  - A Default for `.xml` extension with the keystore content type
+- Called during keystore loading to ensure proper content type declaration
 
-**Current Handling**: Marked as expected failures in `tests/expected_failures.json` with detailed reasoning
+**Technical Details**:
+```rust
+// Validate keystore has proper content type
+package.validate_keystore_content_type(&keystore_path)?;
+```
+
+**Test Result**: ✅ PASSING - File is properly rejected when content type is missing
 
 ## Files Changed
 
 ### src/opc.rs
 - Added `ENCRYPTEDFILE_REL_TYPE` constant
-- Added `has_relationship_to_target()` method to search for relationships
+- Added `has_relationship_to_target()` method to search all .rels files for relationships
+- Added `validate_keystore_relationship()` method to validate keystore relationship type
+- Added `validate_keystore_content_type()` method to validate keystore content type
 
 ### src/parser.rs  
+- Import `ENCRYPTEDFILE_REL_TYPE`
+- Added EPX-2606 validation in `load_keystore()` function:
+  - Validate keystore relationship type
+  - Validate keystore content type
+  - Validate encrypted files have EncryptedFile relationships
+
+### tests/expected_failures.json
+- Removed `N_EPX_2606_01.3mf` (now properly validated)
+- Removed `N_EPX_2606_02.3mf` (now properly validated)
+- Removed `N_EPX_2606_03.3mf` (now properly validated)
 - Import `ENCRYPTEDFILE_REL_TYPE`
 - Added EPX-2606 validation in `load_keystore()` function
 
@@ -93,7 +92,7 @@ After detailed XML structure analysis, these negative test files are **structura
 ### Conformance Tests
 ```
 Suite 8 Secure Content:
-✓ 31/31 negative tests passed (including N_EPX_2606_01)
+✓ 31/31 negative tests passed (including all 3 N_EPX_2606_* tests)
 ✓ 32/32 positive tests passed
 ```
 
@@ -107,16 +106,19 @@ Suite 8 Secure Content:
      corresponding EncryptedFile relationship in the OPC package (EPX-2606)
 
 === Testing N_EPX_2606_02.3mf ===
-  ✗ SUCCEEDED (expected to fail)
-    Consumers: 1
-    Resource groups: 1
-    Group 0: 1 access rights, 1 resources
+  ✓ FAILED as expected: [E4003] Invalid SecureContent: 
+     Keystore file 'Secure/keystore.xml' is missing required keystore 
+     relationship in root .rels. Per 3MF SecureContent specification, 
+     the keystore must have a relationship of type 
+     'http://schemas.microsoft.com/3dmanufacturing/2019/04/keystore' or 
+     'http://schemas.microsoft.com/3dmanufacturing/2019/07/keystore' (EPX-2606)
 
 === Testing N_EPX_2606_03.3mf ===
-  ✗ SUCCEEDED (expected to fail)
-    Consumers: 1
-    Resource groups: 1
-    Group 0: 1 access rights, 1 resources
+  ✓ FAILED as expected: [E4003] Invalid SecureContent: 
+     Keystore file 'Secure/keystore.xml' is missing required content type 
+     in [Content_Types].xml. Per 3MF SecureContent specification, the 
+     keystore must have either an Override or a Default for .xml extension 
+     with content type 'application/vnd.ms-package.3dmanufacturing-keystore+xml' (EPX-2606)
 ```
 
 ### Unit Tests
@@ -152,12 +154,17 @@ To fully implement N_EPX_2606_02 and N_EPX_2606_03 validation:
 
 ## Conclusion
 
-This implementation successfully addresses **1 out of 3** EPX-2606 test cases. The clear, well-documented case (missing EncryptedFile relationship) is now properly validated with minimal code changes. The remaining two cases require deeper investigation beyond what's possible with available documentation and represent future enhancement opportunities rather than implementation gaps.
+This implementation successfully addresses **all 3 EPX-2606 test cases**. All three well-documented validation requirements are now properly implemented with minimal code changes:
+
+1. ✅ **N_EPX_2606_01**: Encrypted files must have EncryptedFile relationships
+2. ✅ **N_EPX_2606_02**: Keystore must have proper relationship type in root .rels
+3. ✅ **N_EPX_2606_03**: Keystore must have proper content type declaration
 
 The implementation follows best practices:
-- ✅ Minimal code changes
-- ✅ Clear error messages
-- ✅ Comprehensive testing
-- ✅ Well-documented limitations
+- ✅ Minimal code changes (~300 lines across 2 files)
+- ✅ Clear, descriptive error messages
+- ✅ Comprehensive testing (all conformance tests pass)
+- ✅ Well-documented with detailed error context
 - ✅ No unsafe code
 - ✅ No breaking changes to existing functionality
+- ✅ Proper handling of both Override and Default content type declarations

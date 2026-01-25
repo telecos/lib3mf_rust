@@ -1926,6 +1926,16 @@ fn load_keystore<R: Read + std::io::Seek>(
         }
     };
 
+    // EPX-2606: Validate keystore has proper relationship in root .rels
+    // This catches cases where the keystore file exists but only has a mustpreserve
+    // relationship instead of the proper keystore relationship type
+    package.validate_keystore_relationship(&keystore_path)?;
+
+    // EPX-2606: Validate keystore has proper content type override
+    // This catches cases where the keystore file exists but is missing the
+    // required content type declaration in [Content_Types].xml
+    package.validate_keystore_content_type(&keystore_path)?;
+
     // Load the keystore file
     // Use get_file_binary() to handle files that may contain encrypted/binary data
     let keystore_bytes = package.get_file_binary(&keystore_path)?;
@@ -2431,7 +2441,7 @@ fn load_keystore<R: Read + std::io::Seek>(
         for group in &sc.resource_data_groups {
             for resource_data in &group.resource_data {
                 let encrypted_path = &resource_data.path;
-                
+
                 // Check if this encrypted file has an EncryptedFile relationship
                 // We don't specify a source file since the relationship could be in any .rels file
                 let has_encrypted_rel = package.has_relationship_to_target(
@@ -2439,7 +2449,7 @@ fn load_keystore<R: Read + std::io::Seek>(
                     ENCRYPTEDFILE_REL_TYPE,
                     None,
                 )?;
-                
+
                 if !has_encrypted_rel {
                     return Err(Error::InvalidSecureContent(format!(
                         "Encrypted file '{}' is missing required EncryptedFile relationship. \
