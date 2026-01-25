@@ -2578,7 +2578,9 @@ fn load_slice_references<R: Read + std::io::Seek>(
             // Per 3MF Slice Extension spec: "For package readability and organization, 
             // slice models SHOULD be stored in the 2D folder UNLESS they are part of 
             // the root model part."
-            // We enforce this as a MUST for all external slice files to catch packaging errors.
+            // We enforce this as a MUST for SliceRef elements (external slice references) 
+            // to catch packaging errors. SliceRef elements by definition reference external 
+            // files and must use the /2D/ folder per spec conventions.
             if !slice_ref.slicepath.starts_with("/2D/") {
                 return Err(Error::InvalidModel(format!(
                     "SliceStack {}: SliceRef references invalid path '{}'.\n\

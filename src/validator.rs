@@ -2252,9 +2252,11 @@ fn validate_slice_extension(model: &Model) -> Result<()> {
         }
 
         // Note: SliceRef validation happens during loading in parser.rs::load_slice_references()
-        // because slice_refs are cleared after loading. Validation includes:
+        // because slice_refs are cleared after loading external files are resolved.
+        // Validation performed during loading includes:
         // - SliceRef slicepath must start with "/2D/"
         // - Referenced slicestackid must exist in external file
+        // - SliceStack cannot contain both <slice> and <sliceref> elements (mixed elements)
     }
 
     // Build a set of valid slicestack IDs for reference validation
