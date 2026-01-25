@@ -3473,6 +3473,12 @@ fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
         check_property_id(multi.id, "MultiProperties")?;
     }
 
+    // Check slice stack IDs (Slice Extension)
+    // Slicestacks are extension resources but share the property resource ID namespace
+    for slice_stack in &model.resources.slice_stacks {
+        check_property_id(slice_stack.id, "SliceStack")?;
+    }
+
     Ok(())
 }
 
