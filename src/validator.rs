@@ -1925,30 +1925,78 @@ fn validate_displacement_extension(model: &Model) -> Result<()> {
                 }
             }
 
-            // Check for manifold mesh - each edge should be shared by exactly 2 triangles
-            // Build edge map: edge -> count
-            let mut edge_count: HashMap<(usize, usize), usize> = HashMap::new();
-            for triangle in &disp_mesh.triangles {
-                // Add all three edges (use sorted indices for undirected edges)
+            // Check for manifold mesh and consistent triangle orientation (DPX 3314_05, 3314_06)
+            // For a properly oriented closed mesh:
+            // - Each edge should be shared by exactly 2 triangles (manifold property)
+            // - The two triangles should traverse the edge in opposite directions (consistent winding)
+            // Build edge map: directed_edge -> count
+            let mut edge_to_triangles: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+            for (tri_idx, triangle) in disp_mesh.triangles.iter().enumerate() {
+                // Add all three directed edges (v1->v2, v2->v3, v3->v1)
                 let edges = [
-                    (triangle.v1.min(triangle.v2), triangle.v1.max(triangle.v2)),
-                    (triangle.v2.min(triangle.v3), triangle.v2.max(triangle.v3)),
-                    (triangle.v3.min(triangle.v1), triangle.v3.max(triangle.v1)),
+                    (triangle.v1, triangle.v2),
+                    (triangle.v2, triangle.v3),
+                    (triangle.v3, triangle.v1),
                 ];
                 for edge in &edges {
-                    *edge_count.entry(*edge).or_insert(0) += 1;
+                    edge_to_triangles.entry(*edge).or_default().push(tri_idx);
                 }
             }
 
-            // Check for non-manifold edges (shared by != 2 triangles)
-            for (edge, count) in &edge_count {
-                if *count != 2 {
-                    return Err(Error::InvalidModel(format!(
-                        "Object {}: Displacement mesh is non-manifold. \
-                         Edge between vertices {} and {} is used by {} triangles (should be exactly 2).\n\
-                         Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
-                        object.id, edge.0, edge.1, count
-                    )));
+            // Check for consistent edge orientation and manifold property
+            // For each directed edge, check if its reverse also exists with exactly one triangle
+            let mut checked_edges = HashSet::new();
+            for ((v1, v2), tris) in &edge_to_triangles {
+                if checked_edges.contains(&(*v1, *v2)) {
+                    continue;
+                }
+                checked_edges.insert((*v1, *v2));
+                checked_edges.insert((*v2, *v1));
+
+                let reverse_edge = (*v2, *v1);
+                let reverse_tris = edge_to_triangles.get(&reverse_edge);
+
+                match (tris.len(), reverse_tris) {
+                    (1, Some(rev_tris)) if rev_tris.len() == 1 => {
+                        // Perfect: edge traversed once in each direction - consistent orientation
+                    }
+                    (1, None) => {
+                        // Edge only traversed in one direction - boundary edge (non-manifold)
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Displacement mesh is non-manifold. \
+                             Edge from vertex {} to vertex {} is only used by one triangle (should be two).\n\
+                             Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
+                            object.id, v1, v2
+                        )));
+                    }
+                    (1, Some(rev_tris)) if rev_tris.len() > 1 => {
+                        // Reverse edge used by multiple triangles - non-manifold
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Displacement mesh is non-manifold. \
+                             Edge between vertices {} and {} is used by {} triangles (should be exactly 2).\n\
+                             Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
+                            object.id, v1.min(v2), v1.max(v2), tris.len() + rev_tris.len()
+                        )));
+                    }
+                    (count, _) if count > 1 => {
+                        // DPX 3314_05: Edge traversed multiple times in the same direction
+                        // This indicates reversed/inconsistent triangle winding
+                        // In a properly oriented mesh, each directed edge should appear exactly once
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Displacement mesh has inconsistent triangle winding.\n\
+                             Edge from vertex {} to vertex {} is traversed {} times in the same direction.\n\
+                             This indicates some triangles have reversed vertex order (normals pointing inward).\n\
+                             Hint: Check triangle vertex winding order - vertices should be ordered counter-clockwise when viewed from outside.",
+                            object.id, v1, v2, count
+                        )));
+                    }
+                    _ => {
+                        // Should not reach here
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Displacement mesh has an unexpected edge configuration for vertices {} and {}.",
+                            object.id, v1, v2
+                        )));
+                    }
                 }
             }
 
