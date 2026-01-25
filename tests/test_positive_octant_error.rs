@@ -1,4 +1,7 @@
-//! Test to verify OutsidePositiveOctant error is properly detected
+//! Test to verify that negative coordinates are allowed in 3MF files
+//!
+//! The 3MF specification allows negative coordinates in build transforms for centering objects.
+//! This test verifies that files with negative coordinates parse successfully.
 
 use lib3mf::{Error, Model, ParserConfig};
 use std::io::Write;
@@ -85,12 +88,12 @@ fn create_3mf_with_transform(transform: [f64; 12]) -> Result<Vec<u8>, Box<dyn st
 }
 
 #[test]
-fn test_outside_positive_octant_error_detection() {
-    // Create a transform that moves object to negative Y (outside positive octant)
-    // Identity matrix except for Y translation = -5
+fn test_negative_coordinates_allowed() {
+    // Create a transform that moves object to negative Y
+    // This is allowed per 3MF spec for centering objects
     let transform_negative_y = [
         1.0, 0.0, 0.0, 0.0, // X translation = 0
-        0.0, 1.0, 0.0, -5.0, // Y translation = -5
+        0.0, 1.0, 0.0, -5.0, // Y translation = -5 (negative is OK)
         0.0, 0.0, 1.0, 0.0, // Z translation = 0
     ];
 
@@ -101,31 +104,12 @@ fn test_outside_positive_octant_error_detection() {
     let result =
         Model::from_reader_with_config(std::io::Cursor::new(&buffer), ParserConfig::default());
 
-    // Should fail with OutsidePositiveOctant error
-    match result {
-        Err(e) => {
-            let error_type = e.error_type();
-            assert_eq!(
-                error_type, "OutsidePositiveOctant",
-                "Expected OutsidePositiveOctant error, got: {} (type: {})",
-                e, error_type
-            );
-
-            // Verify the error message contains relevant information
-            let error_msg = format!("{}", e);
-            assert!(
-                error_msg.contains("E3003"),
-                "Error should contain error code E3003"
-            );
-            assert!(
-                error_msg.contains("Object 1"),
-                "Error should mention the object ID"
-            );
-        }
-        Ok(_) => {
-            panic!("Expected parsing to fail with OutsidePositiveOctant error, but it succeeded");
-        }
-    }
+    // Should succeed - negative coordinates are allowed
+    assert!(
+        result.is_ok(),
+        "Expected parsing to succeed for object with negative coordinates, but got error: {:?}",
+        result.err()
+    );
 }
 
 #[test]

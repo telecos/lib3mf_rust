@@ -25,24 +25,6 @@
       "date_added": "2026-01-23"
     },
     {
-      "file": "P_BXX_2015_03.3mf",
-      "suite": "suite7_beam",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Build item transform for object 2 places the mesh outside the positive octant with min Y coordinate of -1.00. Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-23",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_SXX_0340_02.3mf",
-      "suite": "suite4_core_slice",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Build item transform for object 2 places the mesh outside the positive octant with min X coordinate of -100.00. Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
       "file": "N_XXX_0418_01.3mf",
       "suite": "suite3_core",
       "test_type": "negative",
@@ -155,41 +137,6 @@
       "date_added": "2026-01-23"
     },
     {
-      "file": "N_XPM_0421_01.3mf",
-      "suite": "suite2_core_prod_matl",
-      "test_type": "negative",
-      "reason": "Negative coordinates in build transform. This test expects negative coordinates to fail, but many valid positive test cases use negative coordinates for centering objects. The 3MF spec allows negative coordinates, so this validation is not enforced.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
-      "file": "P_EPX_2102_01_materialExt.3mf",
-      "suite": "suite8_secure",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Build item transform for object 3 places the mesh outside the positive octant with min coordinates: (-77.99, -77.99, -23568.06). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXX_0910_03.3mf",
-      "suite": "suite3_core",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 2 has geometry outside the positive octant with min coordinates: (-22.37, -0.57, 97.25). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXX_0910_05.3mf",
-      "suite": "suite3_core",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 78 has geometry outside the positive octant with min coordinates: (-11.90, -0.31, -259.48). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
       "file": "P_XXX_0326_03.3mf",
       "suite": "suite3_core",
       "test_type": "positive",
@@ -197,15 +144,6 @@
       "issue_url": "",
       "date_added": "2026-01-25",
       "expected_error_type": "InvalidModel"
-    },
-    {
-      "file": "P_XXX_0910_01.3mf",
-      "suite": "suite3_core",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 2 has geometry outside the positive octant with min coordinates: (0.00, -0.57, 85.10). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
     },
     {
       "file": "P_XXX_0338_01.3mf",
@@ -217,51 +155,6 @@
       "expected_error_type": "InvalidModel"
     },
     {
-      "file": "P_XXM_0507_03.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 44612 has geometry outside the positive octant with min coordinates: (-17.12, -17.12, 37.62). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0515_03.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 306 has geometry outside the positive octant with min coordinates: (-17.12, -17.12, 37.62). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0507_04.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 1 has geometry outside the positive octant with min coordinates: (-17.12, -17.12, 37.62). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0515_01.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 32 has geometry outside the positive octant with min coordinates: (-17.12, -17.12, 37.62). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0910_01.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 2 has geometry outside the positive octant with min coordinates: (0.00, -0.57, 85.10). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
       "file": "P_XXM_0338_01.3mf",
       "suite": "suite6_core_matl",
       "test_type": "positive",
@@ -271,24 +164,6 @@
       "expected_error_type": "InvalidModel"
     },
     {
-      "file": "P_XXM_0508_07.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 1 has geometry outside the positive octant with min coordinates: (35.10, 35.10, -357.99). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0910_05.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 78 has geometry outside the positive octant with min coordinates: (-11.90, -0.31, -259.48). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
       "file": "P_XXM_0326_03.3mf",
       "suite": "suite6_core_matl",
       "test_type": "positive",
@@ -296,51 +171,6 @@
       "issue_url": "",
       "date_added": "2026-01-25",
       "expected_error_type": "InvalidModel"
-    },
-    {
-      "file": "P_XXM_0508_09.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 3 has geometry outside the positive octant with min coordinates: (70.74, 70.74, -11117.06). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0508_01.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 3 has geometry outside the positive octant with min coordinates: (-17.12, -17.12, 37.62). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0508_14.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 3 has geometry outside the positive octant with min coordinates: (-12.75, -12.75, -1631.13). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0910_03.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 2 has geometry outside the positive octant with min coordinates: (-22.37, -0.57, 97.25). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
-    },
-    {
-      "file": "P_XXM_0508_08.3mf",
-      "suite": "suite6_core_matl",
-      "test_type": "positive",
-      "reason": "File violates 3MF specification coordinate requirements. Object 3 has geometry outside the positive octant with min coordinates: (-84.99, -84.99, -23350.41). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
-      "issue_url": "",
-      "date_added": "2026-01-25",
-      "expected_error_type": "OutsidePositiveOctant"
     }
   ]
 }
