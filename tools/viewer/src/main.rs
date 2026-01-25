@@ -26,6 +26,10 @@ const FIELD_WIDTH: usize = 34;
 /// Type alias for a colored 3D triangle
 type ColoredTriangle = ((f64, f64, f64), (f64, f64, f64), (f64, f64, f64), Rgb<u8>);
 
+/// Constants for isometric projection (30 degree rotation)
+const ISO_COS_30: f64 = 0.866_025_403_784_438_6; // cos(30°)
+const ISO_SIN_30: f64 = 0.5; // sin(30°)
+
 /// Command-line arguments for the 3MF viewer
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -46,12 +50,12 @@ struct Args {
     #[arg(short, long, value_name = "OUTPUT")]
     export_preview: Option<PathBuf>,
 
-    /// View angle for preview: top, front, side, or isometric (default: isometric)
-    #[arg(long, default_value = "isometric")]
+    /// View angle for preview
+    #[arg(long, default_value = "isometric", value_parser = ["isometric", "top", "front", "side"])]
     view_angle: String,
 
-    /// Render style for preview: wireframe or shaded (default: shaded)
-    #[arg(long, default_value = "shaded")]
+    /// Render style for preview
+    #[arg(long, default_value = "shaded", value_parser = ["shaded", "wireframe"])]
     render_style: String,
 }
 
@@ -417,9 +421,9 @@ fn export_preview(
     // Project and sort triangles by depth for proper rendering
     let mut projected_triangles = Vec::new();
     for (v1, v2, v3, color) in &triangles_3d {
-        let (p1, d1) = project_vertex(v1, view_angle, center_x, center_y, center_z, scale, margin, WIDTH, HEIGHT);
-        let (p2, _) = project_vertex(v2, view_angle, center_x, center_y, center_z, scale, margin, WIDTH, HEIGHT);
-        let (p3, _) = project_vertex(v3, view_angle, center_x, center_y, center_z, scale, margin, WIDTH, HEIGHT);
+        let (p1, d1) = project_vertex(v1, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT);
+        let (p2, _) = project_vertex(v2, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT);
+        let (p3, _) = project_vertex(v3, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT);
         
         // Calculate normal for shading
         let normal = calculate_normal(*v1, *v2, *v3);
@@ -431,38 +435,49 @@ fn export_preview(
     projected_triangles.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
 
     // Render based on style
-    if render_style == "shaded" {
-        for (p1, p2, p3, _, normal, base_color) in &projected_triangles {
-            // Apply simple lighting based on normal
-            let light_dir = (0.5, 0.5, 0.7); // Light from top-right-front
-            let light_intensity = (normal.0 * light_dir.0 + normal.1 * light_dir.1 + normal.2 * light_dir.2)
-                .clamp(0.2, 1.0);
-            
-            let shaded_color = Rgb([
-                (base_color.0[0] as f64 * light_intensity) as u8,
-                (base_color.0[1] as f64 * light_intensity) as u8,
-                (base_color.0[2] as f64 * light_intensity) as u8,
-            ]);
-            
-            // Fill triangle
-            fill_triangle(&mut img, *p1, *p2, *p3, shaded_color);
-            
-            // Draw edges in darker color for definition
-            let edge_color = Rgb([
-                (base_color.0[0] as f64 * 0.3) as u8,
-                (base_color.0[1] as f64 * 0.3) as u8,
-                (base_color.0[2] as f64 * 0.3) as u8,
-            ]);
-            draw_line(&mut img, *p1, *p2, edge_color);
-            draw_line(&mut img, *p2, *p3, edge_color);
-            draw_line(&mut img, *p3, *p1, edge_color);
+    match render_style {
+        "shaded" => {
+            for (p1, p2, p3, _, normal, base_color) in &projected_triangles {
+                // Apply simple lighting based on normal
+                let light_dir = (0.5, 0.5, 0.7); // Light from top-right-front
+                let light_intensity = (normal.0 * light_dir.0 + normal.1 * light_dir.1 + normal.2 * light_dir.2)
+                    .clamp(0.2, 1.0);
+                
+                let shaded_color = Rgb([
+                    (base_color.0[0] as f64 * light_intensity) as u8,
+                    (base_color.0[1] as f64 * light_intensity) as u8,
+                    (base_color.0[2] as f64 * light_intensity) as u8,
+                ]);
+                
+                // Fill triangle
+                fill_triangle(&mut img, *p1, *p2, *p3, shaded_color);
+                
+                // Draw edges in darker color for definition
+                let edge_color = Rgb([
+                    (base_color.0[0] as f64 * 0.3) as u8,
+                    (base_color.0[1] as f64 * 0.3) as u8,
+                    (base_color.0[2] as f64 * 0.3) as u8,
+                ]);
+                draw_line(&mut img, *p1, *p2, edge_color);
+                draw_line(&mut img, *p2, *p3, edge_color);
+                draw_line(&mut img, *p3, *p1, edge_color);
+            }
         }
-    } else {
-        // Wireframe mode
-        for (p1, p2, p3, _, _, color) in &projected_triangles {
-            draw_line(&mut img, *p1, *p2, *color);
-            draw_line(&mut img, *p2, *p3, *color);
-            draw_line(&mut img, *p3, *p1, *color);
+        "wireframe" => {
+            // Wireframe mode
+            for (p1, p2, p3, _, _, color) in &projected_triangles {
+                draw_line(&mut img, *p1, *p2, *color);
+                draw_line(&mut img, *p2, *p3, *color);
+                draw_line(&mut img, *p3, *p1, *color);
+            }
+        }
+        _ => {
+            // Default to wireframe for any unknown style
+            for (p1, p2, p3, _, _, color) in &projected_triangles {
+                draw_line(&mut img, *p1, *p2, *color);
+                draw_line(&mut img, *p2, *p3, *color);
+                draw_line(&mut img, *p3, *p1, *color);
+            }
         }
     }
 
@@ -517,6 +532,14 @@ fn calculate_scene_bounds(triangles: &[ColoredTriangle])
     (min_x, max_x, min_y, max_y, min_z, max_z)
 }
 
+/// Calculate isometric projection coordinates
+fn calculate_isometric(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
+    let iso_x = x * ISO_COS_30 - y * ISO_COS_30;
+    let iso_y = x * ISO_SIN_30 + y * ISO_SIN_30 - z;
+    let iso_depth = x * ISO_SIN_30 + y * ISO_SIN_30 + z;
+    (iso_x, iso_y, iso_depth)
+}
+
 /// Project a 3D vertex to 2D screen coordinates based on view angle
 #[allow(clippy::too_many_arguments)]
 fn project_vertex(
@@ -526,7 +549,6 @@ fn project_vertex(
     center_y: f64,
     center_z: f64,
     scale: f64,
-    _margin: f64,
     width: u32,
     height: u32,
 ) -> ((i32, i32), f64) {
@@ -548,23 +570,10 @@ fn project_vertex(
             // Side view (looking down X axis)
             (y, z, x)
         }
-        "isometric" => {
-            // Isometric view (30 degrees rotation)
-            let cos_30 = 0.866;
-            let sin_30 = 0.5;
-            let iso_x = x * cos_30 - y * cos_30;
-            let iso_y = x * sin_30 + y * sin_30 - z;
-            let iso_depth = x * sin_30 + y * sin_30 + z;
-            (iso_x, iso_y, iso_depth)
-        }
+        "isometric" => calculate_isometric(x, y, z),
         _ => {
             // Default to isometric view for unknown angles
-            let cos_30 = 0.866;
-            let sin_30 = 0.5;
-            let iso_x = x * cos_30 - y * cos_30;
-            let iso_y = x * sin_30 + y * sin_30 - z;
-            let iso_depth = x * sin_30 + y * sin_30 + z;
-            (iso_x, iso_y, iso_depth)
+            calculate_isometric(x, y, z)
         }
     };
 
