@@ -30,7 +30,8 @@
       "test_type": "positive",
       "reason": "File violates 3MF specification coordinate requirements. Build item transform for object 2 places the mesh outside the positive octant with min Y coordinate of -1.00. Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
       "issue_url": "",
-      "date_added": "2026-01-23"
+      "date_added": "2026-01-23",
+      "expected_error_type": "OutsidePositiveOctant"
     },
     {
       "file": "N_XXX_0418_01.3mf",
@@ -182,7 +183,8 @@
       "test_type": "positive",
       "reason": "File violates 3MF specification coordinate requirements. Build item transform for object 3 places the mesh outside the positive octant with min coordinates: (-77.99, -77.99, -23568.06). Per 3MF spec, all coordinates must be non-negative (>= 0). The file appears to be non-compliant with the core specification requirement that all geometry must remain in the positive coordinate space.",
       "issue_url": "",
-      "date_added": "2026-01-25"
+      "date_added": "2026-01-25",
+      "expected_error_type": "OutsidePositiveOctant"
     }
   ]
 }

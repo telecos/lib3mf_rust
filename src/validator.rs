@@ -3866,10 +3866,12 @@ fn validate_build_transform_bounds(model: &Model) -> Result<()> {
             || min.1 < BUILD_VOLUME_MIN - EPSILON
             || min.2 < BUILD_VOLUME_MIN - EPSILON
         {
-            return Err(Error::InvalidModel(format!(
-                "Build item for object {}: Transform places mesh below build plate. Min coordinates: ({:.2}, {:.2}, {:.2}), all coordinates must be >= {:.2}",
-                item.objectid, min.0, min.1, min.2, BUILD_VOLUME_MIN
-            )));
+            return Err(Error::OutsidePositiveOctant(
+                item.objectid,
+                min.0,
+                min.1,
+                min.2,
+            ));
         }
     }
     Ok(())
@@ -4702,10 +4704,13 @@ mod tests {
             result.is_err(),
             "Should reject mesh with negative coordinates"
         );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("below build plate"));
+        // Check for new error message format
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("outside positive octant") || error_msg.contains("E3003"),
+            "Error should indicate outside positive octant: {}",
+            error_msg
+        );
     }
 
     #[test]
