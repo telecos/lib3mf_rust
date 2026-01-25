@@ -33,14 +33,23 @@ fn create_3mf_with_transform(transform: [f64; 12]) -> Result<Vec<u8>, Box<dyn st
     // Add 3D/3dmodel.model with transform
     zip.add_directory("3D/", SimpleFileOptions::default())?;
     zip.start_file("3D/3dmodel.model", SimpleFileOptions::default())?;
-    
+
     let transform_str = format!(
         "{} {} {} {} {} {} {} {} {} {} {} {}",
-        transform[0], transform[1], transform[2], transform[3],
-        transform[4], transform[5], transform[6], transform[7],
-        transform[8], transform[9], transform[10], transform[11]
+        transform[0],
+        transform[1],
+        transform[2],
+        transform[3],
+        transform[4],
+        transform[5],
+        transform[6],
+        transform[7],
+        transform[8],
+        transform[9],
+        transform[10],
+        transform[11]
     );
-    
+
     let model_xml = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
@@ -68,7 +77,7 @@ fn create_3mf_with_transform(transform: [f64; 12]) -> Result<Vec<u8>, Box<dyn st
 </model>"#,
         transform_str
     );
-    
+
     zip.write_all(model_xml.as_bytes())?;
     let _writer = zip.finish()?;
 
@@ -80,19 +89,17 @@ fn test_outside_positive_octant_error_detection() {
     // Create a transform that moves object to negative Y (outside positive octant)
     // Identity matrix except for Y translation = -5
     let transform_negative_y = [
-        1.0, 0.0, 0.0, 0.0,   // X translation = 0
-        0.0, 1.0, 0.0, -5.0,  // Y translation = -5
-        0.0, 0.0, 1.0, 0.0,   // Z translation = 0
+        1.0, 0.0, 0.0, 0.0, // X translation = 0
+        0.0, 1.0, 0.0, -5.0, // Y translation = -5
+        0.0, 0.0, 1.0, 0.0, // Z translation = 0
     ];
 
-    let buffer = create_3mf_with_transform(transform_negative_y)
-        .expect("Failed to create 3MF file");
+    let buffer =
+        create_3mf_with_transform(transform_negative_y).expect("Failed to create 3MF file");
 
     // Try to parse it
-    let result = Model::from_reader_with_config(
-        std::io::Cursor::new(&buffer),
-        ParserConfig::default(),
-    );
+    let result =
+        Model::from_reader_with_config(std::io::Cursor::new(&buffer), ParserConfig::default());
 
     // Should fail with OutsidePositiveOctant error
     match result {
@@ -103,7 +110,7 @@ fn test_outside_positive_octant_error_detection() {
                 "Expected OutsidePositiveOctant error, got: {} (type: {})",
                 e, error_type
             );
-            
+
             // Verify the error message contains relevant information
             let error_msg = format!("{}", e);
             assert!(
@@ -128,7 +135,8 @@ fn test_inside_positive_octant_succeeds() {
     let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
 
     // Add [Content_Types].xml
-    zip.start_file("[Content_Types].xml", SimpleFileOptions::default()).unwrap();
+    zip.start_file("[Content_Types].xml", SimpleFileOptions::default())
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -138,8 +146,10 @@ fn test_inside_positive_octant_succeeds() {
     ).unwrap();
 
     // Add _rels/.rels
-    zip.add_directory("_rels/", SimpleFileOptions::default()).unwrap();
-    zip.start_file("_rels/.rels", SimpleFileOptions::default()).unwrap();
+    zip.add_directory("_rels/", SimpleFileOptions::default())
+        .unwrap();
+    zip.start_file("_rels/.rels", SimpleFileOptions::default())
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -148,9 +158,11 @@ fn test_inside_positive_octant_succeeds() {
     ).unwrap();
 
     // Add 3D/3dmodel.model without transform
-    zip.add_directory("3D/", SimpleFileOptions::default()).unwrap();
-    zip.start_file("3D/3dmodel.model", SimpleFileOptions::default()).unwrap();
-    
+    zip.add_directory("3D/", SimpleFileOptions::default())
+        .unwrap();
+    zip.start_file("3D/3dmodel.model", SimpleFileOptions::default())
+        .unwrap();
+
     let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
     <resources>
@@ -175,15 +187,13 @@ fn test_inside_positive_octant_succeeds() {
         <item objectid="1"/>
     </build>
 </model>"#;
-    
+
     zip.write_all(model_xml.as_bytes()).unwrap();
     let _writer = zip.finish().unwrap();
 
     // Try to parse it
-    let result = Model::from_reader_with_config(
-        std::io::Cursor::new(&buffer),
-        ParserConfig::default(),
-    );
+    let result =
+        Model::from_reader_with_config(std::io::Cursor::new(&buffer), ParserConfig::default());
 
     // Should succeed
     assert!(
@@ -198,10 +208,16 @@ fn test_error_type_method_coverage() {
     // Test that error_type() works for various error types
     let errors = vec![
         (Error::InvalidModel("test".to_string()), "InvalidModel"),
-        (Error::OutsidePositiveOctant(1, -1.0, 0.0, 0.0), "OutsidePositiveOctant"),
+        (
+            Error::OutsidePositiveOctant(1, -1.0, 0.0, 0.0),
+            "OutsidePositiveOctant",
+        ),
         (Error::ParseError("test".to_string()), "ParseError"),
         (Error::InvalidFormat("test".to_string()), "InvalidFormat"),
-        (Error::UnsupportedExtension("test".to_string()), "UnsupportedExtension"),
+        (
+            Error::UnsupportedExtension("test".to_string()),
+            "UnsupportedExtension",
+        ),
     ];
 
     for (error, expected_type) in errors {

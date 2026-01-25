@@ -71,7 +71,9 @@ fn test_positive_case(
         Err(e) => {
             if expected_failures.is_expected_failure(suite, filename, "positive") {
                 // This is an expected failure, validate the error type if specified
-                if let Some(expected_type) = expected_failures.get_expected_error_type(suite, filename) {
+                if let Some(expected_type) =
+                    expected_failures.get_expected_error_type(suite, filename)
+                {
                     let actual_type = e.error_type();
                     if actual_type != expected_type {
                         return Err(format!(

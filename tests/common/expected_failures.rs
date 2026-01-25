@@ -128,6 +128,7 @@ impl ExpectedFailuresManager {
     }
 
     /// Get the expected error type for an expected failure
+    #[allow(dead_code)]
     pub fn get_expected_error_type(&self, suite: &str, filename: &str) -> Option<String> {
         self.get_failure(suite, filename)
             .and_then(|f| f.expected_error_type.clone())

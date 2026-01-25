@@ -13,7 +13,7 @@ use zip::ZipWriter;
 
 /// Simulate the old behavior: a file is marked as expected failure
 /// but fails for the WRONG reason (InvalidFormat instead of OutsidePositiveOctant)
-/// 
+///
 /// This test is intentionally designed to demonstrate error detection.
 /// It shows that if we expect OutsidePositiveOctant but get InvalidFormat,
 /// the new system will catch this mismatch.
@@ -23,7 +23,7 @@ fn test_old_behavior_would_miss_wrong_error() {
     // Create a 3MF file with BOTH issues:
     // 1. Invalid content type (InvalidFormat error)
     // 2. Outside positive octant
-    // 
+    //
     // OLD BEHAVIOR: Would just mark as "expected failure" and pass
     // NEW BEHAVIOR: Will fail because error type doesn't match
 
@@ -31,7 +31,8 @@ fn test_old_behavior_would_miss_wrong_error() {
     let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
 
     // Add INVALID [Content_Types].xml (wrong content type for model)
-    zip.start_file("[Content_Types].xml", SimpleFileOptions::default()).unwrap();
+    zip.start_file("[Content_Types].xml", SimpleFileOptions::default())
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -41,8 +42,10 @@ fn test_old_behavior_would_miss_wrong_error() {
     ).unwrap();
 
     // Add _rels/.rels
-    zip.add_directory("_rels/", SimpleFileOptions::default()).unwrap();
-    zip.start_file("_rels/.rels", SimpleFileOptions::default()).unwrap();
+    zip.add_directory("_rels/", SimpleFileOptions::default())
+        .unwrap();
+    zip.start_file("_rels/.rels", SimpleFileOptions::default())
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -51,9 +54,11 @@ fn test_old_behavior_would_miss_wrong_error() {
     ).unwrap();
 
     // Add 3D/3dmodel.model with transform outside positive octant
-    zip.add_directory("3D/", SimpleFileOptions::default()).unwrap();
-    zip.start_file("3D/3dmodel.model", SimpleFileOptions::default()).unwrap();
-    
+    zip.add_directory("3D/", SimpleFileOptions::default())
+        .unwrap();
+    zip.start_file("3D/3dmodel.model", SimpleFileOptions::default())
+        .unwrap();
+
     let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
     <resources>
@@ -78,36 +83,33 @@ fn test_old_behavior_would_miss_wrong_error() {
         <item objectid="1" transform="1 0 0 0 0 1 0 -5 0 0 1 0"/>
     </build>
 </model>"#;
-    
+
     zip.write_all(model_xml.as_bytes()).unwrap();
     let _writer = zip.finish().unwrap();
 
     // Try to parse it
-    let result = Model::from_reader_with_config(
-        std::io::Cursor::new(&buffer),
-        ParserConfig::default(),
-    );
+    let result =
+        Model::from_reader_with_config(std::io::Cursor::new(&buffer), ParserConfig::default());
 
     // The file should fail, but with InvalidFormat, not OutsidePositiveOctant
     match result {
         Err(e) => {
             let actual_error_type = e.error_type();
-            
+
             // With the NEW behavior, we can detect this mismatch
             let expected_error_type = "OutsidePositiveOctant";
-            
+
             if actual_error_type != expected_error_type {
-                // This is what we want - detecting that the file is failing for 
+                // This is what we want - detecting that the file is failing for
                 // a DIFFERENT reason than expected
                 println!("✓ NEW BEHAVIOR: Detected wrong error type!");
                 println!("  Expected: {}", expected_error_type);
                 println!("  Actual: {}", actual_error_type);
                 println!("  Error: {}", e);
-                
+
                 // This would fail the test in the conformance suite
                 assert_eq!(
-                    actual_error_type,
-                    expected_error_type,
+                    actual_error_type, expected_error_type,
                     "File failed with wrong error type - this catches spec violations!"
                 );
             }
@@ -126,7 +128,8 @@ fn test_new_behavior_catches_correct_error() {
     let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
 
     // Add VALID [Content_Types].xml
-    zip.start_file("[Content_Types].xml", SimpleFileOptions::default()).unwrap();
+    zip.start_file("[Content_Types].xml", SimpleFileOptions::default())
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -136,8 +139,10 @@ fn test_new_behavior_catches_correct_error() {
     ).unwrap();
 
     // Add _rels/.rels
-    zip.add_directory("_rels/", SimpleFileOptions::default()).unwrap();
-    zip.start_file("_rels/.rels", SimpleFileOptions::default()).unwrap();
+    zip.add_directory("_rels/", SimpleFileOptions::default())
+        .unwrap();
+    zip.start_file("_rels/.rels", SimpleFileOptions::default())
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -146,9 +151,11 @@ fn test_new_behavior_catches_correct_error() {
     ).unwrap();
 
     // Add 3D/3dmodel.model with transform outside positive octant
-    zip.add_directory("3D/", SimpleFileOptions::default()).unwrap();
-    zip.start_file("3D/3dmodel.model", SimpleFileOptions::default()).unwrap();
-    
+    zip.add_directory("3D/", SimpleFileOptions::default())
+        .unwrap();
+    zip.start_file("3D/3dmodel.model", SimpleFileOptions::default())
+        .unwrap();
+
     let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
     <resources>
@@ -173,32 +180,27 @@ fn test_new_behavior_catches_correct_error() {
         <item objectid="1" transform="1 0 0 0 0 1 0 -5 0 0 1 0"/>
     </build>
 </model>"#;
-    
+
     zip.write_all(model_xml.as_bytes()).unwrap();
     let _writer = zip.finish().unwrap();
 
     // Try to parse it
-    let result = Model::from_reader_with_config(
-        std::io::Cursor::new(&buffer),
-        ParserConfig::default(),
-    );
+    let result =
+        Model::from_reader_with_config(std::io::Cursor::new(&buffer), ParserConfig::default());
 
     // The file should fail with OutsidePositiveOctant
     match result {
         Err(e) => {
             let actual_error_type = e.error_type();
             let expected_error_type = "OutsidePositiveOctant";
-            
+
             // NEW BEHAVIOR: Verify the error type matches
             assert_eq!(
-                actual_error_type,
-                expected_error_type,
+                actual_error_type, expected_error_type,
                 "Expected {} error, got {}: {}",
-                expected_error_type,
-                actual_error_type,
-                e
+                expected_error_type, actual_error_type, e
             );
-            
+
             println!("✓ NEW BEHAVIOR: Error type matches expectation!");
             println!("  Expected: {}", expected_error_type);
             println!("  Actual: {}", actual_error_type);
