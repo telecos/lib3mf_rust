@@ -172,16 +172,6 @@
       "date_added": "2026-01-23"
     },
     {
-      "test_case_id": "0803_01",
-      "suites": [
-        "suite2_core_prod_matl"
-      ],
-      "test_type": "negative",
-      "reason": "Component reference chain with external path. Tests whether components can reference external objects via p:path when those objects don't exist locally. The validation implemented checks for local objects, but may need refinement for external reference scenarios.",
-      "issue_url": "",
-      "date_added": "2026-01-23"
-    },
-    {
       "test_case_id": "2202_01",
       "suites": [
         "suite9_core_ext"
