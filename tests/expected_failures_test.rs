@@ -93,22 +93,24 @@ fn test_expected_failures_json_valid() {
     // Validate each entry has required fields
     for failure in failures {
         // New format requires test_case_id and suites
-        if let Some(test_case_id) = failure.get("test_case_id").and_then(|v| v.as_str()) {
-            if !test_case_id.is_empty() {
-                assert!(
-                    failure["suites"].is_array(),
-                    "Each failure with test_case_id should have a suites array"
-                );
-                let suites_array = failure["suites"].as_array()
-                    .expect("suites should be an array if is_array() returned true");
-                assert!(
-                    !suites_array.is_empty(),
-                    "suites array should not be empty"
-                );
-            }
-        }
-        // Old format uses file and suite fields
-        else {
+        let has_test_case_id = failure.get("test_case_id")
+            .and_then(|v| v.as_str())
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+            
+        if has_test_case_id {
+            assert!(
+                failure["suites"].is_array(),
+                "Each failure with test_case_id should have a suites array"
+            );
+            let suites_array = failure["suites"].as_array()
+                .expect("suites should be an array if is_array() returned true");
+            assert!(
+                !suites_array.is_empty(),
+                "suites array should not be empty"
+            );
+        } else {
+            // Old format uses file and suite fields
             assert!(
                 failure["file"].is_string(),
                 "Each old-format failure should have a file field"

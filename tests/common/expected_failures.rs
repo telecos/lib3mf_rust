@@ -68,6 +68,11 @@ pub struct ExpectedFailuresManager {
 }
 
 impl ExpectedFailuresManager {
+    /// Create a pattern key for test case ID matching
+    fn make_pattern_key(suite: &str, test_case_id: &str) -> (String, String) {
+        (suite.to_string(), format!("test_case_pattern:{}", test_case_id))
+    }
+
     /// Load expected failures from the configuration file
     pub fn load() -> Self {
         let config_path = "tests/expected_failures.json";
@@ -114,9 +119,8 @@ impl ExpectedFailuresManager {
                 // For each suite, we need to match by test case ID pattern
                 // Store the failure under a special key that includes the test case ID
                 for suite in &failure.suites {
-                    // Create a key with the test_case_id pattern
-                    // We'll match this during lookup
-                    let key = (suite.clone(), format!("*{}*", failure.test_case_id));
+                    // Create a pattern key for matching during lookup
+                    let key = Self::make_pattern_key(suite, &failure.test_case_id);
                     failures.insert(key, failure.clone());
                 }
             }
@@ -171,7 +175,7 @@ impl ExpectedFailuresManager {
         
         // Try pattern match by test case ID (new format)
         if let Some(test_case_id) = Self::extract_test_case_id(filename) {
-            let pattern_key = (suite.to_string(), format!("*{}*", test_case_id));
+            let pattern_key = Self::make_pattern_key(suite, &test_case_id);
             if let Some(failure) = self.failures.get(&pattern_key) {
                 return failure.test_type == test_type;
             }
@@ -193,7 +197,7 @@ impl ExpectedFailuresManager {
         
         // Try pattern match by test case ID (new format)
         if let Some(test_case_id) = Self::extract_test_case_id(filename) {
-            let pattern_key = (suite.to_string(), format!("*{}*", test_case_id));
+            let pattern_key = Self::make_pattern_key(suite, &test_case_id);
             return self.failures.get(&pattern_key);
         }
         
