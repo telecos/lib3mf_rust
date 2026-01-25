@@ -595,6 +595,37 @@ cargo run --example extract_colors test_files/material/kinect_scan.3mf
 cargo run --example test_materials
 ```
 
+### 3MF Viewer Tool
+
+The repository includes a comprehensive command-line viewer tool for analyzing and visualizing 3MF files:
+
+```bash
+# Navigate to the viewer directory
+cd tools/viewer
+
+# View a 3MF file with basic information
+cargo run --release -- ../../test_files/core/box.3mf
+
+# View with detailed mesh information
+cargo run --release -- ../../test_files/material/kinect_scan.3mf --detailed
+
+# Export a wireframe preview image
+cargo run --release -- ../../test_files/core/cylinder.3mf --export-preview preview.png
+
+# Show all vertices and triangles (very verbose)
+cargo run --release -- ../../test_files/core/box.3mf --show-all
+```
+
+The viewer displays:
+- Model information (unit, namespace, extensions)
+- Metadata entries
+- Object and mesh details (vertex/triangle counts, bounding boxes)
+- Materials and color groups
+- Build items and transformations
+- Wireframe preview export capability
+
+See `tools/viewer/README.md` for complete documentation.
+
 ## Architecture
 
 The library is organized into several modules:
