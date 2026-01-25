@@ -211,7 +211,7 @@ fn test_expected_failure_for_p_sxx_0313_01() {
 fn test_multi_suite_test_case() {
     let manager = ExpectedFailuresManager::load();
 
-    // Test case 0421_01 should be an expected failure in both suite2 and suite3
+    // Test case 0421_01 should be an expected failure in suites 2, 3, 5, and 6
     assert!(
         manager.is_expected_failure("suite2_core_prod_matl", "N_XPM_0421_01.3mf", "negative"),
         "N_XPM_0421_01.3mf should be marked as expected failure in suite2"
@@ -222,17 +222,35 @@ fn test_multi_suite_test_case() {
         "N_XXX_0421_01.3mf should be marked as expected failure in suite3"
     );
 
-    // Both should have the same reason
+    assert!(
+        manager.is_expected_failure("suite5_core_prod", "N_XPX_0421_01.3mf", "negative"),
+        "N_XPX_0421_01.3mf should be marked as expected failure in suite5"
+    );
+
+    assert!(
+        manager.is_expected_failure("suite6_core_matl", "N_XXM_0421_01.3mf", "negative"),
+        "N_XXM_0421_01.3mf should be marked as expected failure in suite6"
+    );
+
+    // All should have the same reason
     let reason_suite2 = manager.get_reason("suite2_core_prod_matl", "N_XPM_0421_01.3mf");
     let reason_suite3 = manager.get_reason("suite3_core", "N_XXX_0421_01.3mf");
+    let reason_suite5 = manager.get_reason("suite5_core_prod", "N_XPX_0421_01.3mf");
+    let reason_suite6 = manager.get_reason("suite6_core_matl", "N_XXM_0421_01.3mf");
 
     assert!(reason_suite2.is_some(), "suite2 should have a reason");
     assert!(reason_suite3.is_some(), "suite3 should have a reason");
-    assert_eq!(
-        reason_suite2.unwrap(),
-        reason_suite3.unwrap(),
-        "Both suites should have the same reason for the same test case"
-    );
+    assert!(reason_suite5.is_some(), "suite5 should have a reason");
+    assert!(reason_suite6.is_some(), "suite6 should have a reason");
+    
+    let reason2 = reason_suite2.unwrap();
+    let reason3 = reason_suite3.unwrap();
+    let reason5 = reason_suite5.unwrap();
+    let reason6 = reason_suite6.unwrap();
+    
+    assert_eq!(reason2, reason3, "suite2 and suite3 should have the same reason");
+    assert_eq!(reason2, reason5, "suite2 and suite5 should have the same reason");
+    assert_eq!(reason2, reason6, "suite2 and suite6 should have the same reason");
 }
 
 #[test]
@@ -285,6 +303,14 @@ fn test_test_case_id_extraction() {
     assert!(
         manager.is_expected_failure("suite3_core", "N_XXX_0421_01.3mf", "negative"),
         "Should match N_XXX_0421_01.3mf"
+    );
+    assert!(
+        manager.is_expected_failure("suite5_core_prod", "N_XPX_0421_01.3mf", "negative"),
+        "Should match N_XPX_0421_01.3mf"
+    );
+    assert!(
+        manager.is_expected_failure("suite6_core_matl", "N_XXM_0421_01.3mf", "negative"),
+        "Should match N_XXM_0421_01.3mf"
     );
 
     // These should not match (wrong suite)

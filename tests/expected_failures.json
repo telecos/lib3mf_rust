@@ -64,7 +64,9 @@
       "test_case_id": "0421_01",
       "suites": [
         "suite2_core_prod_matl",
-        "suite3_core"
+        "suite3_core",
+        "suite5_core_prod",
+        "suite6_core_matl"
       ],
       "test_type": "negative",
       "reason": "Build transform bounds validation. The file tests for negative coordinates (below build plate). However, the 3MF specification allows negative coordinates for centering objects. The test case appears to be testing a constraint that is not part of the core 3MF specification.",
