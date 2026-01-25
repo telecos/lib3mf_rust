@@ -4040,22 +4040,43 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
 
 /// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
 ///
-/// **Note: This validation is intentionally disabled.**
+/// Validates that mesh triangles have correct vertex ordering (counter-clockwise
+/// when viewed from outside) by checking the signed volume of each mesh.
 ///
-/// Detecting reversed vertex order reliably requires sophisticated mesh analysis
-/// algorithms that are computationally expensive and have reliability issues with
-/// certain mesh geometries (e.g., non-convex shapes, complex topology). The simple
-/// heuristic of checking if normals point away from the centroid fails for many
-/// valid meshes and can cause false positives.
+/// A mesh with inward-pointing normals (reversed vertex order) will have negative
+/// signed volume. This validation catches meshes where all or most triangles are
+/// inverted.
 ///
-/// A proper implementation would require:
-/// - Ray casting or winding number algorithms
-/// - Topological mesh analysis
-/// - Consideration of non-manifold geometries
-///
-/// For now, we rely on other validators like volume calculation to catch some
-/// cases of inverted meshes.
-fn validate_vertex_order(_model: &Model) -> Result<()> {
+/// Note: This check may not catch partially inverted meshes or complex non-convex
+/// geometries where some triangles are legitimately oriented differently.
+fn validate_vertex_order(model: &Model) -> Result<()> {
+    for object in &model.resources.objects {
+        // Only validate model objects with meshes
+        if object.object_type != ObjectType::Model {
+            continue;
+        }
+
+        if let Some(ref mesh) = object.mesh {
+            // Skip empty meshes
+            if mesh.triangles.is_empty() {
+                continue;
+            }
+
+            // Compute signed volume - negative indicates inverted triangles
+            let signed_volume = mesh_ops::compute_mesh_signed_volume(mesh)?;
+
+            // Allow small negative volumes due to floating point precision,
+            // but reject clearly inverted meshes
+            if signed_volume < -1e-6 {
+                return Err(Error::InvalidModel(format!(
+                    "Object {} has inverted triangle vertex order (inward-pointing normals). \
+                     Signed volume is negative ({:.6}), indicating reversed vertex winding. \
+                     Triangles must be ordered counter-clockwise when viewed from outside the mesh.",
+                    object.id, signed_volume
+                )));
+            }
+        }
+    }
     Ok(())
 }
 
