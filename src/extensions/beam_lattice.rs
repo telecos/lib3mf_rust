@@ -16,10 +16,11 @@ use crate::validator;
 /// ```
 /// use lib3mf::extensions::BeamLatticeExtensionHandler;
 /// use lib3mf::{ExtensionHandler, ExtensionRegistry, Model};
+/// use std::sync::Arc;
 ///
 /// let handler = BeamLatticeExtensionHandler;
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(handler));
+/// registry.register(Arc::new(handler));
 ///
 /// let model = Model::new();
 /// // Use registry.validate_all(&model) to validate

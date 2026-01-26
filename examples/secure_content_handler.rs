@@ -3,6 +3,8 @@
 //! This example shows how to use the SecureContentExtensionHandler with
 //! the ExtensionRegistry to validate secure content in 3MF models.
 
+use std::sync::Arc;
+
 use lib3mf::{
     extensions::SecureContentExtensionHandler, AccessRight, CEKParams, Consumer, ExtensionRegistry,
     KEKParams, Model, ResourceData, ResourceDataGroup, Result, SecureContentInfo,
@@ -13,7 +15,7 @@ fn main() -> Result<()> {
 
     // Create an extension registry and register the handler
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
     println!("✓ Registered SecureContentExtensionHandler\n");
 
     // Example 1: Model without secure content

@@ -3,6 +3,8 @@
 //! This example shows how to create custom extension handlers that can be
 //! registered and used for validation and processing.
 
+use std::sync::Arc;
+
 use lib3mf::{Extension, ExtensionHandler, ExtensionRegistry, Model, Result};
 
 /// Custom handler for the Material extension
@@ -133,9 +135,9 @@ fn main() -> Result<()> {
 
     // Register extension handlers
     println!("Registering extension handlers...");
-    registry.register(Box::new(MaterialExtensionHandler));
-    registry.register(Box::new(ProductionExtensionHandler));
-    registry.register(Box::new(BeamLatticeExtensionHandler));
+    registry.register(Arc::new(MaterialExtensionHandler));
+    registry.register(Arc::new(ProductionExtensionHandler));
+    registry.register(Arc::new(BeamLatticeExtensionHandler));
     println!("  ✓ Registered {} handlers\n", registry.handlers().len());
 
     // Get specific handler
