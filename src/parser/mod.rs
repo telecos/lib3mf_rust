@@ -185,6 +185,7 @@ pub fn parse_model_xml(xml: &str) -> Result<Model> {
     parse_model_xml_with_config(xml, ParserConfig::with_all_extensions())
 }
 
+/// Parse the 3D model XML content with custom configuration
 ///
 /// This is primarily used for testing. For production use, use `Model::from_reader_with_config()`.
 ///

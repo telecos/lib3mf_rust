@@ -3,7 +3,7 @@
 //! This module handles parsing of 3MF Material extension elements including
 //! base materials, color groups, textures, composites, and multi-properties.
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::model::Material;
 use crate::opc::Package;
 use crate::Model;
@@ -44,8 +44,6 @@ pub(super) fn validate_texture_file_paths<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &Model,
 ) -> Result<()> {
-    use crate::error::Error;
-    
     // Get list of encrypted files to skip validation for them
     let encrypted_files: Vec<String> = model
         .secure_content

@@ -652,7 +652,14 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
 /// Load a file from the package, decrypting if it's an encrypted file
 ///
 /// This function checks if the file is in the encrypted files list, and if so,
-/// attempts to decrypt it using the test keys. Otherwise, it loads the file normally.
+/// attempts to decrypt it using test keys (for conformance testing only).
+///
+/// **Security Note**: This implementation uses hardcoded test keys suitable only
+/// for conformance testing. Production implementations should use proper key
+/// management and never store private keys in code.
+///
+/// If test keys are unavailable or decryption fails, an error is returned.
+/// For non-encrypted files, the file is loaded normally from the package.
 pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     normalized_path: &str,
