@@ -84,9 +84,11 @@ pub mod key_provider;
 
 pub use error::{Error, Result};
 pub use extension::{ExtensionHandler, ExtensionRegistry};
-pub use extensions::BooleanOperationsExtensionHandler;
-pub use extensions::DisplacementExtensionHandler;
-pub use extensions::MaterialExtensionHandler;
+pub use extensions::{
+    create_default_registry, register_all_handlers, BeamLatticeExtensionHandler,
+    BooleanOperationsExtensionHandler, DisplacementExtensionHandler, MaterialExtensionHandler,
+    ProductionExtensionHandler, SecureContentExtensionHandler, SliceExtensionHandler,
+};
 pub use key_provider::KeyProvider;
 pub use model::{
     AccessRight, BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod,
