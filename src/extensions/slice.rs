@@ -44,14 +44,17 @@ impl ExtensionHandler for SliceExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
-        // Check if extension is required or if model has any slice stacks or objects referencing slicestacks
-        model.required_extensions.contains(&Extension::Slice)
-            || !model.resources.slice_stacks.is_empty()
-            || model
-                .resources
-                .objects
-                .iter()
-                .any(|obj| obj.slicestackid.is_some())
+        // Check if model has any slice stacks or objects referencing slicestacks
+        if !model.resources.slice_stacks.is_empty() {
+            return true;
+        }
+
+        // Check if any objects reference slicestacks
+        model
+            .resources
+            .objects
+            .iter()
+            .any(|obj| obj.slicestackid.is_some())
     }
 }
 

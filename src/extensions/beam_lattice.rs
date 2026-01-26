@@ -39,14 +39,13 @@ impl ExtensionHandler for BeamLatticeExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
-        // Check if extension is required or if any mesh objects have a beamset
-        model.required_extensions.contains(&Extension::BeamLattice)
-            || model
-                .resources
-                .objects
-                .iter()
-                .filter_map(|obj| obj.mesh.as_ref())
-                .any(|mesh| mesh.beamset.is_some())
+        // Check if any mesh objects have a beamset
+        model
+            .resources
+            .objects
+            .iter()
+            .filter_map(|obj| obj.mesh.as_ref())
+            .any(|mesh| mesh.beamset.is_some())
     }
 }
 

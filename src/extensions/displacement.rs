@@ -34,9 +34,8 @@ impl ExtensionHandler for DisplacementExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
-        // Check if extension is required or if any displacement resources or elements are present
-        model.required_extensions.contains(&Extension::Displacement)
-            || !model.resources.displacement_maps.is_empty()
+        // Check if any displacement resources or elements are present in the model
+        !model.resources.displacement_maps.is_empty()
             || !model.resources.norm_vector_groups.is_empty()
             || !model.resources.disp2d_groups.is_empty()
             || model
