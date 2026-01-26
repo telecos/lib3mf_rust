@@ -173,8 +173,9 @@ mod tests {
         let mut mesh = Mesh::new();
         mesh.vertices.push(crate::model::Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(crate::model::Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(crate::model::Vertex::new(0.0, 1.0, 0.0));
         mesh.triangles
-            .push(crate::model::Triangle::new(0, 1, 0)); // Degenerate, but that's not what we're testing
+            .push(crate::model::Triangle::new(0, 1, 2));
 
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 5)); // Invalid: vertex 5 doesn't exist
