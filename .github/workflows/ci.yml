@@ -69,3 +69,35 @@ jobs:
       
       - name: Run tests
         run: cargo test --features ci --lib --release --verbose
+
+  build-viewer:
+    name: Build Viewer Tool
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+      
+      - name: Build viewer tool
+        run: |
+          cd tools/viewer
+          cargo build --release --verbose
+      
+      - name: Check viewer tool compiles
+        run: |
+          cd tools/viewer
+          cargo check --verbose

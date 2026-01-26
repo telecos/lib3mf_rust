@@ -1,9 +1,15 @@
 # lib3mf Viewer
 
-A command-line tool for viewing and analyzing 3MF (3D Manufacturing Format) files, built using the `lib3mf_rust` library.
+A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, built using the `lib3mf_rust` library.
 
 ## Features
 
+- **Interactive 3D Viewer**: Real-time 3D visualization with mouse controls
+  - **Rotate view**: Left mouse drag
+  - **Pan view**: Right mouse drag  
+  - **Zoom**: Mouse scroll wheel
+  - **Hardware-accelerated rendering** using OpenGL
+  - **Color support** from materials and color groups
 - **Load and Display 3MF Files**: Parse and display comprehensive 3D model information
 - **Model Analysis**: Show detailed information about:
   - Model properties (unit, namespace, language)
@@ -29,7 +35,34 @@ cd tools/viewer
 cargo build --release
 ```
 
+### System Dependencies
+
+On Linux, you may need to install some system libraries:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+```
+
+On macOS and Windows, no additional dependencies are required.
+
 ## Usage
+
+### Interactive 3D Viewer (NEW!)
+
+Launch the interactive 3D viewer window:
+```bash
+cargo run --release -- <path-to-3mf-file> --ui
+```
+
+**Controls:**
+- 🖱️ **Left Mouse + Drag**: Rotate view around the model
+- 🖱️ **Right Mouse + Drag**: Pan the view
+- 🖱️ **Scroll Wheel**: Zoom in/out
+- ⌨️ **Arrow Keys**: Pan the view
+- ⌨️ **ESC / Close Window**: Exit viewer
+
+### Command-Line Mode
 
 Basic usage:
 ```bash
@@ -46,7 +79,7 @@ Show all vertices and triangles (verbose):
 cargo run --release -- <path-to-3mf-file> --show-all
 ```
 
-Export a wireframe preview image:
+Export a preview image:
 ```bash
 cargo run --release -- <path-to-3mf-file> --export-preview output.png
 ```
@@ -82,6 +115,7 @@ Or run the compiled binary directly:
 
 ### Command-Line Options
 
+- `--ui, -u`: Launch interactive 3D viewer window (NEW!)
 - `--detailed, -d`: Show detailed mesh information (vertex/triangle counts, bounding boxes)
 - `--show-all, -a`: Show all vertices and triangles (can be very verbose)
 - `--export-preview <FILE>, -e <FILE>`: Export a preview image to the specified file
@@ -89,6 +123,12 @@ Or run the compiled binary directly:
 - `--render-style <STYLE>`: Choose render style (shaded, wireframe). Default: shaded
 
 ### Examples
+
+**Interactive 3D viewer (recommended):**
+```bash
+cargo run --release -- ../../test_files/core/box.3mf --ui
+cargo run --release -- ../../test_files/core/sphere.3mf --ui
+```
 
 View a basic 3MF file:
 ```bash
@@ -161,9 +201,14 @@ This viewer demonstrates the following capabilities of lib3mf_rust:
 4. **Metadata Access**: Reading model metadata entries
 5. **Build Processing**: Examining build items and transformations
 6. **Extension Support**: Working with various 3MF extensions
-7. **3D Visualization**: Rendering models with isometric projection and shading
+7. **3D Visualization**: Interactive real-time rendering and static image generation
 
 The viewer provides:
+- **Interactive 3D viewer** with:
+  - Hardware-accelerated OpenGL rendering using kiss3d
+  - Real-time mouse-controlled camera (ArcBall)
+  - Material/color group support for colored rendering
+  - Smooth 60 FPS rendering
 - Formatted text output for easy reading
 - Bounding box calculations
 - **Enhanced 3D preview generation** with:
@@ -176,12 +221,13 @@ The viewer provides:
 
 ## Use Cases
 
+- **Interactive Exploration**: Examine 3MF models in real-time with full 3D controls
 - **Quick Inspection**: Rapidly examine 3MF file contents without opening a full 3D viewer
 - **Debugging**: Verify that 3MF files are correctly formed
 - **Analysis**: Understand model structure and properties
 - **Documentation**: Generate text reports of model contents
 - **Testing**: Validate lib3mf_rust parsing capabilities
-- **Preview Generation**: Create simple wireframe previews for documentation
+- **Preview Generation**: Create static preview images for documentation
 
 ## License
 
