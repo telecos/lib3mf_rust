@@ -13,12 +13,12 @@ use crate::validator::validate_boolean_operations;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use lib3mf::extensions::BooleanOperationsExtensionHandler;
 /// use lib3mf::ExtensionRegistry;
 ///
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(BooleanOperationsExtensionHandler));
+/// registry.register(Box::new(BooleanOperationsExtensionHandler::new()));
 /// ```
 pub struct BooleanOperationsExtensionHandler;
 
