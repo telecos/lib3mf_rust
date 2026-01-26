@@ -1,4 +1,0 @@
-# BACKUP - Original monolithic model.rs file
-# This file is kept temporarily for reference during Phase 1 of the refactoring.
-# The actual model module is now in src/model/ directory.
-# This file can be deleted once the refactoring is fully tested and verified.
