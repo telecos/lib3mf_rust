@@ -29,6 +29,7 @@ urlencoding = "2.1"
 parry3d = "0.17"
 nalgebra = "0.33"
 clipper2 = "0.2"
+regex = "1.10"
 
 [dev-dependencies]
 tempfile = "3.14"

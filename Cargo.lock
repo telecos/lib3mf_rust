@@ -827,6 +827,7 @@ dependencies = [
  "parry3d",
  "proptest",
  "quick-xml",
+ "regex",
  "rsa",
  "serde",
  "serde_json",
