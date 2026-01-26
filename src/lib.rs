@@ -66,6 +66,7 @@
 
 pub mod error;
 pub mod extension;
+pub mod extensions;
 pub mod mesh_ops;
 pub mod model;
 pub mod opc;
@@ -83,6 +84,7 @@ pub mod key_provider;
 
 pub use error::{Error, Result};
 pub use extension::{ExtensionHandler, ExtensionRegistry};
+pub use extensions::BooleanOperationsExtensionHandler;
 pub use key_provider::KeyProvider;
 pub use model::{
     AccessRight, BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod,
