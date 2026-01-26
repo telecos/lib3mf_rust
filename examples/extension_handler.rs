@@ -16,22 +16,22 @@ impl ExtensionHandler for MaterialExtensionHandler {
     fn validate(&self, model: &Model) -> Result<()> {
         // Custom material validation logic
         println!("Validating Material extension...");
-        
+
         // Example: Check if there are any base materials defined
         let has_base_materials = model
             .resources
             .base_material_groups
             .iter()
             .any(|group| !group.materials.is_empty());
-        
+
         if has_base_materials {
             println!("  ✓ Found base materials");
         }
-        
+
         // Example: Check for color groups
         let color_group_count = model.resources.color_groups.len();
         println!("  ✓ Found {} color groups", color_group_count);
-        
+
         Ok(())
     }
 
@@ -54,7 +54,7 @@ impl ExtensionHandler for ProductionExtensionHandler {
 
     fn validate(&self, model: &Model) -> Result<()> {
         println!("Validating Production extension...");
-        
+
         // Check for production paths
         let production_items = model
             .resources
@@ -62,9 +62,12 @@ impl ExtensionHandler for ProductionExtensionHandler {
             .iter()
             .filter(|obj| obj.production.is_some())
             .count();
-        
-        println!("  ✓ Found {} objects with production info", production_items);
-        
+
+        println!(
+            "  ✓ Found {} objects with production info",
+            production_items
+        );
+
         Ok(())
     }
 
@@ -92,7 +95,7 @@ impl ExtensionHandler for BeamLatticeExtensionHandler {
 
     fn validate(&self, model: &Model) -> Result<()> {
         println!("Validating BeamLattice extension...");
-        
+
         let beam_lattice_count = model
             .resources
             .objects
@@ -100,9 +103,12 @@ impl ExtensionHandler for BeamLatticeExtensionHandler {
             .filter_map(|obj| obj.mesh.as_ref())
             .filter(|mesh| mesh.beamset.is_some())
             .count();
-        
-        println!("  ✓ Found {} objects with beam lattices", beam_lattice_count);
-        
+
+        println!(
+            "  ✓ Found {} objects with beam lattices",
+            beam_lattice_count
+        );
+
         Ok(())
     }
 
@@ -118,20 +124,20 @@ impl ExtensionHandler for BeamLatticeExtensionHandler {
 
 fn main() -> Result<()> {
     println!("=== Extension Handler Example ===\n");
-    
+
     // Create a simple model
     let model = Model::new();
-    
+
     // Create an extension registry
     let mut registry = ExtensionRegistry::new();
-    
+
     // Register extension handlers
     println!("Registering extension handlers...");
     registry.register(Box::new(MaterialExtensionHandler));
     registry.register(Box::new(ProductionExtensionHandler));
     registry.register(Box::new(BeamLatticeExtensionHandler));
     println!("  ✓ Registered {} handlers\n", registry.handlers().len());
-    
+
     // Get specific handler
     if let Some(handler) = registry.get_handler(Extension::Material) {
         println!("Material extension handler:");
@@ -139,18 +145,18 @@ fn main() -> Result<()> {
         println!("  Namespace: {}", handler.namespace());
         println!();
     }
-    
+
     // Validate all extensions
     println!("Running validation for all registered extensions...");
     registry.validate_all(&model)?;
     println!("\n✓ All validations passed!\n");
-    
+
     // Demonstrate post-parse hook
     let mut model = model;
     println!("Running post-parse hooks...");
     registry.post_parse_all(&mut model)?;
     println!("\n✓ Post-parse processing complete!\n");
-    
+
     // Example: Load and validate an actual 3MF file
     println!("=== Usage with actual 3MF files ===\n");
     println!("To validate a 3MF file with custom extensions:");
@@ -159,6 +165,6 @@ fn main() -> Result<()> {
     println!("3. Parse the 3MF file");
     println!("4. Call registry.validate_all(&model)");
     println!("5. Use registry.post_parse_all(&mut model) if needed");
-    
+
     Ok(())
 }
