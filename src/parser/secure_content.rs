@@ -101,6 +101,7 @@ pub(super) fn validate_kekparams_attributes(
 pub(super) fn load_keystore<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
+    _config: &ParserConfig,
 ) -> Result<()> {
     // Discover keystore file path from relationships
     // Per 3MF SecureContent spec, the keystore is identified by a relationship of type
@@ -665,6 +666,7 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
     normalized_path: &str,
     display_path: &str,
     model: &Model,
+    config: &ParserConfig,
 ) -> Result<String> {
     // Check if this file is encrypted
     let is_encrypted = model
@@ -712,7 +714,9 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
             ))
         })?;
 
-    // Find an access right we can use (look for test consumer)
+    // Find an access right we can use
+    // First, try to use custom key provider if one is configured
+    // Otherwise, fall back to test consumer keys
     let (access_right, _consumer_index) = secure_content
         .resource_data_groups
         .iter()
@@ -723,41 +727,69 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
                 .iter()
                 .any(|rd| rd.path == path_with_slash || rd.path == normalized_path)
             {
-                // Find an access right for the test consumer
-                group
-                    .access_rights
-                    .iter()
-                    .enumerate()
-                    .find(|(idx, _)| {
-                        if *idx < secure_content.consumers.len() {
-                            secure_content.consumers[*idx].consumer_id
-                                == crate::decryption::TEST_CONSUMER_ID
-                        } else {
-                            false
-                        }
-                    })
-                    .map(|(idx, ar)| (ar.clone(), idx))
+                // If custom key provider is configured, use the first access right
+                if config.key_provider().is_some() {
+                    group.access_rights.first().map(|ar| (ar.clone(), 0))
+                } else {
+                    // Otherwise, find an access right for the test consumer
+                    group
+                        .access_rights
+                        .iter()
+                        .enumerate()
+                        .find(|(idx, _)| {
+                            if *idx < secure_content.consumers.len() {
+                                secure_content.consumers[*idx].consumer_id
+                                    == crate::decryption::TEST_CONSUMER_ID
+                            } else {
+                                false
+                            }
+                        })
+                        .map(|(idx, ar)| (ar.clone(), idx))
+                }
             } else {
                 None
             }
         })
         .ok_or_else(|| {
-            Error::InvalidSecureContent(format!(
-                "No access right found for test consumer for file '{}'",
-                display_path
-            ))
+            if config.key_provider().is_some() {
+                Error::InvalidSecureContent(format!(
+                    "No access right found for file '{}'",
+                    display_path
+                ))
+            } else {
+                Error::InvalidSecureContent(format!(
+                    "No access right found for test consumer for file '{}'",
+                    display_path
+                ))
+            }
         })?;
 
-    // Decrypt the file
-    let decrypted = crate::decryption::decrypt_with_test_key(
-        &encrypted_data,
-        &resource_data.cek_params,
-        &access_right,
-        secure_content,
-    )
-    .map_err(|e| {
-        Error::InvalidSecureContent(format!("Failed to decrypt file '{}': {}", display_path, e))
-    })?;
+    // Decrypt the file using custom provider or test keys
+    let decrypted = if let Some(provider) = config.key_provider() {
+        provider
+            .decrypt(
+                &encrypted_data,
+                &resource_data.cek_params,
+                &access_right,
+                secure_content,
+            )
+            .map_err(|e| {
+                Error::InvalidSecureContent(format!(
+                    "Failed to decrypt file '{}' with custom key provider: {}",
+                    display_path, e
+                ))
+            })?
+    } else {
+        crate::decryption::decrypt_with_test_key(
+            &encrypted_data,
+            &resource_data.cek_params,
+            &access_right,
+            secure_content,
+        )
+        .map_err(|e| {
+            Error::InvalidSecureContent(format!("Failed to decrypt file '{}': {}", display_path, e))
+        })?
+    };
 
     // Convert to string
     String::from_utf8(decrypted).map_err(|e| {
@@ -779,6 +811,7 @@ pub(super) fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
     normalized_path: &str,
     display_path: &str,
     model: &Model,
+    config: &ParserConfig,
     context: &str,
 ) -> Result<()> {
     // Check if file exists
@@ -792,12 +825,13 @@ pub(super) fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
 
     // Attempt to load and decrypt the file
     // This will fail if:
-    // - The consumer doesn't match test keys (consumerid != "test3mf01")
-    // - The keyid doesn't match (keyid != "test3mfkek01")
+    // - The consumer doesn't match test keys (consumerid != "test3mf01") when no custom provider
+    // - The keyid doesn't match (keyid != "test3mfkek01") when no custom provider
     // - The consumer has no keyid when one is required
+    // - Custom key provider fails to decrypt
     // - Any other decryption-related issue
     let _decrypted_content =
-        load_file_with_decryption(package, normalized_path, display_path, model)?;
+        load_file_with_decryption(package, normalized_path, display_path, model, config)?;
 
     // If we got here, decryption succeeded - the file is valid
     Ok(())
