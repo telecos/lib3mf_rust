@@ -1,8 +1,14 @@
-//! Extension handler implementations
+//! Concrete implementations of ExtensionHandler trait
 //!
-//! This module contains concrete implementations of the `ExtensionHandler` trait
-//! for each 3MF extension supported by the library.
+//! This module contains concrete implementations of the ExtensionHandler trait
+//! for each supported 3MF extension.
 
-mod secure_content;
+pub mod beam_lattice;
+pub mod material;
+pub mod production;
+pub mod secure_content;
 
+pub use beam_lattice::BeamLatticeExtensionHandler;
+pub use material::MaterialExtensionHandler;
+pub use production::ProductionExtensionHandler;
 pub use secure_content::SecureContentExtensionHandler;
