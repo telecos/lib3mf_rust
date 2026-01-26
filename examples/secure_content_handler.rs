@@ -4,9 +4,8 @@
 //! the ExtensionRegistry to validate secure content in 3MF models.
 
 use lib3mf::{
-    extensions::SecureContentExtensionHandler, AccessRight, CEKParams, Consumer,
-    ExtensionRegistry, KEKParams, Model, ResourceData, ResourceDataGroup, Result,
-    SecureContentInfo,
+    extensions::SecureContentExtensionHandler, AccessRight, CEKParams, Consumer, ExtensionRegistry,
+    KEKParams, Model, ResourceData, ResourceDataGroup, Result, SecureContentInfo,
 };
 
 fn main() -> Result<()> {
@@ -45,8 +44,7 @@ fn main() -> Result<()> {
         access_rights: vec![AccessRight {
             consumer_index: 0,
             kek_params: KEKParams {
-                wrapping_algorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
-                    .to_string(),
+                wrapping_algorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p".to_string(),
                 mgf_algorithm: Some("http://www.w3.org/2009/xmlenc11#mgf1sha256".to_string()),
                 digest_method: Some("http://www.w3.org/2001/04/xmlenc#sha256".to_string()),
             },
