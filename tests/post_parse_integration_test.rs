@@ -130,11 +130,7 @@ fn test_post_parse_called_during_parsing() {
     let result = lib3mf::parser::parse_3mf_with_config(cursor, config);
 
     // Verify parsing succeeded
-    assert!(
-        result.is_ok(),
-        "Parsing should succeed: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "Parsing should succeed: {:?}", result.err());
 
     // Verify that post_parse was called
     assert!(
@@ -189,11 +185,7 @@ fn test_post_parse_not_called_when_extension_not_used() {
     let result = lib3mf::parser::parse_3mf_with_config(cursor, config);
 
     // Verify parsing succeeded
-    assert!(
-        result.is_ok(),
-        "Parsing should succeed: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "Parsing should succeed: {:?}", result.err());
 
     // Verify that post_parse was NOT called (extension not used)
     assert!(
@@ -243,7 +235,10 @@ fn test_post_parse_error_propagates() {
     let result = lib3mf::parser::parse_3mf_with_config(cursor, config);
 
     // Verify parsing failed with the expected error
-    assert!(result.is_err(), "Parsing should fail due to post_parse error");
+    assert!(
+        result.is_err(),
+        "Parsing should fail due to post_parse error"
+    );
     assert!(
         result
             .unwrap_err()
