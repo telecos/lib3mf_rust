@@ -43,7 +43,9 @@
       "test_case_id": "0418_01",
       "suites": [
         "suite2_core_prod_matl",
-        "suite3_core"
+        "suite3_core",
+        "suite5_core_prod",
+        "suite6_core_matl"
       ],
       "test_type": "negative",
       "reason": "Build transform bounds validation. The file tests for objects exceeding Y and Z dimensions beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
@@ -53,7 +55,9 @@
     {
       "test_case_id": "0420_01",
       "suites": [
-        "suite3_core"
+        "suite3_core",
+        "suite5_core_prod",
+        "suite6_core_matl"
       ],
       "test_type": "negative",
       "reason": "Build transform bounds validation. The file tests for objects exceeding X dimension beyond a specific limit. However, the 3MF specification does not define a universal maximum build volume size, only that coordinates must be non-negative. Implementation validates the spec requirement (non-negative coordinates) but not arbitrary dimension limits.",
