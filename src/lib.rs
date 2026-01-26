@@ -84,6 +84,7 @@ pub mod key_provider;
 
 pub use error::{Error, Result};
 pub use extension::{ExtensionHandler, ExtensionRegistry};
+pub use extensions::BooleanOperationsExtensionHandler;
 pub use extensions::DisplacementExtensionHandler;
 pub use extensions::MaterialExtensionHandler;
 pub use key_provider::KeyProvider;
