@@ -1,9 +1,14 @@
-//! Extension handlers for 3MF extensions
+//! Concrete implementations of ExtensionHandler trait
 //!
-//! This module contains concrete implementations of the `ExtensionHandler` trait
-//! for each supported 3MF extension. These handlers provide validation and
-//! processing logic specific to each extension.
+//! This module contains concrete implementations of the ExtensionHandler trait
+//! for each supported 3MF extension.
 
-mod boolean_ops;
+pub mod beam_lattice;
+pub mod boolean_ops;
+pub mod material;
+pub mod production;
 
+pub use beam_lattice::BeamLatticeExtensionHandler;
 pub use boolean_ops::BooleanOperationsExtensionHandler;
+pub use material::MaterialExtensionHandler;
+pub use production::ProductionExtensionHandler;
