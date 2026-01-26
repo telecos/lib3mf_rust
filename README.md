@@ -592,11 +592,6 @@ cargo run --example mesh_analysis test_files/core/box.3mf
 cargo run --example extract_colors test_files/material/kinect_scan.3mf
 ```
 
-#### Testing Materials
-```bash
-cargo run --example test_materials
-```
-
 ### 3MF Viewer Tool
 
 The repository includes a comprehensive command-line viewer tool for analyzing and visualizing 3MF files:
