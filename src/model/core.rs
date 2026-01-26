@@ -316,7 +316,10 @@ impl ParserConfig {
     /// let config = ParserConfig::new()
     ///     .with_key_provider(provider);
     /// ```
-    pub fn with_key_provider(mut self, provider: Arc<dyn crate::key_provider::KeyProvider>) -> Self {
+    pub fn with_key_provider(
+        mut self,
+        provider: Arc<dyn crate::key_provider::KeyProvider>,
+    ) -> Self {
         self.key_provider = Some(provider);
         self
     }

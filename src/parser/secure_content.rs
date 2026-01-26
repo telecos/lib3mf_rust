@@ -766,18 +766,19 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
 
     // Decrypt the file using custom provider or test keys
     let decrypted = if let Some(provider) = config.key_provider() {
-        provider.decrypt(
-            &encrypted_data,
-            &resource_data.cek_params,
-            &access_right,
-            secure_content,
-        )
-        .map_err(|e| {
-            Error::InvalidSecureContent(format!(
-                "Failed to decrypt file '{}' with custom key provider: {}",
-                display_path, e
-            ))
-        })?
+        provider
+            .decrypt(
+                &encrypted_data,
+                &resource_data.cek_params,
+                &access_right,
+                secure_content,
+            )
+            .map_err(|e| {
+                Error::InvalidSecureContent(format!(
+                    "Failed to decrypt file '{}' with custom key provider: {}",
+                    display_path, e
+                ))
+            })?
     } else {
         crate::decryption::decrypt_with_test_key(
             &encrypted_data,
