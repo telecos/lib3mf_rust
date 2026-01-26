@@ -101,7 +101,9 @@ impl ExtensionHandler for SecureContentExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
-        model.required_extensions.contains(&Extension::SecureContent)
+        model
+            .required_extensions
+            .contains(&Extension::SecureContent)
             || model.secure_content.is_some()
     }
 }
