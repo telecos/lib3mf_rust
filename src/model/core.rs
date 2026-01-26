@@ -3,6 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use crate::extension::ExtensionRegistry;
+
 use super::beam_lattice::BeamSet;
 use super::boolean_ops::BooleanShape;
 use super::production::ProductionInfo;
@@ -117,6 +119,8 @@ pub struct ParserConfig {
     /// If provided, this will be used to decrypt encrypted files
     /// If not provided, test keys will be used for Suite 8 conformance
     key_provider: Option<Arc<dyn crate::key_provider::KeyProvider>>,
+    /// Extension registry for managing extension handlers
+    registry: ExtensionRegistry,
 }
 
 impl ParserConfig {
@@ -128,6 +132,7 @@ impl ParserConfig {
             supported_extensions: supported,
             custom_extensions: HashMap::new(),
             key_provider: None,
+            registry: ExtensionRegistry::new(),
         }
     }
 
@@ -149,6 +154,7 @@ impl ParserConfig {
             supported_extensions: supported,
             custom_extensions: HashMap::new(),
             key_provider: None,
+            registry: crate::extensions::create_default_registry(),
         }
     }
 
@@ -347,6 +353,45 @@ impl ParserConfig {
     /// Get all registered custom extensions
     pub fn custom_extensions(&self) -> &HashMap<String, CustomExtensionInfo> {
         &self.custom_extensions
+    }
+
+    /// Register an extension handler
+    ///
+    /// # Arguments
+    ///
+    /// * `handler` - The extension handler to register
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::{ParserConfig, Extension};
+    /// use lib3mf::extensions::MaterialExtensionHandler;
+    /// use std::sync::Arc;
+    ///
+    /// let config = ParserConfig::new()
+    ///     .with_extension_handler(Arc::new(MaterialExtensionHandler));
+    /// ```
+    pub fn with_extension_handler(mut self, handler: Arc<dyn crate::extension::ExtensionHandler>) -> Self {
+        self.registry.register(handler);
+        self
+    }
+
+    /// Get a reference to the extension registry
+    ///
+    /// # Returns
+    ///
+    /// A reference to the internal extension registry
+    pub fn registry(&self) -> &ExtensionRegistry {
+        &self.registry
+    }
+
+    /// Get a mutable reference to the extension registry
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the internal extension registry
+    pub fn registry_mut(&mut self) -> &mut ExtensionRegistry {
+        &mut self.registry
     }
 }
 
@@ -976,5 +1021,76 @@ impl Model {
 impl Default for Model {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::extensions::MaterialExtensionHandler;
+
+    #[test]
+    fn test_parser_config_new_has_empty_registry() {
+        let config = ParserConfig::new();
+        assert_eq!(config.registry().handlers().len(), 0);
+    }
+
+    #[test]
+    fn test_parser_config_with_all_extensions_has_default_registry() {
+        let config = ParserConfig::with_all_extensions();
+        // Should have all 7 standard extension handlers
+        assert_eq!(config.registry().handlers().len(), 7);
+        
+        // Verify specific handlers are present
+        assert!(config.registry().get_handler(Extension::Material).is_some());
+        assert!(config.registry().get_handler(Extension::Production).is_some());
+        assert!(config.registry().get_handler(Extension::BeamLattice).is_some());
+        assert!(config.registry().get_handler(Extension::Slice).is_some());
+        assert!(config.registry().get_handler(Extension::BooleanOperations).is_some());
+        assert!(config.registry().get_handler(Extension::Displacement).is_some());
+        assert!(config.registry().get_handler(Extension::SecureContent).is_some());
+    }
+
+    #[test]
+    fn test_parser_config_with_extension_handler() {
+        let config = ParserConfig::new()
+            .with_extension_handler(Arc::new(MaterialExtensionHandler));
+        
+        assert_eq!(config.registry().handlers().len(), 1);
+        assert!(config.registry().get_handler(Extension::Material).is_some());
+    }
+
+    #[test]
+    fn test_parser_config_registry_mut() {
+        let mut config = ParserConfig::new();
+        assert_eq!(config.registry().handlers().len(), 0);
+        
+        config.registry_mut().register(Arc::new(MaterialExtensionHandler));
+        
+        assert_eq!(config.registry().handlers().len(), 1);
+        assert!(config.registry().get_handler(Extension::Material).is_some());
+    }
+
+    #[test]
+    fn test_parser_config_clone() {
+        let config1 = ParserConfig::new()
+            .with_extension_handler(Arc::new(MaterialExtensionHandler));
+        
+        let config2 = config1.clone();
+        
+        // Both should have the same handlers
+        assert_eq!(config1.registry().handlers().len(), config2.registry().handlers().len());
+        assert_eq!(config1.registry().handlers().len(), 1);
+        assert!(config2.registry().get_handler(Extension::Material).is_some());
+    }
+
+    #[test]
+    fn test_parser_config_chaining() {
+        let config = ParserConfig::new()
+            .with_extension(Extension::Material)
+            .with_extension_handler(Arc::new(MaterialExtensionHandler));
+        
+        assert!(config.supports(&Extension::Material));
+        assert_eq!(config.registry().handlers().len(), 1);
     }
 }
