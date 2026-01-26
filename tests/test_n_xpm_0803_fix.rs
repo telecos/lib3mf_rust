@@ -9,6 +9,7 @@ use lib3mf::{Model, ParserConfig};
 use std::fs::File;
 
 #[test]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_n_xpm_0803_01_rejects_component_chain() {
     // This is a negative test file that should fail validation
     // It creates a component reference chain:
@@ -48,6 +49,7 @@ fn test_n_xpm_0803_01_rejects_component_chain() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_n_spx_0803_01_also_rejects_chain() {
     // Suite1 version of the same test with slice extension
     let config = ParserConfig::new()
@@ -65,6 +67,7 @@ fn test_n_spx_0803_01_also_rejects_chain() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_n_xpx_0803_01_also_rejects_chain() {
     // Suite5 version of the same test
     let config = ParserConfig::new().with_extension(lib3mf::Extension::Production);

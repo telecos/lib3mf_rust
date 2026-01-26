@@ -2,6 +2,7 @@ use lib3mf::{Extension, Model, ParserConfig};
 use std::fs::File;
 
 #[test]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_cmyk_jpeg() {
     let config = ParserConfig::new()
         .with_extension(Extension::Production)

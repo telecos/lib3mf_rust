@@ -9,6 +9,11 @@ repository = "https://github.com/telecos/lib3mf_rust"
 keywords = ["3mf", "3d", "parsing", "manufacturing"]
 categories = ["parser-implementations", "encoding"]
 
+[features]
+default = []
+# Enable this feature in CI to run tests that require external test_suites folder
+ci = []
+
 [dependencies]
 zip = "2.3"
 quick-xml = "0.37"

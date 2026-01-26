@@ -8,7 +8,7 @@ use lib3mf::{Extension, Model, ParserConfig};
 use std::fs::File;
 
 #[test]
-#[ignore = "Requires external test_suites folder with conformance test files"]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_p_xpm_0505_01() {
     let config = ParserConfig::new()
         .with_extension(Extension::Production)
@@ -26,7 +26,7 @@ fn test_p_xpm_0505_01() {
 }
 
 #[test]
-#[ignore = "Requires external test_suites folder with conformance test files"]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_p_xpm_0504_03() {
     let config = ParserConfig::new()
         .with_extension(Extension::Production)
@@ -44,7 +44,7 @@ fn test_p_xpm_0504_03() {
 }
 
 #[test]
-#[ignore = "Requires external test_suites folder with conformance test files"]
+#[cfg_attr(not(feature = "ci"), ignore)]
 fn test_p_xpm_0337_06() {
     let config = ParserConfig::new()
         .with_extension(Extension::Production)

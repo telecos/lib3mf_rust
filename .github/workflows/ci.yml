@@ -40,7 +40,7 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Run tests
-        run: cargo test --lib --test integration_test --test test_real_files --verbose
+        run: cargo test --features ci --lib --test integration_test --test test_real_files --verbose
       
       - name: Run clippy
         run: cargo clippy -- -D warnings
@@ -68,4 +68,4 @@ jobs:
         run: cargo build --release --verbose
       
       - name: Run tests
-        run: cargo test --lib --release --verbose
+        run: cargo test --features ci --lib --release --verbose
