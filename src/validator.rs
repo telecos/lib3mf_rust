@@ -3881,6 +3881,80 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
+/// Helper function to validate triangle material properties for a single object
+///
+/// Checks:
+/// - N_XXM_0601_02: Mixed material assignment requires default pid
+/// - N_XXM_0601_01: Per-vertex properties require pid context
+///
+/// # Arguments
+/// * `object_id` - The ID of the object being validated
+/// * `object_pid` - The object's default pid (if any)
+/// * `mesh` - The mesh containing triangles to validate
+/// * `context` - Context string for error messages (e.g., "Object 1" or "External file 'x.model': Object 1")
+///
+/// # Returns
+/// `Ok(())` if validation passes, `Err` with detailed message if validation fails
+pub(crate) fn validate_object_triangle_materials(
+    object_id: usize,
+    object_pid: Option<usize>,
+    mesh: &crate::model::Mesh,
+    context: &str,
+) -> Result<()> {
+    // N_XXM_0601_02: If some triangles have material properties (pid or per-vertex)
+    // and others don't, object must have a default pid to provide material for
+    // triangles without explicit material properties
+    let mut has_triangles_with_material = false;
+    let mut has_triangles_without_material = false;
+
+    for triangle in &mesh.triangles {
+        let triangle_has_material = triangle.pid.is_some()
+            || triangle.p1.is_some()
+            || triangle.p2.is_some()
+            || triangle.p3.is_some();
+
+        if triangle_has_material {
+            has_triangles_with_material = true;
+        } else {
+            has_triangles_without_material = true;
+        }
+    }
+
+    // If we have mixed material assignment and no default pid on object, this is invalid
+    let has_mixed_assignment_without_default_pid =
+        has_triangles_with_material && has_triangles_without_material && object_pid.is_none();
+
+    if has_mixed_assignment_without_default_pid {
+        return Err(Error::InvalidModel(format!(
+            "{} has some triangles with material properties and some without. \
+             When triangles in an object have mixed material assignment, \
+             the object must have a default pid attribute to provide material \
+             for triangles without explicit material properties. \
+             Add a pid attribute to object {}.",
+            context, object_id
+        )));
+    }
+
+    // N_XXM_0601_01: Validate per-vertex properties
+    for triangle in &mesh.triangles {
+        let has_per_vertex_properties =
+            triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
+
+        if has_per_vertex_properties && triangle.pid.is_none() && object_pid.is_none() {
+            return Err(Error::InvalidModel(format!(
+                "{} has a triangle with per-vertex material properties (p1/p2/p3) \
+                 but neither the triangle nor the object has a pid to provide material context.\n\
+                 Per 3MF Material Extension spec, per-vertex properties require a pid, \
+                 either on the triangle or as a default on the object.\n\
+                 Add a pid attribute to either the triangle or object {}.",
+                context, object_id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_triangle_properties(model: &Model) -> Result<()> {
     // Per 3MF Materials Extension spec:
     // - Triangles can have triangle-level properties (pid and/or pindex)
@@ -3913,25 +3987,15 @@ fn validate_triangle_properties(model: &Model) -> Result<()> {
 
         // Validate triangle-level properties
         if let Some(ref mesh) = object.mesh {
+            // Use helper function for triangle material validation
+            validate_object_triangle_materials(
+                object.id,
+                object.pid,
+                mesh,
+                &format!("Object {}", object.id),
+            )?;
+
             for triangle in &mesh.triangles {
-                // N_XXM_0601_01: If triangle has per-vertex material properties (p1/p2/p3)
-                // but no triangle-level pid AND object has no default pid, this is invalid
-                // Per 3MF Material Extension spec, per-vertex properties need a pid context,
-                // either from the triangle itself or from the object's default
-                let has_per_vertex_properties =
-                    triangle.p1.is_some() || triangle.p2.is_some() || triangle.p3.is_some();
-
-                if has_per_vertex_properties && triangle.pid.is_none() && object.pid.is_none() {
-                    return Err(Error::InvalidModel(format!(
-                        "Triangle in object {} has per-vertex material properties (p1/p2/p3) \
-                         but neither the triangle nor the object has a pid to provide material context.\n\
-                         Per 3MF Material Extension spec, per-vertex properties require a pid, \
-                         either on the triangle or as a default on the object.\n\
-                         Add a pid attribute to either the triangle or object {}.",
-                        object.id, object.id
-                    )));
-                }
-
                 // Validate triangle pindex is within bounds for multi-properties
                 if let (Some(pid), Some(pindex)) = (triangle.pid, triangle.pindex) {
                     // Check if pid references a multiproperties resource

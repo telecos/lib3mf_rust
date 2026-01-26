@@ -3950,6 +3950,8 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
 ) -> Result<()> {
     // Cache to avoid re-parsing the same external file multiple times
     let mut external_file_cache: HashMap<String, Vec<(usize, Option<String>)>> = HashMap::new();
+    // Track which external files we've validated for triangles
+    let mut validated_files: HashSet<String> = HashSet::new();
 
     // Validate build item external references
     for (idx, item) in model.build.items.iter().enumerate() {
@@ -4006,6 +4008,14 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 &format!("Build item {}", idx),
                 &mut external_file_cache,
                 model,
+            )?;
+
+            // N_XXM_0601_02: Validate triangle material properties in external model file
+            validate_external_model_triangles(
+                package,
+                normalized_path,
+                model,
+                &mut validated_files,
             )?;
         }
     }
@@ -4067,6 +4077,14 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         &format!("Object {}, Component {}", object.id, comp_idx),
                         &mut external_file_cache,
                         model,
+                    )?;
+
+                    // N_XXM_0601_02: Validate triangle material properties in external model file
+                    validate_external_model_triangles(
+                        package,
+                        normalized_path,
+                        model,
+                        &mut validated_files,
                     )?;
                 }
             }
@@ -4270,6 +4288,92 @@ fn validate_external_object_reference<R: Read + std::io::Seek>(
     }
     */
 
+    Ok(())
+}
+
+/// Validate an external model file's triangles for material property consistency
+///
+/// N_XXM_0601_02: External model files (non-root) must have proper material properties
+/// When an object has some triangles with material properties and some without,
+/// the object must have a default pid to provide material for unmaterialized triangles
+fn validate_external_model_triangles<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    file_path: &str,
+    model: &Model,
+    validated_files: &mut HashSet<String>,
+) -> Result<()> {
+    // Skip if already validated or is encrypted
+    if validated_files.contains(file_path) {
+        return Ok(());
+    }
+
+    let is_encrypted = model
+        .secure_content
+        .as_ref()
+        .map(|sc| {
+            sc.encrypted_files.iter().any(|encrypted_path| {
+                let enc_normalized = encrypted_path.trim_start_matches('/');
+                enc_normalized == file_path
+            })
+        })
+        .unwrap_or(false);
+
+    if is_encrypted {
+        // Skip validation for encrypted files
+        validated_files.insert(file_path.to_string());
+        return Ok(());
+    }
+
+    // Load and fully parse the external model file
+    let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
+
+    // Parse the external model file with all extensions enabled plus common custom extensions
+    // We use a comprehensive config instead of the main model's config because:
+    // 1. External files may declare different required extensions than the main model
+    // 2. We're only validating triangle material properties, not enforcing extension requirements
+    // 3. This prevents failures when external files use extensions not in the main model's config
+    let external_config = ParserConfig::with_all_extensions()
+        .with_custom_extension(
+            "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10",
+            "Displacement 2023/10",
+        )
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04",
+            "SecureContent 2019/04",
+        )
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07",
+            "BeamLattice Balls",
+        )
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/trianglesets/2021/07",
+            "TriangleSets",
+        );
+
+    let external_model = match parse_model_xml_with_config(&external_xml, external_config) {
+        Ok(model) => model,
+        Err(e) => {
+            return Err(Error::InvalidModel(format!(
+                "External model file '{}' failed to parse: {}",
+                file_path, e
+            )));
+        }
+    };
+
+    // Validate triangle properties in the external model using the shared helper function
+    for object in &external_model.resources.objects {
+        if let Some(ref mesh) = object.mesh {
+            // Use the shared validation function from validator module
+            crate::validator::validate_object_triangle_materials(
+                object.id,
+                object.pid,
+                mesh,
+                &format!("External model file '{}': Object {}", file_path, object.id),
+            )?;
+        }
+    }
+
+    validated_files.insert(file_path.to_string());
     Ok(())
 }
 
