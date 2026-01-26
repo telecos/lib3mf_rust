@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 // Import functions from submodules for internal use
-use beam_lattice::parse_beam;
+use beam_lattice::{parse_ball, parse_beam, parse_beamlattice_start};
 use core::parse_component;
 use displacement::{
     parse_disp2dcoord, parse_disp2dgroup_start, parse_displacement2d, parse_normvector,
@@ -749,90 +749,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             obj.has_extension_shapes = true;
                         }
 
-                        let attrs = parse_attributes(&reader, e)?;
-                        let mut beamset = BeamSet::new();
-
-                        // Parse radius attribute (default 1.0)
-                        if let Some(radius_str) = attrs.get("radius") {
-                            let radius = radius_str.parse::<f64>()?;
-                            // Validate radius is finite and positive
-                            if !radius.is_finite() || radius <= 0.0 {
-                                return Err(Error::InvalidXml(format!(
-                                    "BeamLattice radius must be positive and finite (got {})",
-                                    radius
-                                )));
-                            }
-                            beamset.radius = radius;
-                        }
-
-                        // Parse minlength attribute (default 0.0001)
-                        if let Some(minlength_str) = attrs.get("minlength") {
-                            let minlength = minlength_str.parse::<f64>()?;
-                            // Validate minlength is finite and non-negative
-                            if !minlength.is_finite() || minlength < 0.0 {
-                                return Err(Error::InvalidXml(format!(
-                                    "BeamLattice minlength must be non-negative and finite (got {})",
-                                    minlength
-                                )));
-                            }
-                            beamset.min_length = minlength;
-                        }
-
-                        // Parse cap mode attribute (default sphere)
-                        if let Some(cap_str) = attrs.get("cap") {
-                            beamset.cap_mode = cap_str.parse()?;
-                        }
-
-                        // Parse clippingmesh ID attribute (optional)
-                        if let Some(clip_id_str) = attrs.get("clippingmesh") {
-                            beamset.clipping_mesh_id = Some(clip_id_str.parse::<u32>()?);
-                        }
-
-                        // Parse representationmesh ID attribute (optional)
-                        if let Some(rep_id_str) = attrs.get("representationmesh") {
-                            beamset.representation_mesh_id = Some(rep_id_str.parse::<u32>()?);
-                        }
-
-                        // Parse clippingmode attribute (optional)
-                        if let Some(clip_mode) = attrs.get("clippingmode") {
-                            beamset.clipping_mode = Some(clip_mode.clone());
-                        }
-
-                        // Parse ballmode attribute (optional) - from balls extension
-                        // This can be in default namespace or balls namespace (b2:ballmode)
-                        if let Some(ball_mode) =
-                            attrs.get("ballmode").or_else(|| attrs.get("b2:ballmode"))
-                        {
-                            beamset.ball_mode = Some(ball_mode.clone());
-                        }
-
-                        // Parse ballradius attribute (optional) - from balls extension
-                        // This can be in default namespace or balls namespace (b2:ballradius)
-                        if let Some(ball_radius_str) = attrs
-                            .get("ballradius")
-                            .or_else(|| attrs.get("b2:ballradius"))
-                        {
-                            let ball_radius = ball_radius_str.parse::<f64>()?;
-                            // Validate ball radius is finite and positive
-                            if !ball_radius.is_finite() || ball_radius <= 0.0 {
-                                return Err(Error::InvalidXml(format!(
-                                    "BeamLattice ballradius must be positive and finite (got {})",
-                                    ball_radius
-                                )));
-                            }
-                            beamset.ball_radius = Some(ball_radius);
-                        }
-
-                        // Parse pid attribute (optional) - material/property group ID
-                        if let Some(pid_str) = attrs.get("pid") {
-                            beamset.property_id = Some(pid_str.parse::<u32>()?);
-                        }
-
-                        // Parse pindex attribute (optional) - property index
-                        if let Some(pindex_str) = attrs.get("pindex") {
-                            beamset.property_index = Some(pindex_str.parse::<u32>()?);
-                        }
-
+                        let beamset = parse_beamlattice_start(&reader, e)?;
                         current_beamset = Some(beamset);
                     }
                     "beams" if in_beamset => {
@@ -874,39 +791,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Contains ball elements
                     }
                     "ball" if in_beamset => {
-                        // ball element from balls sub-extension
-                        // References a vertex index and may have material properties
-                        let attrs = parse_attributes(&reader, e)?;
-
-                        // Parse required vindex attribute
-                        let vindex = attrs
-                            .get("vindex")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "Ball element missing required vindex attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-
-                        let mut ball = Ball::new(vindex);
-
-                        // Parse optional radius
-                        if let Some(r_str) = attrs.get("r") {
-                            ball.radius = Some(r_str.parse::<f64>()?);
-                        }
-
-                        // Parse optional pid (property group ID)
-                        if let Some(pid_str) = attrs.get("pid") {
-                            ball.property_id = Some(pid_str.parse::<u32>()?);
-                        }
-
-                        // Parse optional p (property index)
-                        if let Some(p_str) = attrs.get("p") {
-                            ball.property_index = Some(p_str.parse::<u32>()?);
-                        }
-
-                        // Add ball to beamset
                         if let Some(ref mut beamset) = current_beamset {
+                            let ball = parse_ball(&reader, e)?;
                             beamset.balls.push(ball);
                         }
                     }
