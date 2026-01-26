@@ -130,9 +130,7 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{
-    BuildItem, Mesh, Model, Multi, MultiProperties, Object, Triangle, Vertex,
-    };
+    use crate::model::{BuildItem, Mesh, Model, Multi, MultiProperties, Object, Triangle, Vertex};
     use crate::validator::*;
 
     #[test]

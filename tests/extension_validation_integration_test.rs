@@ -4,7 +4,9 @@
 //! the validation flow in validate_model_with_config().
 
 use lib3mf::extension::ExtensionHandler;
-use lib3mf::{BuildItem, Error, Extension, Mesh, Model, Object, ParserConfig, Result, Triangle, Vertex};
+use lib3mf::{
+    BuildItem, Error, Extension, Mesh, Model, Object, ParserConfig, Result, Triangle, Vertex,
+};
 use std::sync::{Arc, Mutex};
 
 /// Test extension handler that tracks if validate() was called
@@ -88,10 +90,7 @@ fn test_extension_handler_validation_failure_propagates() {
 
     obj.mesh = Some(mesh);
     model.resources.objects.push(obj);
-    model
-        .build
-        .items
-        .push(BuildItem::new(1));
+    model.build.items.push(BuildItem::new(1));
 
     // Create a test handler that will fail validation
     let validate_called = Arc::new(Mutex::new(false));
@@ -147,10 +146,7 @@ fn test_multiple_extension_handlers_all_called() {
 
     obj.mesh = Some(mesh);
     model.resources.objects.push(obj);
-    model
-        .build
-        .items
-        .push(BuildItem::new(1));
+    model.build.items.push(BuildItem::new(1));
 
     // Create multiple test handlers that track whether validate() was called
     let material_called = Arc::new(Mutex::new(false));
@@ -220,10 +216,7 @@ fn test_default_registry_handlers_are_called() {
 
     obj.mesh = Some(mesh);
     model.resources.objects.push(obj);
-    model
-        .build
-        .items
-        .push(BuildItem::new(1));
+    model.build.items.push(BuildItem::new(1));
 
     // Use config with all extensions (includes default registry)
     let config = ParserConfig::with_all_extensions();
@@ -265,10 +258,7 @@ fn test_backward_compatibility_with_custom_extensions() {
 
     obj.mesh = Some(mesh);
     model.resources.objects.push(obj);
-    model
-        .build
-        .items
-        .push(BuildItem::new(1));
+    model.build.items.push(BuildItem::new(1));
 
     // Track if the old-style validation handler is called
     let legacy_called = Arc::new(Mutex::new(false));
@@ -320,10 +310,7 @@ fn test_both_systems_work_together() {
 
     obj.mesh = Some(mesh);
     model.resources.objects.push(obj);
-    model
-        .build
-        .items
-        .push(BuildItem::new(1));
+    model.build.items.push(BuildItem::new(1));
 
     // Track if both validation systems are called
     let registry_called = Arc::new(Mutex::new(false));
