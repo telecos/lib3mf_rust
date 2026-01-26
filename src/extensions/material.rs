@@ -51,8 +51,9 @@ impl ExtensionHandler for MaterialExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
-        // Check if the model uses any material-related resources
-        !model.resources.base_material_groups.is_empty()
+        // Check if extension is required or if model uses any material-related resources
+        model.required_extensions.contains(&Extension::Material)
+            || !model.resources.base_material_groups.is_empty()
             || !model.resources.color_groups.is_empty()
             || !model.resources.texture2d_groups.is_empty()
             || !model.resources.composite_materials.is_empty()

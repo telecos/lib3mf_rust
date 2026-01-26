@@ -46,6 +46,11 @@ impl ExtensionHandler for ProductionExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
+        // Check if extension is required or if any production attributes are present
+        if model.required_extensions.contains(&Extension::Production) {
+            return true;
+        }
+
         // Check if any objects have production info
         let has_object_production = model
             .resources

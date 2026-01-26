@@ -36,12 +36,15 @@ impl ExtensionHandler for BooleanOperationsExtensionHandler {
     }
 
     fn is_used_in_model(&self, model: &Model) -> bool {
-        // Check if any object has a boolean_shape field
+        // Check if extension is required or if any object has a boolean_shape field
         model
-            .resources
-            .objects
-            .iter()
-            .any(|obj| obj.boolean_shape.is_some())
+            .required_extensions
+            .contains(&Extension::BooleanOperations)
+            || model
+                .resources
+                .objects
+                .iter()
+                .any(|obj| obj.boolean_shape.is_some())
     }
 }
 
