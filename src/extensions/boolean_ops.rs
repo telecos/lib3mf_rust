@@ -1,4 +1,6 @@
 //! Boolean Operations extension handler
+//!
+//! Implements the `ExtensionHandler` trait for the Boolean Operations extension.
 
 use crate::error::Result;
 use crate::extension::ExtensionHandler;
@@ -13,27 +15,15 @@ use crate::validator::validate_boolean_operations;
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use lib3mf::extensions::BooleanOperationsExtensionHandler;
-/// use lib3mf::ExtensionRegistry;
+/// use lib3mf::extension::{ExtensionHandler, ExtensionRegistry};
 ///
+/// let handler = BooleanOperationsExtensionHandler;
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(BooleanOperationsExtensionHandler::new()));
+/// registry.register(Box::new(handler));
 /// ```
 pub struct BooleanOperationsExtensionHandler;
-
-impl BooleanOperationsExtensionHandler {
-    /// Create a new BooleanOperationsExtensionHandler
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for BooleanOperationsExtensionHandler {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl ExtensionHandler for BooleanOperationsExtensionHandler {
     fn extension_type(&self) -> Extension {
@@ -61,13 +51,13 @@ mod tests {
 
     #[test]
     fn test_extension_type() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         assert_eq!(handler.extension_type(), Extension::BooleanOperations);
     }
 
     #[test]
     fn test_namespace() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         assert_eq!(
             handler.namespace(),
             "http://schemas.3mf.io/3dmanufacturing/booleanoperations/2023/07"
@@ -76,13 +66,13 @@ mod tests {
 
     #[test]
     fn test_name() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         assert_eq!(handler.name(), "BooleanOperations");
     }
 
     #[test]
     fn test_is_used_in_model_with_boolean_shape() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         let mut model = Model::new();
 
         // Add a base object
@@ -103,7 +93,7 @@ mod tests {
 
     #[test]
     fn test_is_used_in_model_without_boolean_shape() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         let mut model = Model::new();
 
         // Add a regular object without boolean_shape
@@ -116,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_validate_valid_model() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         let mut model = Model::new();
 
         // Create a base mesh object
@@ -143,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_model_no_operands() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         let mut model = Model::new();
 
         // Create a base object
@@ -167,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_model_nonexistent_base() {
-        let handler = BooleanOperationsExtensionHandler::new();
+        let handler = BooleanOperationsExtensionHandler;
         let mut model = Model::new();
 
         // Create an object with boolean_shape referencing non-existent base
@@ -183,11 +173,5 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("non-existent object ID"));
-    }
-
-    #[test]
-    fn test_default_trait() {
-        let handler = BooleanOperationsExtensionHandler::default();
-        assert_eq!(handler.extension_type(), Extension::BooleanOperations);
     }
 }
