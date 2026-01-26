@@ -66,6 +66,7 @@
 
 pub mod error;
 pub mod extension;
+pub mod extensions;
 pub mod mesh_ops;
 pub mod model;
 pub mod opc;
