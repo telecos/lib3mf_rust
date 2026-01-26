@@ -1,8 +1,8 @@
 //! Relationship discovery and validation
 
-use crate::error::{Error, Result};
-use super::{Package, RELS_PATH, KEYSTORE_REL_TYPE_2019_04, KEYSTORE_REL_TYPE_2019_07};
 use super::reader::{get_file, has_file};
+use super::{Package, KEYSTORE_REL_TYPE_2019_04, KEYSTORE_REL_TYPE_2019_07, RELS_PATH};
+use crate::error::{Error, Result};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Read;
@@ -215,8 +215,7 @@ pub(super) fn validate_keystore_relationship<R: Read + std::io::Seek>(
                     if let (Some(t), Some(rt)) = (target, rel_type) {
                         let t_normalized = t.trim_start_matches('/');
                         if t_normalized == keystore_normalized
-                            && (rt == KEYSTORE_REL_TYPE_2019_04
-                                || rt == KEYSTORE_REL_TYPE_2019_07)
+                            && (rt == KEYSTORE_REL_TYPE_2019_04 || rt == KEYSTORE_REL_TYPE_2019_07)
                         {
                             has_valid_keystore_rel = true;
                             break;

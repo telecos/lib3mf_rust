@@ -1,7 +1,9 @@
 //! Package reading and validation functionality
 
+use super::{
+    Package, CONTENT_TYPES_PATH, MODEL_REL_TYPE, RELS_PATH, TEXTURE_REL_TYPE, THUMBNAIL_REL_TYPE,
+};
 use crate::error::{Error, Result};
-use super::{Package, CONTENT_TYPES_PATH, RELS_PATH, MODEL_REL_TYPE, TEXTURE_REL_TYPE, THUMBNAIL_REL_TYPE};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Read;
@@ -42,7 +44,7 @@ fn validate_opc_structure<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
                  This file defines package relationships and is required by the OPC specification. \
                  The 3MF file may be corrupt or improperly formatted.",
                 RELS_PATH
-            )
+            ),
         ));
     }
 
@@ -539,7 +541,10 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
 }
 
 /// Get a file from the package by name
-pub(super) fn get_file<R: Read + std::io::Seek>(package: &mut Package<R>, name: &str) -> Result<String> {
+pub(super) fn get_file<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    name: &str,
+) -> Result<String> {
     let mut file = package
         .archive
         .by_name(name)
@@ -567,12 +572,21 @@ pub(super) fn is_empty<R: Read + std::io::Seek>(package: &Package<R>) -> bool {
 /// Get a list of all file names in the package
 pub(super) fn file_names<R: Read + std::io::Seek>(package: &mut Package<R>) -> Vec<String> {
     (0..package.archive.len())
-        .filter_map(|i| package.archive.by_index(i).ok().map(|f| f.name().to_string()))
+        .filter_map(|i| {
+            package
+                .archive
+                .by_index(i)
+                .ok()
+                .map(|f| f.name().to_string())
+        })
         .collect()
 }
 
 /// Get a file as binary data
-pub(super) fn get_file_binary<R: Read + std::io::Seek>(package: &mut Package<R>, name: &str) -> Result<Vec<u8>> {
+pub(super) fn get_file_binary<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    name: &str,
+) -> Result<Vec<u8>> {
     let mut file = package
         .archive
         .by_name(name)
@@ -728,7 +742,10 @@ fn validate_opc_part_name(part_name: &str) -> Result<()> {
 
 /// Get content type for a file path
 #[allow(dead_code)]
-fn get_content_type<R: Read + std::io::Seek>(package: &mut Package<R>, path: &str) -> Result<String> {
+fn get_content_type<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    path: &str,
+) -> Result<String> {
     let content = get_file(package, CONTENT_TYPES_PATH)?;
     let mut reader = Reader::from_str(&content);
     reader.config_mut().trim_text(true);

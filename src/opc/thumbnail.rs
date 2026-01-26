@@ -1,8 +1,8 @@
 //! Thumbnail handling functionality
 
+use super::reader::{get_file, get_file_binary, has_file};
+use super::{Package, CONTENT_TYPES_PATH, MODEL_RELS_PATH, RELS_PATH, THUMBNAIL_REL_TYPE};
 use crate::error::{Error, Result};
-use super::{Package, RELS_PATH, MODEL_RELS_PATH, THUMBNAIL_REL_TYPE, CONTENT_TYPES_PATH};
-use super::reader::{get_file, has_file, get_file_binary};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Read;
@@ -13,7 +13,10 @@ fn normalize_path(path: &str) -> &str {
 }
 
 /// Get content type for a file from [Content_Types].xml
-fn get_content_type<R: Read + std::io::Seek>(package: &mut Package<R>, path: &str) -> Result<String> {
+fn get_content_type<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    path: &str,
+) -> Result<String> {
     let content = get_file(package, CONTENT_TYPES_PATH)?;
     let mut reader = Reader::from_str(&content);
     reader.config_mut().trim_text(true);

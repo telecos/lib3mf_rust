@@ -1,7 +1,7 @@
 //! Package writing functionality for creating 3MF files
 
-use crate::error::{Error, Result};
 use super::{CONTENT_TYPES_PATH, MODEL_PATH, RELS_PATH};
+use crate::error::{Error, Result};
 
 /// Create a 3MF package (ZIP archive) from model data
 ///

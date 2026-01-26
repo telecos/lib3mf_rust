@@ -1,8 +1,8 @@
 //! Content types parsing and validation
 
-use crate::error::{Error, Result};
-use super::{Package, CONTENT_TYPES_PATH};
 use super::reader::get_file;
+use super::{Package, CONTENT_TYPES_PATH};
+use crate::error::{Error, Result};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Read;
@@ -58,9 +58,7 @@ pub(super) fn validate_keystore_content_type<R: Read + std::io::Seek>(
                         if pn_normalized == keystore_normalized {
                             // Check if it's the correct content type
                             if let Some(ct) = content_type {
-                                if ct
-                                    == "application/vnd.ms-package.3dmanufacturing-keystore+xml"
-                                {
+                                if ct == "application/vnd.ms-package.3dmanufacturing-keystore+xml" {
                                     has_override = true;
                                 }
                             }
