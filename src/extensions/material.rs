@@ -139,7 +139,11 @@ mod tests {
         let mut model = Model::new();
 
         // Add a texture2d resource
-        let texture = Texture2D::new(10, "/Textures/texture.png".to_string(), "image/png".to_string());
+        let texture = Texture2D::new(
+            10,
+            "/Textures/texture.png".to_string(),
+            "image/png".to_string(),
+        );
         model.resources.texture2d_resources.push(texture);
 
         assert!(handler.is_used_in_model(&model));
