@@ -70,7 +70,7 @@ fn test_parse_and_write_texture2d() {
     // Note: We can't parse the model back because the texture file doesn't exist in the package.
     // The parser now validates that texture paths reference actual files (per N_XPM_0610_01).
     // This test verifies that writing texture2d resources to XML works correctly.
-    
+
     // Verify the package was written (non-empty)
     let data = cursor.into_inner();
     assert!(!data.is_empty(), "Written 3MF package should not be empty");
@@ -160,8 +160,12 @@ fn test_parse_and_write_multi_properties() {
 
     // Add base material group (required as first property group per 3MF spec)
     let mut base_group = BaseMaterialGroup::new(1);
-    base_group.materials.push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
-    base_group.materials.push(BaseMaterial::new("Green".to_string(), (0, 255, 0, 255)));
+    base_group
+        .materials
+        .push(BaseMaterial::new("Red".to_string(), (255, 0, 0, 255)));
+    base_group
+        .materials
+        .push(BaseMaterial::new("Green".to_string(), (0, 255, 0, 255)));
     model.resources.base_material_groups.push(base_group);
 
     // Add color group (only ONE colorgroup allowed per 3MF spec)
