@@ -4,6 +4,8 @@
 //! in a modular, pluggable way. Each extension can provide its own parsing, validation,
 //! and writing logic through the `ExtensionHandler` trait.
 
+use std::sync::Arc;
+
 use crate::error::Result;
 use crate::model::{Extension, Model};
 
@@ -109,16 +111,18 @@ pub trait ExtensionHandler: Send + Sync {
 ///
 /// ```ignore
 /// use lib3mf::extension::ExtensionRegistry;
+/// use std::sync::Arc;
 ///
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(MaterialExtensionHandler));
-/// registry.register(Box::new(ProductionExtensionHandler));
+/// registry.register(Arc::new(MaterialExtensionHandler));
+/// registry.register(Arc::new(ProductionExtensionHandler));
 ///
 /// // Validate all registered extensions
 /// registry.validate_all(&model)?;
 /// ```
+#[derive(Clone)]
 pub struct ExtensionRegistry {
-    handlers: Vec<Box<dyn ExtensionHandler>>,
+    handlers: Vec<Arc<dyn ExtensionHandler>>,
 }
 
 impl ExtensionRegistry {
@@ -134,7 +138,7 @@ impl ExtensionRegistry {
     /// # Arguments
     ///
     /// * `handler` - The extension handler to register
-    pub fn register(&mut self, handler: Box<dyn ExtensionHandler>) {
+    pub fn register(&mut self, handler: Arc<dyn ExtensionHandler>) {
         self.handlers.push(handler);
     }
 
@@ -215,7 +219,7 @@ impl ExtensionRegistry {
     }
 
     /// Get all registered handlers
-    pub fn handlers(&self) -> &[Box<dyn ExtensionHandler>] {
+    pub fn handlers(&self) -> &[Arc<dyn ExtensionHandler>] {
         &self.handlers
     }
 }
@@ -257,7 +261,7 @@ mod tests {
         let mut registry = ExtensionRegistry::new();
         assert!(registry.handlers().is_empty());
 
-        let handler = Box::new(TestExtensionHandler {
+        let handler = Arc::new(TestExtensionHandler {
             ext_type: Extension::Material,
             should_fail: false,
         });
@@ -286,11 +290,11 @@ mod tests {
     #[test]
     fn test_validate_all_success() {
         let mut registry = ExtensionRegistry::new();
-        registry.register(Box::new(TestExtensionHandler {
+        registry.register(Arc::new(TestExtensionHandler {
             ext_type: Extension::Material,
             should_fail: false,
         }));
-        registry.register(Box::new(TestExtensionHandler {
+        registry.register(Arc::new(TestExtensionHandler {
             ext_type: Extension::Production,
             should_fail: false,
         }));
@@ -302,11 +306,11 @@ mod tests {
     #[test]
     fn test_validate_all_failure() {
         let mut registry = ExtensionRegistry::new();
-        registry.register(Box::new(TestExtensionHandler {
+        registry.register(Arc::new(TestExtensionHandler {
             ext_type: Extension::Material,
             should_fail: false,
         }));
-        registry.register(Box::new(TestExtensionHandler {
+        registry.register(Arc::new(TestExtensionHandler {
             ext_type: Extension::Production,
             should_fail: true,
         }));

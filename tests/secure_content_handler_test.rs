@@ -1,5 +1,7 @@
 //! Integration test for SecureContentExtensionHandler with ExtensionRegistry
 
+use std::sync::Arc;
+
 use lib3mf::{
     extensions::SecureContentExtensionHandler, AccessRight, CEKParams, Consumer, Extension,
     ExtensionHandler, ExtensionRegistry, KEKParams, Model, ResourceData, ResourceDataGroup,
@@ -9,7 +11,7 @@ use lib3mf::{
 #[test]
 fn test_secure_content_handler_with_registry() {
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 
     // Verify handler is registered
     assert_eq!(registry.handlers().len(), 1);
@@ -19,7 +21,7 @@ fn test_secure_content_handler_with_registry() {
 #[test]
 fn test_registry_validate_empty_model() {
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 
     let model = Model::new();
 
@@ -30,7 +32,7 @@ fn test_registry_validate_empty_model() {
 #[test]
 fn test_registry_validate_model_with_secure_content() {
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 
     let mut model = Model::new();
 
@@ -76,7 +78,7 @@ fn test_registry_validate_model_with_secure_content() {
 #[test]
 fn test_registry_validate_invalid_secure_content() {
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 
     let mut model = Model::new();
 
@@ -109,7 +111,7 @@ fn test_registry_validate_invalid_secure_content() {
 #[test]
 fn test_registry_post_parse_all() {
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 
     let mut model = Model::new();
     model.secure_content = Some(SecureContentInfo::default());
@@ -121,7 +123,7 @@ fn test_registry_post_parse_all() {
 #[test]
 fn test_registry_pre_write_all() {
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 
     let mut model = Model::new();
     model.secure_content = Some(SecureContentInfo::default());

@@ -18,10 +18,11 @@ use crate::validator::validate_boolean_operations;
 /// ```ignore
 /// use lib3mf::extensions::BooleanOperationsExtensionHandler;
 /// use lib3mf::extension::{ExtensionHandler, ExtensionRegistry};
+/// use std::sync::Arc;
 ///
 /// let handler = BooleanOperationsExtensionHandler;
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(handler));
+/// registry.register(Arc::new(handler));
 /// ```
 pub struct BooleanOperationsExtensionHandler;
 

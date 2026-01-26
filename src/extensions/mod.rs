@@ -24,10 +24,11 @@
 //! ```
 //! use lib3mf::extension::ExtensionRegistry;
 //! use lib3mf::extensions::{MaterialExtensionHandler, ProductionExtensionHandler};
+//! use std::sync::Arc;
 //!
 //! let mut registry = ExtensionRegistry::new();
-//! registry.register(Box::new(MaterialExtensionHandler));
-//! registry.register(Box::new(ProductionExtensionHandler));
+//! registry.register(Arc::new(MaterialExtensionHandler));
+//! registry.register(Arc::new(ProductionExtensionHandler));
 //! ```
 
 pub mod beam_lattice;
@@ -45,6 +46,8 @@ pub use material::MaterialExtensionHandler;
 pub use production::ProductionExtensionHandler;
 pub use secure_content::SecureContentExtensionHandler;
 pub use slice::SliceExtensionHandler;
+
+use std::sync::Arc;
 
 use crate::extension::ExtensionRegistry;
 
@@ -116,11 +119,11 @@ pub fn create_default_registry() -> ExtensionRegistry {
 /// assert_eq!(registry.handlers().len(), 7);
 /// ```
 pub fn register_all_handlers(registry: &mut ExtensionRegistry) {
-    registry.register(Box::new(MaterialExtensionHandler));
-    registry.register(Box::new(ProductionExtensionHandler));
-    registry.register(Box::new(BeamLatticeExtensionHandler));
-    registry.register(Box::new(SliceExtensionHandler));
-    registry.register(Box::new(BooleanOperationsExtensionHandler));
-    registry.register(Box::new(DisplacementExtensionHandler));
-    registry.register(Box::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(MaterialExtensionHandler));
+    registry.register(Arc::new(ProductionExtensionHandler));
+    registry.register(Arc::new(BeamLatticeExtensionHandler));
+    registry.register(Arc::new(SliceExtensionHandler));
+    registry.register(Arc::new(BooleanOperationsExtensionHandler));
+    registry.register(Arc::new(DisplacementExtensionHandler));
+    registry.register(Arc::new(SecureContentExtensionHandler));
 }

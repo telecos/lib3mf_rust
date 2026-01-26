@@ -3,6 +3,8 @@
 //! This example shows how to use the ProductionExtensionHandler to validate
 //! production extension data in 3MF files.
 
+use std::sync::Arc;
+
 use lib3mf::extensions::ProductionExtensionHandler;
 use lib3mf::{Extension, ExtensionHandler, ExtensionRegistry, Model};
 use std::fs::File;
@@ -82,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test 3: Using with ExtensionRegistry
     println!("\n\nTest 3: Using with ExtensionRegistry");
     let mut registry = ExtensionRegistry::new();
-    registry.register(Box::new(ProductionExtensionHandler));
+    registry.register(Arc::new(ProductionExtensionHandler));
     println!("  ✓ Handler registered");
 
     let model = Model::new();

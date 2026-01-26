@@ -24,9 +24,10 @@ use crate::validator::{validate_slice_extension, validate_slices};
 /// ```ignore
 /// use lib3mf::extension::ExtensionRegistry;
 /// use lib3mf::extensions::slice::SliceExtensionHandler;
+/// use std::sync::Arc;
 ///
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(SliceExtensionHandler));
+/// registry.register(Arc::new(SliceExtensionHandler));
 /// ```
 pub struct SliceExtensionHandler;
 

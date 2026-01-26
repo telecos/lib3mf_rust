@@ -23,10 +23,11 @@ use crate::validator::{
 /// ```ignore
 /// use lib3mf::extensions::MaterialExtensionHandler;
 /// use lib3mf::extension::{ExtensionHandler, ExtensionRegistry};
+/// use std::sync::Arc;
 ///
 /// let handler = MaterialExtensionHandler;
 /// let mut registry = ExtensionRegistry::new();
-/// registry.register(Box::new(handler));
+/// registry.register(Arc::new(handler));
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct MaterialExtensionHandler;
