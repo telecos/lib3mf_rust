@@ -5,7 +5,7 @@
 //! within the same 3MF package.
 
 use crate::error::{Error, Result};
-use crate::model::Model;
+use crate::model::{Model, ParserConfig};
 use crate::opc::Package;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
@@ -38,6 +38,7 @@ use super::secure_content::validate_encrypted_file_can_be_loaded;
 pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &Model,
+    config: &ParserConfig,
 ) -> Result<()> {
     // Cache to avoid re-parsing the same external file multiple times
     let mut external_file_cache: HashMap<String, Vec<(usize, Option<String>)>> = HashMap::new();
@@ -72,6 +73,7 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
                     normalized_path,
                     path,
                     model,
+                    config,
                     &format!("Build item {}", idx),
                 )?;
                 continue;
@@ -99,6 +101,7 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
                 &format!("Build item {}", idx),
                 &mut external_file_cache,
                 model,
+                config,
             )?;
 
             // N_XXM_0601_02: Validate triangle material properties in external model file
@@ -107,6 +110,7 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
                 normalized_path,
                 model,
                 &mut validated_files,
+                config,
             )?;
         }
     }
@@ -141,6 +145,7 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
                             normalized_path,
                             path,
                             model,
+                            config,
                             &format!("Object {}, Component {}", object.id, comp_idx),
                         )?;
                         continue;
@@ -168,6 +173,7 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
                         &format!("Object {}, Component {}", object.id, comp_idx),
                         &mut external_file_cache,
                         model,
+                        config,
                     )?;
 
                     // N_XXM_0601_02: Validate triangle material properties in external model file
@@ -176,6 +182,7 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
                         normalized_path,
                         model,
                         &mut validated_files,
+                        config,
                     )?;
                 }
             }

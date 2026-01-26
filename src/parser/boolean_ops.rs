@@ -46,6 +46,7 @@ const XML_BUFFER_CAPACITY: usize = 4096;
 pub(super) fn validate_boolean_external_paths<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &Model,
+    config: &ParserConfig,
 ) -> Result<()> {
     // Cache to avoid re-parsing the same external file multiple times
     let mut external_file_cache: HashMap<String, Vec<usize>> = HashMap::new();
@@ -97,6 +98,7 @@ pub(super) fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                     "booleanshape base",
                     &mut external_file_cache,
                     model,
+                    config,
                 )?;
             }
 
@@ -146,6 +148,7 @@ pub(super) fn validate_boolean_external_paths<R: Read + std::io::Seek>(
                         "boolean operand",
                         &mut external_file_cache,
                         model,
+                        config,
                     )?;
                 }
             }
@@ -166,11 +169,12 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
     reference_type: &str,
     cache: &mut HashMap<String, Vec<usize>>,
     model: &Model,
+    config: &ParserConfig,
 ) -> Result<()> {
     // Check cache first and load if needed
     if !cache.contains_key(file_path) {
         // Load and parse the external model file (decrypt if encrypted)
-        let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
+        let external_xml = load_file_with_decryption(package, file_path, file_path, model, config)?;
 
         // Parse just enough to extract object IDs
         let mut reader = Reader::from_str(&external_xml);
@@ -255,11 +259,12 @@ pub(super) fn validate_external_object_reference<R: Read + std::io::Seek>(
     reference_context: &str,
     cache: &mut HashMap<String, Vec<(usize, Option<String>)>>,
     model: &Model,
+    config: &ParserConfig,
 ) -> Result<()> {
     // Check cache first and get object info
     if !cache.contains_key(file_path) {
         // Load and parse the external model file (decrypt if encrypted)
-        let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
+        let external_xml = load_file_with_decryption(package, file_path, file_path, model, config)?;
 
         // Parse to extract object IDs and UUIDs
         let mut reader = Reader::from_str(&external_xml);
@@ -402,6 +407,7 @@ pub(super) fn validate_external_model_triangles<R: Read + std::io::Seek>(
     file_path: &str,
     model: &Model,
     validated_files: &mut HashSet<String>,
+    config: &ParserConfig,
 ) -> Result<()> {
     // Skip if already validated or is encrypted
     if validated_files.contains(file_path) {
@@ -426,7 +432,7 @@ pub(super) fn validate_external_model_triangles<R: Read + std::io::Seek>(
     }
 
     // Load and fully parse the external model file
-    let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
+    let external_xml = load_file_with_decryption(package, file_path, file_path, model, config)?;
 
     // Parse the external model file with all extensions enabled plus common custom extensions
     // We use a comprehensive config instead of the main model's config because:

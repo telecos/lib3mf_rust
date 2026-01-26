@@ -17,6 +17,7 @@ use super::{load_file_with_decryption, parse_model_xml_with_config};
 pub(super) fn load_slice_references<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &mut Model,
+    config: &ParserConfig,
 ) -> Result<()> {
     // Type alias for complex nested vector to improve readability
     type SliceRefInfo = (String, String, usize);
@@ -78,7 +79,7 @@ pub(super) fn load_slice_references<R: Read + std::io::Seek>(
         for (normalized_path, display_path, expected_stack_id) in refs {
             // Load the slice file from the package (decrypt if encrypted)
             let slice_xml =
-                load_file_with_decryption(package, &normalized_path, &display_path, model)?;
+                load_file_with_decryption(package, &normalized_path, &display_path, model, config)?;
 
             // Parse the slice file to extract slices and objects
             let (slices, objects) = parse_slice_file_with_objects(&slice_xml, expected_stack_id)?;
