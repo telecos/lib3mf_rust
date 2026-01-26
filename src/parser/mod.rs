@@ -25,7 +25,12 @@ use std::io::Read;
 use beam_lattice::parse_beam;
 use core::parse_component;
 use displacement::validate_displacement_namespace_prefix;
-use material::{parse_base_material, validate_texture_file_paths};
+use material::{
+    parse_base_element, parse_base_material, parse_basematerials_start,
+    parse_color_element, parse_colorgroup_start, parse_composite, parse_compositematerials_start,
+    parse_multi, parse_multiproperties_start, parse_tex2coord, parse_texture2d,
+    parse_texture2dgroup_start, validate_texture_file_paths,
+};
 use slice::load_slice_references;
 
 // Re-export public functions to maintain API compatibility
@@ -645,36 +650,15 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "basematerials" if in_resources => {
                         in_basematerials = true;
                         material_index = 0;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| Error::missing_attribute("basematerials", "id"))?
-                            .parse::<usize>()?;
-                        let mut group = BaseMaterialGroup::new(id);
-                        group.parse_order = resource_parse_order;
+                        let group = parse_basematerials_start(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_basematerialgroup = Some(group);
                     }
                     "base" if in_basematerials => {
                         // Materials within basematerials group
                         if let Some(ref mut group) = current_basematerialgroup {
-                            let attrs = parse_attributes(&reader, e)?;
-
-                            // Validate only allowed attributes are present
-                            // Per 3MF Materials & Properties Extension spec: name, displaycolor
-                            validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
-
-                            let name = attrs.get("name").cloned().unwrap_or_default();
-
-                            // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
-                            // If displaycolor is missing or invalid, use white as default
-                            let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
-                                parse_color(color_str).unwrap_or((255, 255, 255, 255))
-                            } else {
-                                (255, 255, 255, 255)
-                            };
-
-                            group.materials.push(BaseMaterial::new(name, displaycolor));
+                            let base = parse_base_element(&reader, e)?;
+                            group.materials.push(base);
                         }
 
                         // Still parse to materials list for backward compatibility
@@ -684,247 +668,55 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "colorgroup" if in_resources => {
                         in_colorgroup = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| Error::missing_attribute("colorgroup", "id"))?
-                            .parse::<usize>()?;
-                        let mut group = ColorGroup::new(id);
-                        group.parse_order = resource_parse_order;
+                        let group = parse_colorgroup_start(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_colorgroup = Some(group);
                     }
                     "color" if in_colorgroup => {
                         if let Some(ref mut colorgroup) = current_colorgroup {
-                            let attrs = parse_attributes(&reader, e)?;
-                            if let Some(color_str) = attrs.get("color") {
-                                let color = parse_color(color_str).ok_or_else(|| {
-                                    Error::InvalidXml(format!(
-                                        "Invalid color format '{}' in colorgroup {}.\n\
-                                         Colors must be in format #RRGGBB or #RRGGBBAA where each component is a hexadecimal value (0-9, A-F).\n\
-                                         Examples: #FF0000 (red), #00FF0080 (semi-transparent green)",
-                                        color_str, colorgroup.id
-                                    ))
-                                })?;
-                                colorgroup.colors.push(color);
-                            }
+                            let color = parse_color_element(&reader, e, colorgroup.id)?;
+                            colorgroup.colors.push(color);
                         }
                     }
                     "texture2d" if in_resources => {
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| Error::missing_attribute("texture2d", "id"))?
-                            .parse::<usize>()?;
-                        let path = attrs
-                            .get("path")
-                            .ok_or_else(|| Error::missing_attribute("texture2d", "path"))?
-                            .to_string();
-                        let contenttype = attrs
-                            .get("contenttype")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "texture2d missing contenttype attribute".to_string(),
-                                )
-                            })?
-                            .to_string();
-
-                        let mut texture = Texture2D::new(id, path, contenttype);
-                        texture.parse_order = resource_parse_order;
+                        let texture = parse_texture2d(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
-
-                        // Parse optional attributes with spec defaults
-                        if let Some(tileu_str) = attrs.get("tilestyleu") {
-                            texture.tilestyleu = match tileu_str.to_lowercase().as_str() {
-                                "wrap" => TileStyle::Wrap,
-                                "mirror" => TileStyle::Mirror,
-                                "clamp" => TileStyle::Clamp,
-                                "none" => TileStyle::None,
-                                _ => TileStyle::Wrap,
-                            };
-                        }
-
-                        if let Some(tilev_str) = attrs.get("tilestylev") {
-                            texture.tilestylev = match tilev_str.to_lowercase().as_str() {
-                                "wrap" => TileStyle::Wrap,
-                                "mirror" => TileStyle::Mirror,
-                                "clamp" => TileStyle::Clamp,
-                                "none" => TileStyle::None,
-                                _ => TileStyle::Wrap,
-                            };
-                        }
-
-                        if let Some(filter_str) = attrs.get("filter") {
-                            texture.filter = match filter_str.to_lowercase().as_str() {
-                                "auto" => FilterMode::Auto,
-                                "linear" => FilterMode::Linear,
-                                "nearest" => FilterMode::Nearest,
-                                _ => FilterMode::Auto,
-                            };
-                        }
-
                         model.resources.texture2d_resources.push(texture);
                     }
                     "texture2dgroup" if in_resources => {
                         in_texture2dgroup = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| Error::missing_attribute("texture2dgroup", "id"))?
-                            .parse::<usize>()?;
-                        let texid = attrs
-                            .get("texid")
-                            .ok_or_else(|| Error::missing_attribute("texture2dgroup", "texid"))?
-                            .parse::<usize>()?;
-                        let mut group = Texture2DGroup::new(id, texid);
-                        group.parse_order = resource_parse_order;
+                        let group = parse_texture2dgroup_start(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_texture2dgroup = Some(group);
                     }
                     "tex2coord" if in_texture2dgroup => {
                         if let Some(ref mut group) = current_texture2dgroup {
-                            let attrs = parse_attributes(&reader, e)?;
-                            let u = attrs
-                                .get("u")
-                                .ok_or_else(|| Error::missing_attribute("tex2coord", "u"))?
-                                .parse::<f32>()?;
-                            let v = attrs
-                                .get("v")
-                                .ok_or_else(|| Error::missing_attribute("tex2coord", "v"))?
-                                .parse::<f32>()?;
-                            group.tex2coords.push(Tex2Coord::new(u, v));
+                            let coord = parse_tex2coord(&reader, e)?;
+                            group.tex2coords.push(coord);
                         }
                     }
                     "compositematerials" if in_resources => {
                         in_compositematerials = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "compositematerials missing id attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        let matid = attrs
-                            .get("matid")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "compositematerials missing matid attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        let matindices_str = attrs.get("matindices").ok_or_else(|| {
-                            Error::InvalidXml(
-                                "compositematerials missing matindices attribute".to_string(),
-                            )
-                        })?;
-                        let matindices: Vec<usize> = matindices_str
-                            .split_whitespace()
-                            .filter_map(|s| s.parse::<usize>().ok())
-                            .collect();
-
-                        // Validate we parsed at least one index
-                        if matindices.is_empty() {
-                            return Err(Error::InvalidXml(
-                                "compositematerials matindices must contain at least one valid index"
-                                    .to_string(),
-                            ));
-                        }
-
-                        let mut group = CompositeMaterials::new(id, matid, matindices);
-                        group.parse_order = resource_parse_order;
+                        let group = parse_compositematerials_start(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_compositematerials = Some(group);
                     }
                     "composite" if in_compositematerials => {
                         if let Some(ref mut group) = current_compositematerials {
-                            let attrs = parse_attributes(&reader, e)?;
-                            let values_str = attrs.get("values").ok_or_else(|| {
-                                Error::InvalidXml("composite missing values attribute".to_string())
-                            })?;
-                            let values: Vec<f32> = values_str
-                                .split_whitespace()
-                                .filter_map(|s| s.parse::<f32>().ok())
-                                .collect();
-
-                            // Validate we parsed at least one value
-                            if values.is_empty() {
-                                return Err(Error::InvalidXml(
-                                    "composite values must contain at least one valid number"
-                                        .to_string(),
-                                ));
-                            }
-
-                            group.composites.push(Composite::new(values));
+                            let composite = parse_composite(&reader, e)?;
+                            group.composites.push(composite);
                         }
                     }
                     "multiproperties" if in_resources => {
                         in_multiproperties = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "multiproperties missing id attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        let pids_str = attrs.get("pids").ok_or_else(|| {
-                            Error::InvalidXml("multiproperties missing pids attribute".to_string())
-                        })?;
-                        let pids: Vec<usize> = pids_str
-                            .split_whitespace()
-                            .filter_map(|s| s.parse::<usize>().ok())
-                            .collect();
-
-                        // Validate we parsed at least one property ID
-                        if pids.is_empty() {
-                            return Err(Error::InvalidXml(
-                                "multiproperties pids must contain at least one valid ID"
-                                    .to_string(),
-                            ));
-                        }
-
-                        let mut multi = MultiProperties::new(id, pids);
-                        multi.parse_order = resource_parse_order;
+                        let multi = parse_multiproperties_start(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
-
-                        // Parse optional blendmethods
-                        if let Some(blend_str) = attrs.get("blendmethods") {
-                            multi.blendmethods = blend_str
-                                .split_whitespace()
-                                .filter_map(|s| match s.to_lowercase().as_str() {
-                                    "mix" => Some(BlendMethod::Mix),
-                                    "multiply" => Some(BlendMethod::Multiply),
-                                    _ => None,
-                                })
-                                .collect();
-                        }
-
                         current_multiproperties = Some(multi);
                     }
                     "multi" if in_multiproperties => {
                         if let Some(ref mut group) = current_multiproperties {
-                            let attrs = parse_attributes(&reader, e)?;
-                            let pindices_str = attrs.get("pindices").ok_or_else(|| {
-                                Error::InvalidXml("multi missing pindices attribute".to_string())
-                            })?;
-                            let pindices: Vec<usize> = pindices_str
-                                .split_whitespace()
-                                .filter_map(|s| s.parse::<usize>().ok())
-                                .collect();
-
-                            // Note: Empty pindices is allowed per spec - defaults to 0
-                            // But if there's text that all failed to parse, that's an error
-                            if !pindices_str.trim().is_empty() && pindices.is_empty() {
-                                return Err(Error::InvalidXml(
-                                    "multi pindices contains invalid values that could not be parsed"
-                                        .to_string(),
-                                ));
-                            }
-
-                            group.multis.push(Multi::new(pindices));
+                            let multi = parse_multi(&reader, e)?;
+                            group.multis.push(multi);
                         }
                     }
                     "displacement2d" if in_resources => {
@@ -1861,28 +1653,6 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     Ok(model)
 }
 
-/// Parse color string in format #RRGGBBAA or #RRGGBB
-fn parse_color(color_str: &str) -> Option<(u8, u8, u8, u8)> {
-    let color_str = color_str.trim_start_matches('#');
-
-    if color_str.len() == 6 {
-        // #RRGGBB format (assume full opacity)
-        let r = u8::from_str_radix(&color_str[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&color_str[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&color_str[4..6], 16).ok()?;
-        Some((r, g, b, 255))
-    } else if color_str.len() == 8 {
-        // #RRGGBBAA format
-        let r = u8::from_str_radix(&color_str[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&color_str[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&color_str[4..6], 16).ok()?;
-        let a = u8::from_str_radix(&color_str[6..8], 16).ok()?;
-        Some((r, g, b, a))
-    } else {
-        None
-    }
-}
-
 /// Parse required extensions from a space-separated list of namespace URIs
 #[allow(dead_code)] // Kept for backward compatibility
 fn parse_required_extensions(extensions_str: &str) -> Result<(Vec<Extension>, Vec<String>)> {
@@ -2197,22 +1967,6 @@ pub(crate) fn validate_attributes(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_parse_color() {
-        // Test #RRGGBB format
-        assert_eq!(parse_color("#FF0000"), Some((255, 0, 0, 255)));
-        assert_eq!(parse_color("#00FF00"), Some((0, 255, 0, 255)));
-        assert_eq!(parse_color("#0000FF"), Some((0, 0, 255, 255)));
-
-        // Test #RRGGBBAA format
-        assert_eq!(parse_color("#FF000080"), Some((255, 0, 0, 128)));
-        assert_eq!(parse_color("#00FF00FF"), Some((0, 255, 0, 255)));
-
-        // Test invalid formats
-        assert_eq!(parse_color("#FF"), None);
-        assert_eq!(parse_color("FF0000"), Some((255, 0, 0, 255)));
-    }
 
     #[test]
     fn test_parse_minimal_model() {
