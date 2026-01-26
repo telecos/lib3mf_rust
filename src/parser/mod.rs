@@ -34,7 +34,10 @@ use material::{
     parse_multi, parse_multiproperties_start, parse_tex2coord, parse_texture2d,
     parse_texture2dgroup_start, validate_texture_file_paths,
 };
-use slice::load_slice_references;
+use slice::{
+    load_slice_references, parse_slice_polygon_start, parse_slice_segment, parse_slice_start,
+    parse_slice_vertex, parse_sliceref, parse_slicestack_start,
+};
 
 // Re-export public functions to maintain API compatibility
 pub use core::{parse_build_item, parse_object, parse_triangle, parse_vertex};
@@ -956,113 +959,48 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "slicestack" if in_resources => {
                         in_slicestack = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("SliceStack missing id attribute".to_string())
-                            })?
-                            .parse::<usize>()?;
-                        let zbottom = attrs
-                            .get("zbottom")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "SliceStack missing zbottom attribute".to_string(),
-                                )
-                            })?
-                            .parse::<f64>()?;
-                        current_slicestack = Some(SliceStack::new(id, zbottom));
+                        let stack = parse_slicestack_start(&reader, e)?;
+                        current_slicestack = Some(stack);
                     }
                     "slice" if in_slicestack => {
                         in_slice = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let ztop = attrs
-                            .get("ztop")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("Slice missing ztop attribute".to_string())
-                            })?
-                            .parse::<f64>()?;
-                        current_slice = Some(Slice::new(ztop));
-
+                        let slice = parse_slice_start(&reader, e)?;
+                        
                         // For self-closing empty slice tags like <s:slice ztop="100.060"/>,
                         // immediately push the slice since there won't be an End event
                         if is_empty_element {
-                            if let Some(slice) = current_slice.take() {
-                                if let Some(ref mut slicestack) = current_slicestack {
-                                    slicestack.slices.push(slice);
-                                }
+                            if let Some(ref mut slicestack) = current_slicestack {
+                                slicestack.slices.push(slice);
                             }
                             in_slice = false;
+                        } else {
+                            current_slice = Some(slice);
                         }
                     }
                     "sliceref" if in_slicestack => {
-                        let attrs = parse_attributes(&reader, e)?;
-                        let slicestackid = attrs
-                            .get("slicestackid")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "SliceRef missing slicestackid attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        let slicepath = attrs
-                            .get("slicepath")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "SliceRef missing slicepath attribute".to_string(),
-                                )
-                            })?
-                            .to_string();
+                        let slice_ref = parse_sliceref(&reader, e)?;
                         if let Some(ref mut slicestack) = current_slicestack {
-                            slicestack
-                                .slice_refs
-                                .push(SliceRef::new(slicestackid, slicepath));
+                            slicestack.slice_refs.push(slice_ref);
                         }
                     }
                     "vertices" if in_slice => {
                         in_slice_vertices = true;
                     }
                     "vertex" if in_slice_vertices => {
-                        let attrs = parse_attributes(&reader, e)?;
-                        let x = attrs
-                            .get("x")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("Slice vertex missing x attribute".to_string())
-                            })?
-                            .parse::<f64>()?;
-                        let y = attrs
-                            .get("y")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("Slice vertex missing y attribute".to_string())
-                            })?
-                            .parse::<f64>()?;
+                        let vertex = parse_slice_vertex(&reader, e)?;
                         if let Some(ref mut slice) = current_slice {
-                            slice.vertices.push(Vertex2D::new(x, y));
+                            slice.vertices.push(vertex);
                         }
                     }
                     "polygon" if in_slice => {
                         in_slice_polygon = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let startv = attrs
-                            .get("startv")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "Slice polygon missing startv attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        current_slice_polygon = Some(SlicePolygon::new(startv));
+                        let polygon = parse_slice_polygon_start(&reader, e)?;
+                        current_slice_polygon = Some(polygon);
                     }
                     "segment" if in_slice_polygon => {
-                        let attrs = parse_attributes(&reader, e)?;
-                        let v2 = attrs
-                            .get("v2")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("Slice segment missing v2 attribute".to_string())
-                            })?
-                            .parse::<usize>()?;
+                        let segment = parse_slice_segment(&reader, e)?;
                         if let Some(ref mut polygon) = current_slice_polygon {
-                            polygon.segments.push(SliceSegment::new(v2));
+                            polygon.segments.push(segment);
                         }
                     }
                     "booleanshape" if in_resources && current_object.is_some() => {

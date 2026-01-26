@@ -4,11 +4,12 @@
 //! including slice references and external slice files.
 
 use crate::error::{Error, Result};
-use crate::model::{Model, Object, ParserConfig, Slice};
+use crate::model::*;
 use crate::opc::Package;
 use std::io::Read;
+use quick_xml::Reader;
 
-use super::{load_file_with_decryption, parse_model_xml_with_config};
+use super::{load_file_with_decryption, parse_attributes, parse_model_xml_with_config};
 
 /// Load external slice files referenced by SliceRef elements
 ///
@@ -166,4 +167,102 @@ fn parse_slice_file_with_objects(
     let objects = std::mem::take(&mut external_model.resources.objects);
 
     Ok((slices, objects))
+}
+
+/// Parse slicestack start and return initialized stack
+pub(super) fn parse_slicestack_start<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<SliceStack> {
+    let attrs = parse_attributes(reader, e)?;
+    let id = attrs
+        .get("id")
+        .ok_or_else(|| Error::InvalidXml("SliceStack missing id attribute".to_string()))?
+        .parse::<usize>()?;
+    let zbottom = attrs
+        .get("zbottom")
+        .ok_or_else(|| {
+            Error::InvalidXml("SliceStack missing zbottom attribute".to_string())
+        })?
+        .parse::<f64>()?;
+    Ok(SliceStack::new(id, zbottom))
+}
+
+/// Parse slice start and return initialized slice
+pub(super) fn parse_slice_start<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<Slice> {
+    let attrs = parse_attributes(reader, e)?;
+    let ztop = attrs
+        .get("ztop")
+        .ok_or_else(|| Error::InvalidXml("Slice missing ztop attribute".to_string()))?
+        .parse::<f64>()?;
+    Ok(Slice::new(ztop))
+}
+
+/// Parse sliceref element
+pub(super) fn parse_sliceref<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<SliceRef> {
+    let attrs = parse_attributes(reader, e)?;
+    let slicestackid = attrs
+        .get("slicestackid")
+        .ok_or_else(|| {
+            Error::InvalidXml("SliceRef missing slicestackid attribute".to_string())
+        })?
+        .parse::<usize>()?;
+    let slicepath = attrs
+        .get("slicepath")
+        .ok_or_else(|| {
+            Error::InvalidXml("SliceRef missing slicepath attribute".to_string())
+        })?
+        .to_string();
+    Ok(SliceRef::new(slicestackid, slicepath))
+}
+
+/// Parse slice vertex (2D vertex)
+pub(super) fn parse_slice_vertex<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<Vertex2D> {
+    let attrs = parse_attributes(reader, e)?;
+    let x = attrs
+        .get("x")
+        .ok_or_else(|| Error::InvalidXml("Slice vertex missing x attribute".to_string()))?
+        .parse::<f64>()?;
+    let y = attrs
+        .get("y")
+        .ok_or_else(|| Error::InvalidXml("Slice vertex missing y attribute".to_string()))?
+        .parse::<f64>()?;
+    Ok(Vertex2D::new(x, y))
+}
+
+/// Parse polygon start and return initialized polygon
+pub(super) fn parse_slice_polygon_start<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<SlicePolygon> {
+    let attrs = parse_attributes(reader, e)?;
+    let startv = attrs
+        .get("startv")
+        .ok_or_else(|| {
+            Error::InvalidXml("Slice polygon missing startv attribute".to_string())
+        })?
+        .parse::<usize>()?;
+    Ok(SlicePolygon::new(startv))
+}
+
+/// Parse segment element
+pub(super) fn parse_slice_segment<R: std::io::BufRead>(
+    reader: &Reader<R>,
+    e: &quick_xml::events::BytesStart,
+) -> Result<SliceSegment> {
+    let attrs = parse_attributes(reader, e)?;
+    let v2 = attrs
+        .get("v2")
+        .ok_or_else(|| Error::InvalidXml("Slice segment missing v2 attribute".to_string()))?
+        .parse::<usize>()?;
+    Ok(SliceSegment::new(v2))
 }
