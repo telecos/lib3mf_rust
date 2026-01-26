@@ -14,6 +14,7 @@ path = "src/main.rs"
 lib3mf = { path = "../.." }
 clap = { version = "4.5", features = ["derive"] }
 image = "0.25"
+kiss3d = "0.35"
 
 [lints.rust]
 unsafe_code = "forbid"

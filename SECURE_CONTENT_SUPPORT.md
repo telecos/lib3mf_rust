@@ -20,17 +20,6 @@ This document describes the implementation and security considerations for the 3
    - Namespace URI is properly mapped
    - Extension can be validated in `requiredextensions` attribute
 
-2. **Validation Framework**: Test infrastructure exists for suite8_secure tests
-   - Conformance tests defined in `tests/conformance_tests.rs`
-   - Tests pass when test files are available
-
-### What is NOW Supported ✅
-
-1. **Extension Recognition**: The SecureContent extension is recognized and validated
-   - The extension enum includes `Extension::SecureContent`
-   - Namespace URI is properly mapped
-   - Extension can be validated in `requiredextensions` attribute
-
 2. **Complete Keystore Parsing**: Full structural parsing of keystore.xml
    - Extracts keystore UUID
    - Parses consumer definitions (ID, key ID, PEM public keys)
@@ -53,36 +42,115 @@ This document describes the implementation and security considerations for the 3
    - Automatic decryption of encrypted files during parsing
    - **For Suite 8 conformance testing only**
 
+5. **Custom Key Provider Support**: Production-ready decryption with customer keys ✨ NEW
+   - Implement the `KeyProvider` trait to provide your own decryption keys
+   - Configure parser with custom key provider via `ParserConfig`
+   - Full control over key management and cryptographic operations
+   - Use your own crypto libraries (ring, RustCrypto, OpenSSL, etc.)
+   - Seamless integration with existing HSM/key vault infrastructure
+
 ### What is NOT Supported ❌
 
-1. **Production Decryption**
-   - No configurable key provider
-   - No production key management
-   - Only test keys from Suite 8 Appendix D are embedded
-   - Not suitable for production use with real encrypted content
-
+1. **Built-in Production Encryption**
+   - No built-in encryption of files during writing
+   - Applications must encrypt files externally if needed
+   
 2. **Advanced Cryptographic Features**
    - No signature verification
-   - No certificate/key management beyond test keys
-   - No PKI integration
+   - No certificate chain validation
+   - No PKI integration beyond parsing public keys
 
-## Scope of Support: Test-Only Decryption + Metadata Extraction
+## Using Custom Key Providers for Production
 
-This implementation provides two levels of support:
+The library now supports custom key providers, allowing you to use your own cryptographic keys and implementations for decryption.
+
+### Quick Start
+
+```rust
+use lib3mf::{KeyProvider, ParserConfig, Result};
+use lib3mf::{AccessRight, CEKParams, KEKParams, SecureContentInfo};
+use std::sync::Arc;
+
+// 1. Implement the KeyProvider trait
+struct MyKeyProvider {
+    // Your private keys, HSM handles, etc.
+}
+
+impl KeyProvider for MyKeyProvider {
+    fn decrypt(
+        &self,
+        cipher_file_data: &[u8],
+        cek_params: &CEKParams,
+        access_right: &AccessRight,
+        secure_content: &SecureContentInfo,
+    ) -> Result<Vec<u8>> {
+        // Your decryption logic using ring, RustCrypto, OpenSSL, etc.
+        // 1. Parse cipher file format
+        // 2. Unwrap CEK using your private key
+        // 3. Decrypt content using AES-GCM
+        // 4. Decompress if needed
+        todo!()
+    }
+
+    fn encrypt(
+        &self,
+        plaintext: &[u8],
+        consumer_id: &str,
+        compression: bool,
+    ) -> Result<(Vec<u8>, CEKParams, KEKParams, String)> {
+        // Your encryption logic (optional for now)
+        todo!()
+    }
+}
+
+// 2. Configure the parser with your key provider
+let provider: Arc<dyn KeyProvider> = Arc::new(MyKeyProvider { /* ... */ });
+let config = ParserConfig::with_all_extensions()
+    .with_key_provider(provider);
+
+// 3. Parse encrypted 3MF files
+let model = lib3mf::parser::parse_3mf_with_config(file, config)?;
+```
+
+### Implementation Guide
+
+See `examples/custom_key_provider.rs` for a complete working example.
+
+Key points:
+1. Implement the `KeyProvider` trait with your crypto library of choice
+2. Load your private keys from secure storage (HSM, key vault, etc.)
+3. Parse the cipher file format (see 3MF SecureContent spec Appendix D)
+4. Unwrap the CEK using RSA-OAEP with your private key
+5. Decrypt content using AES-256-GCM
+6. Handle DEFLATE decompression if needed
+
+### Recommended Crypto Libraries
+
+- **[ring](https://crates.io/crates/ring)**: Recommended, well-audited, focused on correctness
+- **[RustCrypto](https://github.com/RustCrypto)**: Pure Rust implementations
+- **[OpenSSL bindings](https://crates.io/crates/openssl)**: Battle-tested, widely used
+
+## Scope of Support
+
+This implementation provides three levels of support:
 
 1. **Test-Only Decryption** (Suite 8 Conformance):
    - Automatic decryption of files encrypted with Suite 8 test keys
    - Enables conformance validation against test suite
    - Uses hardcoded test keys from Appendix D
-   - **Not for production use**
+   - **For testing only, not for production**
 
-2. **Complete Metadata Extraction** (Production Applications):
+2. **Custom Key Provider Decryption** (Production Use): ✨ NEW
+   - Full support for customer-provided decryption keys
+   - Implement the `KeyProvider` trait with your crypto library
+   - Integrate with your existing key management infrastructure
+   - Production-ready with proper key security
+
+3. **Complete Metadata Extraction** (All Applications):
    - Full keystore structure parsing
    - All encryption parameters exposed
-   - Applications implement their own decryption
-   - Choose their own cryptographic libraries and key management
-
-### Design Decision: Test Keys for Conformance, Metadata for Production
+   - Applications can inspect encrypted content metadata
+   - No decryption required
 
 **Rationale:**
 1. **Complexity**: Full cryptographic support requires:
