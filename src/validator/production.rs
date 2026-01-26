@@ -2,6 +2,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{Extension, Model, ParserConfig};
+use std::collections::HashSet;
 
 /// Validates production extension path format and usage
 pub fn validate_production_extension(model: &Model) -> Result<()> {
@@ -377,5 +378,170 @@ pub fn validate_production_uuids_required(model: &Model, _config: &ParserConfig)
         }
     }
 
+    Ok(())
+}
+
+/// Validate UUID format per RFC 4122
+///
+/// UUIDs must follow the format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+/// where x is a hexadecimal digit (0-9, a-f, A-F).
+pub(crate) fn validate_uuid_formats(model: &Model) -> Result<()> {
+    // Helper function to validate a single UUID
+    let validate_uuid = |uuid: &str, context: &str| -> Result<()> {
+        // UUID format: 8-4-4-4-12 hexadecimal digits separated by hyphens
+        // Example: 550e8400-e29b-41d4-a716-446655440000
+
+        // Check length (36 characters including hyphens)
+        if uuid.len() != 36 {
+            return Err(Error::InvalidModel(format!(
+                "{}: Invalid UUID '{}' - must be 36 characters in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                context, uuid
+            )));
+        }
+
+        // Check hyphen positions (at indices 8, 13, 18, 23)
+        if uuid.chars().nth(8) != Some('-')
+            || uuid.chars().nth(13) != Some('-')
+            || uuid.chars().nth(18) != Some('-')
+            || uuid.chars().nth(23) != Some('-')
+        {
+            return Err(Error::InvalidModel(format!(
+                "{}: Invalid UUID '{}' - hyphens must be at positions 8, 13, 18, and 23",
+                context, uuid
+            )));
+        }
+
+        // Check that all other characters are hexadecimal digits
+        for (idx, ch) in uuid.chars().enumerate() {
+            if idx == 8 || idx == 13 || idx == 18 || idx == 23 {
+                continue; // Skip hyphens
+            }
+            if !ch.is_ascii_hexdigit() {
+                return Err(Error::InvalidModel(format!(
+                    "{}: Invalid UUID '{}' - character '{}' at position {} is not a hexadecimal digit",
+                    context, uuid, ch, idx
+                )));
+            }
+        }
+
+        Ok(())
+    };
+
+    // Validate build UUID
+    if let Some(ref uuid) = model.build.production_uuid {
+        validate_uuid(uuid, "Build")?;
+    }
+
+    // Validate build item UUIDs
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref uuid) = item.production_uuid {
+            validate_uuid(uuid, &format!("Build item {}", idx))?;
+        }
+    }
+
+    // Validate object UUIDs
+    for object in &model.resources.objects {
+        if let Some(ref prod_info) = object.production {
+            if let Some(ref uuid) = prod_info.uuid {
+                validate_uuid(uuid, &format!("Object {}", object.id))?;
+            }
+        }
+
+        // Validate component UUIDs
+        for (idx, component) in object.components.iter().enumerate() {
+            if let Some(ref prod_info) = component.production {
+                if let Some(ref uuid) = prod_info.uuid {
+                    validate_uuid(uuid, &format!("Object {}, Component {}", object.id, idx))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates that all UUIDs in the model are unique
+///
+/// Per 3MF Production Extension spec, UUIDs must be unique across:
+/// - Build section
+/// - Build items
+/// - Objects
+/// - Components
+pub(crate) fn validate_duplicate_uuids(model: &Model) -> Result<()> {
+    let mut uuids = HashSet::new();
+
+    // Check build UUID
+    if let Some(ref uuid) = model.build.production_uuid {
+        if !uuids.insert(uuid.clone()) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate UUID '{}' found in build",
+                uuid
+            )));
+        }
+    }
+
+    // Check build item UUIDs
+    for (idx, item) in model.build.items.iter().enumerate() {
+        if let Some(ref uuid) = item.production_uuid {
+            if !uuids.insert(uuid.clone()) {
+                return Err(Error::InvalidModel(format!(
+                    "Duplicate UUID '{}' found in build item {}",
+                    uuid, idx
+                )));
+            }
+        }
+    }
+
+    // Check object UUIDs
+    for object in &model.resources.objects {
+        if let Some(ref production) = object.production {
+            if let Some(ref uuid) = production.uuid {
+                if !uuids.insert(uuid.clone()) {
+                    return Err(Error::InvalidModel(format!(
+                        "Duplicate UUID '{}' found on object {}",
+                        uuid, object.id
+                    )));
+                }
+            }
+        }
+
+        // Check component UUIDs within each object
+        for (comp_idx, component) in object.components.iter().enumerate() {
+            if let Some(ref production) = component.production {
+                if let Some(ref uuid) = production.uuid {
+                    if !uuids.insert(uuid.clone()) {
+                        return Err(Error::InvalidModel(format!(
+                            "Duplicate UUID '{}' found in object {} component {}",
+                            uuid, object.id, comp_idx
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0803_01: Validate no component reference chains across multiple model parts
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting component reference chains requires parsing and analyzing external
+/// model files referenced via `p:path`. Since the parser only loads the root model
+/// file, we cannot reliably detect multi-level chains.
+///
+/// A full implementation would require:
+/// 1. Loading all referenced external model files
+/// 2. Building a dependency graph across files
+/// 3. Detecting cycles or chains longer than allowed depth
+///
+/// This is beyond the scope of single-file validation and would require
+/// significant architectural changes to support multi-file analysis.
+pub(crate) fn validate_component_chain(_model: &Model) -> Result<()> {
+    // N_XPM_0803_01: Component reference chain validation
+    //
+    // The validation for components with p:path referencing local objects
+    // is complex and requires more investigation of the 3MF Production Extension spec.
+    // The current understanding is insufficient to implement this correctly.
     Ok(())
 }

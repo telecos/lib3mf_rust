@@ -1,10 +1,9 @@
 //! Core validation functions for 3MF models
 
 use crate::error::{Error, Result};
-use crate::model::Model;
+use crate::mesh_ops;
+use crate::model::{Extension, Model};
 use std::collections::HashSet;
-
-use super::sorted_ids_from_set;
 
 /// Validates mesh geometry for all objects in the model
 pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
@@ -309,5 +308,326 @@ pub fn validate_component_properties(model: &Model) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Helper function to convert a HashSet of IDs to a sorted Vec for error messages
+pub(crate) fn sorted_ids_from_set(ids: &HashSet<usize>) -> Vec<usize> {
+    let mut sorted: Vec<usize> = ids.iter().copied().collect();
+    sorted.sort();
+    sorted
+}
+
+/// Validates the required structure of a 3MF model
+///
+/// Ensures the model contains:
+/// - At least one object (either local or external via production path)
+/// - At least one build item (unless it's an external file with slice stacks)
+pub(crate) fn validate_required_structure(model: &Model) -> Result<()> {
+    // Check if we have objects in resources OR build items with external paths
+    let has_local_objects =
+        !model.resources.objects.is_empty() || !model.resources.slice_stacks.is_empty();
+    let has_external_objects = model
+        .build
+        .items
+        .iter()
+        .any(|item| item.production_path.is_some());
+
+    // Model must contain at least one object (either local or external)
+    if !has_local_objects && !has_external_objects {
+        return Err(Error::InvalidModel(
+            "Model must contain at least one object. \
+             A valid 3MF file requires either:\n\
+             - At least one <object> element within the <resources> section, OR\n\
+             - At least one build <item> with a p:path attribute (Production extension) \
+             referencing an external file.\n\
+             Check that your 3MF file has proper model content."
+                .to_string(),
+        ));
+    }
+
+    // Build section must contain at least one item for main model files
+    // However, external slice/resource files may have empty build sections
+    // We identify these by: having slice stacks but either no objects or empty build
+    let is_external_file = !model.resources.slice_stacks.is_empty()
+        && (model.resources.objects.is_empty() || model.build.items.is_empty());
+
+    if model.build.items.is_empty() && !is_external_file {
+        return Err(Error::InvalidModel(
+            "Build section must contain at least one item. \
+             A valid 3MF file requires at least one <item> element within the <build> section. \
+             The build section specifies which objects should be printed."
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validates that required extensions are properly declared
+///
+/// Checks that models using extension-specific features have the corresponding
+/// extension in their requiredextensions attribute.
+pub(crate) fn validate_required_extensions(model: &Model) -> Result<()> {
+    let mut uses_boolean_ops = false;
+    let mut objects_with_boolean_and_material_props = Vec::new();
+
+    // Check if model uses boolean operations
+    for object in &model.resources.objects {
+        if object.boolean_shape.is_some() {
+            uses_boolean_ops = true;
+
+            // Per Boolean Operations spec: "producers MUST NOT assign pid or pindex
+            // attributes to objects that contain booleanshape"
+            if object.pid.is_some() || object.pindex.is_some() {
+                objects_with_boolean_and_material_props.push(object.id);
+            }
+        }
+    }
+
+    // Validate Boolean Operations extension requirements
+    if uses_boolean_ops {
+        // Check if Boolean Operations extension is in required extensions
+        let has_bo_extension = model
+            .required_extensions
+            .contains(&Extension::BooleanOperations);
+
+        if !has_bo_extension {
+            return Err(Error::InvalidModel(
+                "Model uses boolean operations (<booleanshape>) but does not declare \
+                 the Boolean Operations extension in requiredextensions.\n\
+                 Per 3MF Boolean Operations spec, you must add 'bo' to the requiredextensions \
+                 attribute in the <model> element when using boolean operations.\n\
+                 Example: requiredextensions=\"bo\""
+                    .to_string(),
+            ));
+        }
+    }
+
+    // Check for objects with both booleanshape and material properties
+    if !objects_with_boolean_and_material_props.is_empty() {
+        return Err(Error::InvalidModel(format!(
+            "Objects {:?} contain both <booleanshape> and pid/pindex attributes.\n\
+             Per 3MF Boolean Operations spec section 2 (Object Resources):\n\
+             'producers MUST NOT assign pid or pindex attributes to objects that contain booleanshape.'\n\
+             Remove the pid/pindex attributes from these objects or remove the boolean shape.",
+            objects_with_boolean_and_material_props
+        )));
+    }
+
+    Ok(())
+}
+
+/// Validates that object IDs are unique and positive
+pub(crate) fn validate_object_ids(model: &Model) -> Result<()> {
+    let mut seen_ids = HashSet::new();
+
+    for object in &model.resources.objects {
+        // Object IDs must be positive (non-zero)
+        if object.id == 0 {
+            return Err(Error::InvalidModel(
+                "Object ID must be a positive integer (greater than 0). \
+                 Per the 3MF specification, object IDs must be positive integers. \
+                 Found object with ID = 0, which is invalid."
+                    .to_string(),
+            ));
+        }
+
+        // Check for duplicate IDs
+        if !seen_ids.insert(object.id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate object ID found: {}. \
+                 Each object in the resources section must have a unique ID attribute. \
+                 Check your model for multiple objects with the same ID value.",
+                object.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates transform matrices for build items
+///
+/// Ensures that:
+/// - Transform matrices are non-singular (non-zero determinant)
+/// - Transform matrices don't have negative determinants (no mirroring)
+///
+/// Note: Sliced objects have different transform restrictions validated separately
+pub(crate) fn validate_transform_matrices(model: &Model) -> Result<()> {
+    // Build a set of object IDs that have slicestacks
+    let sliced_object_ids: HashSet<usize> = model
+        .resources
+        .objects
+        .iter()
+        .filter_map(|obj| obj.slicestackid.map(|_| obj.id))
+        .collect();
+
+    for (idx, item) in model.build.items.iter().enumerate() {
+        // Skip validation for build items that reference sliced objects
+        // Per 3MF Slice Extension spec, sliced objects have different transform
+        // restrictions (planar transforms) which are validated in validate_slice_extension
+        if sliced_object_ids.contains(&item.objectid) {
+            continue;
+        }
+
+        if let Some(ref transform) = item.transform {
+            // Calculate the determinant of the 3x3 rotation/scale portion
+            // Transform is stored as 12 values: [m00 m01 m02 m10 m11 m12 m20 m21 m22 tx ty tz]
+            let m00 = transform[0];
+            let m01 = transform[1];
+            let m02 = transform[2];
+            let m10 = transform[3];
+            let m11 = transform[4];
+            let m12 = transform[5];
+            let m20 = transform[6];
+            let m21 = transform[7];
+            let m22 = transform[8];
+
+            // Determinant = m00*(m11*m22 - m12*m21) - m01*(m10*m22 - m12*m20) + m02*(m10*m21 - m11*m20)
+            let det = m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20)
+                + m02 * (m10 * m21 - m11 * m20);
+
+            // Check for zero determinant (singular matrix) - DPX 3314_07
+            const DET_EPSILON: f64 = 1e-10;
+            if det.abs() < DET_EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: Transform matrix has zero determinant ({:.6}), indicating a singular (non-invertible) transformation.\n\
+                     Transform: [{} {} {} {} {} {} {} {} {} {} {} {}]\n\
+                     Hint: Check that the transform matrix is valid and non-degenerate.",
+                    idx,
+                    det,
+                    transform[0],
+                    transform[1],
+                    transform[2],
+                    transform[3],
+                    transform[4],
+                    transform[5],
+                    transform[6],
+                    transform[7],
+                    transform[8],
+                    transform[9],
+                    transform[10],
+                    transform[11]
+                )));
+            }
+
+            if det < 0.0 {
+                return Err(Error::InvalidModel(format!(
+                    "Build item {}: Transform matrix has negative determinant ({:.6}).\n\
+                     Per 3MF spec, transforms with negative determinants (mirror transformations) \
+                     are not allowed as they would invert the object's orientation.\n\
+                     Transform: [{} {} {} {} {} {} {} {} {} {} {} {}]",
+                    idx,
+                    det,
+                    transform[0],
+                    transform[1],
+                    transform[2],
+                    transform[3],
+                    transform[4],
+                    transform[5],
+                    transform[6],
+                    transform[7],
+                    transform[8],
+                    transform[9],
+                    transform[10],
+                    transform[11]
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates mesh volume is positive (not inverted)
+///
+/// Uses signed volume calculation to detect inverted meshes.
+/// Skips validation for sliced objects where mesh orientation doesn't matter.
+pub(crate) fn validate_mesh_volume(model: &Model) -> Result<()> {
+    for object in &model.resources.objects {
+        // Skip mesh volume validation for sliced objects
+        // Per 3MF Slice Extension spec, when an object has a slicestack,
+        // the mesh is not used for printing (slices are used instead),
+        // so mesh orientation doesn't matter
+        if object.slicestackid.is_some() {
+            continue;
+        }
+
+        if let Some(ref mesh) = object.mesh {
+            // Use signed volume to detect inverted meshes
+            let volume = mesh_ops::compute_mesh_signed_volume(mesh)?;
+
+            // Use small epsilon for floating-point comparison
+            const EPSILON: f64 = 1e-10;
+            if volume < -EPSILON {
+                return Err(Error::InvalidModel(format!(
+                    "Object {}: Mesh has negative volume ({}), indicating inverted or incorrectly oriented triangles",
+                    object.id, volume
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting reversed vertex order reliably requires sophisticated mesh analysis
+/// algorithms that are computationally expensive and have reliability issues with
+/// certain mesh geometries (e.g., non-convex shapes, complex topology). The simple
+/// heuristic of checking if normals point away from the centroid fails for many
+/// valid meshes and can cause false positives.
+///
+/// A proper implementation would require:
+/// - Ray casting or winding number algorithms
+/// - Topological mesh analysis
+/// - Consideration of non-manifold geometries
+///
+/// For now, we rely on other validators like volume calculation to catch some
+/// cases of inverted meshes. Additionally, build item transforms with negative
+/// determinants (which would invert normals) are rejected by validate_transform_matrices().
+pub(crate) fn validate_vertex_order(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// N_XPX_0419_01: Validate JPEG thumbnail colorspace (must be RGB, not CMYK)
+///
+/// **Note: Partial validation implemented in OPC layer.**
+///
+/// JPEG CMYK validation is performed in `opc::Package::get_thumbnail_metadata()`
+/// where the actual thumbnail file data is available. This placeholder exists
+/// for documentation and to maintain the validation function signature.
+pub(crate) fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// N_XPX_0420_01: Validate no DTD declaration in XML (security risk)
+///
+/// **Note: Validation implemented in parser.**
+///
+/// DTD validation is handled during XML parsing in `parser::parse_model_xml()`
+/// where the parser rejects `Event::DocType` to prevent XXE (XML External Entity)
+/// attacks. This placeholder exists for documentation and to maintain the
+/// validation function signature.
+pub(crate) fn validate_dtd_declaration(_model: &Model) -> Result<()> {
+    Ok(())
+}
+
+/// Validate thumbnail format
+///
+/// Per 3MF spec, thumbnails must be PNG or JPEG format, and JPEG must be RGB (not CMYK).
+/// Note: Object.has_thumbnail_attribute is a boolean that tracks if thumbnail was present,
+/// but the actual path is not stored (deprecated attribute).
+pub(crate) fn validate_thumbnail_format(_model: &Model) -> Result<()> {
+    // Thumbnail validation is limited because the thumbnail path is not stored in the model
+    // The parser only tracks whether the attribute was present via has_thumbnail_attribute
+    // Full validation would require parsing the thumbnail file itself
+
+    // For now, this is a placeholder for future thumbnail validation
+    // The parser already handles the thumbnail attribute appropriately
+
     Ok(())
 }

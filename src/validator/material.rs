@@ -1113,3 +1113,285 @@ pub fn get_property_resource_size(model: &Model, resource_id: usize) -> Result<u
         resource_id
     )))
 }
+
+/// Validates color formats in color groups
+///
+/// Ensures that all color groups contain at least one color.
+/// Note: Individual color format validation is done during parsing.
+pub(crate) fn validate_color_formats(model: &Model) -> Result<()> {
+    // Colors are already validated during parsing (stored as (u8, u8, u8, u8) tuples)
+    // This function is a placeholder for any additional color validation needs
+
+    // Validate that color groups have at least one color
+    for color_group in &model.resources.color_groups {
+        if color_group.colors.is_empty() {
+            return Err(Error::InvalidModel(format!(
+                "Color group {}: Must contain at least one color.\n\
+                 A color group without colors is invalid.",
+                color_group.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate resource ordering
+///
+/// Per 3MF spec, resources must be defined before they are referenced.
+/// For example, texture2d must be defined before texture2dgroup that references it.
+/// This validation checks for forward references using parse order.
+pub(crate) fn validate_resource_ordering(model: &Model) -> Result<()> {
+    // N_XXM_0606_01: Texture2dgroup must not reference texture2d that appears later in XML
+    for tex_group in &model.resources.texture2d_groups {
+        if let Some(tex2d) = model
+            .resources
+            .texture2d_resources
+            .iter()
+            .find(|t| t.id == tex_group.texid)
+        {
+            if tex_group.parse_order < tex2d.parse_order {
+                return Err(Error::InvalidModel(format!(
+                    "Texture2DGroup {}: Forward reference to texture2d {} which appears later in the resources.\n\
+                     Per 3MF Material Extension spec, texture2d resources must be defined before \
+                     texture2dgroups that reference them.\n\
+                     Move the texture2d element before the texture2dgroup element in the resources section.",
+                    tex_group.id, tex_group.texid
+                )));
+            }
+        } else {
+            return Err(Error::InvalidModel(format!(
+                "Texture2DGroup {}: References texture2d with ID {} which is not defined.\n\
+                 Per 3MF spec, texture2d resources must be defined before texture2dgroups that reference them.\n\
+                 Ensure texture2d with ID {} exists in the <resources> section before this texture2dgroup.",
+                tex_group.id, tex_group.texid, tex_group.texid
+            )));
+        }
+    }
+
+    // N_XXM_0606_02, N_XXM_0606_03, N_XXM_0607_01: Multiproperties must not have forward references
+    for multi_props in &model.resources.multi_properties {
+        for &pid in &multi_props.pids {
+            // Check if PID references a texture2dgroup
+            if let Some(tex_group) = model
+                .resources
+                .texture2d_groups
+                .iter()
+                .find(|t| t.id == pid)
+            {
+                if multi_props.parse_order < tex_group.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to texture2dgroup {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the texture2dgroup element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a colorgroup
+            if let Some(color_group) = model.resources.color_groups.iter().find(|c| c.id == pid) {
+                if multi_props.parse_order < color_group.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to colorgroup {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the colorgroup element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a basematerials group
+            if let Some(base_mat) = model
+                .resources
+                .base_material_groups
+                .iter()
+                .find(|b| b.id == pid)
+            {
+                if multi_props.parse_order < base_mat.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to basematerials group {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the basematerials element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+
+            // Check if PID references a compositematerials group
+            if let Some(composite) = model
+                .resources
+                .composite_materials
+                .iter()
+                .find(|c| c.id == pid)
+            {
+                if multi_props.parse_order < composite.parse_order {
+                    return Err(Error::InvalidModel(format!(
+                        "MultiProperties {}: Forward reference to compositematerials group {} which appears later in the resources.\n\
+                         Per 3MF Material Extension spec, property resources must be defined before \
+                         multiproperties that reference them.\n\
+                         Move the compositematerials element before the multiproperties element in the resources section.",
+                        multi_props.id, pid
+                    )));
+                }
+            }
+        }
+    }
+
+    // N_XPM_0607_01: Objects must not be intermingled with property resources
+    // Per 3MF spec, the resources section should have a consistent ordering:
+    // either all property resources first then all objects, or vice versa.
+    // Intermingling objects between property resources is invalid.
+
+    // Get parse orders for all property resources
+    let mut property_resource_orders = Vec::new();
+
+    for tex2d in &model.resources.texture2d_resources {
+        property_resource_orders.push(("Texture2D", tex2d.id, tex2d.parse_order));
+    }
+    for tex_group in &model.resources.texture2d_groups {
+        property_resource_orders.push(("Texture2DGroup", tex_group.id, tex_group.parse_order));
+    }
+    for color_group in &model.resources.color_groups {
+        property_resource_orders.push(("ColorGroup", color_group.id, color_group.parse_order));
+    }
+    for base_mat in &model.resources.base_material_groups {
+        property_resource_orders.push(("BaseMaterials", base_mat.id, base_mat.parse_order));
+    }
+    for composite in &model.resources.composite_materials {
+        property_resource_orders.push(("CompositeMaterials", composite.id, composite.parse_order));
+    }
+    for multi_props in &model.resources.multi_properties {
+        property_resource_orders.push(("MultiProperties", multi_props.id, multi_props.parse_order));
+    }
+
+    // Get parse orders for all objects
+    let mut object_orders = Vec::new();
+    for obj in &model.resources.objects {
+        object_orders.push((obj.id, obj.parse_order));
+    }
+
+    // Check if there are objects intermingled with property resources
+    // This is only an issue if we have both objects and property resources
+    if !property_resource_orders.is_empty() && !object_orders.is_empty() {
+        // Find min and max parse order for property resources
+        let min_prop_order = property_resource_orders
+            .iter()
+            .map(|(_, _, order)| order)
+            .min()
+            .unwrap();
+        let max_prop_order = property_resource_orders
+            .iter()
+            .map(|(_, _, order)| order)
+            .max()
+            .unwrap();
+
+        // If property resources and objects have overlapping ranges, they're intermingled
+        // Valid: all properties [0-10], all objects [11-20] OR all objects [0-10], all properties [11-20]
+        // Invalid: properties [0-5], objects [6-10], properties [11-15] (intermingled)
+
+        // Check if there's an object between two property resources
+        for (prop_type, prop_id, prop_order) in &property_resource_orders {
+            for (obj_id, obj_order) in &object_orders {
+                // If an object appears between the min and max property resource orders,
+                // and there are property resources both before and after it
+                if *obj_order > *min_prop_order && *obj_order < *max_prop_order {
+                    // Find a property resource that comes after this object
+                    if let Some((later_prop_type, later_prop_id, later_prop_order)) =
+                        property_resource_orders
+                            .iter()
+                            .find(|(_, _, order)| *order > *obj_order)
+                    {
+                        return Err(Error::InvalidModel(format!(
+                            "Invalid resource ordering: Object {} appears between property resources.\n\
+                             The object is at position {}, between {} {} (position {}) and {} {} (position {}).\n\
+                             Per 3MF specification, objects must not be intermingled with property resources.\n\
+                             Either place all objects after all property resources, or all property resources after all objects.",
+                            obj_id, obj_order, prop_type, prop_id, prop_order,
+                            later_prop_type, later_prop_id, later_prop_order
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that resource IDs are unique within their namespaces
+///
+/// Per 3MF spec:
+/// - Object IDs must be unique among objects
+/// - Property resource IDs (basematerials, colorgroups, texture2d, texture2dgroups,
+///   compositematerials, multiproperties) must be unique among property resources
+/// - Objects and property resources have SEPARATE ID namespaces and can reuse IDs
+pub(crate) fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
+    // Check object IDs for duplicates (separate namespace)
+    let mut seen_object_ids: HashSet<usize> = HashSet::new();
+    for obj in &model.resources.objects {
+        if !seen_object_ids.insert(obj.id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate object ID {}: Multiple objects use the same ID.\n\
+                 Per 3MF spec, each object must have a unique ID within the objects namespace.\n\
+                 Change the ID to a unique value.",
+                obj.id
+            )));
+        }
+    }
+
+    // Check property resource IDs for duplicates (separate namespace from objects)
+    // Property resources include: basematerials, colorgroups, texture2d, texture2dgroups,
+    // compositematerials, and multiproperties
+    let mut seen_property_ids: HashSet<usize> = HashSet::new();
+
+    // Helper to check and add property resource ID
+    let mut check_property_id = |id: usize, resource_type: &str| -> Result<()> {
+        if !seen_property_ids.insert(id) {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate property resource ID {}: {} resource uses an ID that is already in use by another property resource.\n\
+                 Per 3MF spec, property resource IDs must be unique among all property resources \
+                 (basematerials, colorgroups, texture2d, texture2dgroups, compositematerials, multiproperties).\n\
+                 Note: Objects have a separate ID namespace and can reuse property resource IDs.",
+                id, resource_type
+            )));
+        }
+        Ok(())
+    };
+
+    // Check all property resource types
+    for base_mat in &model.resources.base_material_groups {
+        check_property_id(base_mat.id, "BaseMaterials")?;
+    }
+
+    for color_group in &model.resources.color_groups {
+        check_property_id(color_group.id, "ColorGroup")?;
+    }
+
+    for texture in &model.resources.texture2d_resources {
+        check_property_id(texture.id, "Texture2D")?;
+    }
+
+    for tex_group in &model.resources.texture2d_groups {
+        check_property_id(tex_group.id, "Texture2DGroup")?;
+    }
+
+    for composite in &model.resources.composite_materials {
+        check_property_id(composite.id, "CompositeMaterials")?;
+    }
+
+    for multi in &model.resources.multi_properties {
+        check_property_id(multi.id, "MultiProperties")?;
+    }
+
+    // Check slice stack IDs (Slice Extension)
+    // Slicestacks are extension resources but share the property resource ID namespace
+    for slice_stack in &model.resources.slice_stacks {
+        check_property_id(slice_stack.id, "SliceStack")?;
+    }
+
+    Ok(())
+}
