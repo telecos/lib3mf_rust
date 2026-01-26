@@ -1,6 +1,6 @@
 //! Material extension types
 
-use super::displacement::{TileStyle, FilterMode};
+use super::displacement::{FilterMode, TileStyle};
 
 /// Material definition with color information
 #[derive(Debug, Clone, PartialEq)]

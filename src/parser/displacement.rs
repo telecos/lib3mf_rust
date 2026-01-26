@@ -19,7 +19,10 @@ use super::{parse_attributes, validate_attributes};
 ///
 /// # Returns
 /// Ok(()) if element has displacement prefix, Err otherwise
-pub(super) fn validate_displacement_namespace_prefix(name_str: &str, element_type: &str) -> Result<()> {
+pub(super) fn validate_displacement_namespace_prefix(
+    name_str: &str,
+    element_type: &str,
+) -> Result<()> {
     let has_displacement_prefix =
         name_str.starts_with("d:") || name_str.starts_with("displacement:");
     if !has_displacement_prefix {
