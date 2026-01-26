@@ -161,6 +161,7 @@ pub(super) fn validate_boolean_external_paths<R: Read + std::io::Seek>(
 /// Validate that an object ID exists in an external model file
 ///
 /// Uses a cache to avoid re-parsing the same file multiple times
+#[allow(clippy::too_many_arguments)]
 fn validate_external_object_id<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     file_path: &str,
@@ -251,6 +252,7 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
 ///
 /// Uses a cache to avoid re-parsing the same file multiple times
 /// Cache stores: (object_id, optional_uuid)
+#[allow(clippy::too_many_arguments)]
 pub(super) fn validate_external_object_reference<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     file_path: &str,
