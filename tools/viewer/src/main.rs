@@ -20,6 +20,8 @@ use lib3mf::{Model, Object};
 use std::fs::File;
 use std::path::PathBuf;
 
+mod ui_viewer;
+
 /// Formatting constant for output field width
 const FIELD_WIDTH: usize = 34;
 
@@ -37,6 +39,10 @@ struct Args {
     /// Path to the 3MF file to view
     #[arg(value_name = "FILE")]
     file_path: PathBuf,
+
+    /// Launch interactive 3D UI viewer
+    #[arg(short, long)]
+    ui: bool,
 
     /// Show detailed mesh information
     #[arg(short, long)]
@@ -75,6 +81,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("✓ Model loaded successfully!");
     println!();
+
+    // If UI mode is requested, launch the interactive viewer
+    if args.ui {
+        println!("Launching interactive 3D viewer...");
+        println!();
+        ui_viewer::launch_ui_viewer(model, args.file_path)?;
+        return Ok(());
+    }
 
     // Display model information
     display_model_info(&model);
