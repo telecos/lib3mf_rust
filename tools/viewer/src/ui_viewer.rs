@@ -18,12 +18,14 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
     let mut window = Window::new(&format!("3MF Viewer - {}", file_path.display()));
     window.set_light(Light::StickToCamera);
     
-    // Create meshes from the model
-    let _mesh_nodes = create_mesh_nodes(&mut window, &model);
+    // Create meshes from the model and add them to the window scene
+    // The meshes are owned by the window and will be rendered each frame
+    create_mesh_nodes(&mut window, &model);
     
-    // Calculate model bounds for camera positioning
+    // Calculate model bounds for potential future camera positioning
+    // Currently, kiss3d's ArcBall camera handles positioning automatically
     let (min_bound, max_bound) = calculate_model_bounds(&model);
-    let _center = Point3::new(
+    let center = Point3::new(
         (min_bound.0 + max_bound.0) / 2.0,
         (min_bound.1 + max_bound.1) / 2.0,
         (min_bound.2 + max_bound.2) / 2.0,
@@ -34,7 +36,11 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
         max_bound.1 - min_bound.1,
         max_bound.2 - min_bound.2,
     );
-    let _max_size = size.x.max(size.y).max(size.z);
+    let max_size = size.x.max(size.y).max(size.z);
+    
+    // Future enhancement: Could use center and max_size to set initial camera position
+    // For now, using kiss3d's default ArcBall camera which provides good automatic positioning
+    let _ = (center, max_size); // Acknowledge unused variables
     
     // The ArcBall camera in kiss3d is controlled by mouse automatically
     // Just set a reasonable initial distance
@@ -61,9 +67,11 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
     println!();
     println!("═══════════════════════════════════════════════════════════");
     
-    // Render loop
+    // Main event loop: kiss3d handles window events, input processing, and frame rendering
+    // Each render() call processes events, updates camera based on mouse input, and draws the scene
+    // Returns false when the window is closed, terminating the loop
     while window.render() {
-        // The meshes are already added to the scene, kiss3d handles the rendering
+        // The meshes are already added to the scene, kiss3d handles the rendering automatically
     }
     
     Ok(())
