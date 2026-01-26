@@ -3881,7 +3881,6 @@ fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// Note: Earlier interpretation that ALL THREE must be specified was too strict and rejected
 /// valid real-world files.
-
 /// Helper function to validate triangle material properties for a single object
 ///
 /// Checks:
