@@ -159,39 +159,47 @@ impl ParserConfig {
     }
 
     /// Add support for a specific extension
-    /// 
+    ///
     /// Automatically registers the default extension handler for known extensions.
     pub fn with_extension(mut self, extension: Extension) -> Self {
         self.supported_extensions.insert(extension);
-        
+
         // Register the corresponding extension handler
         match extension {
             Extension::Material => {
-                self.registry.register(Arc::new(crate::extensions::MaterialExtensionHandler));
+                self.registry
+                    .register(Arc::new(crate::extensions::MaterialExtensionHandler));
             }
             Extension::Production => {
-                self.registry.register(Arc::new(crate::extensions::ProductionExtensionHandler));
+                self.registry
+                    .register(Arc::new(crate::extensions::ProductionExtensionHandler));
             }
             Extension::Slice => {
-                self.registry.register(Arc::new(crate::extensions::SliceExtensionHandler));
+                self.registry
+                    .register(Arc::new(crate::extensions::SliceExtensionHandler));
             }
             Extension::BeamLattice => {
-                self.registry.register(Arc::new(crate::extensions::BeamLatticeExtensionHandler));
+                self.registry
+                    .register(Arc::new(crate::extensions::BeamLatticeExtensionHandler));
             }
             Extension::SecureContent => {
-                self.registry.register(Arc::new(crate::extensions::SecureContentExtensionHandler));
+                self.registry
+                    .register(Arc::new(crate::extensions::SecureContentExtensionHandler));
             }
             Extension::BooleanOperations => {
-                self.registry.register(Arc::new(crate::extensions::BooleanOperationsExtensionHandler));
+                self.registry.register(Arc::new(
+                    crate::extensions::BooleanOperationsExtensionHandler,
+                ));
             }
             Extension::Displacement => {
-                self.registry.register(Arc::new(crate::extensions::DisplacementExtensionHandler));
+                self.registry
+                    .register(Arc::new(crate::extensions::DisplacementExtensionHandler));
             }
             Extension::Core => {
                 // Core doesn't have a handler
             }
         }
-        
+
         self
     }
 
