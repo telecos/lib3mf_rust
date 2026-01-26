@@ -101,6 +101,10 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // This ensures validation can check encrypted file references correctly
     validator::validate_model_with_config(&model, &config_clone)?;
 
+    // Call post_parse hooks for all registered extensions
+    // This allows extensions to perform post-processing after parsing and validation
+    config_clone.registry().post_parse_all(&mut model)?;
+
     Ok(model)
 }
 
