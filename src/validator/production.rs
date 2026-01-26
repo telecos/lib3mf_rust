@@ -332,7 +332,7 @@ pub fn validate_production_paths(model: &Model) -> Result<()> {
 /// must have planar transforms (validated separately in validate_slice_extension),
 /// but can have negative determinants (mirror transformations).
 /// Validates that required UUIDs are present when production extension is used
-pub fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> Result<()> {
+pub fn validate_production_uuids_required(model: &Model) -> Result<()> {
     // Only validate if production extension is explicitly required in the model
     // The config.supports() tells us what the parser accepts, but we need to check
     // what the model file actually requires
@@ -385,7 +385,7 @@ pub fn validate_production_uuids_required(model: &Model, _config: &ParserConfig)
 ///
 /// UUIDs must follow the format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 /// where x is a hexadecimal digit (0-9, a-f, A-F).
-pub(crate) fn validate_uuid_formats(model: &Model) -> Result<()> {
+pub fn validate_uuid_formats(model: &Model) -> Result<()> {
     // Helper function to validate a single UUID
     let validate_uuid = |uuid: &str, context: &str| -> Result<()> {
         // UUID format: 8-4-4-4-12 hexadecimal digits separated by hyphens
@@ -467,7 +467,7 @@ pub(crate) fn validate_uuid_formats(model: &Model) -> Result<()> {
 /// - Build items
 /// - Objects
 /// - Components
-pub(crate) fn validate_duplicate_uuids(model: &Model) -> Result<()> {
+pub fn validate_duplicate_uuids(model: &Model) -> Result<()> {
     let mut uuids = HashSet::new();
 
     // Check build UUID
@@ -537,7 +537,7 @@ pub(crate) fn validate_duplicate_uuids(model: &Model) -> Result<()> {
 ///
 /// This is beyond the scope of single-file validation and would require
 /// significant architectural changes to support multi-file analysis.
-pub(crate) fn validate_component_chain(_model: &Model) -> Result<()> {
+pub fn validate_component_chain(_model: &Model) -> Result<()> {
     // N_XPM_0803_01: Component reference chain validation
     //
     // The validation for components with p:path referencing local objects

@@ -5,7 +5,10 @@
 use crate::error::Result;
 use crate::extension::ExtensionHandler;
 use crate::model::{Extension, Model};
-use crate::validator::{validate_production_extension, validate_production_paths};
+use crate::validator::{
+    validate_component_chain, validate_duplicate_uuids, validate_production_extension,
+    validate_production_paths, validate_production_uuids_required, validate_uuid_formats,
+};
 
 /// Handler for the Production extension
 ///
@@ -35,6 +38,10 @@ impl ExtensionHandler for ProductionExtensionHandler {
         // Call existing production validators
         validate_production_extension(model)?;
         validate_production_paths(model)?;
+        validate_uuid_formats(model)?;
+        validate_production_uuids_required(model)?;
+        validate_duplicate_uuids(model)?;
+        validate_component_chain(model)?;
         Ok(())
     }
 
@@ -144,10 +151,10 @@ mod tests {
         let handler = ProductionExtensionHandler;
         let mut model = Model::new();
 
-        // Add object with valid production path
+        // Add object with valid production path and valid UUID format
         let mut obj = Object::new(1);
         obj.production = Some(ProductionInfo {
-            uuid: Some("test-uuid".to_string()),
+            uuid: Some("12345678-1234-1234-1234-123456789012".to_string()),
             path: Some("/3D/other_part.model".to_string()),
         });
         model.resources.objects.push(obj);

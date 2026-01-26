@@ -25,12 +25,15 @@ pub use core::{
 };
 pub use displacement::validate_displacement_extension;
 pub use material::{
-    get_property_resource_size, validate_material_references, validate_multiproperties_references,
-    validate_object_triangle_materials, validate_texture_paths, validate_triangle_properties,
+    get_property_resource_size, validate_color_formats, validate_duplicate_resource_ids,
+    validate_material_references, validate_multiproperties_references,
+    validate_object_triangle_materials, validate_resource_ordering, validate_texture_paths,
+    validate_triangle_properties,
 };
 pub use production::{
-    validate_production_extension, validate_production_extension_with_config,
-    validate_production_paths, validate_production_uuids_required,
+    validate_component_chain, validate_duplicate_uuids, validate_production_extension,
+    validate_production_extension_with_config, validate_production_paths,
+    validate_production_uuids_required, validate_uuid_formats,
 };
 pub use slice::{
     validate_planar_transform, validate_slice, validate_slice_extension, validate_slices,
@@ -42,10 +45,6 @@ use core::{
     validate_required_extensions, validate_required_structure, validate_thumbnail_format,
     validate_thumbnail_jpeg_colorspace, validate_transform_matrices, validate_vertex_order,
 };
-use material::{
-    validate_color_formats, validate_duplicate_resource_ids, validate_resource_ordering,
-};
-use production::{validate_component_chain, validate_duplicate_uuids, validate_uuid_formats};
 
 use crate::error::{Error, Result};
 use crate::model::{Model, ParserConfig};
@@ -75,23 +74,28 @@ pub fn validate_model(model: &Model) -> Result<()> {
 /// invokes any custom validation handlers registered in the parser configuration.
 #[allow(dead_code)] // Currently called during parsing; may be exposed publicly in future
 pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Result<()> {
-    // Standard validation
+    // Core validation (always required regardless of extensions)
     validate_required_structure(model)?;
     validate_object_ids(model)?;
     validate_mesh_geometry(model)?;
     validate_build_references(model)?;
-    validate_material_references(model)?;
     validate_required_extensions(model)?;
-    validate_boolean_operations(model)?;
     validate_component_references(model)?;
+    
+    // Production extension validation with config support for backward compatibility
+    // This is kept separate because it checks config.supports() for lenient validation
     validate_production_extension_with_config(model, config)?;
-    validate_displacement_extension(model)?;
-    validate_slices(model)?;
-    validate_slice_extension(model)?;
-    validate_beam_lattice(model)?;
 
-    // Extension registry validation (new unified approach)
-    // This calls validate() on all registered extension handlers
+    // Extension registry validation (unified approach)
+    // This calls validate() on all registered extension handlers, which now handle:
+    // - Material extension: material references, texture paths, multiproperties, 
+    //   triangle properties, color formats, resource ordering, duplicate resource IDs
+    // - Production extension: production extension, production paths, UUID formats,
+    //   production UUIDs required, duplicate UUIDs, component chain
+    // - Boolean operations extension
+    // - Displacement extension
+    // - Slice extension
+    // - Beam lattice extension
     config.registry().validate_all(model)?;
 
     // Custom extension validation (legacy pattern - deprecated)
@@ -105,25 +109,14 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
         }
     }
 
-    // Additional Material and Production validations
-    validate_texture_paths(model)?;
-    validate_color_formats(model)?;
-    validate_uuid_formats(model)?;
-    validate_production_paths(model)?;
+    // Additional core validations (not extension-specific)
     validate_transform_matrices(model)?;
-    validate_resource_ordering(model)?;
-    validate_duplicate_resource_ids(model)?;
-    validate_multiproperties_references(model)?;
-    validate_triangle_properties(model)?;
-    validate_production_uuids_required(model, config)?;
     validate_thumbnail_format(model)?;
     validate_mesh_volume(model)?;
     validate_vertex_order(model)?;
     validate_thumbnail_jpeg_colorspace(model)?;
     validate_dtd_declaration(model)?;
     validate_component_properties(model)?;
-    validate_duplicate_uuids(model)?;
-    validate_component_chain(model)?;
 
     Ok(())
 }
