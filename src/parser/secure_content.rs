@@ -436,16 +436,6 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                             )));
                         }
 
-                        // EPX-2607: Validate referenced file exists in package
-                        // Remove leading slash for package lookup
-                        let lookup_path = path.trim_start_matches('/');
-                        if !package.has_file(lookup_path) {
-                            return Err(Error::InvalidSecureContent(format!(
-                                        "Referenced encrypted file '{}' does not exist in package (EPX-2607)",
-                                        path
-                                    )));
-                        }
-
                         // Add to encrypted_files list (for backward compatibility)
                         if let Some(ref mut sc) = model.secure_content {
                             sc.encrypted_files.push(path.clone());
