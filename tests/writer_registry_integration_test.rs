@@ -196,9 +196,10 @@ fn test_write_to_file_with_registry() {
     registry.register(handler);
 
     // Write to a temporary file
-    let temp_file = "/tmp/test_writer_registry.3mf";
+    let temp_dir = std::env::temp_dir();
+    let temp_file = temp_dir.join("test_writer_registry.3mf");
 
-    let result = model.write_to_file_with_registry(temp_file, &registry);
+    let result = model.write_to_file_with_registry(&temp_file, &registry);
     assert!(
         result.is_ok(),
         "Failed to write to file with registry: {:?}",
@@ -213,7 +214,7 @@ fn test_write_to_file_with_registry() {
     );
 
     // Clean up
-    std::fs::remove_file(temp_file).ok();
+    std::fs::remove_file(&temp_file).ok();
 }
 
 #[test]
