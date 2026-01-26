@@ -5,6 +5,7 @@ use crate::model::Model;
 
 use super::sorted_ids_from_set;
 
+/// Validates slice stacks and their slice data
 pub fn validate_slices(model: &Model) -> Result<()> {
     // Validate all slice stacks in resources
     for slice_stack in &model.resources.slice_stacks {
@@ -47,7 +48,6 @@ pub fn validate_slices(model: &Model) -> Result<()> {
 /// - SliceRef slicepath must point to /2D/ folder (not /3D/ or other directories)
 /// - When an object references a slicestack, transforms must be planar (no Z-axis rotation/shear)
 /// - SliceStack must contain either slices OR slicerefs, not both
-
 pub fn validate_slice_extension(model: &Model) -> Result<()> {
     // Check if model uses slice extension
     if model.resources.slice_stacks.is_empty() {
@@ -159,8 +159,7 @@ pub fn validate_slice_extension(model: &Model) -> Result<()> {
     Ok(())
 }
 
-/// Validate a single slice
-
+/// Validates a single slice's polygons and vertices
 pub fn validate_slice(
     slice_stack_id: usize,
     slice_idx: usize,
@@ -307,7 +306,6 @@ pub fn validate_slice(
 /// For planar transforms:
 /// - m02 (index 2), m12 (index 5), m20 (index 6), m21 (index 7) must be exactly 0.0
 /// - m22 (index 8) must be exactly 1.0
-
 pub fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result<()> {
     // Check m02 (index 2)
     if transform[2] != 0.0 {

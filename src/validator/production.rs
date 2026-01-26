@@ -3,6 +3,7 @@
 use crate::error::{Error, Result};
 use crate::model::{Extension, Model, ParserConfig};
 
+/// Validates production extension path format and usage
 pub fn validate_production_extension(model: &Model) -> Result<()> {
     // Helper function to validate p:path format
     let validate_path = |path: &str, context: &str| -> Result<()> {
@@ -108,7 +109,6 @@ pub fn validate_production_extension(model: &Model) -> Result<()> {
 /// production attributes to be used even if the file doesn't declare the production
 /// extension in requiredextensions. This is useful for backward compatibility and
 /// for files that use production attributes but were created before strict validation.
-
 pub fn validate_production_extension_with_config(
     model: &Model,
     config: &ParserConfig,
@@ -261,7 +261,8 @@ pub fn validate_production_extension_with_config(
 /// - NormVectors must be normalized (unit length)
 /// - DisplacementTriangle did must reference existing Disp2DGroup resources
 /// - DisplacementTriangle d1, d2, d3 must reference valid displacement coordinates
-
+///
+/// Validates that production paths don't reference OPC internal files
 pub fn validate_production_paths(model: &Model) -> Result<()> {
     // Helper function to validate that a path doesn't reference OPC internal files
     let validate_not_opc_internal = |path: &str, context: &str| -> Result<()> {
@@ -329,7 +330,7 @@ pub fn validate_production_paths(model: &Model) -> Result<()> {
 /// restrictions are different per the 3MF Slice Extension spec. Sliced objects
 /// must have planar transforms (validated separately in validate_slice_extension),
 /// but can have negative determinants (mirror transformations).
-
+/// Validates that required UUIDs are present when production extension is used
 pub fn validate_production_uuids_required(model: &Model, _config: &ParserConfig) -> Result<()> {
     // Only validate if production extension is explicitly required in the model
     // The config.supports() tells us what the parser accepts, but we need to check

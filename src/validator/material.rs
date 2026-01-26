@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::sorted_ids_from_set;
 
+/// Validates material property group references and uniqueness
 pub fn validate_material_references(model: &Model) -> Result<()> {
     // Validate that all property group IDs are unique across all property group types
     // Property groups include: color groups, base material groups, multiproperties,
@@ -671,7 +672,8 @@ pub fn validate_material_references(model: &Model) -> Result<()> {
 /// - Referenced objects must be defined before the object containing the booleanshape (forward reference rule)
 /// - Base object must define a shape (mesh or booleanshape), not components
 /// - Operand objects must be triangle meshes only
-
+///
+/// Validates that texture paths are in /3D/Textures/ directory
 pub fn validate_texture_paths(model: &Model) -> Result<()> {
     // Get list of encrypted files to skip validation for them
     let encrypted_files: Vec<String> = model
@@ -747,7 +749,7 @@ pub fn validate_texture_paths(model: &Model) -> Result<()> {
 ///
 /// Per 3MF Material Extension spec, colors are stored as RGBA tuples (u8, u8, u8, u8).
 /// The parser already validates format during parsing, but this provides an additional check.
-
+/// Validates that multiproperties reference valid property groups
 pub fn validate_multiproperties_references(model: &Model) -> Result<()> {
     // Build sets of valid resource IDs
     let base_mat_ids: HashSet<usize> = model
@@ -889,7 +891,7 @@ pub fn validate_multiproperties_references(model: &Model) -> Result<()> {
 ///
 /// # Returns
 /// `Ok(())` if validation passes, `Err` with detailed message if validation fails
-
+/// Validates that triangle material properties are correctly assigned
 pub fn validate_triangle_properties(model: &Model) -> Result<()> {
     // Per 3MF Materials Extension spec:
     // - Triangles can have triangle-level properties (pid and/or pindex)
@@ -957,6 +959,7 @@ pub fn validate_triangle_properties(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Validates triangle material properties for a specific object
 pub fn validate_object_triangle_materials(
     object_id: usize,
     object_pid: Option<usize>,
@@ -1017,6 +1020,7 @@ pub fn validate_object_triangle_materials(
     Ok(())
 }
 
+/// Gets the size (number of properties) in a property resource group
 pub fn get_property_resource_size(model: &Model, resource_id: usize) -> Result<usize> {
     // Check colorgroup
     if let Some(color_group) = model

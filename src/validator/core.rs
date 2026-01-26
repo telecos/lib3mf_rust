@@ -6,6 +6,7 @@ use std::collections::HashSet;
 
 use super::sorted_ids_from_set;
 
+/// Validates mesh geometry for all objects in the model
 pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         if let Some(ref mesh) = object.mesh {
@@ -76,6 +77,7 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Validates that mesh edges are manifold (each edge shared by at most 2 triangles)
 pub fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Result<()> {
     use std::collections::HashMap;
 
@@ -116,6 +118,7 @@ pub fn validate_mesh_manifold(object_id: usize, mesh: &crate::model::Mesh) -> Re
     Ok(())
 }
 
+/// Validates that all build items reference valid objects
 pub fn validate_build_references(model: &Model) -> Result<()> {
     // Collect all valid object IDs
     let valid_object_ids: HashSet<usize> =
@@ -144,6 +147,7 @@ pub fn validate_build_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Validates that all component references are valid and non-circular
 pub fn validate_component_references(model: &Model) -> Result<()> {
     // Build a set of valid object IDs for quick lookup
     let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();
@@ -229,6 +233,7 @@ pub fn validate_component_references(model: &Model) -> Result<()> {
     Ok(())
 }
 
+/// Detects circular component references using depth-first search
 pub fn detect_circular_components(
     object_id: usize,
     model: &Model,
@@ -284,6 +289,7 @@ pub fn detect_circular_components(
     Ok(None)
 }
 
+/// Validates that objects with components don't have pid/pindex attributes
 pub fn validate_component_properties(model: &Model) -> Result<()> {
     // Per 3MF spec, objects that contain components (assemblies) cannot have pid/pindex
     // because assemblies don't have their own material properties

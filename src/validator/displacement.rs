@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::sorted_ids_from_set;
 
+/// Validates displacement extension resources and references
 pub fn validate_displacement_extension(model: &Model) -> Result<()> {
     // Check if displacement resources/elements are used (DPX 3312)
     let has_displacement_resources = !model.resources.displacement_maps.is_empty()

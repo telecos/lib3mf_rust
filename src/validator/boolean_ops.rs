@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::sorted_ids_from_set;
 
+/// Validates boolean operation shapes and their references
 pub fn validate_boolean_operations(model: &Model) -> Result<()> {
     // Build a set of valid object IDs for quick lookup
     let valid_object_ids: HashSet<usize> = model.resources.objects.iter().map(|o| o.id).collect();

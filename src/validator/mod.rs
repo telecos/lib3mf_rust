@@ -239,7 +239,6 @@ pub(crate) fn validate_object_ids(model: &Model) -> Result<()> {
 }
 
 /// Validate mesh geometry (vertex indices and triangle degeneracy)
-
 pub(crate) fn validate_color_formats(model: &Model) -> Result<()> {
     // Colors are already validated during parsing (stored as (u8, u8, u8, u8) tuples)
     // This function is a placeholder for any additional color validation needs
@@ -262,7 +261,6 @@ pub(crate) fn validate_color_formats(model: &Model) -> Result<()> {
 ///
 /// UUIDs must follow the format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 /// where x is a hexadecimal digit (0-9, a-f, A-F).
-
 pub(crate) fn validate_uuid_formats(model: &Model) -> Result<()> {
     // Helper function to validate a single UUID
     let validate_uuid = |uuid: &str, context: &str| -> Result<()> {
@@ -342,7 +340,6 @@ pub(crate) fn validate_uuid_formats(model: &Model) -> Result<()> {
 ///
 /// Per 3MF Production Extension spec, production paths must not reference
 /// OPC package internal files like /.rels or /[Content_Types].xml.
-
 pub(crate) fn validate_transform_matrices(model: &Model) -> Result<()> {
     // Build a set of object IDs that have slicestacks
     let sliced_object_ids: std::collections::HashSet<usize> = model
@@ -434,7 +431,6 @@ pub(crate) fn validate_transform_matrices(model: &Model) -> Result<()> {
 /// Per 3MF spec, resources must be defined before they are referenced.
 /// For example, texture2d must be defined before texture2dgroup that references it.
 /// This validation checks for forward references using parse order.
-
 pub(crate) fn validate_resource_ordering(model: &Model) -> Result<()> {
     // N_XXM_0606_01: Texture2dgroup must not reference texture2d that appears later in XML
     for tex_group in &model.resources.texture2d_groups {
@@ -623,7 +619,6 @@ pub(crate) fn validate_resource_ordering(model: &Model) -> Result<()> {
 /// - Property resource IDs (basematerials, colorgroups, texture2d, texture2dgroups,
 ///   compositematerials, multiproperties) must be unique among property resources
 /// - Objects and property resources have SEPARATE ID namespaces and can reuse IDs
-
 pub(crate) fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
     // Check object IDs for duplicates (separate namespace)
     let mut seen_object_ids: HashSet<usize> = HashSet::new();
@@ -696,7 +691,6 @@ pub(crate) fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
 /// Per 3MF Material Extension spec:
 /// - All PIDs in multiproperties.pids must reference valid resources
 /// - MultiProperties cannot reference the same basematerials group multiple times in pids
-
 pub(crate) fn validate_mesh_volume(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         // Skip mesh volume validation for sliced objects
@@ -753,7 +747,6 @@ pub(crate) fn validate_mesh_volume(model: &Model) -> Result<()> {
 /// For now, we rely on other validators like volume calculation to catch some
 /// cases of inverted meshes. Additionally, build item transforms with negative
 /// determinants (which would invert normals) are rejected by validate_transform_matrices().
-
 pub(crate) fn validate_vertex_order(_model: &Model) -> Result<()> {
     Ok(())
 }
@@ -765,7 +758,6 @@ pub(crate) fn validate_vertex_order(_model: &Model) -> Result<()> {
 /// JPEG CMYK validation is performed in `opc::Package::get_thumbnail_metadata()`
 /// where the actual thumbnail file data is available. This placeholder exists
 /// for documentation and to maintain the validation function signature.
-
 pub(crate) fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
     Ok(())
 }
@@ -778,13 +770,11 @@ pub(crate) fn validate_thumbnail_jpeg_colorspace(_model: &Model) -> Result<()> {
 /// where the parser rejects `Event::DocType` to prevent XXE (XML External Entity)
 /// attacks. This placeholder exists for documentation and to maintain the
 /// validation function signature.
-
 pub(crate) fn validate_dtd_declaration(_model: &Model) -> Result<()> {
     Ok(())
 }
 
 /// N_XPX_0424_01: Validate objects with components don't have pid/pindex attributes
-
 pub(crate) fn validate_duplicate_uuids(model: &Model) -> Result<()> {
     let mut uuids = std::collections::HashSet::new();
 
@@ -855,7 +845,6 @@ pub(crate) fn validate_duplicate_uuids(model: &Model) -> Result<()> {
 ///
 /// This is beyond the scope of single-file validation and would require
 /// significant architectural changes to support multi-file analysis.
-
 pub(crate) fn validate_component_chain(_model: &Model) -> Result<()> {
     // N_XPM_0803_01: Component reference chain validation
     //
@@ -870,7 +859,6 @@ pub(crate) fn validate_component_chain(_model: &Model) -> Result<()> {
 /// Per 3MF spec, thumbnails must be PNG or JPEG format, and JPEG must be RGB (not CMYK).
 /// Note: Object.has_thumbnail_attribute is a boolean that tracks if thumbnail was present,
 /// but the actual path is not stored (deprecated attribute).
-
 pub(crate) fn validate_thumbnail_format(_model: &Model) -> Result<()> {
     // Thumbnail validation is limited because the thumbnail path is not stored in the model
     // The parser only tracks whether the attribute was present via has_thumbnail_attribute

@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 use crate::model::{Model, ObjectType};
 use std::collections::HashSet;
 
+/// Validates beam lattice structures in model objects
 pub fn validate_beam_lattice(model: &Model) -> Result<()> {
     // Collect all valid resource IDs (objects, property groups, etc.)
     let mut valid_resource_ids = HashSet::new();
