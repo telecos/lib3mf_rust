@@ -371,7 +371,10 @@ impl ParserConfig {
     /// let config = ParserConfig::new()
     ///     .with_extension_handler(Arc::new(MaterialExtensionHandler));
     /// ```
-    pub fn with_extension_handler(mut self, handler: Arc<dyn crate::extension::ExtensionHandler>) -> Self {
+    pub fn with_extension_handler(
+        mut self,
+        handler: Arc<dyn crate::extension::ExtensionHandler>,
+    ) -> Self {
         self.registry.register(handler);
         self
     }
@@ -1040,22 +1043,36 @@ mod tests {
         let config = ParserConfig::with_all_extensions();
         // Should have all 7 standard extension handlers
         assert_eq!(config.registry().handlers().len(), 7);
-        
+
         // Verify specific handlers are present
         assert!(config.registry().get_handler(Extension::Material).is_some());
-        assert!(config.registry().get_handler(Extension::Production).is_some());
-        assert!(config.registry().get_handler(Extension::BeamLattice).is_some());
+        assert!(config
+            .registry()
+            .get_handler(Extension::Production)
+            .is_some());
+        assert!(config
+            .registry()
+            .get_handler(Extension::BeamLattice)
+            .is_some());
         assert!(config.registry().get_handler(Extension::Slice).is_some());
-        assert!(config.registry().get_handler(Extension::BooleanOperations).is_some());
-        assert!(config.registry().get_handler(Extension::Displacement).is_some());
-        assert!(config.registry().get_handler(Extension::SecureContent).is_some());
+        assert!(config
+            .registry()
+            .get_handler(Extension::BooleanOperations)
+            .is_some());
+        assert!(config
+            .registry()
+            .get_handler(Extension::Displacement)
+            .is_some());
+        assert!(config
+            .registry()
+            .get_handler(Extension::SecureContent)
+            .is_some());
     }
 
     #[test]
     fn test_parser_config_with_extension_handler() {
-        let config = ParserConfig::new()
-            .with_extension_handler(Arc::new(MaterialExtensionHandler));
-        
+        let config = ParserConfig::new().with_extension_handler(Arc::new(MaterialExtensionHandler));
+
         assert_eq!(config.registry().handlers().len(), 1);
         assert!(config.registry().get_handler(Extension::Material).is_some());
     }
@@ -1064,24 +1081,32 @@ mod tests {
     fn test_parser_config_registry_mut() {
         let mut config = ParserConfig::new();
         assert_eq!(config.registry().handlers().len(), 0);
-        
-        config.registry_mut().register(Arc::new(MaterialExtensionHandler));
-        
+
+        config
+            .registry_mut()
+            .register(Arc::new(MaterialExtensionHandler));
+
         assert_eq!(config.registry().handlers().len(), 1);
         assert!(config.registry().get_handler(Extension::Material).is_some());
     }
 
     #[test]
     fn test_parser_config_clone() {
-        let config1 = ParserConfig::new()
-            .with_extension_handler(Arc::new(MaterialExtensionHandler));
-        
+        let config1 =
+            ParserConfig::new().with_extension_handler(Arc::new(MaterialExtensionHandler));
+
         let config2 = config1.clone();
-        
+
         // Both should have the same handlers
-        assert_eq!(config1.registry().handlers().len(), config2.registry().handlers().len());
+        assert_eq!(
+            config1.registry().handlers().len(),
+            config2.registry().handlers().len()
+        );
         assert_eq!(config1.registry().handlers().len(), 1);
-        assert!(config2.registry().get_handler(Extension::Material).is_some());
+        assert!(config2
+            .registry()
+            .get_handler(Extension::Material)
+            .is_some());
     }
 
     #[test]
@@ -1089,7 +1114,7 @@ mod tests {
         let config = ParserConfig::new()
             .with_extension(Extension::Material)
             .with_extension_handler(Arc::new(MaterialExtensionHandler));
-        
+
         assert!(config.supports(&Extension::Material));
         assert_eq!(config.registry().handlers().len(), 1);
     }
