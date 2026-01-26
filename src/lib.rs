@@ -230,6 +230,54 @@ impl Model {
         opc::create_package(writer, &model_xml)
     }
 
+    /// Write a 3MF file to a writer with extension registry
+    ///
+    /// This method serializes the Model to a complete 3MF file (ZIP archive)
+    /// and writes it to the provided writer. Before serialization, it calls
+    /// `pre_write()` on all registered extension handlers, allowing extensions
+    /// to prepare or transform data before writing.
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - A writer to write the 3MF file data to
+    /// * `registry` - Extension registry containing handlers that will be called before writing
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::{Model, create_default_registry};
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut model = Model::new();
+    /// // ... populate model with data ...
+    ///
+    /// // Create registry with all standard extension handlers
+    /// let registry = create_default_registry();
+    ///
+    /// let file = File::create("output.3mf")?;
+    /// model.to_writer_with_registry(file, &registry)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn to_writer_with_registry<W: std::io::Write + std::io::Seek>(
+        mut self,
+        writer: W,
+        registry: &ExtensionRegistry,
+    ) -> Result<W> {
+        // Call pre_write hooks on all registered extensions
+        registry.pre_write_all(&mut self)?;
+
+        // Serialize model to XML
+        let mut xml_buffer = Vec::new();
+        writer::write_model_xml(&self, &mut xml_buffer)?;
+        let model_xml = String::from_utf8(xml_buffer)
+            .map_err(|e| Error::xml_write(format!("Failed to convert XML to UTF-8: {}", e)))?;
+
+        // Create OPC package
+        opc::create_package(writer, &model_xml)
+    }
+
     /// Write a 3MF file to a file path
     ///
     /// This is a convenience method that creates a file and writes the 3MF data to it.
@@ -256,6 +304,44 @@ impl Model {
         let file = std::fs::File::create(path)?;
         // File is automatically flushed and closed when dropped
         self.to_writer(file)?;
+        Ok(())
+    }
+
+    /// Write a 3MF file to a file path with extension registry
+    ///
+    /// This is a convenience method that creates a file and writes the 3MF data to it.
+    /// Before writing, it calls `pre_write()` on all registered extension handlers.
+    /// The file is automatically flushed and closed when the method completes.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the output file
+    /// * `registry` - Extension registry containing handlers that will be called before writing
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::{Model, create_default_registry};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut model = Model::new();
+    /// // ... populate model with data ...
+    ///
+    /// // Create registry with all standard extension handlers
+    /// let registry = create_default_registry();
+    ///
+    /// model.write_to_file_with_registry("output.3mf", &registry)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn write_to_file_with_registry<P: AsRef<std::path::Path>>(
+        self,
+        path: P,
+        registry: &ExtensionRegistry,
+    ) -> Result<()> {
+        let file = std::fs::File::create(path)?;
+        // File is automatically flushed and closed when dropped
+        self.to_writer_with_registry(file, registry)?;
         Ok(())
     }
 }
