@@ -85,7 +85,7 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
 
     // Validate production extension external paths
     // This checks that external files exist and referenced objects/UUIDs are valid
-    validate_production_external_paths(&mut package, &model, &config_clone)?;
+    validate_production_external_paths(&mut package, &model)?;
 
     // Validate texture paths exist in the package (N_XPM_0610_01)
     // This must be done before general validation since it requires package access
@@ -3934,7 +3934,6 @@ fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
 fn validate_production_external_paths<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     model: &Model,
-    config: &ParserConfig,
 ) -> Result<()> {
     // Cache to avoid re-parsing the same external file multiple times
     let mut external_file_cache: HashMap<String, Vec<(usize, Option<String>)>> = HashMap::new();
@@ -4003,7 +4002,6 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                 package,
                 normalized_path,
                 model,
-                config,
                 &mut validated_files,
             )?;
         }
@@ -4073,7 +4071,6 @@ fn validate_production_external_paths<R: Read + std::io::Seek>(
                         package,
                         normalized_path,
                         model,
-                        config,
                         &mut validated_files,
                     )?;
                 }
@@ -4290,7 +4287,6 @@ fn validate_external_model_triangles<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     file_path: &str,
     model: &Model,
-    config: &ParserConfig,
     validated_files: &mut HashSet<String>,
 ) -> Result<()> {
     // Skip if already validated or is encrypted
@@ -4317,10 +4313,31 @@ fn validate_external_model_triangles<R: Read + std::io::Seek>(
 
     // Load and fully parse the external model file
     let external_xml = load_file_with_decryption(package, file_path, file_path, model)?;
-    
-    // Parse the external model file with the same config as the main model
-    // This ensures that all required extensions are supported
-    let external_model = match parse_model_xml_with_config(&external_xml, config.clone()) {
+
+    // Parse the external model file with all extensions enabled plus common custom extensions
+    // We use a comprehensive config instead of the main model's config because:
+    // 1. External files may declare different required extensions than the main model
+    // 2. We're only validating triangle material properties, not enforcing extension requirements
+    // 3. This prevents failures when external files use extensions not in the main model's config
+    let external_config = ParserConfig::with_all_extensions()
+        .with_custom_extension(
+            "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10",
+            "Displacement 2023/10",
+        )
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04",
+            "SecureContent 2019/04",
+        )
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07",
+            "BeamLattice Balls",
+        )
+        .with_custom_extension(
+            "http://schemas.microsoft.com/3dmanufacturing/trianglesets/2021/07",
+            "TriangleSets",
+        );
+
+    let external_model = match parse_model_xml_with_config(&external_xml, external_config) {
         Ok(model) => model,
         Err(e) => {
             return Err(Error::InvalidModel(format!(
