@@ -9,7 +9,7 @@ pub enum TileStyle {
     Mirror,
     /// Clamp to edge pixels
     Clamp,
-    /// No displacement outside [0,1]
+    /// No displacement outside \[0,1\]
     None,
 }
 

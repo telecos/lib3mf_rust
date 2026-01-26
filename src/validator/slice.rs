@@ -284,10 +284,10 @@ pub fn validate_slice(
 /// Validate that a transform is planar (no Z-axis rotation or shear)
 ///
 /// Per 3MF Slice Extension spec:
-/// When an object references slice model data, the 3D transform matrices in <build><item>
-/// and <component> elements are limited to those that do not impact the slicing orientation
+/// When an object references slice model data, the 3D transform matrices in `<build><item>`
+/// and `<component>` elements are limited to those that do not impact the slicing orientation
 /// (planar transformations). Therefore, any transform applied (directly or indirectly) to an
-/// object that references a <slicestack> MUST have m02, m12, m20, and m21 equal to zero and
+/// object that references a `<slicestack>` MUST have m02, m12, m20, and m21 equal to zero and
 /// m22 equal to one.
 ///
 /// Transform matrix layout (3x3 rotation + translation, stored in row-major order as 12 elements):
