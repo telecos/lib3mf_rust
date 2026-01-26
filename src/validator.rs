@@ -4140,6 +4140,17 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
 
 /// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
 ///
+/// Validates that mesh triangles have correct vertex ordering (counter-clockwise
+/// when viewed from outside) by checking the signed volume of each mesh.
+///
+/// A mesh with inward-pointing normals (reversed vertex order) will have negative
+/// signed volume. This validation catches meshes where all or most triangles are
+/// inverted.
+///
+/// Note: This check may not catch partially inverted meshes or complex non-convex
+/// geometries where some triangles are legitimately oriented differently.
+/// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
+///
 /// **Note: This validation is intentionally disabled.**
 ///
 /// Detecting reversed vertex order reliably requires sophisticated mesh analysis
@@ -4154,7 +4165,8 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
 /// - Consideration of non-manifold geometries
 ///
 /// For now, we rely on other validators like volume calculation to catch some
-/// cases of inverted meshes.
+/// cases of inverted meshes. Additionally, build item transforms with negative
+/// determinants (which would invert normals) are rejected by validate_transform_matrices().
 fn validate_vertex_order(_model: &Model) -> Result<()> {
     Ok(())
 }

@@ -223,6 +223,19 @@ pub fn parse_model_xml(xml: &str) -> Result<Model> {
 /// tests in the tests/ directory are compiled separately and wouldn't have access.
 #[doc(hidden)]
 pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Model> {
+    // Check for DTD declarations before parsing for security
+    // DTD declarations can lead to XXE (XML External Entity) attacks
+    // Check first ~2000 characters where DOCTYPE declarations typically appear
+    let check_len = xml.len().min(2000);
+    let xml_start = &xml[..check_len];
+    let xml_start_lower = xml_start.to_lowercase();
+
+    if xml_start_lower.contains("<!doctype") {
+        return Err(Error::InvalidXml(
+            "DTD declarations are not allowed in 3MF files for security reasons".to_string(),
+        ));
+    }
+
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -300,7 +313,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                 // XML declaration is allowed
             }
             Ok(Event::DocType(_)) => {
-                // N_XPX_0420_01: DTD declarations are not allowed (security risk)
+                // DTD declarations are not allowed (security risk)
                 return Err(Error::InvalidXml(
                     "DTD declarations are not allowed in 3MF files for security reasons"
                         .to_string(),
