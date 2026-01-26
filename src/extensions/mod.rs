@@ -5,10 +5,12 @@
 
 pub mod beam_lattice;
 pub mod boolean_ops;
+pub mod displacement;
 pub mod material;
 pub mod production;
 
 pub use beam_lattice::BeamLatticeExtensionHandler;
 pub use boolean_ops::BooleanOperationsExtensionHandler;
+pub use displacement::DisplacementExtensionHandler;
 pub use material::MaterialExtensionHandler;
 pub use production::ProductionExtensionHandler;
