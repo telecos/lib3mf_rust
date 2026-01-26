@@ -65,6 +65,7 @@
 #![warn(missing_docs)]
 
 pub mod error;
+pub mod extension;
 pub mod mesh_ops;
 pub mod model;
 pub mod opc;
@@ -78,6 +79,7 @@ mod writer;
 pub mod decryption;
 
 pub use error::{Error, Result};
+pub use extension::{ExtensionHandler, ExtensionRegistry};
 pub use model::{
     AccessRight, BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod,
     BooleanOpType, BooleanRef, BooleanShape, Build, BuildItem, CEKParams, Channel, ColorGroup,
