@@ -199,7 +199,7 @@ pub enum Error {
     ///
     /// **Suggestions**:
     /// - Ensure the 3MF archive contains all required files
-    /// - Check for [Content_Types].xml and 3D/3dmodel.model files
+    /// - Check for `[Content_Types].xml` and `3D/3dmodel.model` files
     #[error("[E1003] Missing required file: {0}")]
     MissingFile(String),
 

@@ -1287,7 +1287,7 @@ impl<R: Read + std::io::Seek> Package<R> {
     /// Validate that a keystore file has the correct content type override
     ///
     /// EPX-2606 validation: If a keystore file exists, it must have a content type
-    /// defined in [Content_Types].xml, either as an Override for the specific file
+    /// defined in `[Content_Types].xml`, either as an Override for the specific file
     /// or as a Default for the .xml extension.
     ///
     /// # Arguments
@@ -1487,9 +1487,9 @@ impl<R: Read + std::io::Seek> Package<R> {
 /// Create a 3MF package (ZIP archive) from model data
 ///
 /// This function creates a complete 3MF file including:
-/// - [Content_Types].xml
-/// - _rels/.rels
-/// - 3D/3dmodel.model
+/// - `[Content_Types].xml`
+/// - `_rels/.rels`
+/// - `3D/3dmodel.model`
 ///
 /// # Arguments
 ///
@@ -1547,10 +1547,10 @@ pub fn create_package<W: std::io::Write + std::io::Seek>(writer: W, model_xml: &
 /// Create a 3MF package with thumbnail support
 ///
 /// This function creates a complete 3MF file including:
-/// - [Content_Types].xml (with thumbnail content type)
-/// - _rels/.rels (with thumbnail relationship)
-/// - 3D/3dmodel.model
-/// - Metadata/thumbnail.png (or other format)
+/// - `[Content_Types].xml` (with thumbnail content type)
+/// - `_rels/.rels` (with thumbnail relationship)
+/// - `3D/3dmodel.model`
+/// - `Metadata/thumbnail.png` (or other format)
 ///
 /// # Arguments
 ///
