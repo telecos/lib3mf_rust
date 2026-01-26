@@ -69,18 +69,18 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Load keystore to identify encrypted files (SecureContent extension)
     // This MUST happen before validation so that component validation can
     // skip components referencing encrypted files
-    load_keystore(&mut package, &mut model)?;
+    load_keystore(&mut package, &mut model, &config_clone)?;
 
     // Load external slice files if any slice stacks have references
-    load_slice_references(&mut package, &mut model)?;
+    load_slice_references(&mut package, &mut model, &config_clone)?;
 
     // Validate boolean operation external paths before general validation
     // This requires access to the package to check if referenced files exist
-    validate_boolean_external_paths(&mut package, &model)?;
+    validate_boolean_external_paths(&mut package, &model, &config_clone)?;
 
     // Validate production extension external paths
     // This checks that external files exist and referenced objects/UUIDs are valid
-    validate_production_external_paths(&mut package, &model)?;
+    validate_production_external_paths(&mut package, &model, &config_clone)?;
 
     // Validate texture paths exist in the package (N_XPM_0610_01)
     // This must be done before general validation since it requires package access

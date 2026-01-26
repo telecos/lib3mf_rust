@@ -113,6 +113,10 @@ pub struct ParserConfig {
     supported_extensions: HashSet<Extension>,
     /// Registered custom extensions with their handlers
     custom_extensions: HashMap<String, CustomExtensionInfo>,
+    /// Optional key provider for decrypting SecureContent
+    /// If provided, this will be used to decrypt encrypted files
+    /// If not provided, test keys will be used for Suite 8 conformance
+    key_provider: Option<Arc<dyn crate::key_provider::KeyProvider>>,
 }
 
 impl ParserConfig {
@@ -123,6 +127,7 @@ impl ParserConfig {
         Self {
             supported_extensions: supported,
             custom_extensions: HashMap::new(),
+            key_provider: None,
         }
     }
 
@@ -143,6 +148,7 @@ impl ParserConfig {
         Self {
             supported_extensions: supported,
             custom_extensions: HashMap::new(),
+            key_provider: None,
         }
     }
 
@@ -285,6 +291,42 @@ impl ParserConfig {
     /// Check if an extension is supported
     pub fn supports(&self, extension: &Extension) -> bool {
         self.supported_extensions.contains(extension)
+    }
+
+    /// Set a custom key provider for SecureContent decryption
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - The key provider to use for decryption
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use lib3mf::{ParserConfig, KeyProvider};
+    /// use std::sync::Arc;
+    /// # use lib3mf::{Result, SecureContentInfo, AccessRight, CEKParams, KEKParams};
+    ///
+    /// # struct MyKeyProvider;
+    /// # impl KeyProvider for MyKeyProvider {
+    /// #     fn decrypt(&self, _: &[u8], _: &CEKParams, _: &AccessRight, _: &SecureContentInfo) -> Result<Vec<u8>> { Ok(vec![]) }
+    /// #     fn encrypt(&self, _: &[u8], _: &str, _: bool) -> Result<(Vec<u8>, CEKParams, KEKParams, String)> { unimplemented!() }
+    /// # }
+    ///
+    /// let provider: Arc<dyn KeyProvider> = Arc::new(MyKeyProvider);
+    /// let config = ParserConfig::new()
+    ///     .with_key_provider(provider);
+    /// ```
+    pub fn with_key_provider(
+        mut self,
+        provider: Arc<dyn crate::key_provider::KeyProvider>,
+    ) -> Self {
+        self.key_provider = Some(provider);
+        self
+    }
+
+    /// Get the key provider if one is configured
+    pub fn key_provider(&self) -> Option<&Arc<dyn crate::key_provider::KeyProvider>> {
+        self.key_provider.as_ref()
     }
 
     /// Check if a custom extension is registered by namespace
