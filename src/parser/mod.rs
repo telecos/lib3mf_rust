@@ -29,10 +29,10 @@ use displacement::{
     parse_normvectorgroup_start, validate_displacement_namespace_prefix,
 };
 use material::{
-    parse_base_element, parse_base_material, parse_basematerials_start,
-    parse_color_element, parse_colorgroup_start, parse_composite, parse_compositematerials_start,
-    parse_multi, parse_multiproperties_start, parse_tex2coord, parse_texture2d,
-    parse_texture2dgroup_start, validate_texture_file_paths,
+    parse_base_element, parse_base_material, parse_basematerials_start, parse_color_element,
+    parse_colorgroup_start, parse_composite, parse_compositematerials_start, parse_multi,
+    parse_multiproperties_start, parse_tex2coord, parse_texture2d, parse_texture2dgroup_start,
+    validate_texture_file_paths,
 };
 use slice::{
     load_slice_references, parse_slice_polygon_start, parse_slice_segment, parse_slice_start,
@@ -703,7 +703,8 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "compositematerials" if in_resources => {
                         in_compositematerials = true;
-                        let group = parse_compositematerials_start(&reader, e, resource_parse_order)?;
+                        let group =
+                            parse_compositematerials_start(&reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_compositematerials = Some(group);
                     }
@@ -851,7 +852,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "slice" if in_slicestack => {
                         in_slice = true;
                         let slice = parse_slice_start(&reader, e)?;
-                        
+
                         // For self-closing empty slice tags like <s:slice ztop="100.060"/>,
                         // immediately push the slice since there won't be an End event
                         if is_empty_element {

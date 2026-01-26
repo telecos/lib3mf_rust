@@ -6,8 +6,8 @@
 use crate::error::{Error, Result};
 use crate::model::*;
 use crate::opc::Package;
-use std::io::Read;
 use quick_xml::Reader;
+use std::io::Read;
 
 use super::{load_file_with_decryption, parse_attributes, parse_model_xml_with_config};
 
@@ -181,9 +181,7 @@ pub(super) fn parse_slicestack_start<R: std::io::BufRead>(
         .parse::<usize>()?;
     let zbottom = attrs
         .get("zbottom")
-        .ok_or_else(|| {
-            Error::InvalidXml("SliceStack missing zbottom attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("SliceStack missing zbottom attribute".to_string()))?
         .parse::<f64>()?;
     Ok(SliceStack::new(id, zbottom))
 }
@@ -209,15 +207,11 @@ pub(super) fn parse_sliceref<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
     let slicestackid = attrs
         .get("slicestackid")
-        .ok_or_else(|| {
-            Error::InvalidXml("SliceRef missing slicestackid attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("SliceRef missing slicestackid attribute".to_string()))?
         .parse::<usize>()?;
     let slicepath = attrs
         .get("slicepath")
-        .ok_or_else(|| {
-            Error::InvalidXml("SliceRef missing slicepath attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("SliceRef missing slicepath attribute".to_string()))?
         .to_string();
     Ok(SliceRef::new(slicestackid, slicepath))
 }
@@ -247,9 +241,7 @@ pub(super) fn parse_slice_polygon_start<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
     let startv = attrs
         .get("startv")
-        .ok_or_else(|| {
-            Error::InvalidXml("Slice polygon missing startv attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("Slice polygon missing startv attribute".to_string()))?
         .parse::<usize>()?;
     Ok(SlicePolygon::new(startv))
 }

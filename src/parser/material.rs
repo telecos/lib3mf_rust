@@ -78,9 +78,7 @@ pub(super) fn parse_texture2d<R: std::io::BufRead>(
         .to_string();
     let contenttype = attrs
         .get("contenttype")
-        .ok_or_else(|| {
-            Error::InvalidXml("texture2d missing contenttype attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("texture2d missing contenttype attribute".to_string()))?
         .to_string();
 
     let mut texture = Texture2D::new(id, path, contenttype);
@@ -184,13 +182,13 @@ pub(super) fn parse_base_element<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<BaseMaterial> {
     let attrs = parse_attributes(reader, e)?;
-    
+
     // Validate only allowed attributes are present
     // Per 3MF Materials & Properties Extension spec: name, displaycolor
     validate_attributes(&attrs, &["name", "displaycolor"], "base")?;
-    
+
     let name = attrs.get("name").cloned().unwrap_or_default();
-    
+
     // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
     // If displaycolor is missing or invalid, use white as default
     let displaycolor = if let Some(color_str) = attrs.get("displaycolor") {
@@ -198,7 +196,7 @@ pub(super) fn parse_base_element<R: std::io::BufRead>(
     } else {
         (255, 255, 255, 255)
     };
-    
+
     Ok(BaseMaterial::new(name, displaycolor))
 }
 
@@ -225,10 +223,10 @@ pub(super) fn parse_color_element<R: std::io::BufRead>(
     colorgroup_id: usize,
 ) -> Result<(u8, u8, u8, u8)> {
     let attrs = parse_attributes(reader, e)?;
-    let color_str = attrs.get("color").ok_or_else(|| {
-        Error::missing_attribute("color", "color")
-    })?;
-    
+    let color_str = attrs
+        .get("color")
+        .ok_or_else(|| Error::missing_attribute("color", "color"))?;
+
     parse_color(color_str).ok_or_else(|| {
         Error::InvalidXml(format!(
             "Invalid color format '{}' in colorgroup {}.\n\
@@ -285,15 +283,11 @@ pub(super) fn parse_compositematerials_start<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
     let id = attrs
         .get("id")
-        .ok_or_else(|| {
-            Error::InvalidXml("compositematerials missing id attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("compositematerials missing id attribute".to_string()))?
         .parse::<usize>()?;
     let matid = attrs
         .get("matid")
-        .ok_or_else(|| {
-            Error::InvalidXml("compositematerials missing matid attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("compositematerials missing matid attribute".to_string()))?
         .parse::<usize>()?;
     let matindices_str = attrs.get("matindices").ok_or_else(|| {
         Error::InvalidXml("compositematerials missing matindices attribute".to_string())
@@ -321,9 +315,9 @@ pub(super) fn parse_composite<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Composite> {
     let attrs = parse_attributes(reader, e)?;
-    let values_str = attrs.get("values").ok_or_else(|| {
-        Error::InvalidXml("composite missing values attribute".to_string())
-    })?;
+    let values_str = attrs
+        .get("values")
+        .ok_or_else(|| Error::InvalidXml("composite missing values attribute".to_string()))?;
     let values: Vec<f32> = values_str
         .split_whitespace()
         .filter_map(|s| s.parse::<f32>().ok())
@@ -348,13 +342,11 @@ pub(super) fn parse_multiproperties_start<R: std::io::BufRead>(
     let attrs = parse_attributes(reader, e)?;
     let id = attrs
         .get("id")
-        .ok_or_else(|| {
-            Error::InvalidXml("multiproperties missing id attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("multiproperties missing id attribute".to_string()))?
         .parse::<usize>()?;
-    let pids_str = attrs.get("pids").ok_or_else(|| {
-        Error::InvalidXml("multiproperties missing pids attribute".to_string())
-    })?;
+    let pids_str = attrs
+        .get("pids")
+        .ok_or_else(|| Error::InvalidXml("multiproperties missing pids attribute".to_string()))?;
     let pids: Vec<usize> = pids_str
         .split_whitespace()
         .filter_map(|s| s.parse::<usize>().ok())
@@ -391,9 +383,9 @@ pub(super) fn parse_multi<R: std::io::BufRead>(
     e: &quick_xml::events::BytesStart,
 ) -> Result<Multi> {
     let attrs = parse_attributes(reader, e)?;
-    let pindices_str = attrs.get("pindices").ok_or_else(|| {
-        Error::InvalidXml("multi missing pindices attribute".to_string())
-    })?;
+    let pindices_str = attrs
+        .get("pindices")
+        .ok_or_else(|| Error::InvalidXml("multi missing pindices attribute".to_string()))?;
     let pindices: Vec<usize> = pindices_str
         .split_whitespace()
         .filter_map(|s| s.parse::<usize>().ok())

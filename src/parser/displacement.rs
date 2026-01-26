@@ -139,9 +139,7 @@ pub(super) fn parse_displacement2d<R: std::io::BufRead>(
         .parse::<usize>()?;
     let path = attrs
         .get("path")
-        .ok_or_else(|| {
-            Error::InvalidXml("displacement2d missing path attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("displacement2d missing path attribute".to_string()))?
         .to_string();
 
     let mut disp = Displacement2D::new(id, path);
@@ -223,9 +221,7 @@ pub(super) fn parse_normvectorgroup_start<R: std::io::BufRead>(
 
     let id = attrs
         .get("id")
-        .ok_or_else(|| {
-            Error::InvalidXml("normvectorgroup missing id attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("normvectorgroup missing id attribute".to_string()))?
         .parse::<usize>()?;
     Ok(NormVectorGroup::new(id))
 }
@@ -289,9 +285,7 @@ pub(super) fn parse_disp2dgroup_start<R: std::io::BufRead>(
         .parse::<usize>()?;
     let dispid = attrs
         .get("dispid")
-        .ok_or_else(|| {
-            Error::InvalidXml("disp2dgroup missing dispid attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("disp2dgroup missing dispid attribute".to_string()))?
         .parse::<usize>()?;
 
     // Per DPX spec 3.3: Validate dispid references declared Displacement2D resource
@@ -318,9 +312,7 @@ pub(super) fn parse_disp2dgroup_start<R: std::io::BufRead>(
     }
     let height = attrs
         .get("height")
-        .ok_or_else(|| {
-            Error::InvalidXml("disp2dgroup missing height attribute".to_string())
-        })?
+        .ok_or_else(|| Error::InvalidXml("disp2dgroup missing height attribute".to_string()))?
         .parse::<f64>()?;
 
     // Validate height is finite
