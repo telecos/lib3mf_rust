@@ -81,14 +81,14 @@ pub fn validate_model_with_config(model: &Model, config: &ParserConfig) -> Resul
     validate_build_references(model)?;
     validate_required_extensions(model)?;
     validate_component_references(model)?;
-    
+
     // Production extension validation with config support for backward compatibility
     // This is kept separate because it checks config.supports() for lenient validation
     validate_production_extension_with_config(model, config)?;
 
     // Extension registry validation (unified approach)
     // This calls validate() on all registered extension handlers, which now handle:
-    // - Material extension: material references, texture paths, multiproperties, 
+    // - Material extension: material references, texture paths, multiproperties,
     //   triangle properties, color formats, resource ordering, duplicate resource IDs
     // - Production extension: production extension, production paths, UUID formats,
     //   production UUIDs required, duplicate UUIDs, component chain
