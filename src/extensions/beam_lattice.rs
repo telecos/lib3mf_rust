@@ -24,15 +24,8 @@ use crate::validator;
 /// let model = Model::new();
 /// // Use registry.validate_all(&model) to validate
 /// ```
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct BeamLatticeExtensionHandler;
-
-impl BeamLatticeExtensionHandler {
-    /// Create a new BeamLattice extension handler
-    pub fn new() -> Self {
-        Self
-    }
-}
 
 impl ExtensionHandler for BeamLatticeExtensionHandler {
     fn extension_type(&self) -> Extension {
@@ -62,13 +55,13 @@ mod tests {
 
     #[test]
     fn test_extension_type() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         assert_eq!(handler.extension_type(), Extension::BeamLattice);
     }
 
     #[test]
     fn test_namespace() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         assert_eq!(
             handler.namespace(),
             "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02"
@@ -77,20 +70,20 @@ mod tests {
 
     #[test]
     fn test_name() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         assert_eq!(handler.name(), "BeamLattice");
     }
 
     #[test]
     fn test_is_used_in_model_empty() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         let model = Model::new();
         assert!(!handler.is_used_in_model(&model));
     }
 
     #[test]
     fn test_is_used_in_model_no_beamset() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         let mut model = Model::new();
 
         // Add an object with a mesh but no beamset
@@ -109,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_is_used_in_model_with_beamset() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         let mut model = Model::new();
 
         // Add an object with a mesh that has a beamset
@@ -132,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_validate_empty_model() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         let model = Model::new();
         // Empty model should be valid (no beamsets to validate)
         assert!(handler.validate(&model).is_ok());
@@ -140,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_validate_valid_beamset() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         let mut model = Model::new();
 
         // Create a valid object with beamset
@@ -163,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_beamset() {
-        let handler = BeamLatticeExtensionHandler::new();
+        let handler = BeamLatticeExtensionHandler;
         let mut model = Model::new();
 
         // Create an invalid object with beamset (beam references non-existent vertex)
@@ -182,11 +175,5 @@ mod tests {
 
         model.resources.objects.push(object);
         assert!(handler.validate(&model).is_err());
-    }
-
-    #[test]
-    fn test_default_implementation() {
-        let handler = BeamLatticeExtensionHandler::default();
-        assert_eq!(handler.extension_type(), Extension::BeamLattice);
     }
 }
