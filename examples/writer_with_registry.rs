@@ -24,7 +24,7 @@ impl ExtensionHandler for CustomPreWriteHandler {
 
     fn pre_write(&self, model: &mut Model) -> Result<()> {
         println!("  [pre_write] Preparing model for writing...");
-        
+
         // Example: Add metadata if not present
         if !model.has_metadata("ProcessedBy") {
             println!("    Adding 'ProcessedBy' metadata");
@@ -33,7 +33,7 @@ impl ExtensionHandler for CustomPreWriteHandler {
                 "lib3mf_rust with ExtensionRegistry".to_string(),
             ));
         }
-        
+
         Ok(())
     }
 }
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
     // Method 1: Using default registry
     println!("2. Writing with default registry (all standard extensions)...");
     let registry = create_default_registry();
-    
+
     let file_path = temp_dir.join("example_with_default_registry.3mf");
     let file = File::create(&file_path)?;
     model.clone().to_writer_with_registry(file, &registry)?;
@@ -76,10 +76,12 @@ fn main() -> Result<()> {
     println!("3. Writing with custom registry...");
     let mut custom_registry = ExtensionRegistry::new();
     custom_registry.register(std::sync::Arc::new(CustomPreWriteHandler));
-    
+
     let file_path = temp_dir.join("example_with_custom_registry.3mf");
     let file = File::create(&file_path)?;
-    model.clone().to_writer_with_registry(file, &custom_registry)?;
+    model
+        .clone()
+        .to_writer_with_registry(file, &custom_registry)?;
     println!("   ✓ Written to {:?}\n", file_path);
 
     // Method 3: Traditional method (no registry, for backward compatibility)
@@ -99,18 +101,28 @@ fn main() -> Result<()> {
 
     // Verify the files can be read back
     println!("6. Verifying written files can be read back...");
-    let model1 = Model::from_reader(File::open(temp_dir.join("example_with_default_registry.3mf"))?)?;
-    let model2 = Model::from_reader(File::open(temp_dir.join("example_with_custom_registry.3mf"))?)?;
+    let model1 = Model::from_reader(File::open(
+        temp_dir.join("example_with_default_registry.3mf"),
+    )?)?;
+    let model2 = Model::from_reader(File::open(
+        temp_dir.join("example_with_custom_registry.3mf"),
+    )?)?;
     let model3 = Model::from_reader(File::open(temp_dir.join("example_without_registry.3mf"))?)?;
     let model4 = Model::from_reader(File::open(temp_dir.join("example_convenience.3mf"))?)?;
 
     println!("   ✓ All files successfully read back");
     println!("   - Model 1: {} objects", model1.resources.objects.len());
-    println!("   - Model 2: {} objects, {} metadata entries (with ProcessedBy)", 
-             model2.resources.objects.len(), model2.metadata.len());
+    println!(
+        "   - Model 2: {} objects, {} metadata entries (with ProcessedBy)",
+        model2.resources.objects.len(),
+        model2.metadata.len()
+    );
     println!("   - Model 3: {} objects", model3.resources.objects.len());
-    println!("   - Model 4: {} objects, {} metadata entries", 
-             model4.resources.objects.len(), model4.metadata.len());
+    println!(
+        "   - Model 4: {} objects, {} metadata entries",
+        model4.resources.objects.len(),
+        model4.metadata.len()
+    );
 
     println!("\n=== Summary ===");
     println!("✓ ExtensionRegistry.pre_write_all() is now wired into the writer flow");
