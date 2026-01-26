@@ -1103,7 +1103,7 @@ Use this checklist to track your migration progress:
 
 ### Q: My C++ code uses components extensively. Is this supported?
 
-**A:** Components are partially supported. Basic components work, but complex hierarchies may not be fully supported yet. Check the [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for details.
+**A:** Yes, components are fully supported. The library handles component hierarchies, transformations, and nested component structures.
 
 ---
 
@@ -1174,11 +1174,11 @@ match Model::from_reader(file) {
 
 ## Additional Resources
 
-- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Current implementation status
-- [EXTENSION_SUPPORT_SUMMARY.md](EXTENSION_SUPPORT_SUMMARY.md) - Extension support details
 - [ERROR_HANDLING.md](ERROR_HANDLING.md) - Error handling guide
 - [PERFORMANCE.md](PERFORMANCE.md) - Performance benchmarks and tuning
 - [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) - 3MF conformance test results
+- [POLYGON_CLIPPING.md](POLYGON_CLIPPING.md) - Polygon operations documentation
+- [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) - Secure Content extension details
 
 ## Conclusion
 
