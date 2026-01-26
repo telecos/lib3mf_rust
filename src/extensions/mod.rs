@@ -1,8 +1,9 @@
-//! Extension handler implementations
+//! Concrete implementations of ExtensionHandler trait
 //!
-//! This module contains concrete implementations of the `ExtensionHandler` trait
-//! for various 3MF extensions.
+//! This module provides production-ready handlers for each 3MF extension.
 
 pub mod material;
+pub mod production;
 
 pub use material::MaterialExtensionHandler;
+pub use production::ProductionExtensionHandler;
