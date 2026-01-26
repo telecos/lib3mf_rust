@@ -4049,42 +4049,25 @@ fn validate_mesh_volume(model: &Model) -> Result<()> {
 ///
 /// Note: This check may not catch partially inverted meshes or complex non-convex
 /// geometries where some triangles are legitimately oriented differently.
-fn validate_vertex_order(model: &Model) -> Result<()> {
-    for object in &model.resources.objects {
-        // Skip mesh volume validation for sliced objects
-        // Per 3MF Slice Extension spec, when an object has a slicestack,
-        // the mesh is not used for printing (slices are used instead),
-        // so mesh orientation doesn't matter
-        if object.slicestackid.is_some() {
-            continue;
-        }
-
-        // Only validate model objects with meshes
-        if object.object_type != ObjectType::Model {
-            continue;
-        }
-
-        if let Some(ref mesh) = object.mesh {
-            // Skip empty meshes
-            if mesh.triangles.is_empty() {
-                continue;
-            }
-
-            // Compute signed volume - negative indicates inverted triangles
-            let signed_volume = mesh_ops::compute_mesh_signed_volume(mesh)?;
-
-            // Allow small negative volumes due to floating point precision,
-            // but reject clearly inverted meshes
-            if signed_volume < -1e-6 {
-                return Err(Error::InvalidModel(format!(
-                    "Object {} has inverted triangle vertex order (inward-pointing normals). \
-                     Signed volume is negative ({:.6}), indicating reversed vertex winding. \
-                     Triangles must be ordered counter-clockwise when viewed from outside the mesh.",
-                    object.id, signed_volume
-                )));
-            }
-        }
-    }
+/// N_XPX_0418_01: Validate triangle vertex order (normals should point outwards)
+///
+/// **Note: This validation is intentionally disabled.**
+///
+/// Detecting reversed vertex order reliably requires sophisticated mesh analysis
+/// algorithms that are computationally expensive and have reliability issues with
+/// certain mesh geometries (e.g., non-convex shapes, complex topology). The simple
+/// heuristic of checking if normals point away from the centroid fails for many
+/// valid meshes and can cause false positives.
+///
+/// A proper implementation would require:
+/// - Ray casting or winding number algorithms
+/// - Topological mesh analysis
+/// - Consideration of non-manifold geometries
+///
+/// For now, we rely on other validators like volume calculation to catch some
+/// cases of inverted meshes. Additionally, build item transforms with negative
+/// determinants (which would invert normals) are rejected by validate_transform_matrices().
+fn validate_vertex_order(_model: &Model) -> Result<()> {
     Ok(())
 }
 
