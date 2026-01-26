@@ -24,7 +24,10 @@ use std::io::Read;
 // Import functions from submodules for internal use
 use beam_lattice::parse_beam;
 use core::parse_component;
-use displacement::validate_displacement_namespace_prefix;
+use displacement::{
+    parse_disp2dcoord, parse_disp2dgroup_start, parse_displacement2d, parse_normvector,
+    parse_normvectorgroup_start, validate_displacement_namespace_prefix,
+};
 use material::{
     parse_base_element, parse_base_material, parse_basematerials_start,
     parse_color_element, parse_colorgroup_start, parse_composite, parse_compositematerials_start,
@@ -720,134 +723,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "displacement2d" if in_resources => {
-                        let attrs = parse_attributes(&reader, e)?;
-
-                        // Validate only allowed attributes are present
-                        // Per Displacement Extension spec 3.1: id, path, channel, tilestyleu, tilestylev, filter
-                        validate_attributes(
-                            &attrs,
-                            &[
-                                "id",
-                                "path",
-                                "channel",
-                                "tilestyleu",
-                                "tilestylev",
-                                "filter",
-                            ],
-                            "displacement2d",
-                        )?;
-
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("displacement2d missing id attribute".to_string())
-                            })?
-                            .parse::<usize>()?;
-                        let path = attrs
-                            .get("path")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "displacement2d missing path attribute".to_string(),
-                                )
-                            })?
-                            .to_string();
-
-                        let mut disp = Displacement2D::new(id, path);
-
-                        // Parse optional attributes with spec-defined defaults
-                        // Strict validation: reject invalid enum values per DPX 3316
-                        if let Some(channel_str) = attrs.get("channel") {
-                            disp.channel = match channel_str.to_uppercase().as_str() {
-                                "R" => Channel::R,
-                                "G" => Channel::G,
-                                "B" => Channel::B,
-                                "A" => Channel::A,
-                                _ => {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Invalid channel value '{}'. Valid values are: R, G, B, A",
-                                        channel_str
-                                    )))
-                                }
-                            };
-                        }
-
-                        if let Some(tileu_str) = attrs.get("tilestyleu") {
-                            disp.tilestyleu = match tileu_str.to_lowercase().as_str() {
-                                "wrap" => TileStyle::Wrap,
-                                "mirror" => TileStyle::Mirror,
-                                "clamp" => TileStyle::Clamp,
-                                "none" => TileStyle::None,
-                                _ => return Err(Error::InvalidXml(format!(
-                                    "Invalid tilestyleu value '{}'. Valid values are: wrap, mirror, clamp, none",
-                                    tileu_str
-                                ))),
-                            };
-                        }
-
-                        if let Some(tilev_str) = attrs.get("tilestylev") {
-                            disp.tilestylev = match tilev_str.to_lowercase().as_str() {
-                                "wrap" => TileStyle::Wrap,
-                                "mirror" => TileStyle::Mirror,
-                                "clamp" => TileStyle::Clamp,
-                                "none" => TileStyle::None,
-                                _ => return Err(Error::InvalidXml(format!(
-                                    "Invalid tilestylev value '{}'. Valid values are: wrap, mirror, clamp, none",
-                                    tilev_str
-                                ))),
-                            };
-                        }
-
-                        if let Some(filter_str) = attrs.get("filter") {
-                            disp.filter = match filter_str.to_lowercase().as_str() {
-                                "auto" => FilterMode::Auto,
-                                "linear" => FilterMode::Linear,
-                                "nearest" => FilterMode::Nearest,
-                                _ => return Err(Error::InvalidXml(format!(
-                                    "Invalid filter value '{}'. Valid values are: auto, linear, nearest",
-                                    filter_str
-                                ))),
-                            };
-                        }
-
+                        let disp = parse_displacement2d(&reader, e)?;
+                        let id = disp.id;
                         model.resources.displacement_maps.push(disp);
                         declared_displacement2d_ids.insert(id); // Track for forward-reference validation
-                    }
-                    "normvectorgroup" if in_resources => {
-                        in_normvectorgroup = true;
-                        let attrs = parse_attributes(&reader, e)?;
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "normvectorgroup missing id attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        current_normvectorgroup = Some(NormVectorGroup::new(id));
-                    }
-                    "normvector" if in_normvectorgroup => {
-                        if let Some(ref mut nvgroup) = current_normvectorgroup {
-                            let attrs = parse_attributes(&reader, e)?;
-                            let x = attrs
-                                .get("x")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("normvector missing x attribute".to_string())
-                                })?
-                                .parse::<f64>()?;
-                            let y = attrs
-                                .get("y")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("normvector missing y attribute".to_string())
-                                })?
-                                .parse::<f64>()?;
-                            let z = attrs
-                                .get("z")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("normvector missing z attribute".to_string())
-                                })?
-                                .parse::<f64>()?;
-                            nvgroup.vectors.push(NormVector::new(x, y, z));
-                        }
                     }
                     "beamlattice" if current_mesh.is_some() => {
                         // Check if we already have a beamset - nested or multiple beamlattice is invalid
@@ -1050,200 +929,29 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
-                        let attrs = parse_attributes(&reader, e)?;
-
-                        // Validate only allowed attributes are present
-                        // Per Displacement Extension spec 3.2: id
-                        validate_attributes(&attrs, &["id"], "normvectorgroup")?;
-
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "normvectorgroup missing id attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-                        current_normvectorgroup = Some(NormVectorGroup::new(id));
+                        let group = parse_normvectorgroup_start(&reader, e)?;
+                        current_normvectorgroup = Some(group);
                     }
                     "normvector" if in_normvectorgroup => {
                         if let Some(ref mut nvgroup) = current_normvectorgroup {
-                            let attrs = parse_attributes(&reader, e)?;
-
-                            // Validate only allowed attributes are present
-                            // Per Displacement Extension spec 3.2.1: x, y, z
-                            validate_attributes(&attrs, &["x", "y", "z"], "normvector")?;
-
-                            let x = attrs
-                                .get("x")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("normvector missing x attribute".to_string())
-                                })?
-                                .parse::<f64>()?;
-                            let y = attrs
-                                .get("y")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("normvector missing y attribute".to_string())
-                                })?
-                                .parse::<f64>()?;
-                            let z = attrs
-                                .get("z")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml("normvector missing z attribute".to_string())
-                                })?
-                                .parse::<f64>()?;
-
-                            // Validate values are finite
-                            if !x.is_finite() || !y.is_finite() || !z.is_finite() {
-                                return Err(Error::InvalidXml(format!(
-                                    "NormVector has non-finite values: x={}, y={}, z={}",
-                                    x, y, z
-                                )));
-                            }
-
-                            nvgroup.vectors.push(NormVector::new(x, y, z));
+                            let vector = parse_normvector(&reader, e)?;
+                            nvgroup.vectors.push(vector);
                         }
                     }
                     "disp2dgroup" if in_resources => {
                         in_disp2dgroup = true;
-                        let attrs = parse_attributes(&reader, e)?;
-
-                        // Validate only allowed attributes are present
-                        // Per Displacement Extension spec 3.3: id, dispid, nid, height, offset
-                        validate_attributes(
-                            &attrs,
-                            &["id", "dispid", "nid", "height", "offset"],
-                            "disp2dgroup",
+                        let group = parse_disp2dgroup_start(
+                            &reader,
+                            e,
+                            &declared_displacement2d_ids,
+                            &declared_normvectorgroup_ids,
                         )?;
-
-                        let id = attrs
-                            .get("id")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("disp2dgroup missing id attribute".to_string())
-                            })?
-                            .parse::<usize>()?;
-                        let dispid = attrs
-                            .get("dispid")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "disp2dgroup missing dispid attribute".to_string(),
-                                )
-                            })?
-                            .parse::<usize>()?;
-
-                        // Per DPX spec 3.3: Validate dispid references declared Displacement2D resource
-                        if !declared_displacement2d_ids.contains(&dispid) {
-                            return Err(Error::InvalidXml(format!(
-                                "Disp2DGroup references Displacement2D with ID {} which has not been declared yet. \
-                                 Resources must be declared before they are referenced.",
-                                dispid
-                            )));
-                        }
-
-                        let nid = attrs
-                            .get("nid")
-                            .ok_or_else(|| {
-                                Error::InvalidXml("disp2dgroup missing nid attribute".to_string())
-                            })?
-                            .parse::<usize>()?;
-
-                        // Per DPX spec 3.3: Validate nid references declared NormVectorGroup resource
-                        if !declared_normvectorgroup_ids.contains(&nid) {
-                            return Err(Error::InvalidXml(format!(
-                                "Disp2DGroup references NormVectorGroup with ID {} which has not been declared yet. \
-                                 Resources must be declared before they are referenced.",
-                                nid
-                            )));
-                        }
-                        let height = attrs
-                            .get("height")
-                            .ok_or_else(|| {
-                                Error::InvalidXml(
-                                    "disp2dgroup missing height attribute".to_string(),
-                                )
-                            })?
-                            .parse::<f64>()?;
-
-                        // Validate height is finite
-                        if !height.is_finite() {
-                            return Err(Error::InvalidXml(format!(
-                                "Disp2DGroup height must be finite, got: {}",
-                                height
-                            )));
-                        }
-
-                        let mut disp2dgroup = Disp2DGroup::new(id, dispid, nid, height);
-
-                        // Parse optional offset
-                        if let Some(offset_str) = attrs.get("offset") {
-                            let offset = offset_str.parse::<f64>()?;
-                            if !offset.is_finite() {
-                                return Err(Error::InvalidXml(format!(
-                                    "Disp2DGroup offset must be finite, got: {}",
-                                    offset
-                                )));
-                            }
-                            disp2dgroup.offset = offset;
-                        }
-
-                        current_disp2dgroup = Some(disp2dgroup);
+                        current_disp2dgroup = Some(group);
                     }
                     "disp2dcoord" if in_disp2dgroup => {
                         if let Some(ref mut d2dgroup) = current_disp2dgroup {
-                            let attrs = parse_attributes(&reader, e)?;
-
-                            // Validate only allowed attributes are present
-                            // Per Displacement Extension spec 3.3.1: u, v, n, f
-                            validate_attributes(&attrs, &["u", "v", "n", "f"], "disp2dcoord")?;
-
-                            let u = attrs
-                                .get("u")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml(
-                                        "disp2dcoords missing u attribute".to_string(),
-                                    )
-                                })?
-                                .parse::<f64>()?;
-                            let v = attrs
-                                .get("v")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml(
-                                        "disp2dcoords missing v attribute".to_string(),
-                                    )
-                                })?
-                                .parse::<f64>()?;
-                            let n = attrs
-                                .get("n")
-                                .ok_or_else(|| {
-                                    Error::InvalidXml(
-                                        "disp2dcoords missing n attribute".to_string(),
-                                    )
-                                })?
-                                .parse::<usize>()?;
-
-                            // Validate u,v are finite
-                            if !u.is_finite() || !v.is_finite() {
-                                return Err(Error::InvalidXml(format!(
-                                    "Disp2DCoords u and v must be finite, got: u={}, v={}",
-                                    u, v
-                                )));
-                            }
-
-                            let mut coords = Disp2DCoords::new(u, v, n);
-
-                            // Parse optional f attribute
-                            if let Some(f_str) = attrs.get("f") {
-                                let f = f_str.parse::<f64>()?;
-                                if !f.is_finite() {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Disp2DCoords f must be finite, got: {}",
-                                        f
-                                    )));
-                                }
-                                coords.f = f;
-                            }
-
-                            d2dgroup.coords.push(coords);
+                            let coord = parse_disp2dcoord(&reader, e)?;
+                            d2dgroup.coords.push(coord);
                         }
                     }
                     "slicestack" if in_resources => {
