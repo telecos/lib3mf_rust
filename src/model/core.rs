@@ -107,10 +107,6 @@ impl Extension {
 /// Allows consumers to specify which extensions they support and register
 /// custom extension handlers.
 #[derive(Clone)]
-/// Configuration for 3MF parser
-///
-/// Controls which extensions are supported and how validation is performed.
-/// Use this to configure the parser to accept specific extensions.
 pub struct ParserConfig {
     /// Set of extensions supported by the consumer
     /// Core is always implicitly supported
