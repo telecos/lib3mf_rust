@@ -12,9 +12,14 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
-  - **Keyboard shortcuts**: T for themes, B for backgrounds, Ctrl+O for file loading
+  - **Keyboard shortcuts**: T for themes, B for backgrounds, M for boolean mode, Ctrl+O for file loading
   - **Open files**: Ctrl+O to open file dialog
   - **Browse test suites**: Ctrl+T to browse 3MF Consortium test files from GitHub
+  - **Boolean Operations Visualization** (NEW!): Interactive visualization of boolean operations
+    - **Three visualization modes**: Normal, Show Inputs, Highlight Operands
+    - **Color-coded operands**: Blue for base objects, Red/Orange for operands
+    - **Mode cycling**: Press 'M' to cycle through visualization modes
+    - **Operation details**: Console output of boolean operation information
 - **Test Suite Browser** (NEW!): Browse and download official 3MF Consortium test files
   - **Direct GitHub integration**: Fetch test files from the official repository
   - **Interactive navigation**: Browse through test suite directories
@@ -98,8 +103,10 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Scroll Wheel**: Zoom in/out
 - ⌨️ **Arrow Keys**: Pan the view
 - ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
+- ⌨️ **M**: Cycle through boolean operation visualization modes
 - ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
 - ⌨️ **A Key**: Toggle XYZ axes (default: visible)
+- ⌨️ **B**: Toggle beam lattice (if present)
 - ⌨️ **Ctrl+O**: Open file dialog
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **ESC / Close Window**: Exit viewer
@@ -180,6 +187,10 @@ cargo run --release -- --ui
 ```bash
 cargo run --release -- ../../test_files/core/box.3mf --ui
 cargo run --release -- ../../test_files/core/sphere.3mf --ui
+
+# View boolean operations
+cargo run --release -- ../../test_files/boolean_ops/simple_union.3mf --ui
+# (Press 'M' to cycle through visualization modes)
 ```
 
 View a basic 3MF file:
