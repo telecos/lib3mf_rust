@@ -14,6 +14,7 @@ use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use lib3mf::Model;
 use rfd::FileDialog;
+use std::collections::HashSet;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -589,9 +590,6 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             }
                             
                             // Recreate mesh nodes with displacement highlighting
-                            for node in &mut state.mesh_nodes {
-                                node.set_visible(false);
-                            }
                             state.mesh_nodes.clear();
                             
                             state.mesh_nodes = create_mesh_nodes_with_displacement(
@@ -1481,7 +1479,7 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model) 
     let mut nodes = Vec::new();
 
     // Collect objects with displacement meshes
-    let displacement_object_ids: std::collections::HashSet<usize> = model
+    let displacement_object_ids: HashSet<usize> = model
         .resources
         .objects
         .iter()
