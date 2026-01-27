@@ -447,14 +447,6 @@ pub(super) fn validate_external_model_triangles<R: Read + std::io::Seek>(
             "Displacement 2023/10",
         )
         .with_custom_extension(
-            "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04",
-            "SecureContent 2019/04",
-        )
-        .with_custom_extension(
-            "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07",
-            "BeamLattice Balls",
-        )
-        .with_custom_extension(
             "http://schemas.microsoft.com/3dmanufacturing/trianglesets/2021/07",
             "TriangleSets",
         );

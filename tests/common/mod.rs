@@ -50,29 +50,21 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
         "suite6_core_matl" => ParserConfig::new().with_extension(Extension::Material),
 
         // Suite 7: Beam Lattice
-        // Also register the balls sub-extension namespace
         // Note: Most test files use Production extension attributes (p:UUID) even though
         // they don't declare it in requiredextensions, so we support it in the config
+        // The balls sub-extension namespace is now natively recognized as part of BeamLattice
         "suite7_beam" => ParserConfig::new()
             .with_extension(Extension::BeamLattice)
-            .with_extension(Extension::Production)
-            .with_custom_extension(
-                "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07",
-                "BeamLattice Balls",
-            ),
+            .with_extension(Extension::Production),
 
         // Suite 8: Secure Content
         // Some test files also use Production, Material, and Slice extensions
-        // Also register the older 2019/04 SecureContent namespace
+        // The 2019/04 SecureContent namespace is now natively recognized
         "suite8_secure" => ParserConfig::new()
             .with_extension(Extension::SecureContent)
             .with_extension(Extension::Production)
             .with_extension(Extension::Material)
-            .with_extension(Extension::Slice)
-            .with_custom_extension(
-                "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04",
-                "SecureContent 2019/04",
-            ),
+            .with_extension(Extension::Slice),
 
         // Suite 9: Core Extensions - support all for compatibility
         // Also register custom extensions like trianglesets
