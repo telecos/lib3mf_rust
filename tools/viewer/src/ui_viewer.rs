@@ -220,6 +220,7 @@ struct ViewerState {
     show_menu: bool,
     slice_view: SliceView,
     show_displacement: bool,
+    show_materials: bool,
 }
 
 impl ViewerState {
@@ -237,6 +238,7 @@ impl ViewerState {
             show_menu: false,
             slice_view: SliceView::new(),
             show_displacement: false,
+            show_materials: true,
         }
     }
 
@@ -257,6 +259,7 @@ impl ViewerState {
             show_menu: false,
             slice_view,
             show_displacement: false,
+            show_materials: true,
         }
     }
 
@@ -319,9 +322,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
-        state.mesh_nodes = create_mesh_nodes_with_displacement(
+        state.mesh_nodes = create_mesh_nodes_with_materials(
             &mut window,
             state.model.as_ref().unwrap(),
+            state.show_materials,
             state.boolean_mode,
             state.show_displacement,
         );
@@ -484,9 +488,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         state.mesh_nodes.clear();
 
                         // Create new mesh nodes with boolean-aware coloring
-                        state.mesh_nodes = create_mesh_nodes_with_displacement(
+                        state.mesh_nodes = create_mesh_nodes_with_materials(
                             &mut window,
                             model,
+                            state.show_materials,
                             state.boolean_mode,
                             state.show_displacement,
                         );
@@ -519,6 +524,32 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         print_menu(&state);
                     } else {
                         println!("Menu hidden");
+                    }
+                }
+                WindowEvent::Key(Key::R, Action::Release, _) => {
+                    // R key: Toggle material rendering
+                    state.show_materials = !state.show_materials;
+                    println!(
+                        "\nMaterial Rendering: {}",
+                        if state.show_materials { "ON" } else { "OFF (default gray)" }
+                    );
+                    
+                    // Recreate mesh nodes with new coloring
+                    if let Some(ref model) = state.model {
+                        // Remove existing mesh nodes
+                        for node in &mut state.mesh_nodes {
+                            window.remove_node(node);
+                        }
+                        state.mesh_nodes.clear();
+                        
+                        // Create new mesh nodes with appropriate coloring
+                        state.mesh_nodes = create_mesh_nodes_with_materials(
+                            &mut window,
+                            model,
+                            state.show_materials,
+                            state.boolean_mode,
+                            state.show_displacement,
+                        );
                     }
                 }
                 WindowEvent::Key(Key::P, Action::Release, _) => {
@@ -604,9 +635,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             // Recreate mesh nodes with displacement highlighting
                             state.mesh_nodes.clear();
                             
-                            state.mesh_nodes = create_mesh_nodes_with_displacement(
+                            state.mesh_nodes = create_mesh_nodes_with_materials(
                                 &mut window,
                                 model,
+                                state.show_materials,
                                 state.boolean_mode,
                                 state.show_displacement,
                             );
@@ -879,6 +911,23 @@ fn print_model_info(model: &Model) {
     println!("  - Triangles: {}", count_triangles(model));
     println!("  - Vertices: {}", count_vertices(model));
     println!("  - Unit: {}", model.unit);
+    
+    // Display material information
+    if !model.resources.materials.is_empty() 
+        || !model.resources.color_groups.is_empty()
+        || !model.resources.base_material_groups.is_empty() {
+        println!("  - Materials:");
+        if !model.resources.materials.is_empty() {
+            println!("      Base Materials: {}", model.resources.materials.len());
+        }
+        if !model.resources.color_groups.is_empty() {
+            println!("      Color Groups: {}", model.resources.color_groups.len());
+        }
+        if !model.resources.base_material_groups.is_empty() {
+            println!("      Base Material Groups: {}", model.resources.base_material_groups.len());
+        }
+    }
+    
     if beam_count > 0 {
         println!("  - Beam Lattice: {} beams", beam_count);
     }
@@ -1088,10 +1137,68 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             }
         }
+        // Try to find in base material groups (use first material)
+        if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+            if !bmg.materials.is_empty() {
+                let (r, g, b, _) = bmg.materials[0].displaycolor;
+                return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+        }
     }
 
     // Default color: nice blue-gray
     (100.0 / 255.0, 150.0 / 255.0, 200.0 / 255.0)
+}
+
+/// Get color for a specific triangle based on material properties
+fn get_triangle_color(
+    model: &Model,
+    obj: &lib3mf::Object,
+    triangle: &lib3mf::Triangle,
+) -> (f32, f32, f32) {
+    // First check triangle-level material
+    if let Some(pid) = triangle.pid {
+        // Determine which index to use for the color
+        let pindex = triangle.pindex.or(triangle.p1);
+        
+        // Try to find in base materials (single color material)
+        if let Some(mat) = model.resources.materials.iter().find(|m| m.id == pid) {
+            if let Some((r, g, b, _)) = mat.color {
+                return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+        }
+        
+        // Try to find in color groups
+        if let Some(cg) = model.resources.color_groups.iter().find(|c| c.id == pid) {
+            if let Some(idx) = pindex {
+                if idx < cg.colors.len() {
+                    let (r, g, b, _) = cg.colors[idx];
+                    return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                }
+            } else if !cg.colors.is_empty() {
+                // No specific index, use first color
+                let (r, g, b, _) = cg.colors[0];
+                return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+        }
+        
+        // Try to find in base material groups
+        if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+            if let Some(idx) = pindex {
+                if idx < bmg.materials.len() {
+                    let (r, g, b, _) = bmg.materials[idx].displaycolor;
+                    return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                }
+            } else if !bmg.materials.is_empty() {
+                // No specific index, use first material
+                let (r, g, b, _) = bmg.materials[0].displaycolor;
+                return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+        }
+    }
+    
+    // Fall back to object-level color
+    get_object_color(model, obj)
 }
 
 /// Count total triangles in the model
@@ -1607,6 +1714,136 @@ fn create_mesh_nodes_with_displacement(
     }
 }
 
+/// Create mesh nodes with material rendering support
+fn create_mesh_nodes_with_materials(
+    window: &mut Window,
+    model: &Model,
+    show_materials: bool,
+    mode: BooleanMode,
+    show_displacement: bool,
+) -> Vec<SceneNode> {
+    // If materials are disabled, use default rendering
+    if !show_materials {
+        return create_mesh_nodes_with_displacement(window, model, mode, show_displacement);
+    }
+    
+    // If displacement or boolean modes are active, use those instead
+    if show_displacement && has_displacement_data(model) {
+        return create_mesh_nodes_highlight_displacement(window, model);
+    }
+    
+    if mode != BooleanMode::Normal {
+        return create_mesh_nodes_with_boolean_mode(window, model, mode);
+    }
+    
+    // Create nodes with per-triangle material colors
+    create_mesh_nodes_with_triangle_colors(window, model)
+}
+
+/// Create mesh nodes with per-triangle color support
+fn create_mesh_nodes_with_triangle_colors(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    let mut nodes = Vec::new();
+
+    for item in &model.build.items {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            if let Some(ref mesh_data) = obj.mesh {
+                // Check if mesh has per-triangle colors
+                let has_triangle_colors = mesh_data.triangles.iter().any(|t| t.pid.is_some());
+                
+                if has_triangle_colors {
+                    // Create separate mesh for each color group to support per-triangle colors
+                    // Group triangles by their color
+                    let mut color_groups: std::collections::HashMap<(u8, u8, u8), Vec<usize>> = 
+                        std::collections::HashMap::new();
+                    
+                    for (tri_idx, triangle) in mesh_data.triangles.iter().enumerate() {
+                        let color = get_triangle_color(model, obj, triangle);
+                        let color_key = (
+                            (color.0 * 255.0) as u8,
+                            (color.1 * 255.0) as u8,
+                            (color.2 * 255.0) as u8,
+                        );
+                        color_groups.entry(color_key).or_insert_with(Vec::new).push(tri_idx);
+                    }
+                    
+                    // Create a mesh for each color group
+                    for ((r, g, b), tri_indices) in color_groups.iter() {
+                        let vertices: Vec<Point3<f32>> = mesh_data
+                            .vertices
+                            .iter()
+                            .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                            .collect();
+
+                        let faces: Vec<Point3<u32>> = tri_indices
+                            .iter()
+                            .map(|&idx| {
+                                let t = &mesh_data.triangles[idx];
+                                Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32)
+                            })
+                            .collect();
+
+                        if !faces.is_empty() {
+                            let tri_mesh = TriMesh::new(
+                                vertices,
+                                None,
+                                None,
+                                Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                            );
+
+                            let scale = Vector3::new(1.0, 1.0, 1.0);
+                            let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                            mesh_node.set_color(
+                                *r as f32 / 255.0,
+                                *g as f32 / 255.0,
+                                *b as f32 / 255.0,
+                            );
+
+                            nodes.push(mesh_node);
+                        }
+                    }
+                } else {
+                    // No per-triangle colors, use object-level color
+                    let vertices: Vec<Point3<f32>> = mesh_data
+                        .vertices
+                        .iter()
+                        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                        .collect();
+
+                    let faces: Vec<Point3<u32>> = mesh_data
+                        .triangles
+                        .iter()
+                        .filter(|t| {
+                            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+                        })
+                        .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+                        .collect();
+
+                    let tri_mesh = TriMesh::new(
+                        vertices,
+                        None,
+                        None,
+                        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                    );
+
+                    let color = get_object_color(model, obj);
+                    let scale = Vector3::new(1.0, 1.0, 1.0);
+                    let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                    mesh_node.set_color(color.0, color.1, color.2);
+
+                    nodes.push(mesh_node);
+                }
+            }
+        }
+    }
+
+    nodes
+}
+
 /// Create mesh nodes with displacement highlighting
 fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model) -> Vec<SceneNode> {
     let mut nodes = Vec::new();
@@ -1868,6 +2105,12 @@ fn print_menu(state: &ViewerState) {
             println!("    Objects:       {}", disp_objects);
         }
     }
+    
+    // Show material rendering status
+    println!(
+        "  Materials:       {}",
+        if state.show_materials { "ON" } else { "OFF (default gray)" }
+    );
     
     if let Some(ref path) = state.file_path {
         println!(
