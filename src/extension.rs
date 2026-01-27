@@ -162,6 +162,8 @@ impl ExtensionRegistry {
     /// Validate all registered extensions
     ///
     /// This method calls the `validate` method on all registered handlers.
+    /// Validators are called unconditionally to ensure proper validation even when
+    /// extensions are declared but not used, or used but not declared.
     ///
     /// # Arguments
     ///
@@ -173,9 +175,7 @@ impl ExtensionRegistry {
     /// * `Err(...)` if any validation fails
     pub fn validate_all(&self, model: &Model) -> Result<()> {
         for handler in &self.handlers {
-            if handler.is_used_in_model(model) {
-                handler.validate(model)?;
-            }
+            handler.validate(model)?;
         }
         Ok(())
     }

@@ -1118,7 +1118,7 @@ pub fn get_property_resource_size(model: &Model, resource_id: usize) -> Result<u
 ///
 /// Ensures that all color groups contain at least one color.
 /// Note: Individual color format validation is done during parsing.
-pub(crate) fn validate_color_formats(model: &Model) -> Result<()> {
+pub fn validate_color_formats(model: &Model) -> Result<()> {
     // Colors are already validated during parsing (stored as (u8, u8, u8, u8) tuples)
     // This function is a placeholder for any additional color validation needs
 
@@ -1141,7 +1141,7 @@ pub(crate) fn validate_color_formats(model: &Model) -> Result<()> {
 /// Per 3MF spec, resources must be defined before they are referenced.
 /// For example, texture2d must be defined before texture2dgroup that references it.
 /// This validation checks for forward references using parse order.
-pub(crate) fn validate_resource_ordering(model: &Model) -> Result<()> {
+pub fn validate_resource_ordering(model: &Model) -> Result<()> {
     // N_XXM_0606_01: Texture2dgroup must not reference texture2d that appears later in XML
     for tex_group in &model.resources.texture2d_groups {
         if let Some(tex2d) = model
@@ -1329,7 +1329,7 @@ pub(crate) fn validate_resource_ordering(model: &Model) -> Result<()> {
 /// - Property resource IDs (basematerials, colorgroups, texture2d, texture2dgroups,
 ///   compositematerials, multiproperties) must be unique among property resources
 /// - Objects and property resources have SEPARATE ID namespaces and can reuse IDs
-pub(crate) fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
+pub fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
     // Check object IDs for duplicates (separate namespace)
     let mut seen_object_ids: HashSet<usize> = HashSet::new();
     for obj in &model.resources.objects {
