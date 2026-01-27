@@ -112,14 +112,78 @@ impl BooleanMode {
     }
 }
 
+/// Length unit for print bed dimensions
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum LengthUnit {
+    Millimeters,
+    Inches,
+}
+
+impl LengthUnit {
+    /// Get the unit as a string
+    fn as_str(&self) -> &'static str {
+        match self {
+            LengthUnit::Millimeters => "mm",
+            LengthUnit::Inches => "inch",
+        }
+    }
+    
+    /// Convert from a string to LengthUnit
+    fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "mm" | "millimeter" | "millimeters" => Some(LengthUnit::Millimeters),
+            "inch" | "inches" | "in" => Some(LengthUnit::Inches),
+            _ => None,
+        }
+    }
+    
+    /// Convert a value from this unit to millimeters
+    fn to_mm(&self, value: f32) -> f32 {
+        match self {
+            LengthUnit::Millimeters => value,
+            LengthUnit::Inches => value * 25.4,
+        }
+    }
+    
+    /// Convert a value from millimeters to this unit
+    fn from_mm(&self, value: f32) -> f32 {
+        match self {
+            LengthUnit::Millimeters => value,
+            LengthUnit::Inches => value / 25.4,
+        }
+    }
+}
+
+/// Origin mode for the print bed
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Origin {
+    /// Origin at (0, 0, 0) corner
+    Corner,
+    /// Origin at center of bed, Z=0
+    CenterBottom,
+}
+
+impl Origin {
+    /// Get the origin mode as a string
+    fn as_str(&self) -> &'static str {
+        match self {
+            Origin::Corner => "Corner",
+            Origin::CenterBottom => "Center",
+        }
+    }
+}
+
 /// Print area configuration for build volume visualization
 #[derive(Debug, Clone)]
 struct PrintArea {
-    width: f32,   // X dimension
-    depth: f32,   // Y dimension
-    height: f32,  // Z dimension
-    unit: String, // "mm", "inch", etc.
+    width: f32,       // X dimension
+    depth: f32,       // Y dimension
+    height: f32,      // Z dimension
+    unit: LengthUnit,
+    origin: Origin,
     visible: bool,
+    show_ruler: bool,
+    show_scale_bar: bool,
 }
 
 impl PrintArea {
@@ -129,8 +193,11 @@ impl PrintArea {
             width: 200.0,
             depth: 200.0,
             height: 200.0,
-            unit: "mm".to_string(),
+            unit: LengthUnit::Millimeters,
+            origin: Origin::Corner,
             visible: true,
+            show_ruler: false,
+            show_scale_bar: false,
         }
     }
 
@@ -138,6 +205,75 @@ impl PrintArea {
     fn toggle_visibility(&mut self) {
         self.visible = !self.visible;
     }
+    
+    /// Toggle visibility of the ruler
+    fn toggle_ruler(&mut self) {
+        self.show_ruler = !self.show_ruler;
+    }
+    
+    /// Toggle visibility of the scale bar
+    fn toggle_scale_bar(&mut self) {
+        self.show_scale_bar = !self.show_scale_bar;
+    }
+    
+    /// Get width in millimeters (for internal calculations)
+    fn width_mm(&self) -> f32 {
+        self.unit.to_mm(self.width)
+    }
+    
+    /// Get depth in millimeters (for internal calculations)
+    fn depth_mm(&self) -> f32 {
+        self.unit.to_mm(self.depth)
+    }
+    
+    /// Get height in millimeters (for internal calculations)
+    fn height_mm(&self) -> f32 {
+        self.unit.to_mm(self.height)
+    }
+}
+
+/// Printer preset configuration
+struct PrinterPreset {
+    name: &'static str,
+    width: f32,
+    depth: f32,
+    height: f32,
+}
+
+/// Get list of printer presets
+fn printer_presets() -> Vec<PrinterPreset> {
+    vec![
+        PrinterPreset {
+            name: "Prusa MK3S+",
+            width: 250.0,
+            depth: 210.0,
+            height: 210.0,
+        },
+        PrinterPreset {
+            name: "Ender 3",
+            width: 220.0,
+            depth: 220.0,
+            height: 250.0,
+        },
+        PrinterPreset {
+            name: "Bambu Lab X1",
+            width: 256.0,
+            depth: 256.0,
+            height: 256.0,
+        },
+        PrinterPreset {
+            name: "Creality CR-10",
+            width: 300.0,
+            depth: 300.0,
+            height: 400.0,
+        },
+        PrinterPreset {
+            name: "Custom",
+            width: 200.0,
+            depth: 200.0,
+            height: 200.0,
+        },
+    ]
 }
 
 /// 2D point for slice contours
@@ -743,15 +879,15 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("Current settings:");
                     println!(
                         "  Width (X):  {} {}",
-                        state.print_area.width, state.print_area.unit
+                        state.print_area.width, state.print_area.unit.as_str()
                     );
                     println!(
                         "  Depth (Y):  {} {}",
-                        state.print_area.depth, state.print_area.unit
+                        state.print_area.depth, state.print_area.unit.as_str()
                     );
                     println!(
                         "  Height (Z): {} {}",
-                        state.print_area.height, state.print_area.unit
+                        state.print_area.height, state.print_area.unit.as_str()
                     );
                     println!();
                     println!("To change settings, use the console:");
@@ -766,17 +902,41 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         println!("\n✓ Print area updated successfully!");
                         println!(
                             "  Width (X):  {} {}",
-                            state.print_area.width, state.print_area.unit
+                            state.print_area.width, state.print_area.unit.as_str()
                         );
                         println!(
                             "  Depth (Y):  {} {}",
-                            state.print_area.depth, state.print_area.unit
+                            state.print_area.depth, state.print_area.unit.as_str()
                         );
                         println!(
                             "  Height (Z): {} {}",
-                            state.print_area.height, state.print_area.unit
+                            state.print_area.height, state.print_area.unit.as_str()
                         );
                     }
+                }
+                WindowEvent::Key(Key::U, Action::Release, _) => {
+                    // U key: Toggle ruler visibility
+                    state.print_area.toggle_ruler();
+                    println!(
+                        "Ruler: {}",
+                        if state.print_area.show_ruler {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                }
+                WindowEvent::Key(Key::J, Action::Release, _) => {
+                    // J key: Toggle scale bar visibility
+                    state.print_area.toggle_scale_bar();
+                    println!(
+                        "Scale Bar: {}",
+                        if state.print_area.show_scale_bar {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
                 }
                 WindowEvent::Key(Key::D, Action::Press, _) => {
                     // D key: Toggle displacement visualization
@@ -1163,6 +1323,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         // Draw print area if visible
         if state.print_area.visible {
             draw_print_area(&mut window, &state.print_area);
+            
+            // Draw ruler if enabled
+            if state.print_area.show_ruler {
+                draw_ruler(&mut window, &state.print_area);
+            }
+            
+            // Draw scale bar if enabled
+            if state.print_area.show_scale_bar {
+                draw_scale_bar(&mut window, &state.print_area);
+            }
         }
 
         // Draw slice view if visible
@@ -2599,20 +2769,27 @@ fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> V
 
 /// Draw print area as a wireframe box (12 lines)
 fn draw_print_area(window: &mut Window, area: &PrintArea) {
-    // Calculate half dimensions for centering at origin
-    let half_width = area.width / 2.0;
-    let half_depth = area.depth / 2.0;
+    // Get dimensions in mm for internal calculations
+    let width = area.width_mm();
+    let height = area.height_mm();
+    let depth = area.depth_mm();
+    
+    // Calculate offset based on origin mode
+    let (x_offset, y_offset) = match area.origin {
+        Origin::Corner => (0.0, 0.0),
+        Origin::CenterBottom => (-width / 2.0, -depth / 2.0),
+    };
 
     // Define 8 corners of the box
     let corners = [
-        Point3::new(-half_width, -half_depth, 0.0), // 0: bottom front left
-        Point3::new(half_width, -half_depth, 0.0),  // 1: bottom front right
-        Point3::new(half_width, half_depth, 0.0),   // 2: bottom back right
-        Point3::new(-half_width, half_depth, 0.0),  // 3: bottom back left
-        Point3::new(-half_width, -half_depth, area.height), // 4: top front left
-        Point3::new(half_width, -half_depth, area.height), // 5: top front right
-        Point3::new(half_width, half_depth, area.height), // 6: top back right
-        Point3::new(-half_width, half_depth, area.height), // 7: top back left
+        Point3::new(x_offset, y_offset, 0.0),                     // 0: bottom front left
+        Point3::new(x_offset + width, y_offset, 0.0),             // 1: bottom front right
+        Point3::new(x_offset + width, y_offset + depth, 0.0),     // 2: bottom back right
+        Point3::new(x_offset, y_offset + depth, 0.0),             // 3: bottom back left
+        Point3::new(x_offset, y_offset, height),                  // 4: top front left
+        Point3::new(x_offset + width, y_offset, height),          // 5: top front right
+        Point3::new(x_offset + width, y_offset + depth, height),  // 6: top back right
+        Point3::new(x_offset, y_offset + depth, height),          // 7: top back left
     ];
 
     // Color for print area - light blue/gray
@@ -2635,6 +2812,157 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
     window.draw_line(&corners[1], &corners[5], &color);
     window.draw_line(&corners[2], &corners[6], &color);
     window.draw_line(&corners[3], &corners[7], &color);
+    
+    // Draw origin indicator - XYZ axes at origin
+    let origin_size = (width.min(depth).min(height) * 0.05).max(1.0);
+    
+    // Draw XYZ axes at origin
+    window.draw_line(
+        &Point3::new(0.0, 0.0, 0.0),
+        &Point3::new(origin_size, 0.0, 0.0),
+        &Point3::new(1.0, 0.0, 0.0), // Red for X
+    );
+    window.draw_line(
+        &Point3::new(0.0, 0.0, 0.0),
+        &Point3::new(0.0, origin_size, 0.0),
+        &Point3::new(0.0, 1.0, 0.0), // Green for Y
+    );
+    window.draw_line(
+        &Point3::new(0.0, 0.0, 0.0),
+        &Point3::new(0.0, 0.0, origin_size),
+        &Point3::new(0.0, 0.0, 1.0), // Blue for Z
+    );
+}
+
+/// Calculate appropriate tick spacing based on dimension
+fn calculate_tick_spacing(dimension: f32) -> f32 {
+    if dimension <= 50.0 {
+        5.0
+    } else if dimension <= 200.0 {
+        10.0
+    } else if dimension <= 500.0 {
+        25.0
+    } else if dimension <= 1000.0 {
+        50.0
+    } else {
+        100.0
+    }
+}
+
+/// Draw ruler along the axes with tick marks and labels
+fn draw_ruler(window: &mut Window, area: &PrintArea) {
+    // Get dimensions in mm
+    let width = area.width_mm();
+    let height = area.height_mm();
+    let depth = area.depth_mm();
+    
+    // Calculate offset based on origin mode
+    let (x_offset, y_offset) = match area.origin {
+        Origin::Corner => (0.0, 0.0),
+        Origin::CenterBottom => (-width / 2.0, -depth / 2.0),
+    };
+    
+    let tick_color = Point3::new(0.7, 0.7, 0.7);
+    let major_tick_size = 2.0;
+    let minor_tick_size = 1.0;
+    
+    // X-axis ruler
+    let x_spacing = calculate_tick_spacing(width);
+    let mut x = 0.0;
+    while x <= width {
+        let is_major = (x / x_spacing).round() % 5.0 < 0.1;
+        let tick_size = if is_major { major_tick_size } else { minor_tick_size };
+        
+        let pos = Point3::new(x_offset + x, y_offset, 0.0);
+        let tick_end = Point3::new(x_offset + x, y_offset - tick_size, 0.0);
+        window.draw_line(&pos, &tick_end, &tick_color);
+        
+        x += x_spacing;
+    }
+    
+    // Y-axis ruler
+    let y_spacing = calculate_tick_spacing(depth);
+    let mut y = 0.0;
+    while y <= depth {
+        let is_major = (y / y_spacing).round() % 5.0 < 0.1;
+        let tick_size = if is_major { major_tick_size } else { minor_tick_size };
+        
+        let pos = Point3::new(x_offset, y_offset + y, 0.0);
+        let tick_end = Point3::new(x_offset - tick_size, y_offset + y, 0.0);
+        window.draw_line(&pos, &tick_end, &tick_color);
+        
+        y += y_spacing;
+    }
+    
+    // Z-axis ruler
+    let z_spacing = calculate_tick_spacing(height);
+    let mut z = 0.0;
+    while z <= height {
+        let is_major = (z / z_spacing).round() % 5.0 < 0.1;
+        let tick_size = if is_major { major_tick_size } else { minor_tick_size };
+        
+        let pos = Point3::new(x_offset, y_offset, z);
+        let tick_end = Point3::new(x_offset - tick_size, y_offset, z);
+        window.draw_line(&pos, &tick_end, &tick_color);
+        
+        z += z_spacing;
+    }
+}
+
+/// Round a value to a "nice" number for display (1, 2, 5, 10, 20, 50, etc.)
+fn round_to_nice_number(value: f32) -> f32 {
+    let exponent = value.log10().floor();
+    let fraction = value / 10f32.powf(exponent);
+    
+    let nice_fraction = if fraction < 1.5 {
+        1.0
+    } else if fraction < 3.0 {
+        2.0
+    } else if fraction < 7.0 {
+        5.0
+    } else {
+        10.0
+    };
+    
+    nice_fraction * 10f32.powf(exponent)
+}
+
+/// Draw a scale bar in the corner of the screen
+/// Note: This is a simplified version - in a real implementation,
+/// you'd need camera information to calculate screen-space properly
+fn draw_scale_bar(window: &mut Window, area: &PrintArea) {
+    // Use a fixed reference size based on the print bed
+    let reference_size = round_to_nice_number(area.width_mm() * 0.1);
+    
+    // Draw the scale bar at a fixed position in the scene
+    // In corner/bottom of print bed
+    let (x_offset, y_offset) = match area.origin {
+        Origin::Corner => (0.0, 0.0),
+        Origin::CenterBottom => (-area.width_mm() / 2.0, -area.depth_mm() / 2.0),
+    };
+    
+    let bar_start = Point3::new(x_offset + 10.0, y_offset + 10.0, 0.0);
+    let bar_end = Point3::new(x_offset + 10.0 + reference_size, y_offset + 10.0, 0.0);
+    let bar_color = Point3::new(1.0, 1.0, 0.0); // Yellow
+    
+    // Draw the main bar
+    window.draw_line(&bar_start, &bar_end, &bar_color);
+    
+    // Draw tick marks at ends
+    let tick_height = 2.0;
+    window.draw_line(
+        &bar_start,
+        &Point3::new(bar_start.x, bar_start.y, bar_start.z + tick_height),
+        &bar_color,
+    );
+    window.draw_line(
+        &bar_end,
+        &Point3::new(bar_end.x, bar_end.y, bar_end.z + tick_height),
+        &bar_color,
+    );
+    
+    // Note: Text rendering would require additional text rendering capabilities
+    // which kiss3d doesn't provide by default. This would show as just the bar.
 }
 
 /// Print the menu with current settings
@@ -2657,15 +2985,15 @@ fn print_menu(state: &ViewerState) {
     );
     println!(
         "    Width (X):     {} {}",
-        state.print_area.width, state.print_area.unit
+        state.print_area.width, state.print_area.unit.as_str()
     );
     println!(
         "    Depth (Y):     {} {}",
-        state.print_area.depth, state.print_area.unit
+        state.print_area.depth, state.print_area.unit.as_str()
     );
     println!(
         "    Height (Z):    {} {}",
-        state.print_area.height, state.print_area.unit
+        state.print_area.height, state.print_area.unit.as_str()
     );
     
     // Show displacement status if data is present
@@ -2734,34 +3062,88 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
         Ok(current_value)
     }
 
-    // Configure width
-    new_area.width = read_dimension("Enter width (X)", current.width, &current.unit)?;
+    // Show printer presets
+    println!("\nPrinter Presets:");
+    let presets = printer_presets();
+    for (i, preset) in presets.iter().enumerate() {
+        println!("  {}. {} ({}x{}x{} mm)", i + 1, preset.name, preset.width, preset.depth, preset.height);
+    }
+    print!("\nSelect preset (1-{}) or press Enter to customize [custom]: ", presets.len());
+    io::stdout().flush()?;
+    let preset_input = read_line()?;
+    
+    if !preset_input.is_empty() {
+        if let Ok(preset_idx) = preset_input.parse::<usize>() {
+            if preset_idx > 0 && preset_idx <= presets.len() {
+                let preset = &presets[preset_idx - 1];
+                // Convert from mm to current unit
+                new_area.width = current.unit.from_mm(preset.width);
+                new_area.depth = current.unit.from_mm(preset.depth);
+                new_area.height = current.unit.from_mm(preset.height);
+                println!("✓ Applied {} preset", preset.name);
+                
+                // If not "Custom", return early
+                if preset.name != "Custom" {
+                    return Ok(new_area);
+                }
+            }
+        }
+    }
 
-    // Configure depth
-    new_area.depth = read_dimension("Enter depth (Y)", current.depth, &current.unit)?;
-
-    // Configure height
-    new_area.height = read_dimension("Enter height (Z)", current.height, &current.unit)?;
+    // Configure dimensions
+    new_area.width = read_dimension("Enter width (X)", current.width, current.unit.as_str())?;
+    new_area.depth = read_dimension("Enter depth (Y)", current.depth, current.unit.as_str())?;
+    new_area.height = read_dimension("Enter height (Z)", current.height, current.unit.as_str())?;
 
     // Configure unit with validation
-    print!("Enter unit (mm/inch/cm) [{}]: ", current.unit);
+    print!("Enter unit (mm/inch) [{}]: ", current.unit.as_str());
     io::stdout().flush()?;
     let input = read_line()?;
     if !input.is_empty() {
-        // Validate unit against allowed values
-        let normalized = input.to_lowercase();
-        match normalized.as_str() {
-            "mm" | "millimeter" | "millimeters" => new_area.unit = "mm".to_string(),
-            "cm" | "centimeter" | "centimeters" => new_area.unit = "cm".to_string(),
-            "inch" | "inches" | "in" => new_area.unit = "inch".to_string(),
-            "m" | "meter" | "meters" => new_area.unit = "m".to_string(),
-            _ => {
-                println!(
-                    "Warning: Unknown unit '{}', keeping '{}'",
-                    input, current.unit
-                );
+        if let Some(unit) = LengthUnit::from_str(&input) {
+            // Convert dimensions to new unit if changed
+            if unit != current.unit {
+                let width_mm = current.unit.to_mm(new_area.width);
+                let depth_mm = current.unit.to_mm(new_area.depth);
+                let height_mm = current.unit.to_mm(new_area.height);
+                
+                new_area.width = unit.from_mm(width_mm);
+                new_area.depth = unit.from_mm(depth_mm);
+                new_area.height = unit.from_mm(height_mm);
+                new_area.unit = unit;
+                
+                println!("✓ Converted to {}", unit.as_str());
             }
+        } else {
+            println!("Warning: Unknown unit '{}', keeping '{}'", input, current.unit.as_str());
         }
+    }
+    
+    // Configure origin
+    print!("Origin mode (corner/center) [{}]: ", current.origin.as_str());
+    io::stdout().flush()?;
+    let input = read_line()?;
+    if !input.is_empty() {
+        match input.to_lowercase().as_str() {
+            "corner" | "c" => new_area.origin = Origin::Corner,
+            "center" | "centre" | "ctr" => new_area.origin = Origin::CenterBottom,
+            _ => println!("Warning: Unknown origin mode '{}', keeping '{}'", input, current.origin.as_str()),
+        }
+    }
+    
+    // Configure visibility options
+    print!("Show ruler (y/n) [{}]: ", if current.show_ruler { "y" } else { "n" });
+    io::stdout().flush()?;
+    let input = read_line()?;
+    if !input.is_empty() {
+        new_area.show_ruler = matches!(input.to_lowercase().as_str(), "y" | "yes" | "true" | "1");
+    }
+    
+    print!("Show scale bar (y/n) [{}]: ", if current.show_scale_bar { "y" } else { "n" });
+    io::stdout().flush()?;
+    let input = read_line()?;
+    if !input.is_empty() {
+        new_area.show_scale_bar = matches!(input.to_lowercase().as_str(), "y" | "yes" | "true" | "1");
     }
 
     Ok(new_area)
