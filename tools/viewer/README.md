@@ -28,6 +28,14 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Per-triangle colors**: Supports different colors for each triangle face
     - **Material types**: Base materials, color groups, and base material groups
     - **Color information**: Shows material counts in model info and menu
+  - **Slice Stack Visualization** (NEW!): Comprehensive slice extension support
+    - **Automatic detection**: Recognizes 3MF files with pre-computed slices
+    - **Single slice navigation**: Step through slices with Up/Down arrows
+    - **3D stack mode**: View all slices simultaneously with color gradient
+    - **Animation**: Play/pause with Space, adjust speed with [/]
+    - **Spread control**: Separate slices in 3D with Shift+Up/Down
+    - **Rendering modes**: Toggle filled/outline with 'N'
+    - See [SLICE_STACK_FEATURE.md](SLICE_STACK_FEATURE.md) for detailed documentation
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
