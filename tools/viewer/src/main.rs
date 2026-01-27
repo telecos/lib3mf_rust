@@ -17,6 +17,7 @@
 use clap::Parser;
 use image::{ImageBuffer, Rgb};
 use lib3mf::{Model, Object};
+use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -36,9 +37,9 @@ const ISO_SIN_30: f64 = 0.5; // sin(30°)
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Path to the 3MF file to view
+    /// Path to the 3MF file to view (optional - will show file dialog if not provided)
     #[arg(value_name = "FILE")]
-    file_path: PathBuf,
+    file_path: Option<PathBuf>,
 
     /// Launch interactive 3D UI viewer
     #[arg(short, long)]
@@ -65,30 +66,51 @@ struct Args {
     render_style: String,
 }
 
+/// Open a file dialog to select a 3MF file
+fn open_file_dialog() -> Option<PathBuf> {
+    FileDialog::new()
+        .add_filter("3MF Files", &["3mf"])
+        .add_filter("All Files", &["*"])
+        .set_title("Open 3MF File")
+        .pick_file()
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+
+    // If UI mode is requested or no file provided, launch the interactive viewer
+    if args.ui || args.file_path.is_none() {
+        // Get file path from arguments or show file dialog
+        let file_path = if let Some(path) = args.file_path {
+            Some(path)
+        } else if args.ui {
+            // If --ui is specified without a file, show file dialog
+            open_file_dialog()
+        } else {
+            // If neither file nor --ui is specified, launch with empty scene
+            None
+        };
+        
+        ui_viewer::launch_ui_viewer(file_path)?;
+        return Ok(());
+    }
+
+    // Non-UI mode with file provided - display model information
+    let file_path = args.file_path.as_ref().unwrap(); // Safe because we checked ui || file_path.is_none() above
 
     // Load and parse the 3MF file
     println!("═══════════════════════════════════════════════════════════");
     println!("  3MF File Viewer");
     println!("═══════════════════════════════════════════════════════════");
     println!();
-    println!("Loading: {}", args.file_path.display());
+    println!("Loading: {}", file_path.display());
     println!();
 
-    let file = File::open(&args.file_path)?;
+    let file = File::open(file_path)?;
     let model = Model::from_reader(file)?;
 
     println!("✓ Model loaded successfully!");
     println!();
-
-    // If UI mode is requested, launch the interactive viewer
-    if args.ui {
-        println!("Launching interactive 3D viewer...");
-        println!();
-        ui_viewer::launch_ui_viewer(model, args.file_path)?;
-        return Ok(());
-    }
 
     // Display model information
     display_model_info(&model);

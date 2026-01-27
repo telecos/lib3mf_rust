@@ -5,48 +5,144 @@
 
 #![forbid(unsafe_code)]
 
+use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
-use kiss3d::window::Window;
-use kiss3d::scene::SceneNode;
 use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
+use kiss3d::scene::SceneNode;
+use kiss3d::window::Window;
 use lib3mf::Model;
+use rfd::FileDialog;
+use std::fs::File;
 use std::path::PathBuf;
 
+/// Viewer state that can optionally hold a loaded model
+struct ViewerState {
+    model: Option<Model>,
+    file_path: Option<PathBuf>,
+    mesh_nodes: Vec<SceneNode>,
+}
+
+impl ViewerState {
+    /// Create a new empty viewer state
+    fn new_empty() -> Self {
+        Self {
+            model: None,
+            file_path: None,
+            mesh_nodes: Vec::new(),
+        }
+    }
+
+    /// Create a viewer state with a loaded model
+    fn with_model(model: Model, file_path: PathBuf) -> Self {
+        Self {
+            model: Some(model),
+            file_path: Some(file_path),
+            mesh_nodes: Vec::new(),
+        }
+    }
+
+    /// Load a file into the viewer state
+    fn load_file(&mut self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        let file = File::open(&path)?;
+        let model = Model::from_reader(file)?;
+        self.model = Some(model);
+        self.file_path = Some(path);
+        Ok(())
+    }
+
+    /// Get window title based on current state
+    fn window_title(&self) -> String {
+        if let Some(ref path) = self.file_path {
+            format!("3MF Viewer - {}", path.display())
+        } else {
+            "3MF Viewer - No file loaded".to_string()
+        }
+    }
+}
+
 /// Launch the interactive UI viewer
-pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    let mut window = Window::new(&format!("3MF Viewer - {}", file_path.display()));
+pub fn launch_ui_viewer(
+    file_path: Option<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create initial viewer state
+    let mut state = if let Some(path) = file_path {
+        println!("Loading: {}", path.display());
+        let file = File::open(&path)?;
+        let model = Model::from_reader(file)?;
+        println!("✓ Model loaded successfully!");
+        ViewerState::with_model(model, path)
+    } else {
+        println!("Starting viewer with empty scene...");
+        println!("Press Ctrl+O to open a 3MF file");
+        ViewerState::new_empty()
+    };
+
+    let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
-    
-    // Create meshes from the model and add them to the window scene
-    // The meshes are owned by the window and will be rendered each frame
-    create_mesh_nodes(&mut window, &model);
-    
-    // Calculate model bounds for potential future camera positioning
-    // Currently, kiss3d's ArcBall camera handles positioning automatically
-    let (min_bound, max_bound) = calculate_model_bounds(&model);
-    let center = Point3::new(
-        (min_bound.0 + max_bound.0) / 2.0,
-        (min_bound.1 + max_bound.1) / 2.0,
-        (min_bound.2 + max_bound.2) / 2.0,
-    );
-    
-    let size = Vector3::new(
-        max_bound.0 - min_bound.0,
-        max_bound.1 - min_bound.1,
-        max_bound.2 - min_bound.2,
-    );
-    let max_size = size.x.max(size.y).max(size.z);
-    
-    // Future enhancement: Could use center and max_size to set initial camera position
-    // For now, using kiss3d's default ArcBall camera which provides good automatic positioning
-    let _ = (center, max_size); // Acknowledge unused variables
-    
-    // The ArcBall camera in kiss3d is controlled by mouse automatically
-    // Just set a reasonable initial distance
     window.set_framerate_limit(Some(60));
-    
-    // Print controls
+
+    // Create meshes from the model if one is loaded
+    if state.model.is_some() {
+        state.mesh_nodes = create_mesh_nodes(&mut window, state.model.as_ref().unwrap());
+        print_model_info(state.model.as_ref().unwrap());
+    } else {
+        print_empty_scene_info();
+    }
+
+    print_controls();
+
+    // Main event loop
+    while window.render() {
+        // Handle window events
+        for event in window.events().iter() {
+            match event.value {
+                WindowEvent::Key(Key::O, Action::Press, modifiers)
+                    if modifiers.contains(kiss3d::event::Modifiers::Control) =>
+                {
+                    // Ctrl+O: Open file dialog
+                    if let Some(path) = open_file_dialog() {
+                        match state.load_file(path) {
+                            Ok(()) => {
+                                // Hide existing mesh nodes by setting them invisible
+                                for node in &mut state.mesh_nodes {
+                                    node.set_visible(false);
+                                }
+                                state.mesh_nodes.clear();
+
+                                // Create new mesh nodes
+                                if let Some(ref model) = state.model {
+                                    state.mesh_nodes = create_mesh_nodes(&mut window, model);
+                                    window.set_title(&state.window_title());
+                                    println!("\n✓ File loaded successfully!");
+                                    print_model_info(model);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("\n✗ Error loading file: {}", e);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Open a file dialog to select a 3MF file
+fn open_file_dialog() -> Option<PathBuf> {
+    FileDialog::new()
+        .add_filter("3MF Files", &["3mf"])
+        .add_filter("All Files", &["*"])
+        .set_title("Open 3MF File")
+        .pick_file()
+}
+
+/// Print controls information
+fn print_controls() {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Interactive 3D Viewer Controls");
     println!("═══════════════════════════════════════════════════════════");
@@ -55,26 +151,46 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
     println!("  🖱️  Right Mouse + Drag : Pan view");
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
+    println!("  ⌨️  Ctrl+O             : Open file");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
+}
+
+/// Print empty scene information
+fn print_empty_scene_info() {
     println!();
+    println!("═══════════════════════════════════════════════════════════");
+    println!("  No file loaded");
+    println!("═══════════════════════════════════════════════════════════");
+    println!();
+    println!("  Press Ctrl+O to open a 3MF file");
+    println!();
+    println!("═══════════════════════════════════════════════════════════");
+    println!();
+}
+
+/// Print model information
+fn print_model_info(model: &Model) {
+    println!();
+    println!("═══════════════════════════════════════════════════════════");
     println!("  Model Information:");
     println!("  - Objects: {}", model.resources.objects.len());
-    println!("  - Triangles: {}", count_triangles(&model));
-    println!("  - Vertices: {}", count_vertices(&model));
+    println!("  - Triangles: {}", count_triangles(model));
+    println!("  - Vertices: {}", count_vertices(model));
     println!("  - Unit: {}", model.unit);
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    
-    // Main event loop: kiss3d handles window events, input processing, and frame rendering
-    // Each render() call processes events, updates camera based on mouse input, and draws the scene
-    // Returns false when the window is closed, terminating the loop
-    while window.render() {
-        // The meshes are already added to the scene, kiss3d handles the rendering automatically
-    }
-    
-    Ok(())
+    println!();
+}
+
+/// Launch the interactive UI viewer
+#[allow(dead_code)]
+pub fn launch_ui_viewer_legacy(
+    _model: Model,
+    file_path: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    launch_ui_viewer(Some(file_path))
 }
 
 /// Create mesh scene nodes from the 3MF model
@@ -126,6 +242,7 @@ fn create_mesh_nodes(window: &mut Window, model: &Model) -> Vec<SceneNode> {
 }
 
 /// Calculate the bounding box of all meshes in the model
+#[allow(dead_code)]
 fn calculate_model_bounds(model: &Model) -> ((f32, f32, f32), (f32, f32, f32)) {
     let mut min_x = f32::MAX;
     let mut min_y = f32::MAX;
