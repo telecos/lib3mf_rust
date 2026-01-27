@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 use image::{Rgb, RgbImage};
+use kiss3d::camera::ArcBall;
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
@@ -299,8 +300,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
 
-    // The ArcBall camera in kiss3d is controlled by mouse automatically
-    // Just set a reasonable initial distance
+    // Create a custom ArcBall camera for full control
+    let mut camera = create_camera_for_model(state.model.as_ref());
     window.set_framerate_limit(Some(60));
 
     // Set initial background color based on theme
@@ -339,7 +340,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     }
 
     // Main event loop
-    while window.render() {
+    while window.render_with_camera(&mut camera) {
         // Handle window events
         for event in window.events().iter() {
             match event.value {
@@ -374,6 +375,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
+
+                                    // Reset camera to fit new model
+                                    camera = create_camera_for_model(state.model.as_ref());
 
                                     // Recalculate axis length based on new model
                                     let (min_bound, max_bound) = calculate_model_bounds(model);
@@ -428,6 +432,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
+                                    
+                                    // Reset camera to fit new model
+                                    camera = create_camera_for_model(state.model.as_ref());
                                 }
                             }
                             Err(e) => {
@@ -652,6 +659,74 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         println!("\nSlice view is not enabled. Press Z to enable it first.");
                     }
                 }
+                WindowEvent::Key(Key::Equals, Action::Press, _) | WindowEvent::Key(Key::Add, Action::Press, _) => {
+                    // + key: Zoom in
+                    let current_dist = camera.dist();
+                    camera.set_dist(current_dist * 0.9); // Zoom in by 10%
+                    println!("Zoom in (distance: {:.1})", camera.dist());
+                }
+                WindowEvent::Key(Key::Minus, Action::Press, _) | WindowEvent::Key(Key::Subtract, Action::Press, _) => {
+                    // - key: Zoom out
+                    let current_dist = camera.dist();
+                    camera.set_dist(current_dist * 1.1); // Zoom out by 10%
+                    println!("Zoom out (distance: {:.1})", camera.dist());
+                }
+                WindowEvent::Key(Key::PageUp, Action::Press, _) => {
+                    // PageUp: Zoom in
+                    let current_dist = camera.dist();
+                    camera.set_dist(current_dist * 0.9);
+                    println!("Zoom in (distance: {:.1})", camera.dist());
+                }
+                WindowEvent::Key(Key::PageDown, Action::Press, _) => {
+                    // PageDown: Zoom out
+                    let current_dist = camera.dist();
+                    camera.set_dist(current_dist * 1.1);
+                    println!("Zoom out (distance: {:.1})", camera.dist());
+                }
+                WindowEvent::Key(Key::F, Action::Release, _) => {
+                    // F key: Fit model to view
+                    if let Some(ref model) = state.model {
+                        fit_camera_to_model(&mut camera, model);
+                        println!("Camera fit to model");
+                    }
+                }
+                WindowEvent::Key(Key::Home, Action::Release, _) => {
+                    // Home key: Reset camera to default position
+                    camera = create_camera_for_model(state.model.as_ref());
+                    println!("Camera reset to default view");
+                }
+                WindowEvent::Key(Key::Left, Action::Press, _) => {
+                    // Left arrow: Pan left (move camera target left)
+                    let at = camera.at();
+                    let dist = camera.dist();
+                    let pan_amount = dist * 0.05; // 5% of current distance
+                    camera.set_at(Point3::new(at.x - pan_amount, at.y, at.z));
+                }
+                WindowEvent::Key(Key::Right, Action::Press, _) => {
+                    // Right arrow: Pan right
+                    let at = camera.at();
+                    let dist = camera.dist();
+                    let pan_amount = dist * 0.05;
+                    camera.set_at(Point3::new(at.x + pan_amount, at.y, at.z));
+                }
+                WindowEvent::Key(Key::Up, Action::Press, modifiers) 
+                    if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
+                {
+                    // Up arrow (without Shift): Pan up
+                    let at = camera.at();
+                    let dist = camera.dist();
+                    let pan_amount = dist * 0.05;
+                    camera.set_at(Point3::new(at.x, at.y, at.z + pan_amount));
+                }
+                WindowEvent::Key(Key::Down, Action::Press, modifiers) 
+                    if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
+                {
+                    // Down arrow (without Shift): Pan down
+                    let at = camera.at();
+                    let dist = camera.dist();
+                    let pan_amount = dist * 0.05;
+                    camera.set_at(Point3::new(at.x, at.y, at.z - pan_amount));
+                }
                 _ => {}
             }
         }
@@ -724,7 +799,10 @@ fn print_controls() {
     println!("  🖱️  Left Mouse + Drag      : Rotate view");
     println!("  🖱️  Right Mouse + Drag     : Pan view");
     println!("  🖱️  Scroll Wheel           : Zoom in/out");
+    println!("  ⌨️  +/- or PgUp/PgDn       : Zoom in/out");
     println!("  ⌨️  Arrow Keys             : Pan view");
+    println!("  ⌨️  F                      : Fit model to view");
+    println!("  ⌨️  Home                   : Reset camera to default");
     println!("  ⌨️  A Key                  : Toggle XYZ axes");
     println!("  ⌨️  M Key                  : Toggle menu");
     println!("  ⌨️  P Key                  : Toggle print area");
@@ -869,6 +947,69 @@ fn calculate_model_bounds(model: &Model) -> ((f32, f32, f32), (f32, f32, f32)) {
     }
 
     ((min_x, min_y, min_z), (max_x, max_y, max_z))
+}
+
+/// Create a camera positioned to view the model
+fn create_camera_for_model(model: Option<&Model>) -> ArcBall {
+    if let Some(model) = model {
+        let (min_bound, max_bound) = calculate_model_bounds(model);
+        
+        // Calculate the center point of the model
+        let center = Point3::new(
+            (min_bound.0 + max_bound.0) / 2.0,
+            (min_bound.1 + max_bound.1) / 2.0,
+            (min_bound.2 + max_bound.2) / 2.0,
+        );
+        
+        // Calculate the diagonal distance to determine camera distance
+        let size = Vector3::new(
+            max_bound.0 - min_bound.0,
+            max_bound.1 - min_bound.1,
+            max_bound.2 - min_bound.2,
+        );
+        let diagonal = size.magnitude();
+        
+        // Position camera at a distance that shows the entire model
+        let distance = diagonal * 1.5;
+        
+        // Camera eye position (looking from top-right-front)
+        let eye = Point3::new(
+            center.x + distance * 0.5,
+            center.y + distance * 0.5,
+            center.z + distance * 0.7,
+        );
+        
+        ArcBall::new(eye, center)
+    } else {
+        // Default camera for empty scene
+        let eye = Point3::new(100.0, 100.0, 100.0);
+        let at = Point3::origin();
+        ArcBall::new(eye, at)
+    }
+}
+
+/// Fit the camera to show the entire model
+fn fit_camera_to_model(camera: &mut ArcBall, model: &Model) {
+    let (min_bound, max_bound) = calculate_model_bounds(model);
+    
+    // Calculate the center point
+    let center = Point3::new(
+        (min_bound.0 + max_bound.0) / 2.0,
+        (min_bound.1 + max_bound.1) / 2.0,
+        (min_bound.2 + max_bound.2) / 2.0,
+    );
+    
+    // Calculate the diagonal to determine distance
+    let size = Vector3::new(
+        max_bound.0 - min_bound.0,
+        max_bound.1 - min_bound.1,
+        max_bound.2 - min_bound.2,
+    );
+    let diagonal = size.magnitude();
+    
+    // Set camera to look at center with appropriate distance
+    camera.set_at(center);
+    camera.set_dist(diagonal * 1.5);
 }
 
 /// Get color for an object (from materials or default)
