@@ -1219,9 +1219,7 @@ mod tests {
         );
         // Test newer Displacement namespace
         assert_eq!(
-            Extension::from_namespace(
-                "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10"
-            ),
+            Extension::from_namespace("http://schemas.3mf.io/3dmanufacturing/displacement/2023/10"),
             Some(Extension::Displacement)
         );
     }
