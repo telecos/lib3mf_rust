@@ -12,6 +12,14 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
   - **Keyboard shortcuts**: T for themes, B for backgrounds, Ctrl+O for file loading
+  - **Open files**: Ctrl+O to open file dialog
+  - **Browse test suites**: Ctrl+T to browse 3MF Consortium test files from GitHub
+- **Test Suite Browser** (NEW!): Browse and download official 3MF Consortium test files
+  - **Direct GitHub integration**: Fetch test files from the official repository
+  - **Interactive navigation**: Browse through test suite directories
+  - **Test categorization**: Identify positive/negative tests and categories
+  - **Local caching**: Downloaded files are cached for quick access
+  - **Automatic loading**: Selected files load directly into the viewer
 - **Load and Display 3MF Files**: Parse and display comprehensive 3D model information
 - **Model Analysis**: Show detailed information about:
   - Model properties (unit, namespace, language)
@@ -50,6 +58,32 @@ On macOS and Windows, no additional dependencies are required.
 
 ## Usage
 
+### Test Suite Browser (NEW!)
+
+Browse and download test files directly from the 3MF Consortium GitHub repository:
+
+```bash
+cargo run --release -- --browse-tests
+# or short form
+cargo run --release -- -t
+```
+
+**Features:**
+- Navigate through official test suite directories
+- View file sizes and test categories
+- Download files directly to your local cache
+- Automatically open downloaded files in the viewer
+
+**Navigation:**
+- Enter a number to select a directory or file
+- `b` or `back` - Go to parent directory
+- `r` or `refresh` - Clear cache and reload
+- `q` or `quit` - Exit browser
+- `h` or `help` - Show help
+
+**Within the 3D viewer:**
+- Press `Ctrl+T` to open the test suite browser at any time
+
 ### Interactive 3D Viewer (NEW!)
 
 Launch the interactive 3D viewer window:
@@ -64,6 +98,8 @@ cargo run --release -- <path-to-3mf-file> --ui
 - ⌨️ **Arrow Keys**: Pan the view
 - ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
+- ⌨️ **Ctrl+O**: Open file dialog
+- ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **ESC / Close Window**: Exit viewer
 
 ### Command-Line Mode
@@ -119,7 +155,8 @@ Or run the compiled binary directly:
 
 ### Command-Line Options
 
-- `--ui, -u`: Launch interactive 3D viewer window (NEW!)
+- `--browse-tests, -t`: Browse 3MF Consortium test suites from GitHub (NEW!)
+- `--ui, -u`: Launch interactive 3D viewer window
 - `--detailed, -d`: Show detailed mesh information (vertex/triangle counts, bounding boxes)
 - `--show-all, -a`: Show all vertices and triangles (can be very verbose)
 - `--export-preview <FILE>, -e <FILE>`: Export a preview image to the specified file
@@ -127,6 +164,15 @@ Or run the compiled binary directly:
 - `--render-style <STYLE>`: Choose render style (shaded, wireframe). Default: shaded
 
 ### Examples
+
+**Browse and load test files from GitHub:**
+```bash
+# Launch the test suite browser
+cargo run --release -- --browse-tests
+
+# From within the 3D viewer, press Ctrl+T to browse test suites
+cargo run --release -- --ui
+```
 
 **Interactive 3D viewer (recommended):**
 ```bash
@@ -225,6 +271,7 @@ The viewer provides:
 
 ## Use Cases
 
+- **Test Suite Exploration**: Browse and test official 3MF Consortium test files
 - **Interactive Exploration**: Examine 3MF models in real-time with full 3D controls
 - **Quick Inspection**: Rapidly examine 3MF file contents without opening a full 3D viewer
 - **Debugging**: Verify that 3MF files are correctly formed
