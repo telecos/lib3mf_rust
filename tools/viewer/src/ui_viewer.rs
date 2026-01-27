@@ -406,6 +406,12 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     show_axes = !show_axes;
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
+                WindowEvent::Key(Key::S, Action::Release, _) => {
+                    // S key: Capture screenshot
+                    if let Err(e) = capture_screenshot(&window) {
+                        eprintln!("\n✗ Error capturing screenshot: {}", e);
+                    }
+                }
                 WindowEvent::Key(Key::M, Action::Release, _) => {
                     // M key: Toggle menu display
                     state.show_menu = !state.show_menu;
@@ -498,6 +504,27 @@ fn open_file_dialog() -> Option<PathBuf> {
         .pick_file()
 }
 
+/// Generate a timestamped filename for screenshots
+fn generate_screenshot_filename() -> String {
+    let now = chrono::Local::now();
+    format!("screenshot_{}.png", now.format("%Y-%m-%d_%H%M%S"))
+}
+
+/// Capture screenshot of the current window view
+fn capture_screenshot(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
+    let filename = generate_screenshot_filename();
+    
+    // Capture the current frame
+    let img = window.snap_image();
+    
+    // Save as PNG
+    img.save(&filename)?;
+    
+    println!("\n✓ Screenshot saved: {}", filename);
+    
+    Ok(())
+}
+
 /// Print controls information
 fn print_controls() {
     println!("═══════════════════════════════════════════════════════════");
@@ -517,6 +544,7 @@ fn print_controls() {
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
     println!("  ⌨️  V                  : Cycle boolean visualization mode");
+    println!("  ⌨️  S                  : Capture screenshot");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
