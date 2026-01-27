@@ -18,13 +18,13 @@ use std::path::PathBuf;
 
 /// Color themes for the viewer background
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[allow(dead_code)]
 enum Theme {
     Dark,
     Light,
     Blue,
     White,
     Black,
+    #[allow(dead_code)]
     Custom(f32, f32, f32),
 }
 
@@ -112,6 +112,14 @@ impl ViewerState {
             "3MF Viewer - No file loaded".to_string()
         }
     }
+
+    /// Cycle to next theme and apply it to the window
+    fn cycle_theme(&mut self, window: &mut Window) {
+        self.theme = self.theme.next();
+        let bg_color = self.theme.background_color();
+        window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
+        println!("Theme changed to: {}", self.theme.name());
+    }
 }
 
 /// Launch the interactive UI viewer
@@ -181,17 +189,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 }
                 WindowEvent::Key(Key::T, Action::Press, _) => {
                     // T: Cycle through themes
-                    state.theme = state.theme.next();
-                    let bg_color = state.theme.background_color();
-                    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
-                    println!("Theme changed to: {}", state.theme.name());
+                    state.cycle_theme(&mut window);
                 }
                 WindowEvent::Key(Key::B, Action::Press, _) => {
                     // B: Cycle through background color presets (same as T for now)
-                    state.theme = state.theme.next();
-                    let bg_color = state.theme.background_color();
-                    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
-                    println!("Background changed to: {}", state.theme.name());
+                    state.cycle_theme(&mut window);
                 }
                 _ => {}
             }
