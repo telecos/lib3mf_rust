@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 use crate::menu_ui::{MenuAction, MenuBar};
+use crate::slice_window::{LineSegment2D, Point2D, SliceConfig, SlicePreviewWindow};
 use image::{Rgb, RgbImage};
 use kiss3d::camera::ArcBall;
 use kiss3d::event::{Action, Key, WindowEvent};
@@ -140,20 +141,6 @@ impl PrintArea {
     }
 }
 
-/// 2D point for slice contours
-#[derive(Debug, Clone, Copy)]
-struct Point2D {
-    x: f32,
-    y: f32,
-}
-
-/// Line segment in 2D space for slice contours
-#[derive(Debug, Clone, Copy)]
-struct LineSegment2D {
-    start: Point2D,
-    end: Point2D,
-}
-
 /// Slice view state
 #[derive(Debug, Clone)]
 struct SliceView {
@@ -167,7 +154,7 @@ struct SliceView {
     visible: bool,
     /// Whether to show the slice plane in 3D view
     show_plane: bool,
-    /// Computed contour line segments at current Z height
+    /// Computed contour line segments at current Z height (using slice_window types)
     contours: Vec<LineSegment2D>,
     /// Slice stack mode
     use_slice_stack: bool,
@@ -350,6 +337,7 @@ struct ViewerState {
     slice_view: SliceView,
     show_displacement: bool,
     show_materials: bool,
+    slice_preview_window: Option<SlicePreviewWindow>,
 }
 
 impl ViewerState {
@@ -367,6 +355,7 @@ impl ViewerState {
             slice_view: SliceView::new(),
             show_displacement: false,
             show_materials: true,
+            slice_preview_window: None,
         }
     }
 
@@ -387,6 +376,7 @@ impl ViewerState {
             slice_view,
             show_displacement: false,
             show_materials: true,
+            slice_preview_window: None,
         }
     }
 
@@ -418,6 +408,99 @@ impl ViewerState {
         let bg_color = self.theme.background_color();
         window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
         println!("Theme changed to: {}", self.theme.name());
+    }
+
+    /// Toggle slice preview window
+    fn toggle_slice_preview_window(&mut self) {
+        if self.slice_preview_window.is_some() {
+            // Close existing window
+            self.slice_preview_window = None;
+            println!("Slice preview window closed");
+        } else {
+            // Create new window
+            match SlicePreviewWindow::new() {
+                Ok(mut window) => {
+                    // Initialize with current model bounds if available
+                    if let Some(ref model) = self.model {
+                        let (min_bound, max_bound) = calculate_model_bounds(model);
+                        window.set_model_bounds((min_bound.0, min_bound.1), (max_bound.0, max_bound.1));
+                        
+                        // Sync initial configuration
+                        self.sync_slice_preview_window(&mut window);
+                    }
+                    self.slice_preview_window = Some(window);
+                    println!("Slice preview window opened");
+                    println!("  Controls: Up/Down arrows, PageUp/PageDown to adjust Z");
+                    println!("  Press 'G' to toggle grid, 'F' to toggle filled mode");
+                }
+                Err(e) => {
+                    eprintln!("Failed to create slice preview window: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Sync slice preview window with current slice view state
+    fn sync_slice_preview_window(&mut self, window: &mut SlicePreviewWindow) {
+        // Convert contours to the format expected by the preview window
+        let contours: Vec<LineSegment2D> = self
+            .slice_view
+            .contours
+            .iter()
+            .map(|seg| LineSegment2D {
+                start: Point2D {
+                    x: seg.start.x,
+                    y: seg.start.y,
+                },
+                end: Point2D {
+                    x: seg.end.x,
+                    y: seg.end.y,
+                },
+            })
+            .collect();
+
+        let config = SliceConfig {
+            z_height: self.slice_view.z_height,
+            min_z: self.slice_view.min_z,
+            max_z: self.slice_view.max_z,
+            filled_mode: self.slice_view.filled_mode,
+            show_grid: true,
+            contours,
+        };
+
+        window.update_config(config);
+    }
+
+    /// Update slice preview window (call in main loop)
+    fn update_slice_preview_window(&mut self) -> bool {
+        // Extract the window temporarily to avoid borrow checker issues
+        let mut window = match self.slice_preview_window.take() {
+            Some(w) => w,
+            None => return true,
+        };
+        
+        // Check if Z height changed in the preview window
+        let preview_z = window.get_z_height();
+        if (preview_z - self.slice_view.z_height).abs() > 0.001 {
+            // Update main slice view to match preview window
+            self.slice_view.z_height = preview_z;
+            
+            // Recompute contours
+            if let Some(ref model) = self.model {
+                self.slice_view.contours = compute_slice_contours(model, self.slice_view.z_height);
+            }
+        }
+        
+        // Sync current state to preview window
+        self.sync_slice_preview_window(&mut window);
+        
+        // Update the preview window
+        let should_continue = window.update();
+        
+        // Put window back
+        self.slice_preview_window = Some(window);
+        
+        should_continue
     }
 }
 
@@ -1151,8 +1234,18 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     // Right arrow: Pan view right
                     pan_camera(&mut camera, 1.0, 0.0, 0.0);
                 }
+                WindowEvent::Key(Key::W, Action::Release, _) => {
+                    // W key: Toggle slice preview window
+                    state.toggle_slice_preview_window();
+                }
                 _ => {}
             }
+        }
+
+        // Update slice preview window if active
+        if !state.update_slice_preview_window() {
+            // Window was closed, remove it
+            state.slice_preview_window = None;
         }
 
         // Draw XYZ axes if visible
@@ -1449,6 +1542,7 @@ fn print_controls() {
     println!("  ⌨️  P Key                  : Toggle print area");
     println!("  ⌨️  C Key                  : Configure print area");
     println!("  ⌨️  Z Key                  : Toggle 2D slice view");
+    println!("  ⌨️  W Key                  : Toggle slice preview window");
     println!("  ⌨️  Shift+Up/Down          : Adjust slice Z height");
     println!("  ⌨️  L Key                  : Toggle slice plane");
     println!("  ⌨️  X Key                  : Export slice to PNG");

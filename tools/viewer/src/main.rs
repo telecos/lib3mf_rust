@@ -24,6 +24,7 @@ use std::path::PathBuf;
 mod browser_ui;
 mod github_api;
 mod menu_ui;
+mod slice_window;
 mod ui_viewer;
 
 /// Formatting constant for output field width
