@@ -1,6 +1,8 @@
 #!/bin/bash
 # Demo script for displacement visualization in the 3MF viewer
 
+set -e  # Exit on error
+
 echo "==================================================================="
 echo "  3MF Displacement Visualization Demo"
 echo "==================================================================="
@@ -20,7 +22,10 @@ echo ""
 cd "$(dirname "$0")" || exit 1
 
 echo "Building the viewer..."
-cargo build --release
+if ! cargo build --release; then
+    echo "Error: Build failed. Please check the error messages above."
+    exit 1
+fi
 echo ""
 
 echo "==================================================================="

@@ -565,7 +565,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         );
                     }
                 }
-                WindowEvent::Key(Key::D, Action::Release, _) => {
+                WindowEvent::Key(Key::D, Action::Press, _) => {
                     // D key: Toggle displacement visualization
                     if let Some(ref model) = state.model {
                         if has_displacement_data(model) {
