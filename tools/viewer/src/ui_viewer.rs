@@ -139,6 +139,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
+
+    // The ArcBall camera in kiss3d is controlled by mouse automatically
+    // Just set a reasonable initial distance
     window.set_framerate_limit(Some(60));
 
     // Set initial background color based on theme
@@ -154,6 +157,22 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     }
 
     print_controls();
+
+    // Track axis visualization state (default: visible)
+    let mut show_axes = true;
+
+    // Calculate axis length based on model size (if model is loaded)
+    let mut axis_length = 100.0; // Default length for empty scene
+    if let Some(ref model) = state.model {
+        let (min_bound, max_bound) = calculate_model_bounds(model);
+        let size = Vector3::new(
+            max_bound.0 - min_bound.0,
+            max_bound.1 - min_bound.1,
+            max_bound.2 - min_bound.2,
+        );
+        let max_size = size.x.max(size.y).max(size.z);
+        axis_length = max_size * 0.5; // 50% of model size
+    }
 
     // Main event loop
     while window.render() {
@@ -179,6 +198,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
+
+                                    // Recalculate axis length based on new model
+                                    let (min_bound, max_bound) = calculate_model_bounds(model);
+                                    let size = Vector3::new(
+                                        max_bound.0 - min_bound.0,
+                                        max_bound.1 - min_bound.1,
+                                        max_bound.2 - min_bound.2,
+                                    );
+                                    let max_size = size.x.max(size.y).max(size.z);
+                                    axis_length = max_size * 0.5;
                                 }
                             }
                             Err(e) => {
@@ -194,6 +223,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 WindowEvent::Key(Key::B, Action::Press, _) => {
                     // B: Cycle through themes (alternative to T key)
                     state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::A, Action::Release, _) => {
+                    // A key: Toggle XYZ axes
+                    show_axes = !show_axes;
+                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
                 WindowEvent::Key(Key::T, Action::Press, modifiers)
                     if modifiers.contains(kiss3d::event::Modifiers::Control) =>
@@ -230,6 +264,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 _ => {}
             }
         }
+
+        // Draw XYZ axes if visible
+        if show_axes {
+            draw_axes(&mut window, axis_length);
+        }
     }
 
     Ok(())
@@ -254,6 +293,7 @@ fn print_controls() {
     println!("  🖱️  Right Mouse + Drag : Pan view");
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
+    println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  Ctrl+O             : Open file");
     println!("  ⌨️  T or B             : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
@@ -287,16 +327,6 @@ fn print_model_info(model: &Model) {
     println!("  - Unit: {}", model.unit);
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!();
-}
-
-/// Launch the interactive UI viewer
-#[allow(dead_code)]
-pub fn launch_ui_viewer_legacy(
-    _model: Model,
-    file_path: PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    launch_ui_viewer(Some(file_path))
 }
 
 /// Create mesh scene nodes from the 3MF model
@@ -447,6 +477,33 @@ fn count_vertices(model: &Model) -> usize {
         }
     }
     total
+}
+
+/// Draw XYZ coordinate axes
+/// X axis = Red, Y axis = Green, Z axis = Blue
+fn draw_axes(window: &mut Window, length: f32) {
+    let origin = Point3::origin();
+
+    // X axis - Red
+    window.draw_line(
+        &origin,
+        &Point3::new(length, 0.0, 0.0),
+        &Point3::new(1.0, 0.0, 0.0), // Red color
+    );
+
+    // Y axis - Green
+    window.draw_line(
+        &origin,
+        &Point3::new(0.0, length, 0.0),
+        &Point3::new(0.0, 1.0, 0.0), // Green color
+    );
+
+    // Z axis - Blue
+    window.draw_line(
+        &origin,
+        &Point3::new(0.0, 0.0, length),
+        &Point3::new(0.0, 0.0, 1.0), // Blue color
+    );
 }
 
 #[cfg(test)]

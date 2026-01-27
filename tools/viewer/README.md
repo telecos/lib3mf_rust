@@ -8,6 +8,7 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Rotate view**: Left mouse drag
   - **Pan view**: Right mouse drag  
   - **Zoom**: Mouse scroll wheel
+  - **XYZ Axes**: Toggle coordinate axes with 'A' key (X=Red, Y=Green, Z=Blue)
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
@@ -98,6 +99,7 @@ cargo run --release -- <path-to-3mf-file> --ui
 - ⌨️ **Arrow Keys**: Pan the view
 - ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
+- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
 - ⌨️ **Ctrl+O**: Open file dialog
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **ESC / Close Window**: Exit viewer
@@ -258,6 +260,7 @@ The viewer provides:
   - Hardware-accelerated OpenGL rendering using kiss3d
   - Real-time mouse-controlled camera (ArcBall)
   - Material/color group support for colored rendering
+  - XYZ coordinate axes (X=Red, Y=Green, Z=Blue)
   - Smooth 60 FPS rendering
 - Formatted text output for easy reading
 - Bounding box calculations
