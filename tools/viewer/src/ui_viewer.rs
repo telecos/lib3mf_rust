@@ -7,8 +7,8 @@
 
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
-use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
+use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use lib3mf::Model;
@@ -62,9 +62,7 @@ impl ViewerState {
 }
 
 /// Launch the interactive UI viewer
-pub fn launch_ui_viewer(
-    file_path: Option<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     // Create initial viewer state
     let mut state = if let Some(path) = file_path {
         println!("Loading: {}", path.display());
@@ -196,48 +194,53 @@ pub fn launch_ui_viewer_legacy(
 /// Create mesh scene nodes from the 3MF model
 fn create_mesh_nodes(window: &mut Window, model: &Model) -> Vec<SceneNode> {
     let mut nodes = Vec::new();
-    
+
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh_data) = obj.mesh {
                 // Convert vertices to nalgebra Point3
-                let vertices: Vec<Point3<f32>> = mesh_data.vertices
+                let vertices: Vec<Point3<f32>> = mesh_data
+                    .vertices
                     .iter()
                     .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
                     .collect();
-                
+
                 // Convert triangles to face indices (Point3<u32> for TriMesh)
-                let faces: Vec<Point3<u32>> = mesh_data.triangles
+                let faces: Vec<Point3<u32>> = mesh_data
+                    .triangles
                     .iter()
                     .filter(|t| {
-                        t.v1 < vertices.len() && 
-                        t.v2 < vertices.len() && 
-                        t.v3 < vertices.len()
+                        t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
                     })
                     .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
                     .collect();
-                
+
                 // Create TriMesh
                 let tri_mesh = TriMesh::new(
                     vertices,
                     None, // No normals, will be computed
                     None, // No UVs
-                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces))
+                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
                 );
-                
+
                 // Get object color
                 let color = get_object_color(model, obj);
-                
+
                 // Create mesh and add to scene
                 let scale = Vector3::new(1.0, 1.0, 1.0);
                 let mut mesh_node = window.add_trimesh(tri_mesh, scale);
                 mesh_node.set_color(color.0, color.1, color.2);
-                
+
                 nodes.push(mesh_node);
             }
         }
     }
-    
+
     nodes
 }
 
@@ -252,7 +255,12 @@ fn calculate_model_bounds(model: &Model) -> ((f32, f32, f32), (f32, f32, f32)) {
     let mut max_z = f32::MIN;
 
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh) = obj.mesh {
                 for v in &mesh.vertices {
                     min_x = min_x.min(v.x as f32);
@@ -292,7 +300,7 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
             }
         }
     }
-    
+
     // Default color: nice blue-gray
     (100.0 / 255.0, 150.0 / 255.0, 200.0 / 255.0)
 }
@@ -301,7 +309,12 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
 fn count_triangles(model: &Model) -> usize {
     let mut total = 0;
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh) = obj.mesh {
                 total += mesh.triangles.len();
             }
@@ -314,7 +327,12 @@ fn count_triangles(model: &Model) -> usize {
 fn count_vertices(model: &Model) -> usize {
     let mut total = 0;
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh) = obj.mesh {
                 total += mesh.vertices.len();
             }

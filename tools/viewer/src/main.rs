@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // If neither file nor --ui is specified, launch with empty scene
             None
         };
-        
+
         ui_viewer::launch_ui_viewer(file_path)?;
         return Ok(());
     }
@@ -135,8 +135,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(output_path) = args.export_preview {
         export_preview(&model, &output_path, &args.view_angle, &args.render_style)?;
         println!();
-        println!("✓ Preview exported to: {} ({} view, {} style)", 
-            output_path.display(), args.view_angle, args.render_style);
+        println!(
+            "✓ Preview exported to: {} ({} view, {} style)",
+            output_path.display(),
+            args.view_angle,
+            args.render_style
+        );
     }
 
     println!();
@@ -195,12 +199,30 @@ fn display_metadata(model: &Model) {
 /// Display resources
 fn display_resources(model: &Model, detailed: bool) {
     println!("┌─ Resources ────────────────────────────────────────────┐");
-    println!("│ Objects:              {:<FIELD_WIDTH$} │", model.resources.objects.len());
-    println!("│ Base Materials:       {:<FIELD_WIDTH$} │", model.resources.materials.len());
-    println!("│ Color Groups:         {:<FIELD_WIDTH$} │", model.resources.color_groups.len());
-    println!("│ Texture 2D Groups:    {:<FIELD_WIDTH$} │", model.resources.texture2d_groups.len());
-    println!("│ Composite Materials:  {:<FIELD_WIDTH$} │", model.resources.composite_materials.len());
-    println!("│ Multi-Properties:     {:<FIELD_WIDTH$} │", model.resources.multi_properties.len());
+    println!(
+        "│ Objects:              {:<FIELD_WIDTH$} │",
+        model.resources.objects.len()
+    );
+    println!(
+        "│ Base Materials:       {:<FIELD_WIDTH$} │",
+        model.resources.materials.len()
+    );
+    println!(
+        "│ Color Groups:         {:<FIELD_WIDTH$} │",
+        model.resources.color_groups.len()
+    );
+    println!(
+        "│ Texture 2D Groups:    {:<FIELD_WIDTH$} │",
+        model.resources.texture2d_groups.len()
+    );
+    println!(
+        "│ Composite Materials:  {:<FIELD_WIDTH$} │",
+        model.resources.composite_materials.len()
+    );
+    println!(
+        "│ Multi-Properties:     {:<FIELD_WIDTH$} │",
+        model.resources.multi_properties.len()
+    );
     println!("└────────────────────────────────────────────────────────┘");
     println!();
 
@@ -227,24 +249,20 @@ fn display_object_details(objects: &[Object]) {
             };
             println!("│   Name:           {:<36} │", name_display);
         }
-        println!("│   Type:           {:<36} │", format!("{:?}", obj.object_type));
+        println!(
+            "│   Type:           {:<36} │",
+            format!("{:?}", obj.object_type)
+        );
 
         if let Some(ref mesh) = obj.mesh {
             let (min, max) = calculate_bounding_box(mesh);
-            let size = (
-                max.0 - min.0,
-                max.1 - min.1,
-                max.2 - min.2,
-            );
+            let size = (max.0 - min.0, max.1 - min.1, max.2 - min.2);
 
             println!("│   Vertices:       {:<36} │", mesh.vertices.len());
             println!("│   Triangles:      {:<36} │", mesh.triangles.len());
             println!(
                 "│   Bounding Box:   {:<36} │",
-                format!(
-                    "{:.1} x {:.1} x {:.1}",
-                    size.0, size.1, size.2
-                )
+                format!("{:.1} x {:.1} x {:.1}", size.0, size.1, size.2)
             );
         }
 
@@ -293,7 +311,10 @@ fn display_material_details(model: &Model) {
 /// Display build items
 fn display_build(model: &Model) {
     println!("┌─ Build Items ──────────────────────────────────────────┐");
-    println!("│ Total Items:          {:<FIELD_WIDTH$} │", model.build.items.len());
+    println!(
+        "│ Total Items:          {:<FIELD_WIDTH$} │",
+        model.build.items.len()
+    );
 
     for (i, item) in model.build.items.iter().enumerate() {
         println!("│{:─<56}│", "");
@@ -333,17 +354,18 @@ fn display_detailed_meshes(model: &Model, show_all: bool) {
 
     for obj in &model.resources.objects {
         if let Some(ref mesh) = obj.mesh {
-            println!("│ Object {}: {} vertices, {} triangles", 
-                obj.id, mesh.vertices.len(), mesh.triangles.len());
+            println!(
+                "│ Object {}: {} vertices, {} triangles",
+                obj.id,
+                mesh.vertices.len(),
+                mesh.triangles.len()
+            );
             println!("│{:─<56}│", "");
 
             if show_all {
                 println!("│ Vertices:");
                 for (i, v) in mesh.vertices.iter().enumerate().take(100) {
-                    println!(
-                        "│   [{:4}] ({:8.2}, {:8.2}, {:8.2})",
-                        i, v.x, v.y, v.z
-                    );
+                    println!("│   [{:4}] ({:8.2}, {:8.2}, {:8.2})", i, v.x, v.y, v.z);
                 }
                 if mesh.vertices.len() > 100 {
                     println!("│   ... and {} more vertices", mesh.vertices.len() - 100);
@@ -352,10 +374,7 @@ fn display_detailed_meshes(model: &Model, show_all: bool) {
                 println!("│");
                 println!("│ Triangles:");
                 for (i, t) in mesh.triangles.iter().enumerate().take(50) {
-                    println!(
-                        "│   [{:4}] ({:5}, {:5}, {:5})",
-                        i, t.v1, t.v2, t.v3
-                    );
+                    println!("│   [{:4}] ({:5}, {:5}, {:5})", i, t.v1, t.v2, t.v3);
                 }
                 if mesh.triangles.len() > 50 {
                     println!("│   ... and {} more triangles", mesh.triangles.len() - 50);
@@ -397,7 +416,7 @@ fn calculate_bounding_box(mesh: &lib3mf::Mesh) -> ((f64, f64, f64), (f64, f64, f
 
 /// Export a preview image with enhanced 3D rendering
 fn export_preview(
-    model: &Model, 
+    model: &Model,
     output_path: &PathBuf,
     view_angle: &str,
     render_style: &str,
@@ -410,18 +429,23 @@ fn export_preview(
     // Collect all triangles from build items
     let mut triangles_3d = Vec::new();
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh) = obj.mesh {
                 // Get color for this object
                 let color = get_object_color(model, obj);
-                
+
                 for tri in &mesh.triangles {
                     let vertex_count = mesh.vertices.len();
                     if tri.v1 < vertex_count && tri.v2 < vertex_count && tri.v3 < vertex_count {
                         let v1 = &mesh.vertices[tri.v1];
                         let v2 = &mesh.vertices[tri.v2];
                         let v3 = &mesh.vertices[tri.v3];
-                        
+
                         triangles_3d.push((
                             (v1.x, v1.y, v1.z),
                             (v2.x, v2.y, v2.z),
@@ -457,13 +481,19 @@ fn export_preview(
     // Project and sort triangles by depth for proper rendering
     let mut projected_triangles = Vec::new();
     for (v1, v2, v3, color) in &triangles_3d {
-        let (p1, d1) = project_vertex(v1, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT);
-        let (p2, _) = project_vertex(v2, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT);
-        let (p3, _) = project_vertex(v3, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT);
-        
+        let (p1, d1) = project_vertex(
+            v1, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT,
+        );
+        let (p2, _) = project_vertex(
+            v2, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT,
+        );
+        let (p3, _) = project_vertex(
+            v3, view_angle, center_x, center_y, center_z, scale, WIDTH, HEIGHT,
+        );
+
         // Calculate normal for shading
         let normal = calculate_normal(*v1, *v2, *v3);
-        
+
         projected_triangles.push((p1, p2, p3, d1, normal, *color));
     }
 
@@ -476,18 +506,19 @@ fn export_preview(
             for (p1, p2, p3, _, normal, base_color) in &projected_triangles {
                 // Apply simple lighting based on normal
                 let light_dir = (0.5, 0.5, 0.7); // Light from top-right-front
-                let light_intensity = (normal.0 * light_dir.0 + normal.1 * light_dir.1 + normal.2 * light_dir.2)
-                    .clamp(0.2, 1.0);
-                
+                let light_intensity =
+                    (normal.0 * light_dir.0 + normal.1 * light_dir.1 + normal.2 * light_dir.2)
+                        .clamp(0.2, 1.0);
+
                 let shaded_color = Rgb([
                     (base_color.0[0] as f64 * light_intensity) as u8,
                     (base_color.0[1] as f64 * light_intensity) as u8,
                     (base_color.0[2] as f64 * light_intensity) as u8,
                 ]);
-                
+
                 // Fill triangle
                 fill_triangle(&mut img, *p1, *p2, *p3, shaded_color);
-                
+
                 // Draw edges in darker color for definition
                 let edge_color = Rgb([
                     (base_color.0[0] as f64 * 0.3) as u8,
@@ -539,14 +570,13 @@ fn get_object_color(model: &Model, obj: &Object) -> Rgb<u8> {
             }
         }
     }
-    
+
     // Default color: nice blue-gray
     Rgb([100u8, 150u8, 200u8])
 }
 
 /// Calculate scene bounds for all triangles
-fn calculate_scene_bounds(triangles: &[ColoredTriangle]) 
-    -> (f64, f64, f64, f64, f64, f64) {
+fn calculate_scene_bounds(triangles: &[ColoredTriangle]) -> (f64, f64, f64, f64, f64, f64) {
     let mut min_x = f64::MAX;
     let mut max_x = f64::MIN;
     let mut min_y = f64::MAX;
@@ -620,16 +650,20 @@ fn project_vertex(
 }
 
 /// Calculate surface normal for lighting
-fn calculate_normal(v1: (f64, f64, f64), v2: (f64, f64, f64), v3: (f64, f64, f64)) -> (f64, f64, f64) {
+fn calculate_normal(
+    v1: (f64, f64, f64),
+    v2: (f64, f64, f64),
+    v3: (f64, f64, f64),
+) -> (f64, f64, f64) {
     // Two edge vectors
     let edge1 = (v2.0 - v1.0, v2.1 - v1.1, v2.2 - v1.2);
     let edge2 = (v3.0 - v1.0, v3.1 - v1.1, v3.2 - v1.2);
-    
+
     // Cross product
     let nx = edge1.1 * edge2.2 - edge1.2 * edge2.1;
     let ny = edge1.2 * edge2.0 - edge1.0 * edge2.2;
     let nz = edge1.0 * edge2.1 - edge1.1 * edge2.0;
-    
+
     // Normalize
     let length = (nx * nx + ny * ny + nz * nz).sqrt().max(0.001);
     (nx / length, ny / length, nz / length)
@@ -655,15 +689,19 @@ fn fill_triangle(
 
     // Scan line fill algorithm
     let total_height = p3.1 - p1.1;
-    
+
     for y in p1.1..=p3.1 {
         if y < 0 || y >= img.height() as i32 {
             continue;
         }
 
         let second_half = y > p2.1 || p2.1 == p1.1;
-        let segment_height = if second_half { p3.1 - p2.1 } else { p2.1 - p1.1 };
-        
+        let segment_height = if second_half {
+            p3.1 - p2.1
+        } else {
+            p2.1 - p1.1
+        };
+
         if segment_height == 0 {
             continue;
         }
@@ -696,12 +734,20 @@ fn fill_triangle(
 
 /// Export a simple wireframe preview (legacy function)
 #[allow(dead_code)]
-fn export_wireframe_preview(model: &Model, output_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn export_wireframe_preview(
+    model: &Model,
+    output_path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     export_preview(model, output_path, "isometric", "shaded")
 }
 
 /// Draw a line using Bresenham's algorithm
-fn draw_line(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, p1: (i32, i32), p2: (i32, i32), color: Rgb<u8>) {
+fn draw_line(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    p1: (i32, i32),
+    p2: (i32, i32),
+    color: Rgb<u8>,
+) {
     let (mut x0, mut y0) = p1;
     let (x1, y1) = p2;
 
