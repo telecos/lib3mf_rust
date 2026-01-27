@@ -413,3 +413,54 @@ fn count_vertices(model: &Model) -> usize {
     }
     total
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_theme_cycling() {
+        let theme = Theme::Dark;
+        assert_eq!(theme.next(), Theme::Light);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Light);
+        assert_eq!(theme.next(), Theme::Blue);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Blue);
+        assert_eq!(theme.next(), Theme::White);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::White);
+        assert_eq!(theme.next(), Theme::Black);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Black);
+        assert_eq!(theme.next(), Theme::Dark);
+    }
+
+    #[test]
+    fn test_theme_background_colors() {
+        assert_eq!(Theme::Dark.background_color(), (0.1, 0.1, 0.1));
+        assert_eq!(Theme::Light.background_color(), (0.88, 0.88, 0.88));
+        assert_eq!(Theme::Blue.background_color(), (0.04, 0.09, 0.16));
+        assert_eq!(Theme::White.background_color(), (1.0, 1.0, 1.0));
+        assert_eq!(Theme::Black.background_color(), (0.0, 0.0, 0.0));
+        
+        let custom = Theme::Custom(0.5, 0.6, 0.7);
+        assert_eq!(custom.background_color(), (0.5, 0.6, 0.7));
+    }
+
+    #[test]
+    fn test_theme_names() {
+        assert_eq!(Theme::Dark.name(), "Dark");
+        assert_eq!(Theme::Light.name(), "Light");
+        assert_eq!(Theme::Blue.name(), "Blue");
+        assert_eq!(Theme::White.name(), "White");
+        assert_eq!(Theme::Black.name(), "Black");
+        
+        let custom = Theme::Custom(0.5, 0.6, 0.7);
+        assert_eq!(custom.name(), "Custom(0.50, 0.60, 0.70)");
+    }
+}
