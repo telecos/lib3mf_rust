@@ -289,7 +289,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                         model,
                                         state.boolean_mode,
                                     );
-                                    state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
+                                    state.beam_nodes =
+                                        create_beam_lattice_nodes(&mut window, model);
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
@@ -319,7 +320,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("Opening test suite browser...");
                     println!("(The 3D viewer window will remain open in the background)");
                     println!();
-                    
+
                     if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
                         match state.load_file(path) {
                             Ok(()) => {
@@ -342,7 +343,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                         model,
                                         state.boolean_mode,
                                     );
-                                    state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
+                                    state.beam_nodes =
+                                        create_beam_lattice_nodes(&mut window, model);
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
@@ -362,14 +364,18 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     }
                     println!(
                         "\nBeam lattice: {}",
-                        if state.show_beams { "visible" } else { "hidden" }
+                        if state.show_beams {
+                            "visible"
+                        } else {
+                            "hidden"
+                        }
                     );
                 }
                 WindowEvent::Key(Key::V, Action::Press, _) => {
                     // V: Cycle boolean operation visualization mode
                     state.boolean_mode = state.boolean_mode.next();
                     println!("\nBoolean mode: {}", state.boolean_mode.name());
-                    
+
                     // Recreate mesh nodes with new coloring
                     if let Some(ref model) = state.model {
                         // Hide existing mesh nodes
@@ -377,14 +383,14 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             node.set_visible(false);
                         }
                         state.mesh_nodes.clear();
-                        
+
                         // Create new mesh nodes with boolean-aware coloring
                         state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
                             &mut window,
                             model,
                             state.boolean_mode,
                         );
-                        
+
                         // Print boolean operation information if in special mode
                         if state.boolean_mode != BooleanMode::Normal {
                             print_boolean_info(model);
@@ -414,7 +420,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     state.print_area.toggle_visibility();
                     println!(
                         "Print Area: {}",
-                        if state.print_area.visible { "ON" } else { "OFF" }
+                        if state.print_area.visible {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
                     );
                 }
                 WindowEvent::Key(Key::C, Action::Release, _) => {
@@ -424,23 +434,41 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("═══════════════════════════════════════════════════════════");
                     println!();
                     println!("Current settings:");
-                    println!("  Width (X):  {} {}", state.print_area.width, state.print_area.unit);
-                    println!("  Depth (Y):  {} {}", state.print_area.depth, state.print_area.unit);
-                    println!("  Height (Z): {} {}", state.print_area.height, state.print_area.unit);
+                    println!(
+                        "  Width (X):  {} {}",
+                        state.print_area.width, state.print_area.unit
+                    );
+                    println!(
+                        "  Depth (Y):  {} {}",
+                        state.print_area.depth, state.print_area.unit
+                    );
+                    println!(
+                        "  Height (Z): {} {}",
+                        state.print_area.height, state.print_area.unit
+                    );
                     println!();
                     println!("To change settings, use the console:");
                     println!("  - Enter new dimensions when prompted");
                     println!("  - Press Enter to keep current value");
                     println!();
                     println!("═══════════════════════════════════════════════════════════");
-                    
+
                     // Simple console-based configuration
                     if let Ok(new_config) = configure_print_area(&state.print_area) {
                         state.print_area = new_config;
                         println!("\n✓ Print area updated successfully!");
-                        println!("  Width (X):  {} {}", state.print_area.width, state.print_area.unit);
-                        println!("  Depth (Y):  {} {}", state.print_area.depth, state.print_area.unit);
-                        println!("  Height (Z): {} {}", state.print_area.height, state.print_area.unit);
+                        println!(
+                            "  Width (X):  {} {}",
+                            state.print_area.width, state.print_area.unit
+                        );
+                        println!(
+                            "  Depth (Y):  {} {}",
+                            state.print_area.depth, state.print_area.unit
+                        );
+                        println!(
+                            "  Height (Z): {} {}",
+                            state.print_area.height, state.print_area.unit
+                        );
                     }
                 }
                 _ => {}
@@ -512,7 +540,7 @@ fn print_empty_scene_info() {
 fn print_model_info(model: &Model) {
     let beam_count = count_beams(model);
     let boolean_count = count_boolean_operations(model);
-    
+
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!("  Model Information:");
@@ -717,10 +745,15 @@ fn create_cylinder_mesh(
     // Calculate cylinder axis and length
     let axis = p2 - p1;
     let length = axis.norm();
-    
+
     if length < 1e-6 {
         // Degenerate cylinder, return empty mesh
-        return TriMesh::new(vertices, None, None, Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)));
+        return TriMesh::new(
+            vertices,
+            None,
+            None,
+            Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+        );
     }
 
     let axis_normalized = axis.normalize();
@@ -752,7 +785,7 @@ fn create_cylinder_mesh(
     // Generate faces connecting the two circles
     for i in 0..segments {
         let next_i = (i + 1) % segments;
-        
+
         let b1 = i * 2;
         let t1 = i * 2 + 1;
         let b2 = next_i * 2;
@@ -765,7 +798,7 @@ fn create_cylinder_mesh(
 
     // Add end caps if radii are non-zero
     let base_vertex_count = vertices.len();
-    
+
     // Bottom cap (at p1)
     if r1 > 1e-6 {
         vertices.push(p1); // Center vertex
@@ -833,11 +866,7 @@ fn create_sphere_mesh(center: Point3<f32>, radius: f32, segments: u32) -> TriMes
     // Generate faces for top cap
     for seg in 0..segments {
         let next_seg = (seg + 1) % segments;
-        faces.push(Point3::new(
-            0,
-            seg + 1,
-            next_seg + 1,
-        ));
+        faces.push(Point3::new(0, seg + 1, next_seg + 1));
     }
 
     // Generate faces for middle rings
@@ -894,7 +923,9 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                     // Generate beam cylinders
                     for beam in &beamset.beams {
                         // Get vertex positions
-                        if beam.v1 >= mesh_data.vertices.len() || beam.v2 >= mesh_data.vertices.len() {
+                        if beam.v1 >= mesh_data.vertices.len()
+                            || beam.v2 >= mesh_data.vertices.len()
+                        {
                             continue; // Skip invalid beam
                         }
 
@@ -911,10 +942,10 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                         // Create cylinder mesh for the beam
                         let cylinder = create_cylinder_mesh(p1, p2, r1, r2, GEOMETRY_SEGMENTS);
                         let mut mesh_node = window.add_trimesh(cylinder, IDENTITY_SCALE);
-                        
+
                         // Set beam color
                         mesh_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
-                        
+
                         nodes.push(mesh_node);
                     }
 
@@ -923,7 +954,7 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                     if beamset.cap_mode == lib3mf::BeamCapMode::Sphere {
                         use std::collections::HashMap;
                         let mut vertex_connections: HashMap<usize, usize> = HashMap::new();
-                        
+
                         for beam in &beamset.beams {
                             *vertex_connections.entry(beam.v1).or_insert(0) += 1;
                             *vertex_connections.entry(beam.v2).or_insert(0) += 1;
@@ -934,9 +965,11 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                             if *connection_count >= 2 && *vertex_idx < mesh_data.vertices.len() {
                                 let v = &mesh_data.vertices[*vertex_idx];
                                 let center = Point3::new(v.x as f32, v.y as f32, v.z as f32);
-                                
+
                                 // Use the maximum radius of beams connected to this vertex
-                                let max_radius = beamset.beams.iter()
+                                let max_radius = beamset
+                                    .beams
+                                    .iter()
                                     .filter(|b| b.v1 == *vertex_idx || b.v2 == *vertex_idx)
                                     .map(|b| {
                                         if b.v1 == *vertex_idx {
@@ -945,12 +978,14 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                                             b.r2.unwrap_or(b.r1.unwrap_or(beamset.radius))
                                         }
                                     })
-                                    .fold(beamset.radius, f64::max) as f32;
+                                    .fold(beamset.radius, f64::max)
+                                    as f32;
 
-                                let sphere = create_sphere_mesh(center, max_radius, GEOMETRY_SEGMENTS);
+                                let sphere =
+                                    create_sphere_mesh(center, max_radius, GEOMETRY_SEGMENTS);
                                 let mut sphere_node = window.add_trimesh(sphere, IDENTITY_SCALE);
                                 sphere_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
-                                
+
                                 nodes.push(sphere_node);
                             }
                         }
@@ -1026,7 +1061,7 @@ fn print_boolean_info(model: &Model) {
             println!("    Operation: {}", shape.operation.as_str());
             println!("    Base Object: {}", shape.objectid);
             println!("    Operands: {} objects", shape.operands.len());
-            
+
             for (i, operand) in shape.operands.iter().enumerate() {
                 println!("      [{}] Object ID: {}", i + 1, operand.objectid);
                 if let Some(ref path) = operand.path {
@@ -1055,9 +1090,7 @@ fn create_trimesh_node(
     let faces: Vec<Point3<u32>> = mesh_data
         .triangles
         .iter()
-        .filter(|t| {
-            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
-        })
+        .filter(|t| t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len())
         .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
         .collect();
 
@@ -1071,7 +1104,7 @@ fn create_trimesh_node(
     let scale = Vector3::new(1.0, 1.0, 1.0);
     let mut mesh_node = window.add_trimesh(tri_mesh, scale);
     mesh_node.set_color(color.0, color.1, color.2);
-    
+
     mesh_node
 }
 
@@ -1141,12 +1174,8 @@ fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<Scen
     for obj in &model.resources.objects {
         if boolean_base_objects.contains(&obj.id) || boolean_operand_objects.contains(&obj.id) {
             // Check if already rendered via build items
-            let already_in_build = model
-                .build
-                .items
-                .iter()
-                .any(|item| item.objectid == obj.id);
-            
+            let already_in_build = model.build.items.iter().any(|item| item.objectid == obj.id);
+
             if !already_in_build {
                 if let Some(ref mesh_data) = obj.mesh {
                     let color = if boolean_base_objects.contains(&obj.id) {
@@ -1201,7 +1230,7 @@ fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> V
 
     nodes
 }
-  
+
 /// Draw print area as a wireframe box (12 lines)
 fn draw_print_area(window: &mut Window, area: &PrintArea) {
     // Calculate half dimensions for centering at origin
@@ -1210,14 +1239,14 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
 
     // Define 8 corners of the box
     let corners = [
-        Point3::new(-half_width, -half_depth, 0.0),           // 0: bottom front left
-        Point3::new(half_width, -half_depth, 0.0),            // 1: bottom front right
-        Point3::new(half_width, half_depth, 0.0),             // 2: bottom back right
-        Point3::new(-half_width, half_depth, 0.0),            // 3: bottom back left
-        Point3::new(-half_width, -half_depth, area.height),   // 4: top front left
-        Point3::new(half_width, -half_depth, area.height),    // 5: top front right
-        Point3::new(half_width, half_depth, area.height),     // 6: top back right
-        Point3::new(-half_width, half_depth, area.height),    // 7: top back left
+        Point3::new(-half_width, -half_depth, 0.0), // 0: bottom front left
+        Point3::new(half_width, -half_depth, 0.0),  // 1: bottom front right
+        Point3::new(half_width, half_depth, 0.0),   // 2: bottom back right
+        Point3::new(-half_width, half_depth, 0.0),  // 3: bottom back left
+        Point3::new(-half_width, -half_depth, area.height), // 4: top front left
+        Point3::new(half_width, -half_depth, area.height), // 5: top front right
+        Point3::new(half_width, half_depth, area.height), // 6: top back right
+        Point3::new(-half_width, half_depth, area.height), // 7: top back left
     ];
 
     // Color for print area - light blue/gray
@@ -1250,12 +1279,31 @@ fn print_menu(state: &ViewerState) {
     println!("═══════════════════════════════════════════════════════════");
     println!();
     println!("  Theme:           {}", state.theme.name());
-    println!("  Print Area:      {}", if state.print_area.visible { "ON" } else { "OFF" });
-    println!("    Width (X):     {} {}", state.print_area.width, state.print_area.unit);
-    println!("    Depth (Y):     {} {}", state.print_area.depth, state.print_area.unit);
-    println!("    Height (Z):    {} {}", state.print_area.height, state.print_area.unit);
+    println!(
+        "  Print Area:      {}",
+        if state.print_area.visible {
+            "ON"
+        } else {
+            "OFF"
+        }
+    );
+    println!(
+        "    Width (X):     {} {}",
+        state.print_area.width, state.print_area.unit
+    );
+    println!(
+        "    Depth (Y):     {} {}",
+        state.print_area.depth, state.print_area.unit
+    );
+    println!(
+        "    Height (Z):    {} {}",
+        state.print_area.height, state.print_area.unit
+    );
     if let Some(ref path) = state.file_path {
-        println!("  File:            {}", path.file_name().unwrap_or_default().to_string_lossy());
+        println!(
+            "  File:            {}",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        );
     }
     println!();
     println!("  Press M to hide menu");
@@ -1314,7 +1362,10 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
             "inch" | "inches" | "in" => new_area.unit = "inch".to_string(),
             "m" | "meter" | "meters" => new_area.unit = "m".to_string(),
             _ => {
-                println!("Warning: Unknown unit '{}', keeping '{}'", input, current.unit);
+                println!(
+                    "Warning: Unknown unit '{}', keeping '{}'",
+                    input, current.unit
+                );
             }
         }
     }
@@ -1340,10 +1391,10 @@ mod tests {
     fn test_print_area_toggle_visibility() {
         let mut area = PrintArea::new();
         assert!(area.visible);
-        
+
         area.toggle_visibility();
         assert!(!area.visible);
-        
+
         area.toggle_visibility();
         assert!(area.visible);
     }
@@ -1352,19 +1403,19 @@ mod tests {
     fn test_theme_cycling() {
         let theme = Theme::Dark;
         assert_eq!(theme.next(), Theme::Light);
-        
+
         let theme = theme.next();
         assert_eq!(theme, Theme::Light);
         assert_eq!(theme.next(), Theme::Blue);
-        
+
         let theme = theme.next();
         assert_eq!(theme, Theme::Blue);
         assert_eq!(theme.next(), Theme::White);
-        
+
         let theme = theme.next();
         assert_eq!(theme, Theme::White);
         assert_eq!(theme.next(), Theme::Black);
-        
+
         let theme = theme.next();
         assert_eq!(theme, Theme::Black);
         assert_eq!(theme.next(), Theme::Dark);
@@ -1377,7 +1428,7 @@ mod tests {
         assert_eq!(Theme::Blue.background_color(), (0.04, 0.09, 0.16));
         assert_eq!(Theme::White.background_color(), (1.0, 1.0, 1.0));
         assert_eq!(Theme::Black.background_color(), (0.0, 0.0, 0.0));
-        
+
         let custom = Theme::Custom(0.5, 0.6, 0.7);
         assert_eq!(custom.background_color(), (0.5, 0.6, 0.7));
     }
