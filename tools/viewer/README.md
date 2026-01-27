@@ -10,6 +10,8 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Zoom**: Mouse scroll wheel
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
+  - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
+  - **Keyboard shortcuts**: T for themes, B for backgrounds, Ctrl+O for file loading
 - **Load and Display 3MF Files**: Parse and display comprehensive 3D model information
 - **Model Analysis**: Show detailed information about:
   - Model properties (unit, namespace, language)
@@ -60,6 +62,9 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Right Mouse + Drag**: Pan the view
 - 🖱️ **Scroll Wheel**: Zoom in/out
 - ⌨️ **Arrow Keys**: Pan the view
+- ⌨️ **T**: Cycle through background themes (Dark, Light, Blue, White, Black)
+- ⌨️ **B**: Cycle through background colors
+- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
 - ⌨️ **ESC / Close Window**: Exit viewer
 
 ### Command-Line Mode
