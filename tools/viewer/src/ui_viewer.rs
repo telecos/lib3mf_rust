@@ -288,7 +288,7 @@ impl SliceView {
                 
                 if self.current_slice_index >= self.total_slices {
                     if self.animation_loop {
-                        self.current_slice_index = self.current_slice_index % self.total_slices;
+                        self.current_slice_index %= self.total_slices;
                     } else {
                         self.current_slice_index = self.total_slices - 1;
                         self.animation_playing = false;
@@ -2507,8 +2507,7 @@ fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &
             let center_y = vertices.iter().map(|v| v.y as f32).sum::<f32>() / vertices.len() as f32;
             let center = Point3::new(center_x, center_y, z);
             
-            for i in 0..vertices.len() {
-                let v = vertices[i];
+            for v in vertices.iter() {
                 window.draw_line(
                     &Point3::new(v.x as f32, v.y as f32, z),
                     &center,
