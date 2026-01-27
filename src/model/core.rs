@@ -1168,7 +1168,9 @@ mod tests {
     fn test_extension_from_namespace_beamlattice() {
         // Test main BeamLattice namespace
         assert_eq!(
-            Extension::from_namespace("http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02"),
+            Extension::from_namespace(
+                "http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02"
+            ),
             Some(Extension::BeamLattice)
         );
     }
@@ -1177,7 +1179,9 @@ mod tests {
     fn test_extension_from_namespace_beamlattice_balls() {
         // Test balls sub-extension namespace (should map to BeamLattice)
         assert_eq!(
-            Extension::from_namespace("http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07"),
+            Extension::from_namespace(
+                "http://schemas.microsoft.com/3dmanufacturing/beamlattice/balls/2020/07"
+            ),
             Some(Extension::BeamLattice)
         );
     }
@@ -1186,12 +1190,16 @@ mod tests {
     fn test_extension_from_namespace_securecontent_variants() {
         // Test main SecureContent namespace
         assert_eq!(
-            Extension::from_namespace("http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07"),
+            Extension::from_namespace(
+                "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07"
+            ),
             Some(Extension::SecureContent)
         );
         // Test older SecureContent namespace for backward compatibility
         assert_eq!(
-            Extension::from_namespace("http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04"),
+            Extension::from_namespace(
+                "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04"
+            ),
             Some(Extension::SecureContent)
         );
     }

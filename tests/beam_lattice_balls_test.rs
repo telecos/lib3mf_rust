@@ -100,7 +100,7 @@ fn test_balls_extension_with_full_namespace() {
 
     let config = ParserConfig::new().with_extension(Extension::BeamLattice);
     let result = parse_model_xml_with_config(xml, config);
-    
+
     assert!(
         result.is_ok(),
         "Failed to parse model with full balls namespace URI: {:?}",
@@ -138,7 +138,7 @@ fn test_balls_extension_fails_without_beamlattice_support() {
     // Don't support BeamLattice extension
     let config = ParserConfig::new();
     let result = parse_model_xml_with_config(xml, config);
-    
+
     // Should fail because balls extension requires BeamLattice support
     assert!(
         result.is_err(),
