@@ -102,12 +102,11 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Right Mouse + Drag**: Pan the view
 - 🖱️ **Scroll Wheel**: Zoom in/out
 - ⌨️ **Arrow Keys**: Pan the view
-- ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
+- ⌨️ **T**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **M**: Cycle through boolean operation visualization modes
-- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
-- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
 - ⌨️ **B**: Toggle beam lattice (if present)
-- ⌨️ **Ctrl+O**: Open file dialog
+- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
+- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **ESC / Close Window**: Exit viewer
 

@@ -955,6 +955,41 @@ fn print_boolean_info(model: &Model) {
     println!("═══════════════════════════════════════════════════════════");
 }
 
+/// Create a TriMesh node from mesh data with the given color
+fn create_trimesh_node(
+    window: &mut Window,
+    mesh_data: &lib3mf::Mesh,
+    color: (f32, f32, f32),
+) -> SceneNode {
+    let vertices: Vec<Point3<f32>> = mesh_data
+        .vertices
+        .iter()
+        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+        .collect();
+
+    let faces: Vec<Point3<u32>> = mesh_data
+        .triangles
+        .iter()
+        .filter(|t| {
+            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+        })
+        .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+        .collect();
+
+    let tri_mesh = TriMesh::new(
+        vertices,
+        None,
+        None,
+        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+    );
+
+    let scale = Vector3::new(1.0, 1.0, 1.0);
+    let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+    mesh_node.set_color(color.0, color.1, color.2);
+    
+    mesh_node
+}
+
 /// Create mesh nodes with boolean operation-aware coloring
 fn create_mesh_nodes_with_boolean_mode(
     window: &mut Window,
@@ -999,28 +1034,6 @@ fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<Scen
             }
 
             if let Some(ref mesh_data) = obj.mesh {
-                let vertices: Vec<Point3<f32>> = mesh_data
-                    .vertices
-                    .iter()
-                    .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
-                    .collect();
-
-                let faces: Vec<Point3<u32>> = mesh_data
-                    .triangles
-                    .iter()
-                    .filter(|t| {
-                        t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
-                    })
-                    .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
-                    .collect();
-
-                let tri_mesh = TriMesh::new(
-                    vertices,
-                    None,
-                    None,
-                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
-                );
-
                 // Determine color based on role in boolean operations
                 let color = if boolean_base_objects.contains(&obj.id) {
                     // Base object: Blue
@@ -1033,10 +1046,7 @@ fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<Scen
                     get_object_color(model, obj)
                 };
 
-                let scale = Vector3::new(1.0, 1.0, 1.0);
-                let mut mesh_node = window.add_trimesh(tri_mesh, scale);
-                mesh_node.set_color(color.0, color.1, color.2);
-
+                let mesh_node = create_trimesh_node(window, mesh_data, color);
                 nodes.push(mesh_node);
             }
         }
@@ -1054,38 +1064,13 @@ fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<Scen
             
             if !already_in_build {
                 if let Some(ref mesh_data) = obj.mesh {
-                    let vertices: Vec<Point3<f32>> = mesh_data
-                        .vertices
-                        .iter()
-                        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
-                        .collect();
-
-                    let faces: Vec<Point3<u32>> = mesh_data
-                        .triangles
-                        .iter()
-                        .filter(|t| {
-                            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
-                        })
-                        .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
-                        .collect();
-
-                    let tri_mesh = TriMesh::new(
-                        vertices,
-                        None,
-                        None,
-                        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
-                    );
-
                     let color = if boolean_base_objects.contains(&obj.id) {
                         (0.3, 0.5, 0.9) // Blue for base
                     } else {
                         (0.9, 0.3, 0.3) // Red for operand
                     };
 
-                    let scale = Vector3::new(1.0, 1.0, 1.0);
-                    let mut mesh_node = window.add_trimesh(tri_mesh, scale);
-                    mesh_node.set_color(color.0, color.1, color.2);
-
+                    let mesh_node = create_trimesh_node(window, mesh_data, color);
                     nodes.push(mesh_node);
                 }
             }
@@ -1116,28 +1101,6 @@ fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> V
     for obj in &model.resources.objects {
         if boolean_base_objects.contains(&obj.id) || boolean_operand_objects.contains(&obj.id) {
             if let Some(ref mesh_data) = obj.mesh {
-                let vertices: Vec<Point3<f32>> = mesh_data
-                    .vertices
-                    .iter()
-                    .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
-                    .collect();
-
-                let faces: Vec<Point3<u32>> = mesh_data
-                    .triangles
-                    .iter()
-                    .filter(|t| {
-                        t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
-                    })
-                    .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
-                    .collect();
-
-                let tri_mesh = TriMesh::new(
-                    vertices,
-                    None,
-                    None,
-                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
-                );
-
                 // Use bright, distinct colors
                 let color = if boolean_base_objects.contains(&obj.id) {
                     (0.2, 0.6, 1.0) // Bright blue for base
@@ -1145,10 +1108,7 @@ fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> V
                     (1.0, 0.4, 0.2) // Bright orange for operands
                 };
 
-                let scale = Vector3::new(1.0, 1.0, 1.0);
-                let mut mesh_node = window.add_trimesh(tri_mesh, scale);
-                mesh_node.set_color(color.0, color.1, color.2);
-
+                let mesh_node = create_trimesh_node(window, mesh_data, color);
                 nodes.push(mesh_node);
             }
         }
