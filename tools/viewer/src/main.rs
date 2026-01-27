@@ -21,6 +21,8 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
+mod browser_ui;
+mod github_api;
 mod ui_viewer;
 
 /// Formatting constant for output field width
@@ -44,6 +46,10 @@ struct Args {
     /// Launch interactive 3D UI viewer
     #[arg(short, long)]
     ui: bool,
+
+    /// Browse 3MF Consortium test suites from GitHub
+    #[arg(short = 't', long)]
+    browse_tests: bool,
 
     /// Show detailed mesh information
     #[arg(short, long)]
@@ -77,6 +83,17 @@ fn open_file_dialog() -> Option<PathBuf> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+
+    // If browse-tests flag is set, launch the test suite browser
+    if args.browse_tests {
+        if let Some(file_path) = browser_ui::launch_browser()? {
+            // User selected a file from the browser, launch viewer with it
+            println!();
+            println!("Opening file in viewer...");
+            ui_viewer::launch_ui_viewer(Some(file_path))?;
+        }
+        return Ok(());
+    }
 
     // If UI mode is requested or no file provided, launch the interactive viewer
     if args.ui || args.file_path.is_none() {
