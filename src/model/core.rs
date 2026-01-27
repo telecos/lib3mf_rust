@@ -89,6 +89,10 @@ impl Extension {
             "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07" => {
                 Some(Extension::Displacement)
             }
+            // Also accept the newer 2023/10 namespace for displacement
+            "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10" => {
+                Some(Extension::Displacement)
+            }
             _ => None,
         }
     }
@@ -1201,6 +1205,22 @@ mod tests {
                 "http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/04"
             ),
             Some(Extension::SecureContent)
+        );
+    }
+
+    #[test]
+    fn test_extension_from_namespace_displacement_variants() {
+        // Test main Displacement namespace
+        assert_eq!(
+            Extension::from_namespace(
+                "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07"
+            ),
+            Some(Extension::Displacement)
+        );
+        // Test newer Displacement namespace
+        assert_eq!(
+            Extension::from_namespace("http://schemas.3mf.io/3dmanufacturing/displacement/2023/10"),
+            Some(Extension::Displacement)
         );
     }
 }

@@ -82,16 +82,12 @@ pub fn get_suite_config(suite_name: &str) -> ParserConfig {
             .with_extension(Extension::Material),
 
         // Suite 11: Displacement
-        // Register both the built-in 2022/07 namespace and the newer 2023/10 namespace
+        // Support both 2022/07 and 2023/10 namespaces (now natively recognized)
         // Some test files also use BooleanOperations and Production extensions
         "suite11_Displacement" => ParserConfig::new()
             .with_extension(Extension::Displacement)
             .with_extension(Extension::BooleanOperations)
-            .with_extension(Extension::Production)
-            .with_custom_extension(
-                "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10",
-                "Displacement 2023/10",
-            ),
+            .with_extension(Extension::Production),
 
         // Default: support all extensions for unknown suites
         _ => ParserConfig::with_all_extensions(),
