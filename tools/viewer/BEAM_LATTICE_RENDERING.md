@@ -15,13 +15,21 @@ The viewer automatically detects beam lattice data in loaded 3MF models and rend
 - **Distinct Color**: Beams are rendered in orange (RGB: 1.0, 0.6, 0.0) to distinguish from mesh geometry
 - **Segment Count**: Uses 8 segments around cylinder circumference for efficient rendering
 
-### 2. Ball Joints (Sphere Cap Mode)
+### 2. Ball Joints
 
-When the beam set uses sphere cap mode, the viewer adds spherical joints at vertices:
+The viewer supports both explicit balls (from the balls extension) and inferred balls:
 
-- **Vertex Connections**: Identifies vertices with 2+ beam connections
-- **Adaptive Radius**: Uses the maximum radius of connected beams
-- **Ball Meshes**: Generates sphere meshes with 8 segments
+**Explicit Balls (Balls Extension)**:
+- Renders balls explicitly defined in `<bb:balls>` elements
+- Uses ball-specific radius or falls back to `ball_radius` or beamset default
+- Takes precedence over inferred ball joints
+- Supports per-ball properties (property_id, property_index)
+
+**Inferred Ball Joints (Sphere Cap Mode)**:
+- When no explicit balls are defined and cap mode is sphere
+- Identifies vertices with 2+ beam connections
+- Adaptive Radius: Uses the maximum radius of connected beams
+- Ball Meshes: Generates sphere meshes with 8 segments
 
 ### 3. User Controls
 
@@ -70,7 +78,13 @@ For each object with beam lattice data:
    - Apply orange color
    - Add to scene
 
-2. **Process Ball Joints** (if cap_mode == Sphere):
+2. **Process Explicit Balls** (from Balls Extension):
+   - Render all balls defined in `beamset.balls` vector
+   - Use ball's radius, or fall back to beamset.ball_radius or beamset.radius
+   - Apply orange color
+   - Add to scene
+
+3. **Process Inferred Ball Joints** (if no explicit balls and cap_mode == Sphere):
    - Count connections at each vertex
    - Generate spheres at vertices with 2+ connections
    - Use maximum radius of connected beams
