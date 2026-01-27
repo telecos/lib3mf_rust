@@ -185,7 +185,7 @@ cargo run --release -- ../../test_files/core/sphere.3mf --ui
 
 # While the viewer is running, press 'P' to capture screenshots
 # Screenshots are automatically saved with timestamped filenames like:
-# screenshot_2026-01-27_145230.png
+# screenshot_2025-01-27_145230.png
 ```
 
 View a basic 3MF file:

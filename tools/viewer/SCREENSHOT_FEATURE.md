@@ -22,9 +22,9 @@ The lib3mf viewer includes a built-in screenshot feature that allows you to capt
 Screenshots are saved with timestamped filenames to ensure uniqueness and avoid overwriting previous captures:
 
 ```
-screenshot_2026-01-27_145230.png
-screenshot_2026-01-27_145245.png
-screenshot_2026-01-27_150103.png
+screenshot_2025-01-27_145230.png
+screenshot_2025-01-27_145245.png
+screenshot_2025-01-27_150103.png
 ```
 
 Format: `screenshot_YYYY-MM-DD_HHMMSS.png`
@@ -58,7 +58,7 @@ cargo run --release -- ../../test_files/core/sphere.3mf --ui
 #    - Press 'T' to change background theme if desired
 #    - Press 'P' to capture screenshot
 #
-# 3. Screenshot saved as: screenshot_2026-01-27_145230.png
+# 3. Screenshot saved as: screenshot_2025-01-27_145230.png
 ```
 
 ### Multiple Screenshots
@@ -71,13 +71,13 @@ cargo run --release -- ../../test_files/core/box.3mf --ui
 
 # While running:
 # 1. Position view from front, press 'P'
-#    → screenshot_2026-01-27_100500.png
+#    → screenshot_2025-01-27_100500.png
 #
 # 2. Rotate to side view, press 'P'
-#    → screenshot_2026-01-27_100512.png
+#    → screenshot_2025-01-27_100512.png
 #
 # 3. Rotate to top view, press 'P'
-#    → screenshot_2026-01-27_100525.png
+#    → screenshot_2025-01-27_100525.png
 ```
 
 ### Different Themes
@@ -128,7 +128,7 @@ Press 'P' at any time while the viewer window is active to capture a screenshot 
 When you capture a screenshot, the viewer prints a confirmation message to the console:
 
 ```
-✓ Screenshot saved: screenshot_2026-01-27_145230.png
+✓ Screenshot saved: screenshot_2025-01-27_145230.png
 ```
 
 If there's an error (e.g., disk full, permission denied), an error message is displayed:
