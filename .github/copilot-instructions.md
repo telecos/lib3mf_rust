@@ -84,7 +84,6 @@ test_files/             # Test data organized by extension
 - Return descriptive errors using the `Error` enum defined in `error.rs`
 - Use `thiserror` for custom error types
 - Include context in error messages (e.g., file paths, element names, line numbers when available)
-- See `ERROR_HANDLING.md` for detailed error handling patterns
 
 ### Testing Practices
 1. **Unit tests**: Test individual functions and modules in the same file using `#[cfg(test)]`
@@ -126,7 +125,6 @@ test_files/             # Test data organized by extension
 - Validate resource ID references to prevent infinite loops
 - Handle ZIP bomb scenarios (extremely large compressed files)
 - For Secure Content: Use test keys only for conformance testing, document production requirements
-- See `SECURE_CONTENT_SUPPORT.md` for encryption handling guidelines
 
 ### Input Validation
 - Validate all XML attributes against spec constraints
@@ -164,7 +162,6 @@ test_files/             # Test data organized by extension
 - Target 100% pass rate on positive tests (valid 3MF files)
 - Properly reject invalid files in negative tests
 - Document any intentional deviations from spec with rationale
-- See `CONFORMANCE_REPORT.md` for current status
 
 ## Git Workflow
 
@@ -189,14 +186,8 @@ test_files/             # Test data organized by extension
 - Parsing should scale linearly with file size
 - Use pre-allocated buffers where possible
 - Profile with `cargo bench` for performance-critical code
-- See `PERFORMANCE.md` for optimization strategies
 - Avoid unnecessary allocations in hot paths
 
 ## Additional Resources
 
 - [3MF Specification](https://3mf.io/specification/) - Official format documentation
-- `MIGRATION_FROM_CPP.md` - Guide for users migrating from C++ lib3mf
-- `CONFORMANCE_REPORT.md` - Current conformance test results
-- `POLYGON_CLIPPING.md` - Polygon operations documentation
-- `ERROR_HANDLING.md` - Error handling patterns
-- `PERFORMANCE.md` - Performance characteristics and profiling
