@@ -62,8 +62,7 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Right Mouse + Drag**: Pan the view
 - 🖱️ **Scroll Wheel**: Zoom in/out
 - ⌨️ **Arrow Keys**: Pan the view
-- ⌨️ **T**: Cycle through background themes (Dark, Light, Blue, White, Black)
-- ⌨️ **B**: Cycle through background colors
+- ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
 - ⌨️ **ESC / Close Window**: Exit viewer
 

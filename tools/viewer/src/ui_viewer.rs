@@ -54,14 +54,14 @@ impl Theme {
     }
 
     /// Get the name of the theme for display
-    fn name(&self) -> String {
+    fn name(&self) -> &'static str {
         match self {
-            Theme::Dark => "Dark".to_string(),
-            Theme::Light => "Light".to_string(),
-            Theme::Blue => "Blue".to_string(),
-            Theme::White => "White".to_string(),
-            Theme::Black => "Black".to_string(),
-            Theme::Custom(r, g, b) => format!("Custom({:.2}, {:.2}, {:.2})", r, g, b),
+            Theme::Dark => "Dark",
+            Theme::Light => "Light",
+            Theme::Blue => "Blue",
+            Theme::White => "White",
+            Theme::Black => "Black",
+            Theme::Custom(_, _, _) => "Custom",
         }
     }
 }
@@ -192,7 +192,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     state.cycle_theme(&mut window);
                 }
                 WindowEvent::Key(Key::B, Action::Press, _) => {
-                    // B: Cycle through background color presets (same as T for now)
+                    // B: Cycle through themes (alternative to T key)
                     state.cycle_theme(&mut window);
                 }
                 _ => {}
@@ -223,8 +223,7 @@ fn print_controls() {
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  Ctrl+O             : Open file");
-    println!("  ⌨️  T                  : Cycle themes");
-    println!("  ⌨️  B                  : Cycle background colors");
+    println!("  ⌨️  T or B             : Cycle themes");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -461,8 +460,8 @@ mod tests {
         assert_eq!(Theme::Blue.name(), "Blue");
         assert_eq!(Theme::White.name(), "White");
         assert_eq!(Theme::Black.name(), "Black");
-        
+
         let custom = Theme::Custom(0.5, 0.6, 0.7);
-        assert_eq!(custom.name(), "Custom(0.50, 0.60, 0.70)");
+        assert_eq!(custom.name(), "Custom");
     }
 }
