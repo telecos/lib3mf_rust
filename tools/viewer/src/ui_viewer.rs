@@ -3186,4 +3186,127 @@ mod tests {
         assert_eq!(after_pan.y, initial_at.y, "Pan right should not change Y");
         assert_eq!(after_pan.z, initial_at.z, "Pan right should not change Z");
     }
+
+    #[test]
+    fn test_beam_plane_intersection_crossing() {
+        // Beam crossing Z plane at z=5
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (10.0, 10.0, 10.0);
+        let r1 = 2.0;
+        let r2 = 4.0;
+        let z_height = 5.0;
+        
+        let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
+        assert!(result.is_some(), "Beam crossing plane should intersect");
+        
+        let (center, radius) = result.unwrap();
+        // At z=5, t should be 0.5
+        assert!((center.x - 5.0).abs() < 0.001, "X should be at midpoint");
+        assert!((center.y - 5.0).abs() < 0.001, "Y should be at midpoint");
+        assert!((radius - 3.0).abs() < 0.001, "Radius should be interpolated to 3.0");
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_no_crossing() {
+        // Beam entirely above Z plane
+        let p1 = (0.0, 0.0, 10.0);
+        let p2 = (10.0, 10.0, 20.0);
+        let r1 = 2.0;
+        let r2 = 4.0;
+        let z_height = 5.0;
+        
+        let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
+        assert!(result.is_none(), "Beam not crossing plane should not intersect");
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_constant_radius() {
+        // Beam with constant radius
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (0.0, 0.0, 10.0);
+        let r1 = 2.5;
+        let r2 = 2.5;
+        let z_height = 7.0;
+        
+        let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
+        assert!(result.is_some(), "Vertical beam should intersect");
+        
+        let (center, radius) = result.unwrap();
+        assert!((center.x - 0.0).abs() < 0.001, "X should be at beam center");
+        assert!((center.y - 0.0).abs() < 0.001, "Y should be at beam center");
+        assert!((radius - 2.5).abs() < 0.001, "Radius should remain constant");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_crossing() {
+        // Ball centered at z=5 with radius 3
+        let center = (10.0, 20.0, 5.0);
+        let radius = 3.0;
+        let z_height = 6.0; // 1 unit above center
+        
+        let result = ball_plane_intersection(center, radius, z_height);
+        assert!(result.is_some(), "Ball should intersect plane");
+        
+        let (center_2d, slice_radius) = result.unwrap();
+        assert!((center_2d.x - 10.0).abs() < 0.001, "X should match ball center");
+        assert!((center_2d.y - 20.0).abs() < 0.001, "Y should match ball center");
+        
+        // At dz=1, slice_radius = sqrt(3^2 - 1^2) = sqrt(8) ≈ 2.828
+        let expected_radius = (radius * radius - 1.0 * 1.0).sqrt();
+        assert!((slice_radius - expected_radius).abs() < 0.001, "Slice radius should be sqrt(8)");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_no_crossing() {
+        // Ball far from plane
+        let center = (10.0, 20.0, 5.0);
+        let radius = 2.0;
+        let z_height = 10.0; // 5 units above center
+        
+        let result = ball_plane_intersection(center, radius, z_height);
+        assert!(result.is_none(), "Ball should not intersect distant plane");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_at_center() {
+        // Plane passing through ball center
+        let center = (10.0, 20.0, 5.0);
+        let radius = 3.0;
+        let z_height = 5.0;
+        
+        let result = ball_plane_intersection(center, radius, z_height);
+        assert!(result.is_some(), "Ball should intersect plane at center");
+        
+        let (_, slice_radius) = result.unwrap();
+        assert!((slice_radius - radius).abs() < 0.001, "Slice radius should equal ball radius");
+    }
+
+    #[test]
+    fn test_circle_to_line_segments() {
+        let center = Point2D { x: 10.0, y: 20.0 };
+        let radius = 5.0;
+        let segments = 8;
+        
+        let line_segs = circle_to_line_segments(center, radius, segments);
+        
+        assert_eq!(line_segs.len(), segments as usize, "Should have correct number of segments");
+        
+        // Check that all segments are connected (end of one is start of next)
+        for i in 0..segments as usize {
+            let current = &line_segs[i];
+            let next = &line_segs[(i + 1) % segments as usize];
+            
+            assert!((current.end.x - next.start.x).abs() < 0.001, "Segments should be connected");
+            assert!((current.end.y - next.start.y).abs() < 0.001, "Segments should be connected");
+        }
+        
+        // Check that points are approximately at the right distance from center
+        for seg in &line_segs {
+            let dx_start = seg.start.x - center.x;
+            let dy_start = seg.start.y - center.y;
+            let dist_start = (dx_start * dx_start + dy_start * dy_start).sqrt();
+            
+            assert!((dist_start - radius).abs() < 0.001, "Start point should be at radius distance");
+        }
+    }
 }
