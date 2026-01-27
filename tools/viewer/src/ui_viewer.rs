@@ -664,23 +664,17 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         println!("\nSlice view is not enabled. Press Z to enable it first.");
                     }
                 }
-                WindowEvent::Key(Key::Equals, Action::Press, _) | WindowEvent::Key(Key::Add, Action::Press, _) => {
-                    // + key: Zoom in
+                WindowEvent::Key(Key::Equals, Action::Press, _) 
+                    | WindowEvent::Key(Key::Add, Action::Press, _) 
+                    | WindowEvent::Key(Key::PageUp, Action::Press, _) => {
+                    // + key or PageUp: Zoom in
                     zoom_camera(&mut camera, ZOOM_STEP);
                     println!("Zoom in (distance: {:.1})", camera.dist());
                 }
-                WindowEvent::Key(Key::Minus, Action::Press, _) | WindowEvent::Key(Key::Subtract, Action::Press, _) => {
-                    // - key: Zoom out
-                    zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
-                    println!("Zoom out (distance: {:.1})", camera.dist());
-                }
-                WindowEvent::Key(Key::PageUp, Action::Press, _) => {
-                    // PageUp: Zoom in
-                    zoom_camera(&mut camera, ZOOM_STEP);
-                    println!("Zoom in (distance: {:.1})", camera.dist());
-                }
-                WindowEvent::Key(Key::PageDown, Action::Press, _) => {
-                    // PageDown: Zoom out
+                WindowEvent::Key(Key::Minus, Action::Press, _) 
+                    | WindowEvent::Key(Key::Subtract, Action::Press, _)
+                    | WindowEvent::Key(Key::PageDown, Action::Press, _) => {
+                    // - key or PageDown: Zoom out
                     zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
                     println!("Zoom out (distance: {:.1})", camera.dist());
                 }
@@ -697,23 +691,23 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("Camera reset to default view");
                 }
                 WindowEvent::Key(Key::Left, Action::Press, _) => {
-                    // Left arrow: Pan left (move camera target left)
+                    // Left arrow: Pan view left
                     pan_camera(&mut camera, -1.0, 0.0, 0.0);
                 }
                 WindowEvent::Key(Key::Right, Action::Press, _) => {
-                    // Right arrow: Pan right
+                    // Right arrow: Pan view right
                     pan_camera(&mut camera, 1.0, 0.0, 0.0);
                 }
                 WindowEvent::Key(Key::Up, Action::Press, modifiers) 
                     if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
                 {
-                    // Up arrow (without Shift): Pan up
+                    // Up arrow (without Shift): Pan view up
                     pan_camera(&mut camera, 0.0, 0.0, 1.0);
                 }
                 WindowEvent::Key(Key::Down, Action::Press, modifiers) 
                     if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
                 {
-                    // Down arrow (without Shift): Pan down
+                    // Down arrow (without Shift): Pan view down
                     pan_camera(&mut camera, 0.0, 0.0, -1.0);
                 }
                 _ => {}
