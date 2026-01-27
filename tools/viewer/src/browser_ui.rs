@@ -102,11 +102,12 @@ pub fn launch_browser() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
                 if let Ok(index) = choice.parse::<usize>() {
                     if index > 0 && index <= state.current_items.len() {
                         let selected = &state.current_items[index - 1];
-                        
+
                         if selected.content_type == "dir" {
                             // Navigate into directory
                             state.navigate_to(selected.path.clone(), selected.name.clone());
-                        } else if selected.content_type == "file" && selected.name.ends_with(".3mf") {
+                        } else if selected.content_type == "file" && selected.name.ends_with(".3mf")
+                        {
                             // Download and return file path
                             println!();
                             println!("Downloading file...");
@@ -154,12 +155,12 @@ fn print_items(items: &[GitHubContent]) {
     }
 
     println!("┌─ Contents ─────────────────────────────────────────────┐");
-    
+
     for (i, item) in items.iter().enumerate() {
         let index = i + 1;
         let test_type = TestType::from_filename(&item.name);
         let category = TestCategory::from_path(&item.path);
-        
+
         let icon = if item.content_type == "dir" {
             "📁"
         } else if item.name.ends_with(".3mf") {
@@ -182,15 +183,22 @@ fn print_items(items: &[GitHubContent]) {
 
         // Show category for files
         if item.content_type == "file" && item.name.ends_with(".3mf") {
-            println!("│ {:2}. {} {:<35} {:<8} {:<6} │", 
-                index, icon, display_name, 
-                category.display_name(), size_str);
+            println!(
+                "│ {:2}. {} {:<35} {:<8} {:<6} │",
+                index,
+                icon,
+                display_name,
+                category.display_name(),
+                size_str
+            );
         } else {
-            println!("│ {:2}. {} {:<35} {:<15} │", 
-                index, icon, display_name, size_str);
+            println!(
+                "│ {:2}. {} {:<35} {:<15} │",
+                index, icon, display_name, size_str
+            );
         }
     }
-    
+
     println!("└────────────────────────────────────────────────────────┘");
     println!();
 }
@@ -234,10 +242,10 @@ fn print_help() {
 fn get_user_input() -> Result<String, Box<dyn std::error::Error>> {
     print!("> ");
     io::stdout().flush()?;
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
-    
+
     Ok(input.trim().to_string())
 }
 

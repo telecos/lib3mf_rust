@@ -129,7 +129,7 @@ impl GitHubClient {
             .ok_or("Unable to determine cache directory")?
             .join("lib3mf_viewer")
             .join("github_cache");
-        
+
         fs::create_dir_all(&cache_dir)?;
 
         let client = reqwest::blocking::Client::builder()
@@ -144,7 +144,10 @@ impl GitHubClient {
     }
 
     /// List contents of a directory in the test suites repository
-    pub fn list_directory(&mut self, path: &str) -> Result<Vec<GitHubContent>, Box<dyn std::error::Error>> {
+    pub fn list_directory(
+        &mut self,
+        path: &str,
+    ) -> Result<Vec<GitHubContent>, Box<dyn std::error::Error>> {
         // Check cache first
         if let Some(cached) = self.directory_cache.get(path) {
             return Ok(cached.clone());
@@ -172,17 +175,27 @@ impl GitHubClient {
         let contents: Vec<GitHubContent> = response.json()?;
 
         // Cache the results
-        self.directory_cache.insert(path.to_string(), contents.clone());
+        self.directory_cache
+            .insert(path.to_string(), contents.clone());
 
         Ok(contents)
     }
 
     /// Download a file from the test suites repository
-    pub fn download_file(&self, item: &GitHubContent) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let download_url = item.download_url.as_ref()
+    pub fn download_file(
+        &self,
+        item: &GitHubContent,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let download_url = item
+            .download_url
+            .as_ref()
             .ok_or("No download URL available")?;
 
-        println!("Downloading: {} ({} bytes)", item.name, item.size.unwrap_or(0));
+        println!(
+            "Downloading: {} ({} bytes)",
+            item.name,
+            item.size.unwrap_or(0)
+        );
 
         // Download the file
         let response = self.client.get(download_url).send()?;
@@ -190,10 +203,7 @@ impl GitHubClient {
         let bytes = response.bytes()?;
 
         // Save to temp directory with unique name based on path
-        let file_name = format!("{}_{}", 
-            item.path.replace('/', "_"),
-            item.name
-        );
+        let file_name = format!("{}_{}", item.path.replace('/', "_"), item.name);
         let temp_path = self.cache_dir.join(&file_name);
 
         fs::write(&temp_path, bytes)?;
@@ -215,16 +225,17 @@ impl GitHubClient {
     }
 
     /// Build a complete directory tree (recursive)
-    pub fn build_tree(&mut self, path: &str) -> Result<Vec<GitHubContent>, Box<dyn std::error::Error>> {
+    pub fn build_tree(
+        &mut self,
+        path: &str,
+    ) -> Result<Vec<GitHubContent>, Box<dyn std::error::Error>> {
         let mut contents = self.list_directory(path)?;
-        
+
         // Sort: directories first, then files
-        contents.sort_by(|a, b| {
-            match (&a.content_type[..], &b.content_type[..]) {
-                ("dir", "file") => std::cmp::Ordering::Less,
-                ("file", "dir") => std::cmp::Ordering::Greater,
-                _ => a.name.cmp(&b.name),
-            }
+        contents.sort_by(|a, b| match (&a.content_type[..], &b.content_type[..]) {
+            ("dir", "file") => std::cmp::Ordering::Less,
+            ("file", "dir") => std::cmp::Ordering::Greater,
+            _ => a.name.cmp(&b.name),
         });
 
         Ok(contents)
@@ -240,7 +251,8 @@ impl Default for GitHubClient {
 /// Filter test files by category
 #[allow(dead_code)] // Reserved for future filtering feature
 pub fn filter_by_category(items: &[GitHubContent], category: &TestCategory) -> Vec<GitHubContent> {
-    items.iter()
+    items
+        .iter()
         .filter(|item| {
             let item_category = TestCategory::from_path(&item.path);
             &item_category == category
@@ -253,10 +265,11 @@ pub fn filter_by_category(items: &[GitHubContent], category: &TestCategory) -> V
 #[allow(dead_code)] // Reserved for future search feature
 pub fn search_files(items: &[GitHubContent], query: &str) -> Vec<GitHubContent> {
     let query_lower = query.to_lowercase();
-    items.iter()
+    items
+        .iter()
         .filter(|item| {
-            item.name.to_lowercase().contains(&query_lower) ||
-            item.path.to_lowercase().contains(&query_lower)
+            item.name.to_lowercase().contains(&query_lower)
+                || item.path.to_lowercase().contains(&query_lower)
         })
         .cloned()
         .collect()
@@ -269,14 +282,23 @@ mod tests {
     #[test]
     fn test_category_parsing() {
         assert_eq!(TestCategory::from_path("core/box.3mf"), TestCategory::Core);
-        assert_eq!(TestCategory::from_path("materials/color.3mf"), TestCategory::Materials);
-        assert_eq!(TestCategory::from_path("production/uuid.3mf"), TestCategory::Production);
+        assert_eq!(
+            TestCategory::from_path("materials/color.3mf"),
+            TestCategory::Materials
+        );
+        assert_eq!(
+            TestCategory::from_path("production/uuid.3mf"),
+            TestCategory::Production
+        );
     }
 
     #[test]
     fn test_type_detection() {
         assert_eq!(TestType::from_filename("valid_box.3mf"), TestType::Positive);
-        assert_eq!(TestType::from_filename("invalid_mesh.3mf"), TestType::Negative);
+        assert_eq!(
+            TestType::from_filename("invalid_mesh.3mf"),
+            TestType::Negative
+        );
         assert_eq!(TestType::from_filename("box.3mf"), TestType::Unknown);
     }
 }
