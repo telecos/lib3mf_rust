@@ -156,6 +156,38 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     show_axes = !show_axes;
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
+                WindowEvent::Key(Key::T, Action::Press, modifiers)
+                    if modifiers.contains(kiss3d::event::Modifiers::Control) =>
+                {
+                    // Ctrl+T: Browse test suites
+                    println!("\n");
+                    println!("Opening test suite browser...");
+                    println!("(The 3D viewer window will remain open in the background)");
+                    println!();
+                    
+                    if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
+                        match state.load_file(path) {
+                            Ok(()) => {
+                                // Hide existing mesh nodes by setting them invisible
+                                for node in &mut state.mesh_nodes {
+                                    node.set_visible(false);
+                                }
+                                state.mesh_nodes.clear();
+
+                                // Create new mesh nodes
+                                if let Some(ref model) = state.model {
+                                    state.mesh_nodes = create_mesh_nodes(&mut window, model);
+                                    window.set_title(&state.window_title());
+                                    println!("\n✓ File loaded successfully!");
+                                    print_model_info(model);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("\n✗ Error loading file: {}", e);
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -190,6 +222,7 @@ fn print_controls() {
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  Ctrl+O             : Open file");
+    println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -203,6 +236,7 @@ fn print_empty_scene_info() {
     println!("═══════════════════════════════════════════════════════════");
     println!();
     println!("  Press Ctrl+O to open a 3MF file");
+    println!("  Press Ctrl+T to browse test suites from GitHub");
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!();
