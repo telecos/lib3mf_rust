@@ -783,7 +783,8 @@ fn print_controls() {
     println!("  🖱️  Right Mouse + Drag     : Pan view");
     println!("  🖱️  Scroll Wheel           : Zoom in/out");
     println!("  ⌨️  +/- or PgUp/PgDn       : Zoom in/out");
-    println!("  ⌨️  Arrow Keys             : Pan view");
+    println!("  ⌨️  Arrow Keys             : Pan view (Up/Down/Left/Right)");
+    println!("  ⌨️  Shift+Up/Down          : Adjust slice Z height");
     println!("  ⌨️  F                      : Fit model to view");
     println!("  ⌨️  Home                   : Reset camera to default");
     println!("  ⌨️  A Key                  : Toggle XYZ axes");
@@ -2095,5 +2096,44 @@ mod tests {
 
         let custom = Theme::Custom(0.5, 0.6, 0.7);
         assert_eq!(custom.name(), "Custom");
+    }
+
+    #[test]
+    fn test_create_camera_for_empty_scene() {
+        // Test camera creation for empty scene
+        let camera = create_camera_for_model(None);
+        
+        // Should create a default camera
+        assert!(camera.dist() > 0.0, "Camera distance should be positive");
+    }
+
+    #[test]
+    fn test_zoom_camera() {
+        // Create a default camera
+        let mut camera = create_camera_for_model(None);
+        let initial_dist = camera.dist();
+        
+        // Zoom in
+        zoom_camera(&mut camera, ZOOM_STEP);
+        assert!(camera.dist() < initial_dist, "Zoom in should decrease distance");
+        
+        // Zoom out
+        zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
+        assert!((camera.dist() - initial_dist).abs() < 0.01, "Zoom in/out should be reversible");
+    }
+
+    #[test]
+    fn test_pan_camera() {
+        // Create a default camera
+        let mut camera = create_camera_for_model(None);
+        let initial_at = camera.at();
+        
+        // Pan right (positive X)
+        pan_camera(&mut camera, 1.0, 0.0, 0.0);
+        let after_pan = camera.at();
+        
+        assert!(after_pan.x > initial_at.x, "Pan right should increase X coordinate");
+        assert_eq!(after_pan.y, initial_at.y, "Pan right should not change Y");
+        assert_eq!(after_pan.z, initial_at.z, "Pan right should not change Z");
     }
 }
