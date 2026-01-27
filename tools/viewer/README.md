@@ -10,6 +10,11 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Zoom**: Mouse scroll wheel
   - **XYZ Axes**: Toggle coordinate axes with 'A' key (X=Red, Y=Green, Z=Blue)
   - **Screenshot capture**: Save current view to PNG with 'P' key (auto-timestamped filenames)
+  - **Print Area Visualization** (NEW!): Configurable build volume wireframe box
+    - Toggle visibility with 'P' key
+    - Configure dimensions with 'C' key
+    - Default: 200x200x200mm
+  - **Menu System** (NEW!): Press 'M' to view current settings
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
@@ -98,6 +103,10 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Right Mouse + Drag**: Pan the view
 - 🖱️ **Scroll Wheel**: Zoom in/out
 - ⌨️ **Arrow Keys**: Pan the view
+- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
+- ⌨️ **M Key**: Toggle menu display (NEW!)
+- ⌨️ **P Key**: Toggle print area visibility (NEW!)
+- ⌨️ **C Key**: Configure print area dimensions (NEW!)
 - ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
 - ⌨️ **A Key**: Toggle XYZ axes (default: visible)
@@ -277,6 +286,19 @@ The viewer provides:
   - Multiple view angles (isometric, top, front, side)
   - Shaded and wireframe rendering modes
 - Detailed mesh inspection capabilities
+
+## Print Area Visualization
+
+The viewer includes a configurable print area (build volume) visualization feature:
+
+- **Toggle Visibility**: Press `P` to show/hide the print area wireframe
+- **Configure Dimensions**: Press `C` to set custom dimensions (width, depth, height)
+- **View Menu**: Press `M` to see current print area settings
+- **Default Size**: 200x200x200mm (suitable for common desktop 3D printers)
+- **Visual Style**: Light blue/gray wireframe box that doesn't obscure the model
+- **Coordinate System**: Centered at origin, extends from Z=0 (build plate) upward
+
+See [PRINT_AREA_FEATURE.md](PRINT_AREA_FEATURE.md) for detailed documentation.
 
 ## Use Cases
 
