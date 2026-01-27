@@ -8,7 +8,6 @@
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
-use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
@@ -79,31 +78,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
-    
-    // Create meshes from the model and add them to the window scene
-    // The meshes are owned by the window and will be rendered each frame
-    create_mesh_nodes(&mut window, &model);
-    
-    // Calculate model bounds for potential future camera positioning
-    // Currently, kiss3d's ArcBall camera handles positioning automatically
-    let (min_bound, max_bound) = calculate_model_bounds(&model);
-    let center = Point3::new(
-        (min_bound.0 + max_bound.0) / 2.0,
-        (min_bound.1 + max_bound.1) / 2.0,
-        (min_bound.2 + max_bound.2) / 2.0,
-    );
-    
-    let size = Vector3::new(
-        max_bound.0 - min_bound.0,
-        max_bound.1 - min_bound.1,
-        max_bound.2 - min_bound.2,
-    );
-    let max_size = size.x.max(size.y).max(size.z);
-    
-    // Future enhancement: Could use center for positioning
-    // For now, using kiss3d's default ArcBall camera which provides good automatic positioning
-    let _ = center; // Acknowledge unused variable
-    
+
     // The ArcBall camera in kiss3d is controlled by mouse automatically
     // Just set a reasonable initial distance
     window.set_framerate_limit(Some(60));
@@ -117,6 +92,22 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     }
 
     print_controls();
+
+    // Track axis visualization state (default: visible)
+    let mut show_axes = true;
+
+    // Calculate axis length based on model size (if model is loaded)
+    let mut axis_length = 100.0; // Default length for empty scene
+    if let Some(ref model) = state.model {
+        let (min_bound, max_bound) = calculate_model_bounds(model);
+        let size = Vector3::new(
+            max_bound.0 - min_bound.0,
+            max_bound.1 - min_bound.1,
+            max_bound.2 - min_bound.2,
+        );
+        let max_size = size.x.max(size.y).max(size.z);
+        axis_length = max_size * 0.5; // 50% of model size
+    }
 
     // Main event loop
     while window.render() {
@@ -142,6 +133,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
+
+                                    // Recalculate axis length based on new model
+                                    let (min_bound, max_bound) = calculate_model_bounds(model);
+                                    let size = Vector3::new(
+                                        max_bound.0 - min_bound.0,
+                                        max_bound.1 - min_bound.1,
+                                        max_bound.2 - min_bound.2,
+                                    );
+                                    let max_size = size.x.max(size.y).max(size.z);
+                                    axis_length = max_size * 0.5;
                                 }
                             }
                             Err(e) => {
@@ -150,8 +151,18 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
+                WindowEvent::Key(Key::A, Action::Release, _) => {
+                    // A key: Toggle XYZ axes
+                    show_axes = !show_axes;
+                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
+                }
                 _ => {}
             }
+        }
+
+        // Draw XYZ axes if visible
+        if show_axes {
+            draw_axes(&mut window, axis_length);
         }
     }
 
@@ -208,34 +219,6 @@ fn print_model_info(model: &Model) {
     println!("  - Unit: {}", model.unit);
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    
-    // Track axis visualization state (default: visible)
-    let mut show_axes = true;
-    
-    // Calculate axis length based on model size
-    let axis_length = max_size * 0.5; // 50% of model size
-    
-    // Main event loop: kiss3d handles window events, input processing, and frame rendering
-    // Each render() call processes events, updates camera based on mouse input, and draws the scene
-    // Returns false when the window is closed, terminating the loop
-    while window.render() {
-        // Handle keyboard events
-        for event in window.events().iter() {
-            if let WindowEvent::Key(key, Action::Release, _) = event.value {
-                if key == Key::A {
-                    show_axes = !show_axes;
-                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
-                }
-            }
-        }
-        
-        // Draw XYZ axes if visible
-        if show_axes {
-            draw_axes(&mut window, axis_length);
-        }
-    }
-    
-    Ok(())
 }
 
 /// Create mesh scene nodes from the 3MF model
@@ -392,21 +375,21 @@ fn count_vertices(model: &Model) -> usize {
 /// X axis = Red, Y axis = Green, Z axis = Blue
 fn draw_axes(window: &mut Window, length: f32) {
     let origin = Point3::origin();
-    
+
     // X axis - Red
     window.draw_line(
         &origin,
         &Point3::new(length, 0.0, 0.0),
         &Point3::new(1.0, 0.0, 0.0), // Red color
     );
-    
+
     // Y axis - Green
     window.draw_line(
         &origin,
         &Point3::new(0.0, length, 0.0),
         &Point3::new(0.0, 1.0, 0.0), // Green color
     );
-    
+
     // Z axis - Blue
     window.draw_line(
         &origin,
