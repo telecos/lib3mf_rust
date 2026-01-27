@@ -212,6 +212,7 @@ struct ViewerState {
     print_area: PrintArea,
     show_menu: bool,
     slice_view: SliceView,
+    show_displacement: bool,
 }
 
 impl ViewerState {
@@ -228,6 +229,7 @@ impl ViewerState {
             print_area: PrintArea::new(),
             show_menu: false,
             slice_view: SliceView::new(),
+            show_displacement: false,
         }
     }
 
@@ -247,6 +249,7 @@ impl ViewerState {
             print_area: PrintArea::new(),
             show_menu: false,
             slice_view,
+            show_displacement: false,
         }
     }
 
@@ -309,10 +312,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
-        state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+        state.mesh_nodes = create_mesh_nodes_with_displacement(
             &mut window,
             state.model.as_ref().unwrap(),
             state.boolean_mode,
+            state.show_displacement,
         );
         state.beam_nodes = create_beam_lattice_nodes(&mut window, state.model.as_ref().unwrap());
         print_model_info(state.model.as_ref().unwrap());
@@ -364,10 +368,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
                                 // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
-                                    state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+                                    state.mesh_nodes = create_mesh_nodes_with_displacement(
                                         &mut window,
                                         model,
                                         state.boolean_mode,
+                                        state.show_displacement,
                                     );
                                     state.beam_nodes =
                                         create_beam_lattice_nodes(&mut window, model);
@@ -418,10 +423,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
                                 // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
-                                    state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+                                    state.mesh_nodes = create_mesh_nodes_with_displacement(
                                         &mut window,
                                         model,
                                         state.boolean_mode,
+                                        state.show_displacement,
                                     );
                                     state.beam_nodes =
                                         create_beam_lattice_nodes(&mut window, model);
@@ -465,10 +471,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         state.mesh_nodes.clear();
 
                         // Create new mesh nodes with boolean-aware coloring
-                        state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+                        state.mesh_nodes = create_mesh_nodes_with_displacement(
                             &mut window,
                             model,
                             state.boolean_mode,
+                            state.show_displacement,
                         );
 
                         // Print boolean operation information if in special mode
@@ -555,6 +562,47 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             "  Height (Z): {} {}",
                             state.print_area.height, state.print_area.unit
                         );
+                    }
+                }
+                WindowEvent::Key(Key::D, Action::Release, _) => {
+                    // D key: Toggle displacement visualization
+                    if let Some(ref model) = state.model {
+                        if has_displacement_data(model) {
+                            state.show_displacement = !state.show_displacement;
+                            println!(
+                                "\nDisplacement Visualization: {}",
+                                if state.show_displacement {
+                                    "ON"
+                                } else {
+                                    "OFF"
+                                }
+                            );
+                            
+                            // Print displacement info when enabling
+                            if state.show_displacement {
+                                let (maps, norm_groups, disp_groups) = count_displacement_resources(model);
+                                let disp_objects = count_displacement_objects(model);
+                                println!("  Displacement Maps: {}", maps);
+                                println!("  Normal Vector Groups: {}", norm_groups);
+                                println!("  Displacement Groups: {}", disp_groups);
+                                println!("  Objects with Displacement: {}", disp_objects);
+                            }
+                            
+                            // Recreate mesh nodes with displacement highlighting
+                            for node in &mut state.mesh_nodes {
+                                node.set_visible(false);
+                            }
+                            state.mesh_nodes.clear();
+                            
+                            state.mesh_nodes = create_mesh_nodes_with_displacement(
+                                &mut window,
+                                model,
+                                state.boolean_mode,
+                                state.show_displacement,
+                            );
+                        } else {
+                            println!("\nNo displacement data in this model");
+                        }
                     }
                 }
                 WindowEvent::Key(Key::Z, Action::Release, _) => {
@@ -738,6 +786,7 @@ fn print_controls() {
     println!("  ⌨️  Ctrl+T                 : Browse test suites");
     println!("  ⌨️  B                      : Toggle beam lattice");
     println!("  ⌨️  V                      : Cycle boolean visualization mode");
+    println!("  ⌨️  D                      : Toggle displacement visualization");
     println!("  ⌨️  S                      : Capture screenshot");
     println!("  ⌨️  ESC / Close Window     : Exit viewer");
     println!();
@@ -776,6 +825,26 @@ fn print_model_info(model: &Model) {
     if boolean_count > 0 {
         println!("  - Boolean Operations: {} operations", boolean_count);
     }
+    
+    // Display displacement information if present
+    if has_displacement_data(model) {
+        let (maps, norm_groups, disp_groups) = count_displacement_resources(model);
+        let disp_objects = count_displacement_objects(model);
+        println!("  - Displacement:");
+        if maps > 0 {
+            println!("      Maps: {}", maps);
+        }
+        if norm_groups > 0 {
+            println!("      Normal Vector Groups: {}", norm_groups);
+        }
+        if disp_groups > 0 {
+            println!("      Displacement Groups: {}", disp_groups);
+        }
+        if disp_objects > 0 {
+            println!("      Objects with Displacement: {}", disp_objects);
+        }
+    }
+    
     println!();
     println!("═══════════════════════════════════════════════════════════");
 }
@@ -1277,6 +1346,36 @@ fn count_boolean_operations(model: &Model) -> usize {
         .count()
 }
 
+/// Check if model has displacement data
+fn has_displacement_data(model: &Model) -> bool {
+    !model.resources.displacement_maps.is_empty()
+        || !model.resources.norm_vector_groups.is_empty()
+        || !model.resources.disp2d_groups.is_empty()
+        || model
+            .resources
+            .objects
+            .iter()
+            .any(|obj| obj.displacement_mesh.is_some())
+}
+
+/// Count displacement resources in the model
+fn count_displacement_resources(model: &Model) -> (usize, usize, usize) {
+    let maps = model.resources.displacement_maps.len();
+    let norm_groups = model.resources.norm_vector_groups.len();
+    let disp_groups = model.resources.disp2d_groups.len();
+    (maps, norm_groups, disp_groups)
+}
+
+/// Count objects with displacement meshes
+fn count_displacement_objects(model: &Model) -> usize {
+    model
+        .resources
+        .objects
+        .iter()
+        .filter(|obj| obj.displacement_mesh.is_some())
+        .count()
+}
+
 /// Print detailed boolean operation information
 fn print_boolean_info(model: &Model) {
     let boolean_objects: Vec<_> = model
@@ -1361,6 +1460,84 @@ fn create_mesh_nodes_with_boolean_mode(
         BooleanMode::ShowInputs => create_mesh_nodes_show_inputs(window, model),
         BooleanMode::HighlightOperands => create_mesh_nodes_highlight_operands(window, model),
     }
+}
+
+/// Create mesh nodes with optional displacement highlighting
+fn create_mesh_nodes_with_displacement(
+    window: &mut Window,
+    model: &Model,
+    mode: BooleanMode,
+    show_displacement: bool,
+) -> Vec<SceneNode> {
+    if show_displacement && has_displacement_data(model) {
+        create_mesh_nodes_highlight_displacement(window, model)
+    } else {
+        create_mesh_nodes_with_boolean_mode(window, model, mode)
+    }
+}
+
+/// Create mesh nodes with displacement highlighting
+fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    let mut nodes = Vec::new();
+
+    // Collect objects with displacement meshes
+    let displacement_object_ids: std::collections::HashSet<usize> = model
+        .resources
+        .objects
+        .iter()
+        .filter(|obj| obj.displacement_mesh.is_some())
+        .map(|obj| obj.id)
+        .collect();
+
+    for item in &model.build.items {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            if let Some(ref mesh_data) = obj.mesh {
+                // Convert vertices to nalgebra Point3
+                let vertices: Vec<Point3<f32>> = mesh_data
+                    .vertices
+                    .iter()
+                    .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                    .collect();
+
+                // Convert triangles to face indices
+                let faces: Vec<Point3<u32>> = mesh_data
+                    .triangles
+                    .iter()
+                    .filter(|t| {
+                        t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+                    })
+                    .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+                    .collect();
+
+                // Create TriMesh
+                let tri_mesh = TriMesh::new(
+                    vertices,
+                    None,
+                    None,
+                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                );
+
+                // Use bright cyan/aqua color for objects with displacement data
+                let color = if displacement_object_ids.contains(&obj.id) {
+                    (0.0, 1.0, 1.0) // Bright cyan for displaced objects
+                } else {
+                    get_object_color(model, obj) // Normal color
+                };
+
+                let mut mesh_node = window.add_trimesh(tri_mesh, IDENTITY_SCALE);
+                mesh_node.set_color(color.0, color.1, color.2);
+
+                nodes.push(mesh_node);
+            }
+        }
+    }
+
+    nodes
 }
 
 /// Create mesh nodes with boolean inputs shown in different colors
@@ -1541,6 +1718,26 @@ fn print_menu(state: &ViewerState) {
         "    Height (Z):    {} {}",
         state.print_area.height, state.print_area.unit
     );
+    
+    // Show displacement status if data is present
+    if let Some(ref model) = state.model {
+        if has_displacement_data(model) {
+            println!(
+                "  Displacement:    {}",
+                if state.show_displacement {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            );
+            let (maps, _, disp_groups) = count_displacement_resources(model);
+            let disp_objects = count_displacement_objects(model);
+            println!("    Maps:          {}", maps);
+            println!("    Groups:        {}", disp_groups);
+            println!("    Objects:       {}", disp_objects);
+        }
+    }
+    
     if let Some(ref path) = state.file_path {
         println!(
             "  File:            {}",
