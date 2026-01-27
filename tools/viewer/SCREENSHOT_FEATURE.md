@@ -150,9 +150,9 @@ If there's an error (e.g., disk full, permission denied), an error message is di
 The screenshot feature uses:
 - **kiss3d's `snap_image()`**: Captures the current framebuffer
 - **image crate**: Saves the captured image as PNG
-- **std::time**: Generates unique timestamps for filenames
+- **chrono crate**: Generates accurate timestamps for filenames
 
-The implementation is minimal and does not require any external dependencies beyond what's already included in the viewer.
+The chrono dependency provides proper date/time formatting for screenshot filenames.
 
 ## Comparison with Export Preview
 
