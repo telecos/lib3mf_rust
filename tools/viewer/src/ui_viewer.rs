@@ -23,6 +23,11 @@ const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
 const GEOMETRY_SEGMENTS: u32 = 8; // Number of segments for cylinder/sphere meshes
 const IDENTITY_SCALE: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0); // Identity scale for meshes
 
+// Constants for camera controls
+const CAMERA_DISTANCE_MULTIPLIER: f32 = 1.5; // Factor for comfortable viewing distance
+const ZOOM_STEP: f32 = 0.9; // Zoom in multiplier (0.9 = 10% closer)
+const PAN_STEP: f32 = 0.05; // Pan amount as percentage of camera distance
+
 /// Color themes for the viewer background
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Theme {
@@ -661,26 +666,22 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 }
                 WindowEvent::Key(Key::Equals, Action::Press, _) | WindowEvent::Key(Key::Add, Action::Press, _) => {
                     // + key: Zoom in
-                    let current_dist = camera.dist();
-                    camera.set_dist(current_dist * 0.9); // Zoom in by 10%
+                    zoom_camera(&mut camera, ZOOM_STEP);
                     println!("Zoom in (distance: {:.1})", camera.dist());
                 }
                 WindowEvent::Key(Key::Minus, Action::Press, _) | WindowEvent::Key(Key::Subtract, Action::Press, _) => {
                     // - key: Zoom out
-                    let current_dist = camera.dist();
-                    camera.set_dist(current_dist * 1.1); // Zoom out by 10%
+                    zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
                     println!("Zoom out (distance: {:.1})", camera.dist());
                 }
                 WindowEvent::Key(Key::PageUp, Action::Press, _) => {
                     // PageUp: Zoom in
-                    let current_dist = camera.dist();
-                    camera.set_dist(current_dist * 0.9);
+                    zoom_camera(&mut camera, ZOOM_STEP);
                     println!("Zoom in (distance: {:.1})", camera.dist());
                 }
                 WindowEvent::Key(Key::PageDown, Action::Press, _) => {
                     // PageDown: Zoom out
-                    let current_dist = camera.dist();
-                    camera.set_dist(current_dist * 1.1);
+                    zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
                     println!("Zoom out (distance: {:.1})", camera.dist());
                 }
                 WindowEvent::Key(Key::F, Action::Release, _) => {
@@ -697,35 +698,23 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 }
                 WindowEvent::Key(Key::Left, Action::Press, _) => {
                     // Left arrow: Pan left (move camera target left)
-                    let at = camera.at();
-                    let dist = camera.dist();
-                    let pan_amount = dist * 0.05; // 5% of current distance
-                    camera.set_at(Point3::new(at.x - pan_amount, at.y, at.z));
+                    pan_camera(&mut camera, -1.0, 0.0, 0.0);
                 }
                 WindowEvent::Key(Key::Right, Action::Press, _) => {
                     // Right arrow: Pan right
-                    let at = camera.at();
-                    let dist = camera.dist();
-                    let pan_amount = dist * 0.05;
-                    camera.set_at(Point3::new(at.x + pan_amount, at.y, at.z));
+                    pan_camera(&mut camera, 1.0, 0.0, 0.0);
                 }
                 WindowEvent::Key(Key::Up, Action::Press, modifiers) 
                     if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
                 {
                     // Up arrow (without Shift): Pan up
-                    let at = camera.at();
-                    let dist = camera.dist();
-                    let pan_amount = dist * 0.05;
-                    camera.set_at(Point3::new(at.x, at.y, at.z + pan_amount));
+                    pan_camera(&mut camera, 0.0, 0.0, 1.0);
                 }
                 WindowEvent::Key(Key::Down, Action::Press, modifiers) 
                     if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
                 {
                     // Down arrow (without Shift): Pan down
-                    let at = camera.at();
-                    let dist = camera.dist();
-                    let pan_amount = dist * 0.05;
-                    camera.set_at(Point3::new(at.x, at.y, at.z - pan_amount));
+                    pan_camera(&mut camera, 0.0, 0.0, -1.0);
                 }
                 _ => {}
             }
@@ -949,28 +938,33 @@ fn calculate_model_bounds(model: &Model) -> ((f32, f32, f32), (f32, f32, f32)) {
     ((min_x, min_y, min_z), (max_x, max_y, max_z))
 }
 
+/// Calculate the center and optimal distance for viewing the model
+fn calculate_camera_params(model: &Model) -> (Point3<f32>, f32) {
+    let (min_bound, max_bound) = calculate_model_bounds(model);
+    
+    // Calculate the center point of the model
+    let center = Point3::new(
+        (min_bound.0 + max_bound.0) / 2.0,
+        (min_bound.1 + max_bound.1) / 2.0,
+        (min_bound.2 + max_bound.2) / 2.0,
+    );
+    
+    // Calculate the diagonal distance to determine camera distance
+    let size = Vector3::new(
+        max_bound.0 - min_bound.0,
+        max_bound.1 - min_bound.1,
+        max_bound.2 - min_bound.2,
+    );
+    let diagonal = size.magnitude();
+    
+    // Return center and optimal viewing distance
+    (center, diagonal * CAMERA_DISTANCE_MULTIPLIER)
+}
+
 /// Create a camera positioned to view the model
 fn create_camera_for_model(model: Option<&Model>) -> ArcBall {
     if let Some(model) = model {
-        let (min_bound, max_bound) = calculate_model_bounds(model);
-        
-        // Calculate the center point of the model
-        let center = Point3::new(
-            (min_bound.0 + max_bound.0) / 2.0,
-            (min_bound.1 + max_bound.1) / 2.0,
-            (min_bound.2 + max_bound.2) / 2.0,
-        );
-        
-        // Calculate the diagonal distance to determine camera distance
-        let size = Vector3::new(
-            max_bound.0 - min_bound.0,
-            max_bound.1 - min_bound.1,
-            max_bound.2 - min_bound.2,
-        );
-        let diagonal = size.magnitude();
-        
-        // Position camera at a distance that shows the entire model
-        let distance = diagonal * 1.5;
+        let (center, distance) = calculate_camera_params(model);
         
         // Camera eye position (looking from top-right-front)
         let eye = Point3::new(
@@ -990,26 +984,29 @@ fn create_camera_for_model(model: Option<&Model>) -> ArcBall {
 
 /// Fit the camera to show the entire model
 fn fit_camera_to_model(camera: &mut ArcBall, model: &Model) {
-    let (min_bound, max_bound) = calculate_model_bounds(model);
-    
-    // Calculate the center point
-    let center = Point3::new(
-        (min_bound.0 + max_bound.0) / 2.0,
-        (min_bound.1 + max_bound.1) / 2.0,
-        (min_bound.2 + max_bound.2) / 2.0,
-    );
-    
-    // Calculate the diagonal to determine distance
-    let size = Vector3::new(
-        max_bound.0 - min_bound.0,
-        max_bound.1 - min_bound.1,
-        max_bound.2 - min_bound.2,
-    );
-    let diagonal = size.magnitude();
+    let (center, distance) = calculate_camera_params(model);
     
     // Set camera to look at center with appropriate distance
     camera.set_at(center);
-    camera.set_dist(diagonal * 1.5);
+    camera.set_dist(distance);
+}
+
+/// Zoom the camera by a given factor
+fn zoom_camera(camera: &mut ArcBall, factor: f32) {
+    let current_dist = camera.dist();
+    camera.set_dist(current_dist * factor);
+}
+
+/// Pan the camera in a given direction
+fn pan_camera(camera: &mut ArcBall, delta_x: f32, delta_y: f32, delta_z: f32) {
+    let at = camera.at();
+    let dist = camera.dist();
+    let pan_amount = dist * PAN_STEP;
+    camera.set_at(Point3::new(
+        at.x + delta_x * pan_amount,
+        at.y + delta_y * pan_amount,
+        at.z + delta_z * pan_amount,
+    ));
 }
 
 /// Get color for an object (from materials or default)
