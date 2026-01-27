@@ -167,6 +167,26 @@ struct SliceView {
     show_plane: bool,
     /// Computed contour line segments at current Z height
     contours: Vec<LineSegment2D>,
+    /// Slice stack mode
+    use_slice_stack: bool,
+    /// Current slice index when using slice stack
+    current_slice_index: usize,
+    /// Total number of slices in the stack
+    total_slices: usize,
+    /// Animation state
+    animation_playing: bool,
+    /// Animation speed (slices per second)
+    animation_speed: f32,
+    /// Animation time accumulator
+    animation_time: f32,
+    /// Loop animation
+    animation_loop: bool,
+    /// Spread factor for 3D visualization (1.0 = actual positions, >1.0 = spread apart)
+    spread_factor: f32,
+    /// Show all slices in 3D stack
+    show_stack_3d: bool,
+    /// Render mode: true = filled, false = outline
+    filled_mode: bool,
 }
 
 impl SliceView {
@@ -179,6 +199,16 @@ impl SliceView {
             visible: false,
             show_plane: true,
             contours: Vec::new(),
+            use_slice_stack: false,
+            current_slice_index: 0,
+            total_slices: 0,
+            animation_playing: false,
+            animation_speed: 2.0, // 2 slices per second
+            animation_time: 0.0,
+            animation_loop: true,
+            spread_factor: 1.0,
+            show_stack_3d: false,
+            filled_mode: false,
         }
     }
 
@@ -189,6 +219,14 @@ impl SliceView {
         self.max_z = max_bound.2;
         // Start at middle of the model
         self.z_height = (self.min_z + self.max_z) / 2.0;
+        
+        // Check if model has slice stacks
+        if !model.resources.slice_stacks.is_empty() {
+            self.total_slices = model.resources.slice_stacks[0].slices.len();
+            if self.total_slices > 0 {
+                self.current_slice_index = 0;
+            }
+        }
     }
 
     /// Move the slice plane up or down
@@ -204,6 +242,96 @@ impl SliceView {
     /// Toggle visibility of the slice plane in 3D view
     fn toggle_plane(&mut self) {
         self.show_plane = !self.show_plane;
+    }
+    
+    /// Navigate to next slice in stack
+    fn next_slice(&mut self) {
+        if self.total_slices > 0 {
+            self.current_slice_index = (self.current_slice_index + 1).min(self.total_slices - 1);
+        }
+    }
+    
+    /// Navigate to previous slice in stack
+    fn prev_slice(&mut self) {
+        if self.current_slice_index > 0 {
+            self.current_slice_index -= 1;
+        }
+    }
+    
+    /// Jump to first slice
+    fn first_slice(&mut self) {
+        self.current_slice_index = 0;
+    }
+    
+    /// Jump to last slice
+    fn last_slice(&mut self) {
+        if self.total_slices > 0 {
+            self.current_slice_index = self.total_slices - 1;
+        }
+    }
+    
+    /// Toggle animation
+    fn toggle_animation(&mut self) {
+        self.animation_playing = !self.animation_playing;
+        self.animation_time = 0.0;
+    }
+    
+    /// Update animation state
+    fn update_animation(&mut self, delta_time: f32) {
+        if self.animation_playing && self.total_slices > 0 {
+            self.animation_time += delta_time;
+            let slices_elapsed = (self.animation_time * self.animation_speed) as usize;
+            
+            if slices_elapsed > 0 {
+                // Preserve fractional part for more accurate timing
+                self.animation_time -= slices_elapsed as f32 / self.animation_speed;
+                self.current_slice_index += slices_elapsed;
+                
+                if self.current_slice_index >= self.total_slices {
+                    if self.animation_loop {
+                        self.current_slice_index %= self.total_slices;
+                    } else {
+                        self.current_slice_index = self.total_slices - 1;
+                        self.animation_playing = false;
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Increase animation speed
+    fn increase_speed(&mut self) {
+        self.animation_speed = (self.animation_speed * 1.5).min(20.0);
+    }
+    
+    /// Decrease animation speed
+    fn decrease_speed(&mut self) {
+        self.animation_speed = (self.animation_speed / 1.5).max(0.1);
+    }
+    
+    /// Increase spread factor
+    fn increase_spread(&mut self) {
+        self.spread_factor = (self.spread_factor + 0.2).min(5.0);
+    }
+    
+    /// Decrease spread factor
+    fn decrease_spread(&mut self) {
+        self.spread_factor = (self.spread_factor - 0.2).max(1.0);
+    }
+    
+    /// Toggle 3D stack visualization
+    fn toggle_stack_3d(&mut self) {
+        self.show_stack_3d = !self.show_stack_3d;
+    }
+    
+    /// Toggle filled/outline mode
+    fn toggle_filled_mode(&mut self) {
+        self.filled_mode = !self.filled_mode;
+    }
+    
+    /// Toggle slice stack mode
+    fn toggle_slice_stack_mode(&mut self) {
+        self.use_slice_stack = !self.use_slice_stack;
     }
 }
 
@@ -507,9 +635,33 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
                 WindowEvent::Key(Key::S, Action::Release, _) => {
-                    // S key: Capture screenshot
-                    if let Err(e) = capture_screenshot(&window) {
-                        eprintln!("\n✗ Error capturing screenshot: {}", e);
+                    // S key: Toggle slice stack mode OR capture screenshot
+                    // Priority: Slice stack mode when slice view is visible and has slice stacks
+                    if state.slice_view.visible && state.model.is_some() {
+                        if let Some(ref model) = state.model {
+                            if !model.resources.slice_stacks.is_empty() {
+                                // Toggle slice stack mode
+                                state.slice_view.toggle_slice_stack_mode();
+                                println!(
+                                    "\nSlice Stack Mode: {}",
+                                    if state.slice_view.use_slice_stack {
+                                        "ON (use Up/Down to navigate)"
+                                    } else {
+                                        "OFF (use Shift+Up/Down for Z height)"
+                                    }
+                                );
+                            } else {
+                                // No slice stacks - capture screenshot
+                                if let Err(e) = capture_screenshot(&window) {
+                                    eprintln!("\n✗ Error capturing screenshot: {}", e);
+                                }
+                            }
+                        }
+                    } else {
+                        // S key: Capture screenshot (when slice view not visible or no model)
+                        if let Err(e) = capture_screenshot(&window) {
+                            eprintln!("\n✗ Error capturing screenshot: {}", e);
+                        }
                     }
                 }
                 WindowEvent::Key(Key::M, Action::Release, _) => {
@@ -622,65 +774,168 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         if state.slice_view.visible {
                             // Compute contours when enabling
                             if let Some(ref model) = state.model {
-                                state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
-                                println!(
-                                    "\nSlice View: ON at Z = {:.2} {} ({} segments)",
-                                    state.slice_view.z_height,
-                                    model.unit,
-                                    state.slice_view.contours.len()
-                                );
-                                println!("  Z range: {:.2} to {:.2} {}", 
-                                    state.slice_view.min_z, 
-                                    state.slice_view.max_z,
-                                    model.unit
-                                );
-                                println!("  Use Up/Down arrows (with Shift) to adjust Z height");
-                                println!("  Use X to export slice to PNG");
-                                println!("  Use L to toggle slice plane visibility");
+                                // Check for slice stacks
+                                if !model.resources.slice_stacks.is_empty() {
+                                    // Enable slice stack mode automatically
+                                    state.slice_view.use_slice_stack = true;
+                                    
+                                    let stack = &model.resources.slice_stacks[0];
+                                    println!("\n✓ Slice Stack Detected!");
+                                    println!("  Total Slices: {}", stack.slices.len());
+                                    println!("  Z Bottom: {:.3} {}", stack.zbottom, model.unit);
+                                    if !stack.slices.is_empty() {
+                                        let z_range = stack.slices.last().unwrap().ztop - stack.zbottom;
+                                        let avg_spacing = if stack.slices.len() > 1 {
+                                            z_range / (stack.slices.len() - 1) as f64
+                                        } else {
+                                            0.0
+                                        };
+                                        println!("  Z Top: {:.3} {}", stack.slices.last().unwrap().ztop, model.unit);
+                                        println!("  Z Range: {:.3} {}", z_range, model.unit);
+                                        println!("  Average Layer Height: {:.3} {}", avg_spacing, model.unit);
+                                    }
+                                    println!("\nSlice Stack Mode: ON");
+                                    println!("  Current Slice: {} / {}", state.slice_view.current_slice_index + 1, state.slice_view.total_slices);
+                                    println!("\nControls:");
+                                    println!("  Up/Down arrows     - Navigate slices");
+                                    println!("  Home/End           - Jump to first/last slice");
+                                    println!("  Space              - Play/pause animation");
+                                    println!("  [ / ]              - Adjust animation speed");
+                                    println!("  Shift+Up/Down      - Adjust spread factor (in 3D mode)");
+                                    println!("  S                  - Toggle slice stack mode");
+                                    println!("  K                  - Toggle 3D stack visualization");
+                                    println!("  N                  - Toggle filled/outline mode");
+                                    println!("  L                  - Toggle slice plane visibility");
+                                    println!("  X                  - Export slice to PNG");
+                                } else {
+                                    state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                    println!(
+                                        "\nSlice View: ON at Z = {:.2} {} ({} segments)",
+                                        state.slice_view.z_height,
+                                        model.unit,
+                                        state.slice_view.contours.len()
+                                    );
+                                    println!("  Z range: {:.2} to {:.2} {}", 
+                                        state.slice_view.min_z, 
+                                        state.slice_view.max_z,
+                                        model.unit
+                                    );
+                                    println!("  Use Up/Down arrows (with Shift) to adjust Z height");
+                                    println!("  Use X to export slice to PNG");
+                                    println!("  Use L to toggle slice plane visibility");
+                                }
                             }
                         } else {
                             println!("\nSlice View: OFF");
                         }
                     }
                 }
-                WindowEvent::Key(Key::Up, Action::Press, modifiers)
-                    if modifiers.contains(kiss3d::event::Modifiers::Shift) =>
-                {
-                    // Shift+Up: Increase Z height
+                WindowEvent::Key(Key::Up, Action::Press, modifiers) => {
                     if state.slice_view.visible && state.model.is_some() {
-                        let delta = (state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
-                        state.slice_view.adjust_z(delta);
-                        
-                        // Recompute contours
-                        if let Some(ref model) = state.model {
-                            state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
-                            println!(
-                                "Slice Z: {:.2} {} ({} segments)",
-                                state.slice_view.z_height,
-                                model.unit,
-                                state.slice_view.contours.len()
-                            );
+                        if modifiers.contains(kiss3d::event::Modifiers::Shift) {
+                            // Shift+Up: Adjust spread factor or Z height
+                            if state.slice_view.use_slice_stack && state.slice_view.show_stack_3d {
+                                state.slice_view.increase_spread();
+                                println!("Spread factor: {:.1}x", state.slice_view.spread_factor);
+                            } else {
+                                // Increase Z height
+                                let delta = (state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
+                                state.slice_view.adjust_z(delta);
+                                
+                                // Recompute contours
+                                if let Some(ref model) = state.model {
+                                    state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                    println!(
+                                        "Slice Z: {:.2} {} ({} segments)",
+                                        state.slice_view.z_height,
+                                        model.unit,
+                                        state.slice_view.contours.len()
+                                    );
+                                }
+                            }
+                        } else {
+                            // Up without modifier: Navigate to next slice in stack
+                            if state.slice_view.use_slice_stack && state.slice_view.total_slices > 0 {
+                                state.slice_view.next_slice();
+                                if let Some(ref model) = state.model {
+                                    if !model.resources.slice_stacks.is_empty() {
+                                        let stack = &model.resources.slice_stacks[0];
+                                        if state.slice_view.current_slice_index < stack.slices.len() {
+                                            let slice = &stack.slices[state.slice_view.current_slice_index];
+                                            println!(
+                                                "Slice {} / {} - Z: {:.3} {} ({} vertices, {} polygons)",
+                                                state.slice_view.current_slice_index + 1,
+                                                state.slice_view.total_slices,
+                                                slice.ztop,
+                                                model.unit,
+                                                slice.vertices.len(),
+                                                slice.polygons.len()
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Pan camera up when slice view not in stack mode
+                                pan_camera(&mut camera, 0.0, 0.0, 1.0);
+                            }
                         }
+                    } else if !modifiers.contains(kiss3d::event::Modifiers::Shift) {
+                        // Pan camera up when slice view not visible
+                        pan_camera(&mut camera, 0.0, 0.0, 1.0);
                     }
                 }
-                WindowEvent::Key(Key::Down, Action::Press, modifiers)
-                    if modifiers.contains(kiss3d::event::Modifiers::Shift) =>
-                {
-                    // Shift+Down: Decrease Z height
+                WindowEvent::Key(Key::Down, Action::Press, modifiers) => {
                     if state.slice_view.visible && state.model.is_some() {
-                        let delta = -(state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
-                        state.slice_view.adjust_z(delta);
-                        
-                        // Recompute contours
-                        if let Some(ref model) = state.model {
-                            state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
-                            println!(
-                                "Slice Z: {:.2} {} ({} segments)",
-                                state.slice_view.z_height,
-                                model.unit,
-                                state.slice_view.contours.len()
-                            );
+                        if modifiers.contains(kiss3d::event::Modifiers::Shift) {
+                            // Shift+Down: Adjust spread factor or Z height
+                            if state.slice_view.use_slice_stack && state.slice_view.show_stack_3d {
+                                state.slice_view.decrease_spread();
+                                println!("Spread factor: {:.1}x", state.slice_view.spread_factor);
+                            } else {
+                                // Decrease Z height
+                                let delta = -(state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
+                                state.slice_view.adjust_z(delta);
+                                
+                                // Recompute contours
+                                if let Some(ref model) = state.model {
+                                    state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                    println!(
+                                        "Slice Z: {:.2} {} ({} segments)",
+                                        state.slice_view.z_height,
+                                        model.unit,
+                                        state.slice_view.contours.len()
+                                    );
+                                }
+                            }
+                        } else {
+                            // Down without modifier: Navigate to previous slice in stack
+                            if state.slice_view.use_slice_stack && state.slice_view.total_slices > 0 {
+                                state.slice_view.prev_slice();
+                                if let Some(ref model) = state.model {
+                                    if !model.resources.slice_stacks.is_empty() {
+                                        let stack = &model.resources.slice_stacks[0];
+                                        if state.slice_view.current_slice_index < stack.slices.len() {
+                                            let slice = &stack.slices[state.slice_view.current_slice_index];
+                                            println!(
+                                                "Slice {} / {} - Z: {:.3} {} ({} vertices, {} polygons)",
+                                                state.slice_view.current_slice_index + 1,
+                                                state.slice_view.total_slices,
+                                                slice.ztop,
+                                                model.unit,
+                                                slice.vertices.len(),
+                                                slice.polygons.len()
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Pan camera down when slice view not in stack mode
+                                pan_camera(&mut camera, 0.0, 0.0, -1.0);
+                            }
                         }
+                    } else if !modifiers.contains(kiss3d::event::Modifiers::Shift) {
+                        // Pan camera down when slice view not visible
+                        pan_camera(&mut camera, 0.0, 0.0, -1.0);
                     }
                 }
                 WindowEvent::Key(Key::L, Action::Release, _) => {
@@ -708,6 +963,108 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     } else if !state.slice_view.visible {
                         println!("\nSlice view is not enabled. Press Z to enable it first.");
+                    }
+                }
+                WindowEvent::Key(Key::K, Action::Release, _) => {
+                    // K key: Toggle 3D stack visualization
+                    if state.slice_view.visible && state.slice_view.use_slice_stack {
+                        state.slice_view.toggle_stack_3d();
+                        println!(
+                            "\n3D Stack Visualization: {}",
+                            if state.slice_view.show_stack_3d {
+                                "ON"
+                            } else {
+                                "OFF"
+                            }
+                        );
+                        if state.slice_view.show_stack_3d {
+                            println!("  Use Shift+Up/Down to adjust spread factor");
+                            println!("  Current spread: {:.1}x", state.slice_view.spread_factor);
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::Space, Action::Release, _) => {
+                    // Space: Play/pause slice animation
+                    if state.slice_view.visible && state.slice_view.use_slice_stack {
+                        state.slice_view.toggle_animation();
+                        println!(
+                            "\nSlice Animation: {}",
+                            if state.slice_view.animation_playing {
+                                "PLAYING"
+                            } else {
+                                "PAUSED"
+                            }
+                        );
+                        if state.slice_view.animation_playing {
+                            println!("  Speed: {:.1} slices/sec", state.slice_view.animation_speed);
+                            println!("  Loop: {}", if state.slice_view.animation_loop { "ON" } else { "OFF" });
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::Home, Action::Release, _) if state.slice_view.visible && state.slice_view.use_slice_stack => {
+                    // Home key: Jump to first slice (when slice stack mode active)
+                    state.slice_view.first_slice();
+                    if let Some(ref model) = state.model {
+                        if !model.resources.slice_stacks.is_empty() {
+                            let stack = &model.resources.slice_stacks[0];
+                            if !stack.slices.is_empty() {
+                                let slice = &stack.slices[0];
+                                println!(
+                                    "First Slice - Z: {:.3} {} ({} vertices, {} polygons)",
+                                    slice.ztop,
+                                    model.unit,
+                                    slice.vertices.len(),
+                                    slice.polygons.len()
+                                );
+                            }
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::End, Action::Release, _) if state.slice_view.visible && state.slice_view.use_slice_stack => {
+                    // End key: Jump to last slice (when slice stack mode active)
+                    state.slice_view.last_slice();
+                    if let Some(ref model) = state.model {
+                        if !model.resources.slice_stacks.is_empty() {
+                            let stack = &model.resources.slice_stacks[0];
+                            if state.slice_view.current_slice_index < stack.slices.len() {
+                                let slice = &stack.slices[state.slice_view.current_slice_index];
+                                println!(
+                                    "Last Slice - Z: {:.3} {} ({} vertices, {} polygons)",
+                                    slice.ztop,
+                                    model.unit,
+                                    slice.vertices.len(),
+                                    slice.polygons.len()
+                                );
+                            }
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::RBracket, Action::Release, _) => {
+                    // ]: Increase animation speed
+                    if state.slice_view.visible && state.slice_view.use_slice_stack {
+                        state.slice_view.increase_speed();
+                        println!("Animation speed: {:.1} slices/sec", state.slice_view.animation_speed);
+                    }
+                }
+                WindowEvent::Key(Key::LBracket, Action::Release, _) => {
+                    // [: Decrease animation speed
+                    if state.slice_view.visible && state.slice_view.use_slice_stack {
+                        state.slice_view.decrease_speed();
+                        println!("Animation speed: {:.1} slices/sec", state.slice_view.animation_speed);
+                    }
+                }
+                WindowEvent::Key(Key::N, Action::Release, _) => {
+                    // N key: Toggle filled/outline mode for slices
+                    if state.slice_view.visible && state.slice_view.use_slice_stack {
+                        state.slice_view.toggle_filled_mode();
+                        println!(
+                            "\nSlice Render Mode: {}",
+                            if state.slice_view.filled_mode {
+                                "FILLED"
+                            } else {
+                                "OUTLINE"
+                            }
+                        );
                     }
                 }
                 WindowEvent::Key(Key::Equals, Action::Press, _) 
@@ -744,18 +1101,6 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     // Right arrow: Pan view right
                     pan_camera(&mut camera, 1.0, 0.0, 0.0);
                 }
-                WindowEvent::Key(Key::Up, Action::Press, modifiers) 
-                    if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
-                {
-                    // Up arrow (without Shift): Pan view up
-                    pan_camera(&mut camera, 0.0, 0.0, 1.0);
-                }
-                WindowEvent::Key(Key::Down, Action::Press, modifiers) 
-                    if !modifiers.contains(kiss3d::event::Modifiers::Shift) =>
-                {
-                    // Down arrow (without Shift): Pan view down
-                    pan_camera(&mut camera, 0.0, 0.0, -1.0);
-                }
                 _ => {}
             }
         }
@@ -775,13 +1120,33 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
             if let Some(ref model) = state.model {
                 let bounds = calculate_model_bounds(model);
                 
-                // Draw slice plane if enabled
-                if state.slice_view.show_plane {
-                    draw_slice_plane(&mut window, &state.slice_view, bounds);
+                // Update animation if playing
+                if state.slice_view.animation_playing {
+                    let delta_time = 1.0 / 60.0; // Assume ~60 FPS
+                    state.slice_view.update_animation(delta_time);
                 }
                 
-                // Draw slice contours
-                draw_slice_contours(&mut window, &state.slice_view);
+                if state.slice_view.use_slice_stack && !model.resources.slice_stacks.is_empty() {
+                    // Render slice stack data
+                    if state.slice_view.show_stack_3d {
+                        // Render all slices in 3D
+                        draw_slice_stack_3d(&mut window, &state.slice_view, &model.resources.slice_stacks[0]);
+                    } else {
+                        // Render current slice only
+                        if state.slice_view.current_slice_index < model.resources.slice_stacks[0].slices.len() {
+                            draw_slice_stack_single(&mut window, &state.slice_view, &model.resources.slice_stacks[0]);
+                        }
+                    }
+                } else {
+                    // Original slice view mode (computed from mesh)
+                    // Draw slice plane if enabled
+                    if state.slice_view.show_plane {
+                        draw_slice_plane(&mut window, &state.slice_view, bounds);
+                    }
+                    
+                    // Draw slice contours
+                    draw_slice_contours(&mut window, &state.slice_view);
+                }
             }
         }
     }
@@ -2091,6 +2456,125 @@ fn draw_slice_contours(window: &mut Window, slice_view: &SliceView) {
         );
     }
 }
+
+/// Draw a single slice from the slice stack at current index
+fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &lib3mf::model::SliceStack) {
+    use lib3mf::model::Vertex2D;
+    
+    // Early return if slice stack is empty or index is out of bounds
+    if stack.slices.is_empty() || slice_view.current_slice_index >= stack.slices.len() {
+        return;
+    }
+    
+    let slice = &stack.slices[slice_view.current_slice_index];
+    let z = slice.ztop as f32;
+    
+    // Color based on position in stack (gradient from blue to red)
+    let t = slice_view.current_slice_index as f32 / stack.slices.len() as f32;
+    let color = Point3::new(t, 0.0, 1.0 - t);
+    
+    // Draw each polygon in the slice
+    for polygon in &slice.polygons {
+        if polygon.startv >= slice.vertices.len() {
+            continue;
+        }
+        
+        // Build the polygon vertices
+        let mut vertices: Vec<&Vertex2D> = Vec::new();
+        vertices.push(&slice.vertices[polygon.startv]);
+        
+        for segment in &polygon.segments {
+            if segment.v2 < slice.vertices.len() {
+                vertices.push(&slice.vertices[segment.v2]);
+            }
+        }
+        
+        // Draw polygon edges
+        for i in 0..vertices.len() {
+            let v1 = vertices[i];
+            let v2 = vertices[(i + 1) % vertices.len()];
+            
+            window.draw_line(
+                &Point3::new(v1.x as f32, v1.y as f32, z),
+                &Point3::new(v2.x as f32, v2.y as f32, z),
+                &color,
+            );
+        }
+        
+        // If filled mode, draw filled triangles (simple fan triangulation)
+        if slice_view.filled_mode && vertices.len() >= 3 {
+            // Note: kiss3d doesn't have a simple filled polygon primitive
+            // So we'll just draw more lines to create a denser visualization
+            let center_x = vertices.iter().map(|v| v.x as f32).sum::<f32>() / vertices.len() as f32;
+            let center_y = vertices.iter().map(|v| v.y as f32).sum::<f32>() / vertices.len() as f32;
+            let center = Point3::new(center_x, center_y, z);
+            
+            for v in vertices.iter() {
+                window.draw_line(
+                    &Point3::new(v.x as f32, v.y as f32, z),
+                    &center,
+                    &color,
+                );
+            }
+        }
+    }
+}
+
+/// Draw all slices in the stack in 3D
+fn draw_slice_stack_3d(window: &mut Window, slice_view: &SliceView, stack: &lib3mf::model::SliceStack) {
+    use lib3mf::model::Vertex2D;
+    
+    // Early return if slice stack is empty
+    if stack.slices.is_empty() {
+        return;
+    }
+    
+    for (slice_idx, slice) in stack.slices.iter().enumerate() {
+        // Apply spread factor
+        let z = slice.ztop as f32 * slice_view.spread_factor;
+        
+        // Color gradient from blue (bottom) to red (top)
+        let t = slice_idx as f32 / stack.slices.len() as f32;
+        let color = Point3::new(t, 0.0, 1.0 - t);
+        
+        // Highlight current slice with brighter color
+        let color = if slice_idx == slice_view.current_slice_index {
+            Point3::new(1.0, 1.0, 0.0) // Yellow for current slice
+        } else {
+            color
+        };
+        
+        // Draw each polygon in the slice
+        for polygon in &slice.polygons {
+            if polygon.startv >= slice.vertices.len() {
+                continue;
+            }
+            
+            // Build the polygon vertices
+            let mut vertices: Vec<&Vertex2D> = Vec::new();
+            vertices.push(&slice.vertices[polygon.startv]);
+            
+            for segment in &polygon.segments {
+                if segment.v2 < slice.vertices.len() {
+                    vertices.push(&slice.vertices[segment.v2]);
+                }
+            }
+            
+            // Draw polygon edges
+            for i in 0..vertices.len() {
+                let v1 = vertices[i];
+                let v2 = vertices[(i + 1) % vertices.len()];
+                
+                window.draw_line(
+                    &Point3::new(v1.x as f32, v1.y as f32, z),
+                    &Point3::new(v2.x as f32, v2.y as f32, z),
+                    &color,
+                );
+            }
+        }
+    }
+}
+
 
 /// Export slice view to PNG file
 fn export_slice_to_png(
