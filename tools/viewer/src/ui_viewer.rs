@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 /// Color themes for the viewer background
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 enum Theme {
     Dark,
     Light,
@@ -131,7 +132,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
     window.set_framerate_limit(Some(60));
-    
+
     // Set initial background color based on theme
     let bg_color = state.theme.background_color();
     window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
