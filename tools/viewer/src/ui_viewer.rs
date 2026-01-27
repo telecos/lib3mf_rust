@@ -2608,6 +2608,87 @@ fn triangle_plane_intersection(
     }
 }
 
+/// Compute beam-plane intersection for a cylindrical beam
+/// Returns a circle in 2D if the beam crosses the Z plane
+fn beam_plane_intersection(
+    p1: (f32, f32, f32),
+    p2: (f32, f32, f32),
+    r1: f32,
+    r2: f32,
+    z_height: f32,
+) -> Option<(Point2D, f32)> {
+    let (x1, y1, z1) = p1;
+    let (x2, y2, z2) = p2;
+
+    // Check if beam crosses Z plane (endpoints on different sides)
+    if (z1 - z_height) * (z2 - z_height) > 0.0 {
+        return None; // Both endpoints on same side
+    }
+
+    // Handle edge case where beam is exactly on the plane
+    if (z1 - z_height).abs() < 1e-6 && (z2 - z_height).abs() < 1e-6 {
+        return None; // Beam lies in plane - degenerate case
+    }
+
+    // Find intersection point along beam axis
+    let t = (z_height - z1) / (z2 - z1);
+    
+    // Clamp t to [0, 1] to handle numerical precision issues
+    let t = t.clamp(0.0, 1.0);
+    
+    let center_x = x1 + t * (x2 - x1);
+    let center_y = y1 + t * (y2 - y1);
+
+    // Interpolate radius for tapered beams
+    let radius = r1 + t * (r2 - r1);
+
+    Some((Point2D { x: center_x, y: center_y }, radius))
+}
+
+/// Compute ball-plane intersection for a spherical ball joint
+/// Returns a circle in 2D if the sphere intersects the Z plane
+fn ball_plane_intersection(
+    center: (f32, f32, f32),
+    radius: f32,
+    z_height: f32,
+) -> Option<(Point2D, f32)> {
+    let (x, y, z) = center;
+    let dz = (z - z_height).abs();
+    
+    if dz > radius {
+        return None; // Plane doesn't intersect sphere
+    }
+
+    // Circle radius at slice height (from sphere geometry: r^2 = r_slice^2 + dz^2)
+    let slice_radius = (radius * radius - dz * dz).sqrt();
+
+    Some((Point2D { x, y }, slice_radius))
+}
+
+/// Convert a circle to a polygon approximation with specified number of segments
+fn circle_to_line_segments(center: Point2D, radius: f32, segments: u32) -> Vec<LineSegment2D> {
+    let mut line_segments = Vec::with_capacity(segments as usize);
+    let two_pi = 2.0 * std::f32::consts::PI;
+    
+    for i in 0..segments {
+        let angle1 = two_pi * (i as f32) / (segments as f32);
+        let angle2 = two_pi * ((i + 1) as f32) / (segments as f32);
+        
+        let p1 = Point2D {
+            x: center.x + radius * angle1.cos(),
+            y: center.y + radius * angle1.sin(),
+        };
+        let p2 = Point2D {
+            x: center.x + radius * angle2.cos(),
+            y: center.y + radius * angle2.sin(),
+        };
+        
+        line_segments.push(LineSegment2D { start: p1, end: p2 });
+    }
+    
+    line_segments
+}
+
 /// Compute all slice contours for a model at a given Z height
 fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
     let mut segments = Vec::new();
@@ -2640,6 +2721,53 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
 
                     if let Some(segment) = triangle_plane_intersection(p1, p2, p3, z_height) {
                         segments.push(segment);
+                    }
+                }
+
+                // Process beam lattices (NEW)
+                if let Some(ref beamset) = mesh.beamset {
+                    // Process beams
+                    for beam in &beamset.beams {
+                        // Validate vertex indices
+                        if beam.v1 >= mesh.vertices.len() || beam.v2 >= mesh.vertices.len() {
+                            continue; // Skip invalid beams
+                        }
+
+                        let v1 = &mesh.vertices[beam.v1];
+                        let v2 = &mesh.vertices[beam.v2];
+
+                        let p1 = (v1.x as f32, v1.y as f32, v1.z as f32);
+                        let p2 = (v2.x as f32, v2.y as f32, v2.z as f32);
+
+                        // Get beam radii (with fallbacks to beamset defaults)
+                        let r1 = beam.r1.unwrap_or(beamset.radius) as f32;
+                        let r2 = beam.r2.unwrap_or(r1 as f64) as f32;
+
+                        if let Some((center, radius)) = beam_plane_intersection(p1, p2, r1, r2, z_height) {
+                            // Convert circle to polygon segments (16 segments per circle)
+                            segments.extend(circle_to_line_segments(center, radius, 16));
+                        }
+                    }
+
+                    // Process ball joints (if present)
+                    for ball in &beamset.balls {
+                        // Validate vertex index
+                        if ball.vindex >= mesh.vertices.len() {
+                            continue; // Skip invalid balls
+                        }
+
+                        let vertex = &mesh.vertices[ball.vindex];
+                        let center = (vertex.x as f32, vertex.y as f32, vertex.z as f32);
+
+                        // Get ball radius (with fallback to beamset ball_radius or default radius)
+                        let radius = ball.radius
+                            .or(beamset.ball_radius)
+                            .unwrap_or(beamset.radius) as f32;
+
+                        if let Some((center_2d, slice_radius)) = ball_plane_intersection(center, radius, z_height) {
+                            // Convert circle to polygon segments (16 segments per circle)
+                            segments.extend(circle_to_line_segments(center_2d, slice_radius, 16));
+                        }
                     }
                 }
             }
