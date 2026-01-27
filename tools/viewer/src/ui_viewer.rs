@@ -216,19 +216,6 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
-                WindowEvent::Key(Key::T, Action::Press, _) => {
-                    // T: Cycle through themes
-                    state.cycle_theme(&mut window);
-                }
-                WindowEvent::Key(Key::B, Action::Press, _) => {
-                    // B: Cycle through themes (alternative to T key)
-                    state.cycle_theme(&mut window);
-                }
-                WindowEvent::Key(Key::A, Action::Release, _) => {
-                    // A key: Toggle XYZ axes
-                    show_axes = !show_axes;
-                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
-                }
                 WindowEvent::Key(Key::T, Action::Press, modifiers)
                     if modifiers.contains(kiss3d::event::Modifiers::Control) =>
                 {
@@ -260,6 +247,19 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             }
                         }
                     }
+                }
+                WindowEvent::Key(Key::T, Action::Press, _) => {
+                    // T: Cycle through themes
+                    state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::B, Action::Press, _) => {
+                    // B: Cycle through themes (alternative to T key)
+                    state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::A, Action::Release, _) => {
+                    // A key: Toggle XYZ axes
+                    show_axes = !show_axes;
+                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
                 _ => {}
             }
