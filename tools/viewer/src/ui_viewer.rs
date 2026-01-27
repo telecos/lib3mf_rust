@@ -841,9 +841,29 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                         nodes.push(mesh_node);
                     }
 
-                    // Add spherical joints at highly connected vertices
-                    // (only for sphere cap mode)
-                    if beamset.cap_mode == lib3mf::BeamCapMode::Sphere {
+                    // Render explicit balls from the balls extension
+                    // These are explicitly defined in the 3MF file
+                    for ball in &beamset.balls {
+                        if ball.vindex < mesh_data.vertices.len() {
+                            let v = &mesh_data.vertices[ball.vindex];
+                            let center = Point3::new(v.x as f32, v.y as f32, v.z as f32);
+                            
+                            // Use ball's radius, or default from ball_radius, or beamset radius
+                            let radius = ball.radius
+                                .or(beamset.ball_radius)
+                                .unwrap_or(beamset.radius) as f32;
+                            
+                            let sphere = create_sphere_mesh(center, radius, GEOMETRY_SEGMENTS);
+                            let mut sphere_node = window.add_trimesh(sphere, IDENTITY_SCALE);
+                            sphere_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
+                            
+                            nodes.push(sphere_node);
+                        }
+                    }
+
+                    // Add inferred spherical joints at highly connected vertices
+                    // (only for sphere cap mode and when explicit balls are not defined)
+                    if beamset.cap_mode == lib3mf::BeamCapMode::Sphere && beamset.balls.is_empty() {
                         use std::collections::HashMap;
                         let mut vertex_connections: HashMap<usize, usize> = HashMap::new();
                         
