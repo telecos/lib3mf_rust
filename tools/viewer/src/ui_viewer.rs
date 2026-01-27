@@ -15,6 +15,7 @@ use lib3mf::Model;
 use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 // Constants for beam lattice rendering
 const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
@@ -294,6 +295,12 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     show_axes = !show_axes;
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
+                WindowEvent::Key(Key::P, Action::Press, _) => {
+                    // P key: Capture screenshot
+                    if let Err(e) = capture_screenshot(&window) {
+                        eprintln!("\n✗ Error capturing screenshot: {}", e);
+                    }
+                }
                 _ => {}
             }
         }
@@ -316,6 +323,57 @@ fn open_file_dialog() -> Option<PathBuf> {
         .pick_file()
 }
 
+/// Generate a timestamped filename for screenshots
+fn generate_screenshot_filename() -> String {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+    
+    // Simple timestamp using seconds since epoch
+    // For better formatting, we could add chrono, but this keeps dependencies minimal
+    let secs = now.as_secs();
+    
+    // Calculate date/time components manually
+    const SECS_PER_DAY: u64 = 86400;
+    const SECS_PER_HOUR: u64 = 3600;
+    const SECS_PER_MINUTE: u64 = 60;
+    
+    // Days since epoch (Jan 1, 1970)
+    let days_since_epoch = secs / SECS_PER_DAY;
+    
+    // Simple year calculation (approximate)
+    let year = 1970 + (days_since_epoch / 365);
+    let day_of_year = days_since_epoch % 365;
+    let month = (day_of_year / 30) + 1;
+    let day = (day_of_year % 30) + 1;
+    
+    // Time components
+    let secs_today = secs % SECS_PER_DAY;
+    let hour = secs_today / SECS_PER_HOUR;
+    let minute = (secs_today % SECS_PER_HOUR) / SECS_PER_MINUTE;
+    let second = secs_today % SECS_PER_MINUTE;
+    
+    format!(
+        "screenshot_{:04}-{:02}-{:02}_{:02}{:02}{:02}.png",
+        year, month, day, hour, minute, second
+    )
+}
+
+/// Capture screenshot of the current window view
+fn capture_screenshot(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
+    let filename = generate_screenshot_filename();
+    
+    // Capture the current frame
+    let img = window.snap_image();
+    
+    // Save as PNG
+    img.save(&filename)?;
+    
+    println!("\n✓ Screenshot saved: {}", filename);
+    
+    Ok(())
+}
+
 /// Print controls information
 fn print_controls() {
     println!("═══════════════════════════════════════════════════════════");
@@ -331,6 +389,7 @@ fn print_controls() {
     println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
+    println!("  ⌨️  P                  : Capture screenshot");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
