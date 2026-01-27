@@ -28,6 +28,11 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Export to PNG**: Press 'X' to export current slice with grid and contours
     - **Toggle plane**: Press 'L' to show/hide the slice plane rectangle
     - See [SLICE_VIEW_FEATURE.md](SLICE_VIEW_FEATURE.md) for detailed documentation
+  - **Material Rendering** (NEW!): View materials and colors from 3MF files
+    - **Toggle materials**: Press 'R' to toggle between material colors and default gray
+    - **Per-triangle colors**: Supports different colors for each triangle face
+    - **Material types**: Base materials, color groups, and base material groups
+    - **Color information**: Shows material counts in model info and menu
   - **Slice Stack Visualization** (NEW!): Comprehensive slice extension support
     - **Automatic detection**: Recognizes 3MF files with pre-computed slices
     - **Single slice navigation**: Step through slices with Up/Down arrows
@@ -151,6 +156,14 @@ cargo run --release -- <path-to-3mf-file> --ui
 - ⌨️ **F**: Fit model to view
 - ⌨️ **Home**: Reset camera to default position
 - ⌨️ **Arrow Keys**: Pan the view
+- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
+- ⌨️ **M Key**: Toggle menu display (NEW!)
+- ⌨️ **R Key**: Toggle material rendering (ON = show colors, OFF = default gray) (NEW!)
+- ⌨️ **P Key**: Toggle print area visibility (NEW!)
+- ⌨️ **C Key**: Configure print area dimensions (NEW!)
+- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
+- ⌨️ **S**: Capture screenshot to PNG file (timestamped filename)
+- ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **ESC / Close Window**: Exit viewer
 
 ### Command-Line Mode
