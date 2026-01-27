@@ -16,11 +16,62 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
+/// Color themes for the viewer background
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Theme {
+    Dark,
+    Light,
+    Blue,
+    White,
+    Black,
+    #[allow(dead_code)]
+    Custom(f32, f32, f32),
+}
+
+impl Theme {
+    /// Get the background color for this theme
+    fn background_color(&self) -> (f32, f32, f32) {
+        match self {
+            Theme::Dark => (0.1, 0.1, 0.1),
+            Theme::Light => (0.88, 0.88, 0.88),
+            Theme::Blue => (0.04, 0.09, 0.16),
+            Theme::White => (1.0, 1.0, 1.0),
+            Theme::Black => (0.0, 0.0, 0.0),
+            Theme::Custom(r, g, b) => (*r, *g, *b),
+        }
+    }
+
+    /// Get the next theme in the cycle
+    fn next(&self) -> Theme {
+        match self {
+            Theme::Dark => Theme::Light,
+            Theme::Light => Theme::Blue,
+            Theme::Blue => Theme::White,
+            Theme::White => Theme::Black,
+            Theme::Black => Theme::Dark,
+            Theme::Custom(_, _, _) => Theme::Dark,
+        }
+    }
+
+    /// Get the name of the theme for display
+    fn name(&self) -> &'static str {
+        match self {
+            Theme::Dark => "Dark",
+            Theme::Light => "Light",
+            Theme::Blue => "Blue",
+            Theme::White => "White",
+            Theme::Black => "Black",
+            Theme::Custom(_, _, _) => "Custom",
+        }
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
     file_path: Option<PathBuf>,
     mesh_nodes: Vec<SceneNode>,
+    theme: Theme,
 }
 
 impl ViewerState {
@@ -30,6 +81,7 @@ impl ViewerState {
             model: None,
             file_path: None,
             mesh_nodes: Vec::new(),
+            theme: Theme::Dark,
         }
     }
 
@@ -39,6 +91,7 @@ impl ViewerState {
             model: Some(model),
             file_path: Some(file_path),
             mesh_nodes: Vec::new(),
+            theme: Theme::Dark,
         }
     }
 
@@ -58,6 +111,14 @@ impl ViewerState {
         } else {
             "3MF Viewer - No file loaded".to_string()
         }
+    }
+
+    /// Cycle to next theme and apply it to the window
+    fn cycle_theme(&mut self, window: &mut Window) {
+        self.theme = self.theme.next();
+        let bg_color = self.theme.background_color();
+        window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
+        println!("Theme changed to: {}", self.theme.name());
     }
 }
 
@@ -82,6 +143,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     // The ArcBall camera in kiss3d is controlled by mouse automatically
     // Just set a reasonable initial distance
     window.set_framerate_limit(Some(60));
+
+    // Set initial background color based on theme
+    let bg_color = state.theme.background_color();
+    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
 
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
@@ -151,11 +216,6 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
-                WindowEvent::Key(Key::A, Action::Release, _) => {
-                    // A key: Toggle XYZ axes
-                    show_axes = !show_axes;
-                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
-                }
                 WindowEvent::Key(Key::T, Action::Press, modifiers)
                     if modifiers.contains(kiss3d::event::Modifiers::Control) =>
                 {
@@ -187,6 +247,19 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             }
                         }
                     }
+                }
+                WindowEvent::Key(Key::T, Action::Press, _) => {
+                    // T: Cycle through themes
+                    state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::B, Action::Press, _) => {
+                    // B: Cycle through themes (alternative to T key)
+                    state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::A, Action::Release, _) => {
+                    // A key: Toggle XYZ axes
+                    show_axes = !show_axes;
+                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
                 _ => {}
             }
@@ -222,6 +295,7 @@ fn print_controls() {
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  Ctrl+O             : Open file");
+    println!("  ⌨️  T or B             : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
@@ -430,4 +504,55 @@ fn draw_axes(window: &mut Window, length: f32) {
         &Point3::new(0.0, 0.0, length),
         &Point3::new(0.0, 0.0, 1.0), // Blue color
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_theme_cycling() {
+        let theme = Theme::Dark;
+        assert_eq!(theme.next(), Theme::Light);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Light);
+        assert_eq!(theme.next(), Theme::Blue);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Blue);
+        assert_eq!(theme.next(), Theme::White);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::White);
+        assert_eq!(theme.next(), Theme::Black);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Black);
+        assert_eq!(theme.next(), Theme::Dark);
+    }
+
+    #[test]
+    fn test_theme_background_colors() {
+        assert_eq!(Theme::Dark.background_color(), (0.1, 0.1, 0.1));
+        assert_eq!(Theme::Light.background_color(), (0.88, 0.88, 0.88));
+        assert_eq!(Theme::Blue.background_color(), (0.04, 0.09, 0.16));
+        assert_eq!(Theme::White.background_color(), (1.0, 1.0, 1.0));
+        assert_eq!(Theme::Black.background_color(), (0.0, 0.0, 0.0));
+        
+        let custom = Theme::Custom(0.5, 0.6, 0.7);
+        assert_eq!(custom.background_color(), (0.5, 0.6, 0.7));
+    }
+
+    #[test]
+    fn test_theme_names() {
+        assert_eq!(Theme::Dark.name(), "Dark");
+        assert_eq!(Theme::Light.name(), "Light");
+        assert_eq!(Theme::Blue.name(), "Blue");
+        assert_eq!(Theme::White.name(), "White");
+        assert_eq!(Theme::Black.name(), "Black");
+
+        let custom = Theme::Custom(0.5, 0.6, 0.7);
+        assert_eq!(custom.name(), "Custom");
+    }
 }
