@@ -289,10 +289,6 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     // T: Cycle through themes
                     state.cycle_theme(&mut window);
                 }
-                WindowEvent::Key(Key::B, Action::Press, _) => {
-                    // B: Cycle through themes (alternative to T key)
-                    state.cycle_theme(&mut window);
-                }
                 WindowEvent::Key(Key::A, Action::Release, _) => {
                     // A key: Toggle XYZ axes
                     show_axes = !show_axes;
@@ -332,7 +328,7 @@ fn print_controls() {
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  Ctrl+O             : Open file");
-    println!("  ⌨️  T or B             : Cycle themes");
+    println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
