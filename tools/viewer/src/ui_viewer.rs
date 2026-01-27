@@ -21,6 +21,55 @@ const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
 const GEOMETRY_SEGMENTS: u32 = 8; // Number of segments for cylinder/sphere meshes
 const IDENTITY_SCALE: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0); // Identity scale for meshes
 
+/// Color themes for the viewer background
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Theme {
+    Dark,
+    Light,
+    Blue,
+    White,
+    Black,
+    #[allow(dead_code)]
+    Custom(f32, f32, f32),
+}
+
+impl Theme {
+    /// Get the background color for this theme
+    fn background_color(&self) -> (f32, f32, f32) {
+        match self {
+            Theme::Dark => (0.1, 0.1, 0.1),
+            Theme::Light => (0.88, 0.88, 0.88),
+            Theme::Blue => (0.04, 0.09, 0.16),
+            Theme::White => (1.0, 1.0, 1.0),
+            Theme::Black => (0.0, 0.0, 0.0),
+            Theme::Custom(r, g, b) => (*r, *g, *b),
+        }
+    }
+
+    /// Get the next theme in the cycle
+    fn next(&self) -> Theme {
+        match self {
+            Theme::Dark => Theme::Light,
+            Theme::Light => Theme::Blue,
+            Theme::Blue => Theme::White,
+            Theme::White => Theme::Black,
+            Theme::Black => Theme::Dark,
+            Theme::Custom(_, _, _) => Theme::Dark,
+        }
+    }
+
+    /// Get the name of the theme for display
+    fn name(&self) -> &'static str {
+        match self {
+            Theme::Dark => "Dark",
+            Theme::Light => "Light",
+            Theme::Blue => "Blue",
+            Theme::White => "White",
+            Theme::Black => "Black",
+            Theme::Custom(_, _, _) => "Custom",
+        }
+    }
+}
 
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
@@ -29,6 +78,7 @@ struct ViewerState {
     mesh_nodes: Vec<SceneNode>,
     beam_nodes: Vec<SceneNode>,
     show_beams: bool,
+    theme: Theme,
 }
 
 impl ViewerState {
@@ -40,6 +90,7 @@ impl ViewerState {
             mesh_nodes: Vec::new(),
             beam_nodes: Vec::new(),
             show_beams: true,
+            theme: Theme::Dark,
         }
     }
 
@@ -51,6 +102,7 @@ impl ViewerState {
             mesh_nodes: Vec::new(),
             beam_nodes: Vec::new(),
             show_beams: true,
+            theme: Theme::Dark,
         }
     }
 
@@ -71,6 +123,14 @@ impl ViewerState {
             "3MF Viewer - No file loaded".to_string()
         }
     }
+
+    /// Cycle to next theme and apply it to the window
+    fn cycle_theme(&mut self, window: &mut Window) {
+        self.theme = self.theme.next();
+        let bg_color = self.theme.background_color();
+        window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
+        println!("Theme changed to: {}", self.theme.name());
+    }
 }
 
 /// Launch the interactive UI viewer
@@ -90,7 +150,14 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
+
+    // The ArcBall camera in kiss3d is controlled by mouse automatically
+    // Just set a reasonable initial distance
     window.set_framerate_limit(Some(60));
+
+    // Set initial background color based on theme
+    let bg_color = state.theme.background_color();
+    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
 
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
@@ -102,6 +169,22 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     }
 
     print_controls();
+
+    // Track axis visualization state (default: visible)
+    let mut show_axes = true;
+
+    // Calculate axis length based on model size (if model is loaded)
+    let mut axis_length = 100.0; // Default length for empty scene
+    if let Some(ref model) = state.model {
+        let (min_bound, max_bound) = calculate_model_bounds(model);
+        let size = Vector3::new(
+            max_bound.0 - min_bound.0,
+            max_bound.1 - min_bound.1,
+            max_bound.2 - min_bound.2,
+        );
+        let max_size = size.x.max(size.y).max(size.z);
+        axis_length = max_size * 0.5; // 50% of model size
+    }
 
     // Main event loop
     while window.render() {
@@ -134,6 +217,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
+
+                                    // Recalculate axis length based on new model
+                                    let (min_bound, max_bound) = calculate_model_bounds(model);
+                                    let size = Vector3::new(
+                                        max_bound.0 - min_bound.0,
+                                        max_bound.1 - min_bound.1,
+                                        max_bound.2 - min_bound.2,
+                                    );
+                                    let max_size = size.x.max(size.y).max(size.z);
+                                    axis_length = max_size * 0.5;
                                 }
                             }
                             Err(e) => {
@@ -192,8 +285,26 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         if state.show_beams { "visible" } else { "hidden" }
                     );
                 }
+                WindowEvent::Key(Key::T, Action::Press, _) => {
+                    // T: Cycle through themes
+                    state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::B, Action::Press, _) => {
+                    // B: Cycle through themes (alternative to T key)
+                    state.cycle_theme(&mut window);
+                }
+                WindowEvent::Key(Key::A, Action::Release, _) => {
+                    // A key: Toggle XYZ axes
+                    show_axes = !show_axes;
+                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
+                }
                 _ => {}
             }
+        }
+
+        // Draw XYZ axes if visible
+        if show_axes {
+            draw_axes(&mut window, axis_length);
         }
     }
 
@@ -219,7 +330,9 @@ fn print_controls() {
     println!("  🖱️  Right Mouse + Drag : Pan view");
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
+    println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  Ctrl+O             : Open file");
+    println!("  ⌨️  T or B             : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
@@ -257,16 +370,6 @@ fn print_model_info(model: &Model) {
     }
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!();
-}
-
-/// Launch the interactive UI viewer
-#[allow(dead_code)]
-pub fn launch_ui_viewer_legacy(
-    _model: Model,
-    file_path: PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    launch_ui_viewer(Some(file_path))
 }
 
 /// Create mesh scene nodes from the 3MF model
@@ -700,4 +803,82 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
     }
 
     nodes
+}
+
+/// Draw XYZ coordinate axes
+/// X axis = Red, Y axis = Green, Z axis = Blue
+fn draw_axes(window: &mut Window, length: f32) {
+    let origin = Point3::origin();
+
+    // X axis - Red
+    window.draw_line(
+        &origin,
+        &Point3::new(length, 0.0, 0.0),
+        &Point3::new(1.0, 0.0, 0.0), // Red color
+    );
+
+    // Y axis - Green
+    window.draw_line(
+        &origin,
+        &Point3::new(0.0, length, 0.0),
+        &Point3::new(0.0, 1.0, 0.0), // Green color
+    );
+
+    // Z axis - Blue
+    window.draw_line(
+        &origin,
+        &Point3::new(0.0, 0.0, length),
+        &Point3::new(0.0, 0.0, 1.0), // Blue color
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_theme_cycling() {
+        let theme = Theme::Dark;
+        assert_eq!(theme.next(), Theme::Light);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Light);
+        assert_eq!(theme.next(), Theme::Blue);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Blue);
+        assert_eq!(theme.next(), Theme::White);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::White);
+        assert_eq!(theme.next(), Theme::Black);
+        
+        let theme = theme.next();
+        assert_eq!(theme, Theme::Black);
+        assert_eq!(theme.next(), Theme::Dark);
+    }
+
+    #[test]
+    fn test_theme_background_colors() {
+        assert_eq!(Theme::Dark.background_color(), (0.1, 0.1, 0.1));
+        assert_eq!(Theme::Light.background_color(), (0.88, 0.88, 0.88));
+        assert_eq!(Theme::Blue.background_color(), (0.04, 0.09, 0.16));
+        assert_eq!(Theme::White.background_color(), (1.0, 1.0, 1.0));
+        assert_eq!(Theme::Black.background_color(), (0.0, 0.0, 0.0));
+        
+        let custom = Theme::Custom(0.5, 0.6, 0.7);
+        assert_eq!(custom.background_color(), (0.5, 0.6, 0.7));
+    }
+
+    #[test]
+    fn test_theme_names() {
+        assert_eq!(Theme::Dark.name(), "Dark");
+        assert_eq!(Theme::Light.name(), "Light");
+        assert_eq!(Theme::Blue.name(), "Blue");
+        assert_eq!(Theme::White.name(), "White");
+        assert_eq!(Theme::Black.name(), "Black");
+
+        let custom = Theme::Custom(0.5, 0.6, 0.7);
+        assert_eq!(custom.name(), "Custom");
+    }
 }
