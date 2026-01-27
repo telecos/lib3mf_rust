@@ -37,7 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Display basic model information
     println!("┌─ Model Information ────────────────────────────────────┐");
-    println!("│ Objects:              {:<35} │", model.resources.objects.len());
+    println!(
+        "│ Objects:              {:<35} │",
+        model.resources.objects.len()
+    );
     println!("│ Build Items:          {:<35} │", model.build.items.len());
     println!("└────────────────────────────────────────────────────────┘");
     println!();
@@ -68,13 +71,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Display details of each boolean operation
     for (i, obj) in boolean_objects.iter().enumerate() {
         if let Some(ref shape) = obj.boolean_shape {
-            println!("┌─ Operation {} ──────────────────────────────────────────┐", i + 1);
+            println!(
+                "┌─ Operation {} ──────────────────────────────────────────┐",
+                i + 1
+            );
             println!("│ Object ID:            {:<35} │", obj.id);
             println!("│ Operation Type:       {:<35} │", shape.operation.as_str());
             println!("│ Base Object ID:       {:<35} │", shape.objectid);
             println!("│ Number of Operands:   {:<35} │", shape.operands.len());
             println!("│                                                        │");
-            
+
             // List all operands
             for (j, operand) in shape.operands.iter().enumerate() {
                 println!("│ Operand {}:            {:<35} │", j + 1, operand.objectid);
@@ -82,7 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("│   Path:               {:<35} │", path);
                 }
             }
-            
+
             println!("└────────────────────────────────────────────────────────┘");
             println!();
         }
@@ -96,7 +102,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("To interactively visualize these boolean operations:");
     println!();
     println!("  Run the viewer in UI mode:");
-    println!("  $ cargo run --release --bin lib3mf-viewer -- --ui {}", file_path);
+    println!(
+        "  $ cargo run --release --bin lib3mf-viewer -- --ui {}",
+        file_path
+    );
     println!();
     println!("  Keyboard controls in the viewer:");
     println!("  • V - Cycle through visualization modes:");
