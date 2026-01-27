@@ -16,11 +16,61 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
+/// Color themes for the viewer background
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Theme {
+    Dark,
+    Light,
+    Blue,
+    White,
+    Black,
+    Custom(f32, f32, f32),
+}
+
+impl Theme {
+    /// Get the background color for this theme
+    fn background_color(&self) -> (f32, f32, f32) {
+        match self {
+            Theme::Dark => (0.1, 0.1, 0.1),
+            Theme::Light => (0.88, 0.88, 0.88),
+            Theme::Blue => (0.04, 0.09, 0.16),
+            Theme::White => (1.0, 1.0, 1.0),
+            Theme::Black => (0.0, 0.0, 0.0),
+            Theme::Custom(r, g, b) => (*r, *g, *b),
+        }
+    }
+
+    /// Get the next theme in the cycle
+    fn next(&self) -> Theme {
+        match self {
+            Theme::Dark => Theme::Light,
+            Theme::Light => Theme::Blue,
+            Theme::Blue => Theme::White,
+            Theme::White => Theme::Black,
+            Theme::Black => Theme::Dark,
+            Theme::Custom(_, _, _) => Theme::Dark,
+        }
+    }
+
+    /// Get the name of the theme for display
+    fn name(&self) -> String {
+        match self {
+            Theme::Dark => "Dark".to_string(),
+            Theme::Light => "Light".to_string(),
+            Theme::Blue => "Blue".to_string(),
+            Theme::White => "White".to_string(),
+            Theme::Black => "Black".to_string(),
+            Theme::Custom(r, g, b) => format!("Custom({:.2}, {:.2}, {:.2})", r, g, b),
+        }
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
     file_path: Option<PathBuf>,
     mesh_nodes: Vec<SceneNode>,
+    theme: Theme,
 }
 
 impl ViewerState {
@@ -30,6 +80,7 @@ impl ViewerState {
             model: None,
             file_path: None,
             mesh_nodes: Vec::new(),
+            theme: Theme::Dark,
         }
     }
 
@@ -39,6 +90,7 @@ impl ViewerState {
             model: Some(model),
             file_path: Some(file_path),
             mesh_nodes: Vec::new(),
+            theme: Theme::Dark,
         }
     }
 
@@ -79,6 +131,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     let mut window = Window::new(&state.window_title());
     window.set_light(Light::StickToCamera);
     window.set_framerate_limit(Some(60));
+    
+    // Set initial background color based on theme
+    let bg_color = state.theme.background_color();
+    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
 
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
@@ -122,6 +178,20 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
+                WindowEvent::Key(Key::T, Action::Press, _) => {
+                    // T: Cycle through themes
+                    state.theme = state.theme.next();
+                    let bg_color = state.theme.background_color();
+                    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
+                    println!("Theme changed to: {}", state.theme.name());
+                }
+                WindowEvent::Key(Key::B, Action::Press, _) => {
+                    // B: Cycle through background color presets (same as T for now)
+                    state.theme = state.theme.next();
+                    let bg_color = state.theme.background_color();
+                    window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
+                    println!("Background changed to: {}", state.theme.name());
+                }
                 _ => {}
             }
         }
@@ -150,6 +220,8 @@ fn print_controls() {
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  Ctrl+O             : Open file");
+    println!("  ⌨️  T                  : Cycle themes");
+    println!("  ⌨️  B                  : Cycle background colors");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
