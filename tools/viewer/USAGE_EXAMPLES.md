@@ -1,5 +1,51 @@
 # lib3mf Viewer - Usage Examples
 
+## Test Suite Browser (NEW!)
+
+### Overview
+Browse and download official 3MF Consortium test files directly from GitHub without leaving the viewer.
+
+### Starting the Browser
+```bash
+cargo run --release -- --browse-tests
+# or short form:
+cargo run --release -- -t
+```
+
+### Interactive Workflow
+
+1. **Navigate to a test suite**
+   ```
+   > 7  # Select suite3_core
+   ```
+
+2. **Browse test categories**
+   ```
+   > 3  # Select positive_test_cases
+   ```
+
+3. **Download and open a file**
+   ```
+   > 1  # Download first test file
+   ```
+   The file automatically downloads and opens in the 3D viewer!
+
+### Commands
+- **Number** - Select item by number
+- **b** or **back** - Go to parent directory
+- **r** or **refresh** - Clear cache and reload
+- **q** or **quit** - Exit browser
+- **h** or **help** - Show help
+
+### Within the 3D Viewer
+Press **Ctrl+T** anytime to launch the browser while viewing a model.
+
+### File Caching
+Downloaded files are cached locally:
+- Linux: `~/.cache/lib3mf_viewer/github_cache/`
+- macOS: `~/Library/Caches/lib3mf_viewer/github_cache/`
+- Windows: `%LOCALAPPDATA%\lib3mf_viewer\github_cache\`
+
 ## Interactive 3D Viewer
 
 ### Basic Usage
@@ -17,6 +63,11 @@ When the window opens, you'll see:
 - **Rotate**: Click and drag with LEFT mouse button
 - **Pan**: Click and drag with RIGHT mouse button
 - **Zoom**: Use mouse scroll wheel
+
+### Keyboard Shortcuts
+- **Ctrl+O**: Open a local 3MF file
+- **Ctrl+T**: Browse test suites from GitHub
+- **ESC**: Exit viewer
 
 ### Example Commands
 
