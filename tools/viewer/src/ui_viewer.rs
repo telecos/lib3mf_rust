@@ -10,6 +10,7 @@ use kiss3d::window::Window;
 use kiss3d::scene::SceneNode;
 use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
+use kiss3d::event::{Action, Key, WindowEvent};
 use lib3mf::Model;
 use std::path::PathBuf;
 
@@ -38,9 +39,9 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
     );
     let max_size = size.x.max(size.y).max(size.z);
     
-    // Future enhancement: Could use center and max_size to set initial camera position
+    // Future enhancement: Could use center for positioning
     // For now, using kiss3d's default ArcBall camera which provides good automatic positioning
-    let _ = (center, max_size); // Acknowledge unused variables
+    let _ = center; // Acknowledge unused variable
     
     // The ArcBall camera in kiss3d is controlled by mouse automatically
     // Just set a reasonable initial distance
@@ -55,6 +56,7 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
     println!("  🖱️  Right Mouse + Drag : Pan view");
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
+    println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -67,11 +69,30 @@ pub fn launch_ui_viewer(model: Model, file_path: PathBuf) -> Result<(), Box<dyn 
     println!();
     println!("═══════════════════════════════════════════════════════════");
     
+    // Track axis visualization state (default: visible)
+    let mut show_axes = true;
+    
+    // Calculate axis length based on model size
+    let axis_length = max_size * 0.5; // 50% of model size
+    
     // Main event loop: kiss3d handles window events, input processing, and frame rendering
     // Each render() call processes events, updates camera based on mouse input, and draws the scene
     // Returns false when the window is closed, terminating the loop
     while window.render() {
-        // The meshes are already added to the scene, kiss3d handles the rendering automatically
+        // Handle keyboard events
+        for event in window.events().iter() {
+            if let WindowEvent::Key(key, Action::Release, _) = event.value {
+                if key == Key::A {
+                    show_axes = !show_axes;
+                    println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
+                }
+            }
+        }
+        
+        // Draw XYZ axes if visible
+        if show_axes {
+            draw_axes(&mut window, axis_length);
+        }
     }
     
     Ok(())
@@ -204,4 +225,31 @@ fn count_vertices(model: &Model) -> usize {
         }
     }
     total
+}
+
+/// Draw XYZ coordinate axes
+/// X axis = Red, Y axis = Green, Z axis = Blue
+fn draw_axes(window: &mut Window, length: f32) {
+    let origin = Point3::origin();
+    
+    // X axis - Red
+    window.draw_line(
+        &origin,
+        &Point3::new(length, 0.0, 0.0),
+        &Point3::new(1.0, 0.0, 0.0), // Red color
+    );
+    
+    // Y axis - Green
+    window.draw_line(
+        &origin,
+        &Point3::new(0.0, length, 0.0),
+        &Point3::new(0.0, 1.0, 0.0), // Green color
+    );
+    
+    // Z axis - Blue
+    window.draw_line(
+        &origin,
+        &Point3::new(0.0, 0.0, length),
+        &Point3::new(0.0, 0.0, 1.0), // Blue color
+    );
 }
