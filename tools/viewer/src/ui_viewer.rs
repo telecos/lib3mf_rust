@@ -1729,6 +1729,94 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
     (100.0 / 255.0, 150.0 / 255.0, 200.0 / 255.0)
 }
 
+/// Resolve composite material color by blending base materials
+fn resolve_composite_color(
+    model: &Model,
+    comp: &lib3mf::CompositeMaterials,
+    composite_idx: usize,
+) -> (f32, f32, f32) {
+    // Get the composite definition
+    let composite = &comp.composites[composite_idx];
+    
+    // Find the base material group this composite references
+    if let Some(base_group) = model.resources.base_material_groups.iter().find(|bg| bg.id == comp.matid) {
+        // Blend colors according to the composite values
+        let mut r_total = 0.0_f32;
+        let mut g_total = 0.0_f32;
+        let mut b_total = 0.0_f32;
+        
+        for (i, &value) in composite.values.iter().enumerate() {
+            if i < comp.matindices.len() {
+                let mat_idx = comp.matindices[i];
+                if mat_idx < base_group.materials.len() {
+                    let (r, g, b, _) = base_group.materials[mat_idx].displaycolor;
+                    r_total += (r as f32 / 255.0) * value;
+                    g_total += (g as f32 / 255.0) * value;
+                    b_total += (b as f32 / 255.0) * value;
+                }
+            }
+        }
+        
+        return (r_total, g_total, b_total);
+    }
+    
+    // Fallback to purple to indicate composite material that couldn't be resolved
+    (0.8, 0.0, 0.8)
+}
+
+/// Resolve multi-property color by blending multiple property groups
+fn resolve_multiproperty_color(
+    model: &Model,
+    multi: &lib3mf::MultiProperties,
+    multi_idx: usize,
+) -> (f32, f32, f32) {
+    // Get the multi element
+    let multi_elem = &multi.multis[multi_idx];
+    
+    // Get colors from each referenced property group
+    let mut colors = Vec::new();
+    
+    for (i, &pid) in multi.pids.iter().enumerate() {
+        if i < multi_elem.pindices.len() {
+            let pindex = multi_elem.pindices[i];
+            
+            // Try to get color from each property group type
+            if let Some(cg) = model.resources.color_groups.iter().find(|c| c.id == pid) {
+                if pindex < cg.colors.len() {
+                    let (r, g, b, _) = cg.colors[pindex];
+                    colors.push((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0));
+                }
+            } else if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+                if pindex < bmg.materials.len() {
+                    let (r, g, b, _) = bmg.materials[pindex].displaycolor;
+                    colors.push((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0));
+                }
+            }
+        }
+    }
+    
+    if colors.is_empty() {
+        // Fallback to magenta to indicate multi-property that couldn't be resolved
+        return (1.0, 0.0, 1.0);
+    }
+    
+    // Blend colors based on blend methods
+    // For simplicity, we average the colors (Mix blend method)
+    // A more sophisticated implementation would handle Multiply and other blend modes
+    let mut r_total = 0.0_f32;
+    let mut g_total = 0.0_f32;
+    let mut b_total = 0.0_f32;
+    
+    for (r, g, b) in &colors {
+        r_total += r;
+        g_total += g;
+        b_total += b;
+    }
+    
+    let count = colors.len() as f32;
+    (r_total / count, g_total / count, b_total / count)
+}
+
 /// Get color for a specific triangle based on material properties
 fn get_triangle_color(
     model: &Model,
@@ -1772,6 +1860,37 @@ fn get_triangle_color(
                 // No specific index, use first material
                 let (r, g, b, _) = bmg.materials[0].displaycolor;
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+        }
+        
+        // Try to find in texture2d groups
+        // Note: Full texture rendering is not supported in kiss3d without custom shaders
+        // Display textured triangles with a teal color to indicate texture mapping
+        if let Some(_tex_group) = model.resources.texture2d_groups.iter().find(|tg| tg.id == pid) {
+            return (0.0, 0.8, 0.8); // Teal color for textured surfaces
+        }
+        
+        // Try to find in composite materials
+        if let Some(comp) = model.resources.composite_materials.iter().find(|c| c.id == pid) {
+            if let Some(idx) = pindex {
+                if idx < comp.composites.len() {
+                    return resolve_composite_color(model, comp, idx);
+                }
+            } else if !comp.composites.is_empty() {
+                // Use first composite
+                return resolve_composite_color(model, comp, 0);
+            }
+        }
+        
+        // Try to find in multi-properties
+        if let Some(multi) = model.resources.multi_properties.iter().find(|m| m.id == pid) {
+            if let Some(idx) = pindex {
+                if idx < multi.multis.len() {
+                    return resolve_multiproperty_color(model, multi, idx);
+                }
+            } else if !multi.multis.is_empty() {
+                // Use first multi
+                return resolve_multiproperty_color(model, multi, 0);
             }
         }
     }
