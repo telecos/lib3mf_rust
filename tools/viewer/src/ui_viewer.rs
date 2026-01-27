@@ -3309,4 +3309,30 @@ mod tests {
             assert!((dist_start - radius).abs() < 0.001, "Start point should be at radius distance");
         }
     }
+
+    #[test]
+    fn test_compute_slice_with_beam_lattice() {
+        use std::fs::File;
+        
+        // Load the pyramid beam lattice test file
+        let file = File::open("../../test_files/beam_lattice/pyramid.3mf")
+            .expect("Failed to open pyramid.3mf test file");
+        let model = Model::from_reader(file).expect("Failed to parse pyramid.3mf");
+        
+        // Compute slices at different heights
+        let z_heights = [0.0, 25.0, 50.0, 75.0, 100.0];
+        
+        for z_height in z_heights {
+            let segments = compute_slice_contours(&model, z_height);
+            
+            // At each height, we should have some segments from beams crossing
+            // The exact number depends on the beam lattice structure
+            // For z > 0 and z < 100, we expect some beam intersections
+            if z_height > 0.0 && z_height < 100.0 {
+                assert!(segments.len() > 0, 
+                    "Expected beam lattice slices at z={}, but got {} segments", 
+                    z_height, segments.len());
+            }
+        }
+    }
 }
