@@ -17,13 +17,13 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
-  - **Keyboard shortcuts**: T for themes, B for backgrounds, M for boolean mode, Ctrl+O for file loading
+  - **Keyboard shortcuts**: T for themes, B for backgrounds, V for boolean mode, Ctrl+O for file loading
   - **Open files**: Ctrl+O to open file dialog
   - **Browse test suites**: Ctrl+T to browse 3MF Consortium test files from GitHub
   - **Boolean Operations Visualization** (NEW!): Interactive visualization of boolean operations
     - **Three visualization modes**: Normal, Show Inputs, Highlight Operands
     - **Color-coded operands**: Blue for base objects, Red/Orange for operands
-    - **Mode cycling**: Press 'M' to cycle through visualization modes
+    - **Mode cycling**: Press 'V' to cycle through visualization modes
     - **Operation details**: Console output of boolean operation information
 - **Test Suite Browser** (NEW!): Browse and download official 3MF Consortium test files
   - **Direct GitHub integration**: Fetch test files from the official repository
@@ -108,7 +108,7 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Scroll Wheel**: Zoom in/out
 - ⌨️ **Arrow Keys**: Pan the view
 - ⌨️ **T**: Cycle through background themes (Dark, Light, Blue, White, Black)
-- ⌨️ **M**: Cycle through boolean operation visualization modes
+- ⌨️ **V**: Cycle through boolean operation visualization modes
 - ⌨️ **B**: Toggle beam lattice (if present)
 - ⌨️ **A Key**: Toggle XYZ axes (default: visible)
 - ⌨️ **M Key**: Toggle menu display (NEW!)
@@ -198,7 +198,7 @@ cargo run --release -- ../../test_files/core/sphere.3mf --ui
 
 # View boolean operations
 cargo run --release -- ../../test_files/boolean_ops/simple_union.3mf --ui
-# (Press 'M' to cycle through visualization modes)
+# (Press 'V' to cycle through visualization modes)
 ```
 
 View a basic 3MF file:

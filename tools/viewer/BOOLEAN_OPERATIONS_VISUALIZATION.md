@@ -16,7 +16,7 @@ The viewer supports visualization of all boolean operation types defined in the 
 
 ## Visualization Modes
 
-The viewer provides three visualization modes for boolean operations, accessible by pressing the **M** key:
+The viewer provides three visualization modes for boolean operations, accessible by pressing the **V** key:
 
 ### 1. Normal Mode
 
@@ -60,7 +60,7 @@ cargo run --release --bin lib3mf-viewer -- test_files/boolean_ops/simple_union.3
 
 When viewing a model in UI mode:
 
-- **M**: Cycle through visualization modes (Normal → Show Inputs → Highlight Operands → Normal)
+- **V**: Cycle through visualization modes (Normal → Show Inputs → Highlight Operands → Normal)
 - **T**: Cycle through background themes
 - **A**: Toggle coordinate axes
 - **B**: Toggle beam lattice (if present)

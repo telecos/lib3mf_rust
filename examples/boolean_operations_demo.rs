@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("To visualize boolean operations:");
         println!("  1. Load a 3MF file with boolean operations");
         println!("  2. Use the viewer with the --ui flag");
-        println!("  3. Press 'M' to cycle through visualization modes");
+        println!("  3. Press 'V' to cycle through visualization modes");
         return Ok(());
     }
 
@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  $ cargo run --release --bin lib3mf-viewer -- --ui {}", file_path);
     println!();
     println!("  Keyboard controls in the viewer:");
-    println!("  • M - Cycle through visualization modes:");
+    println!("  • V - Cycle through visualization modes:");
     println!("    - Normal: Show all meshes normally");
     println!("    - Show Inputs: Color-code boolean operands");
     println!("      (Blue = base object, Red = operand)");

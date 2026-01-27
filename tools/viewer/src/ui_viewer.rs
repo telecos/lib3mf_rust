@@ -365,8 +365,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         if state.show_beams { "visible" } else { "hidden" }
                     );
                 }
-                WindowEvent::Key(Key::M, Action::Press, _) => {
-                    // M: Cycle boolean operation visualization mode
+                WindowEvent::Key(Key::V, Action::Press, _) => {
+                    // V: Cycle boolean operation visualization mode
                     state.boolean_mode = state.boolean_mode.next();
                     println!("\nBoolean mode: {}", state.boolean_mode.name());
                     
@@ -488,7 +488,7 @@ fn print_controls() {
     println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
-    println!("  ⌨️  M                  : Cycle boolean visualization mode");
+    println!("  ⌨️  V                  : Cycle boolean visualization mode");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
