@@ -9,6 +9,7 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Pan view**: Right mouse drag  
   - **Zoom**: Mouse scroll wheel
   - **XYZ Axes**: Toggle coordinate axes with 'A' key (X=Red, Y=Green, Z=Blue)
+  - **Screenshot capture**: Save current view to PNG with 'S' key (auto-timestamped filenames)
   - **Print Area Visualization** (NEW!): Configurable build volume wireframe box
     - Toggle visibility with 'P' key
     - Configure dimensions with 'C' key
@@ -108,6 +109,7 @@ cargo run --release -- <path-to-3mf-file> --ui
 - ⌨️ **C Key**: Configure print area dimensions (NEW!)
 - ⌨️ **T or B**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
+- ⌨️ **S**: Capture screenshot to PNG file (timestamped filename)
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **ESC / Close Window**: Exit viewer
 
@@ -187,6 +189,10 @@ cargo run --release -- --ui
 ```bash
 cargo run --release -- ../../test_files/core/box.3mf --ui
 cargo run --release -- ../../test_files/core/sphere.3mf --ui
+
+# While the viewer is running, press 'S' to capture screenshots
+# Screenshots are automatically saved with timestamped filenames like:
+# screenshot_2025-01-27_145230.png
 ```
 
 View a basic 3MF file:
