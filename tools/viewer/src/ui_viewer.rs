@@ -666,48 +666,46 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
         Ok(input.trim().to_string())
     }
 
-    // Configure width
-    print!("Enter width (X) in {} [{}]: ", current.unit, current.width);
-    io::stdout().flush()?;
-    let input = read_line()?;
-    if !input.is_empty() {
-        if let Ok(val) = input.parse::<f32>() {
-            if val > 0.0 {
-                new_area.width = val;
+    // Helper function to read and validate a positive dimension
+    fn read_dimension(prompt: &str, current_value: f32, unit: &str) -> Result<f32, io::Error> {
+        print!("{} in {} [{}]: ", prompt, unit, current_value);
+        io::stdout().flush()?;
+        let input = read_line()?;
+        if !input.is_empty() {
+            if let Ok(val) = input.parse::<f32>() {
+                if val > 0.0 {
+                    return Ok(val);
+                }
             }
         }
+        Ok(current_value)
     }
+
+    // Configure width
+    new_area.width = read_dimension("Enter width (X)", current.width, &current.unit)?;
 
     // Configure depth
-    print!("Enter depth (Y) in {} [{}]: ", current.unit, current.depth);
-    io::stdout().flush()?;
-    let input = read_line()?;
-    if !input.is_empty() {
-        if let Ok(val) = input.parse::<f32>() {
-            if val > 0.0 {
-                new_area.depth = val;
-            }
-        }
-    }
+    new_area.depth = read_dimension("Enter depth (Y)", current.depth, &current.unit)?;
 
     // Configure height
-    print!("Enter height (Z) in {} [{}]: ", current.unit, current.height);
-    io::stdout().flush()?;
-    let input = read_line()?;
-    if !input.is_empty() {
-        if let Ok(val) = input.parse::<f32>() {
-            if val > 0.0 {
-                new_area.height = val;
-            }
-        }
-    }
+    new_area.height = read_dimension("Enter height (Z)", current.height, &current.unit)?;
 
-    // Configure unit
+    // Configure unit with validation
     print!("Enter unit (mm/inch/cm) [{}]: ", current.unit);
     io::stdout().flush()?;
     let input = read_line()?;
     if !input.is_empty() {
-        new_area.unit = input;
+        // Validate unit against allowed values
+        let normalized = input.to_lowercase();
+        match normalized.as_str() {
+            "mm" | "millimeter" | "millimeters" => new_area.unit = "mm".to_string(),
+            "cm" | "centimeter" | "centimeters" => new_area.unit = "cm".to_string(),
+            "inch" | "inches" | "in" => new_area.unit = "inch".to_string(),
+            "m" | "meter" | "meters" => new_area.unit = "m".to_string(),
+            _ => {
+                println!("Warning: Unknown unit '{}', keeping '{}'", input, current.unit);
+            }
+        }
     }
 
     Ok(new_area)
