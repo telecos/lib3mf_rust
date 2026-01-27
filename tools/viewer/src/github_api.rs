@@ -94,10 +94,11 @@ impl TestType {
     /// Determine test type from filename/path
     pub fn from_filename(filename: &str) -> Self {
         let lower = filename.to_lowercase();
-        if lower.contains("pass") || lower.contains("valid") || lower.contains("positive") {
-            TestType::Positive
-        } else if lower.contains("fail") || lower.contains("invalid") || lower.contains("negative") {
+        // Check for negative indicators first (before checking "valid" which might be part of "invalid")
+        if lower.contains("fail") || lower.contains("invalid") || lower.contains("negative") {
             TestType::Negative
+        } else if lower.contains("pass") || lower.contains("valid") || lower.contains("positive") {
+            TestType::Positive
         } else {
             TestType::Unknown
         }
