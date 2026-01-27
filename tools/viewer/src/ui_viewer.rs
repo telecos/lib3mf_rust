@@ -23,6 +23,7 @@ use std::path::PathBuf;
 const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
 const GEOMETRY_SEGMENTS: u32 = 8; // Number of segments for cylinder/sphere meshes
 const IDENTITY_SCALE: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0); // Identity scale for meshes
+const CIRCLE_APPROXIMATION_SEGMENTS: u32 = 16; // Number of segments for circle approximations in slices
 
 // Constants for camera controls
 const CAMERA_DISTANCE_MULTIPLIER: f32 = 1.5; // Factor for comfortable viewing distance
@@ -2610,6 +2611,13 @@ fn triangle_plane_intersection(
 
 /// Compute beam-plane intersection for a cylindrical beam
 /// Returns a circle in 2D if the beam crosses the Z plane
+/// 
+/// # Arguments
+/// * `p1` - First endpoint of the beam (x, y, z)
+/// * `p2` - Second endpoint of the beam (x, y, z)
+/// * `r1` - Radius at first endpoint (must be positive)
+/// * `r2` - Radius at second endpoint (must be positive)
+/// * `z_height` - Z coordinate of the plane
 fn beam_plane_intersection(
     p1: (f32, f32, f32),
     p2: (f32, f32, f32),
@@ -2620,13 +2628,20 @@ fn beam_plane_intersection(
     let (x1, y1, z1) = p1;
     let (x2, y2, z2) = p2;
 
+    // Validate radii
+    if r1 <= 0.0 || r2 <= 0.0 {
+        return None; // Invalid radius
+    }
+
     // Check if beam crosses Z plane (endpoints on different sides)
     if (z1 - z_height) * (z2 - z_height) > 0.0 {
         return None; // Both endpoints on same side
     }
 
     // Handle edge case where beam is exactly on the plane
-    if (z1 - z_height).abs() < 1e-6 && (z2 - z_height).abs() < 1e-6 {
+    // Use epsilon appropriate for f32 precision
+    let epsilon = 1e-5;
+    if (z1 - z_height).abs() < epsilon && (z2 - z_height).abs() < epsilon {
         return None; // Beam lies in plane - degenerate case
     }
 
@@ -2647,12 +2662,23 @@ fn beam_plane_intersection(
 
 /// Compute ball-plane intersection for a spherical ball joint
 /// Returns a circle in 2D if the sphere intersects the Z plane
+///
+/// # Arguments
+/// * `center` - Center of the sphere (x, y, z)
+/// * `radius` - Radius of the sphere (must be positive)
+/// * `z_height` - Z coordinate of the plane
 fn ball_plane_intersection(
     center: (f32, f32, f32),
     radius: f32,
     z_height: f32,
 ) -> Option<(Point2D, f32)> {
     let (x, y, z) = center;
+
+    // Validate radius
+    if radius <= 0.0 {
+        return None; // Invalid radius
+    }
+    
     let dz = (z - z_height).abs();
     
     if dz > radius {
@@ -2666,7 +2692,18 @@ fn ball_plane_intersection(
 }
 
 /// Convert a circle to a polygon approximation with specified number of segments
+/// 
+/// # Arguments
+/// * `center` - Center of the circle
+/// * `radius` - Radius of the circle (should be positive)
+/// * `segments` - Number of segments (must be >= 3)
 fn circle_to_line_segments(center: Point2D, radius: f32, segments: u32) -> Vec<LineSegment2D> {
+    // Validate input
+    if segments < 3 {
+        // Return a minimal triangle for degenerate cases
+        return Vec::new();
+    }
+
     let mut line_segments = Vec::with_capacity(segments as usize);
     let two_pi = 2.0 * std::f32::consts::PI;
     
@@ -2741,11 +2778,11 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
 
                         // Get beam radii (with fallbacks to beamset defaults)
                         let r1 = beam.r1.unwrap_or(beamset.radius) as f32;
-                        let r2 = beam.r2.unwrap_or(r1 as f64) as f32;
+                        let r2 = beam.r2.or(beam.r1).unwrap_or(beamset.radius) as f32;
 
                         if let Some((center, radius)) = beam_plane_intersection(p1, p2, r1, r2, z_height) {
-                            // Convert circle to polygon segments (16 segments per circle)
-                            segments.extend(circle_to_line_segments(center, radius, 16));
+                            // Convert circle to polygon segments
+                            segments.extend(circle_to_line_segments(center, radius, CIRCLE_APPROXIMATION_SEGMENTS));
                         }
                     }
 
@@ -2765,8 +2802,8 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
                             .unwrap_or(beamset.radius) as f32;
 
                         if let Some((center_2d, slice_radius)) = ball_plane_intersection(center, radius, z_height) {
-                            // Convert circle to polygon segments (16 segments per circle)
-                            segments.extend(circle_to_line_segments(center_2d, slice_radius, 16));
+                            // Convert circle to polygon segments
+                            segments.extend(circle_to_line_segments(center_2d, slice_radius, CIRCLE_APPROXIMATION_SEGMENTS));
                         }
                     }
                 }
@@ -3207,6 +3244,20 @@ mod tests {
     }
 
     #[test]
+    fn test_beam_plane_intersection_invalid_radius() {
+        // Test negative radius
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (10.0, 10.0, 10.0);
+        let z_height = 5.0;
+        
+        let result = beam_plane_intersection(p1, p2, -1.0, 2.0, z_height);
+        assert!(result.is_none(), "Negative radius should return None");
+        
+        let result = beam_plane_intersection(p1, p2, 2.0, 0.0, z_height);
+        assert!(result.is_none(), "Zero radius should return None");
+    }
+
+    #[test]
     fn test_beam_plane_intersection_no_crossing() {
         // Beam entirely above Z plane
         let p1 = (0.0, 0.0, 10.0);
@@ -3265,6 +3316,19 @@ mod tests {
         
         let result = ball_plane_intersection(center, radius, z_height);
         assert!(result.is_none(), "Ball should not intersect distant plane");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_invalid_radius() {
+        // Test negative and zero radius
+        let center = (10.0, 20.0, 5.0);
+        let z_height = 5.0;
+        
+        let result = ball_plane_intersection(center, -1.0, z_height);
+        assert!(result.is_none(), "Negative radius should return None");
+        
+        let result = ball_plane_intersection(center, 0.0, z_height);
+        assert!(result.is_none(), "Zero radius should return None");
     }
 
     #[test]
