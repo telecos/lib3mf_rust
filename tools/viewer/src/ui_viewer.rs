@@ -71,6 +71,37 @@ impl Theme {
     }
 }
 
+/// Boolean operation visualization mode
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum BooleanMode {
+    /// Show all meshes normally
+    Normal,
+    /// Show boolean operation inputs separately with different colors
+    ShowInputs,
+    /// Hide non-boolean objects and highlight boolean operands
+    HighlightOperands,
+}
+
+impl BooleanMode {
+    /// Get the next mode in the cycle
+    fn next(&self) -> BooleanMode {
+        match self {
+            BooleanMode::Normal => BooleanMode::ShowInputs,
+            BooleanMode::ShowInputs => BooleanMode::HighlightOperands,
+            BooleanMode::HighlightOperands => BooleanMode::Normal,
+        }
+    }
+
+    /// Get the name of the mode for display
+    fn name(&self) -> &'static str {
+        match self {
+            BooleanMode::Normal => "Normal",
+            BooleanMode::ShowInputs => "Show Inputs",
+            BooleanMode::HighlightOperands => "Highlight Operands",
+        }
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
@@ -79,6 +110,7 @@ struct ViewerState {
     beam_nodes: Vec<SceneNode>,
     show_beams: bool,
     theme: Theme,
+    boolean_mode: BooleanMode,
 }
 
 impl ViewerState {
@@ -91,6 +123,7 @@ impl ViewerState {
             beam_nodes: Vec::new(),
             show_beams: true,
             theme: Theme::Dark,
+            boolean_mode: BooleanMode::Normal,
         }
     }
 
@@ -103,6 +136,7 @@ impl ViewerState {
             beam_nodes: Vec::new(),
             show_beams: true,
             theme: Theme::Dark,
+            boolean_mode: BooleanMode::Normal,
         }
     }
 
@@ -161,7 +195,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
-        state.mesh_nodes = create_mesh_nodes(&mut window, state.model.as_ref().unwrap());
+        state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+            &mut window,
+            state.model.as_ref().unwrap(),
+            state.boolean_mode,
+        );
         state.beam_nodes = create_beam_lattice_nodes(&mut window, state.model.as_ref().unwrap());
         print_model_info(state.model.as_ref().unwrap());
     } else {
@@ -212,7 +250,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
                                 // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
-                                    state.mesh_nodes = create_mesh_nodes(&mut window, model);
+                                    state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+                                        &mut window,
+                                        model,
+                                        state.boolean_mode,
+                                    );
                                     state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
@@ -261,7 +303,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
                                 // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
-                                    state.mesh_nodes = create_mesh_nodes(&mut window, model);
+                                    state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+                                        &mut window,
+                                        model,
+                                        state.boolean_mode,
+                                    );
                                     state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
@@ -284,6 +330,32 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         "\nBeam lattice: {}",
                         if state.show_beams { "visible" } else { "hidden" }
                     );
+                }
+                WindowEvent::Key(Key::M, Action::Press, _) => {
+                    // M: Cycle boolean operation visualization mode
+                    state.boolean_mode = state.boolean_mode.next();
+                    println!("\nBoolean mode: {}", state.boolean_mode.name());
+                    
+                    // Recreate mesh nodes with new coloring
+                    if let Some(ref model) = state.model {
+                        // Hide existing mesh nodes
+                        for node in &mut state.mesh_nodes {
+                            node.set_visible(false);
+                        }
+                        state.mesh_nodes.clear();
+                        
+                        // Create new mesh nodes with boolean-aware coloring
+                        state.mesh_nodes = create_mesh_nodes_with_boolean_mode(
+                            &mut window,
+                            model,
+                            state.boolean_mode,
+                        );
+                        
+                        // Print boolean operation information if in special mode
+                        if state.boolean_mode != BooleanMode::Normal {
+                            print_boolean_info(model);
+                        }
+                    }
                 }
                 WindowEvent::Key(Key::T, Action::Press, _) => {
                     // T: Cycle through themes
@@ -331,6 +403,7 @@ fn print_controls() {
     println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
+    println!("  ⌨️  M                  : Cycle boolean visualization mode");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -353,6 +426,7 @@ fn print_empty_scene_info() {
 /// Print model information
 fn print_model_info(model: &Model) {
     let beam_count = count_beams(model);
+    let boolean_count = count_boolean_operations(model);
     
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -363,6 +437,9 @@ fn print_model_info(model: &Model) {
     println!("  - Unit: {}", model.unit);
     if beam_count > 0 {
         println!("  - Beam Lattice: {} beams", beam_count);
+    }
+    if boolean_count > 0 {
+        println!("  - Boolean Operations: {} operations", boolean_count);
     }
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -826,6 +903,258 @@ fn draw_axes(window: &mut Window, length: f32) {
         &Point3::new(0.0, 0.0, length),
         &Point3::new(0.0, 0.0, 1.0), // Blue color
     );
+}
+
+/// Count total boolean operations in the model
+fn count_boolean_operations(model: &Model) -> usize {
+    model
+        .resources
+        .objects
+        .iter()
+        .filter(|obj| obj.boolean_shape.is_some())
+        .count()
+}
+
+/// Print detailed boolean operation information
+fn print_boolean_info(model: &Model) {
+    let boolean_objects: Vec<_> = model
+        .resources
+        .objects
+        .iter()
+        .filter(|obj| obj.boolean_shape.is_some())
+        .collect();
+
+    if boolean_objects.is_empty() {
+        println!("\n  No boolean operations found in model");
+        return;
+    }
+
+    println!();
+    println!("═══════════════════════════════════════════════════════════");
+    println!("  Boolean Operations Information");
+    println!("═══════════════════════════════════════════════════════════");
+
+    for obj in boolean_objects {
+        if let Some(ref shape) = obj.boolean_shape {
+            println!();
+            println!("  Object ID: {}", obj.id);
+            println!("    Operation: {}", shape.operation.as_str());
+            println!("    Base Object: {}", shape.objectid);
+            println!("    Operands: {} objects", shape.operands.len());
+            
+            for (i, operand) in shape.operands.iter().enumerate() {
+                println!("      [{}] Object ID: {}", i + 1, operand.objectid);
+                if let Some(ref path) = operand.path {
+                    println!("          Path: {}", path);
+                }
+            }
+        }
+    }
+
+    println!();
+    println!("═══════════════════════════════════════════════════════════");
+}
+
+/// Create mesh nodes with boolean operation-aware coloring
+fn create_mesh_nodes_with_boolean_mode(
+    window: &mut Window,
+    model: &Model,
+    mode: BooleanMode,
+) -> Vec<SceneNode> {
+    match mode {
+        BooleanMode::Normal => create_mesh_nodes(window, model),
+        BooleanMode::ShowInputs => create_mesh_nodes_show_inputs(window, model),
+        BooleanMode::HighlightOperands => create_mesh_nodes_highlight_operands(window, model),
+    }
+}
+
+/// Create mesh nodes with boolean inputs shown in different colors
+fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    let mut nodes = Vec::new();
+
+    // Collect all boolean operations and their operands
+    let mut boolean_base_objects = std::collections::HashSet::new();
+    let mut boolean_operand_objects = std::collections::HashSet::new();
+
+    for obj in &model.resources.objects {
+        if let Some(ref shape) = obj.boolean_shape {
+            boolean_base_objects.insert(shape.objectid);
+            for operand in &shape.operands {
+                boolean_operand_objects.insert(operand.objectid);
+            }
+        }
+    }
+
+    // Render all objects with appropriate colors
+    for item in &model.build.items {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            // Skip objects with boolean_shape (they're the result objects)
+            if obj.boolean_shape.is_some() {
+                continue;
+            }
+
+            if let Some(ref mesh_data) = obj.mesh {
+                let vertices: Vec<Point3<f32>> = mesh_data
+                    .vertices
+                    .iter()
+                    .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                    .collect();
+
+                let faces: Vec<Point3<u32>> = mesh_data
+                    .triangles
+                    .iter()
+                    .filter(|t| {
+                        t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+                    })
+                    .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+                    .collect();
+
+                let tri_mesh = TriMesh::new(
+                    vertices,
+                    None,
+                    None,
+                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                );
+
+                // Determine color based on role in boolean operations
+                let color = if boolean_base_objects.contains(&obj.id) {
+                    // Base object: Blue
+                    (0.3, 0.5, 0.9)
+                } else if boolean_operand_objects.contains(&obj.id) {
+                    // Operand object: Red
+                    (0.9, 0.3, 0.3)
+                } else {
+                    // Regular object: Use default color
+                    get_object_color(model, obj)
+                };
+
+                let scale = Vector3::new(1.0, 1.0, 1.0);
+                let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                mesh_node.set_color(color.0, color.1, color.2);
+
+                nodes.push(mesh_node);
+            }
+        }
+    }
+
+    // Also render the base and operand objects directly (not just from build items)
+    for obj in &model.resources.objects {
+        if boolean_base_objects.contains(&obj.id) || boolean_operand_objects.contains(&obj.id) {
+            // Check if already rendered via build items
+            let already_in_build = model
+                .build
+                .items
+                .iter()
+                .any(|item| item.objectid == obj.id);
+            
+            if !already_in_build {
+                if let Some(ref mesh_data) = obj.mesh {
+                    let vertices: Vec<Point3<f32>> = mesh_data
+                        .vertices
+                        .iter()
+                        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                        .collect();
+
+                    let faces: Vec<Point3<u32>> = mesh_data
+                        .triangles
+                        .iter()
+                        .filter(|t| {
+                            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+                        })
+                        .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+                        .collect();
+
+                    let tri_mesh = TriMesh::new(
+                        vertices,
+                        None,
+                        None,
+                        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                    );
+
+                    let color = if boolean_base_objects.contains(&obj.id) {
+                        (0.3, 0.5, 0.9) // Blue for base
+                    } else {
+                        (0.9, 0.3, 0.3) // Red for operand
+                    };
+
+                    let scale = Vector3::new(1.0, 1.0, 1.0);
+                    let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                    mesh_node.set_color(color.0, color.1, color.2);
+
+                    nodes.push(mesh_node);
+                }
+            }
+        }
+    }
+
+    nodes
+}
+
+/// Create mesh nodes with only boolean operands highlighted
+fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    let mut nodes = Vec::new();
+
+    // Collect all boolean operations and their operands
+    let mut boolean_base_objects = std::collections::HashSet::new();
+    let mut boolean_operand_objects = std::collections::HashSet::new();
+
+    for obj in &model.resources.objects {
+        if let Some(ref shape) = obj.boolean_shape {
+            boolean_base_objects.insert(shape.objectid);
+            for operand in &shape.operands {
+                boolean_operand_objects.insert(operand.objectid);
+            }
+        }
+    }
+
+    // Only render base and operand objects
+    for obj in &model.resources.objects {
+        if boolean_base_objects.contains(&obj.id) || boolean_operand_objects.contains(&obj.id) {
+            if let Some(ref mesh_data) = obj.mesh {
+                let vertices: Vec<Point3<f32>> = mesh_data
+                    .vertices
+                    .iter()
+                    .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                    .collect();
+
+                let faces: Vec<Point3<u32>> = mesh_data
+                    .triangles
+                    .iter()
+                    .filter(|t| {
+                        t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+                    })
+                    .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+                    .collect();
+
+                let tri_mesh = TriMesh::new(
+                    vertices,
+                    None,
+                    None,
+                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                );
+
+                // Use bright, distinct colors
+                let color = if boolean_base_objects.contains(&obj.id) {
+                    (0.2, 0.6, 1.0) // Bright blue for base
+                } else {
+                    (1.0, 0.4, 0.2) // Bright orange for operands
+                };
+
+                let scale = Vector3::new(1.0, 1.0, 1.0);
+                let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                mesh_node.set_color(color.0, color.1, color.2);
+
+                nodes.push(mesh_node);
+            }
+        }
+    }
+
+    nodes
 }
 
 #[cfg(test)]
