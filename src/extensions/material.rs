@@ -4,7 +4,8 @@ use crate::error::Result;
 use crate::extension::ExtensionHandler;
 use crate::model::{Extension, Model};
 use crate::validator::{
-    validate_material_references, validate_multiproperties_references, validate_texture_paths,
+    validate_color_formats, validate_duplicate_resource_ids, validate_material_references,
+    validate_multiproperties_references, validate_resource_ordering, validate_texture_paths,
     validate_triangle_properties,
 };
 
@@ -43,6 +44,9 @@ impl ExtensionHandler for MaterialExtensionHandler {
         validate_texture_paths(model)?;
         validate_multiproperties_references(model)?;
         validate_triangle_properties(model)?;
+        validate_color_formats(model)?;
+        validate_resource_ordering(model)?;
+        validate_duplicate_resource_ids(model)?;
         Ok(())
     }
 
