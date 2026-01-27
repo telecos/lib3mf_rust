@@ -1768,7 +1768,7 @@ fn create_mesh_nodes_with_triangle_colors(window: &mut Window, model: &Model) ->
                             (color.1 * 255.0) as u8,
                             (color.2 * 255.0) as u8,
                         );
-                        color_groups.entry(color_key).or_insert_with(Vec::new).push(tri_idx);
+                        color_groups.entry(color_key).or_default().push(tri_idx);
                     }
                     
                     // Create a mesh for each color group
