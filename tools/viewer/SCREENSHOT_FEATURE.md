@@ -11,7 +11,7 @@ The lib3mf viewer includes a built-in screenshot feature that allows you to capt
 
 2. Position the view as desired (rotate, pan, zoom)
 
-3. Press the **P** key to capture a screenshot
+3. Press the **S** key to capture a screenshot
 
 4. The screenshot is automatically saved with a timestamped filename
 
@@ -56,7 +56,7 @@ cargo run --release -- ../../test_files/core/sphere.3mf --ui
 #    - Rotate the view with left mouse drag
 #    - Adjust zoom with scroll wheel
 #    - Press 'T' to change background theme if desired
-#    - Press 'P' to capture screenshot
+#    - Press 'S' to capture screenshot
 #
 # 3. Screenshot saved as: screenshot_2025-01-27_145230.png
 ```
@@ -70,13 +70,13 @@ You can capture multiple screenshots during a session:
 cargo run --release -- ../../test_files/core/box.3mf --ui
 
 # While running:
-# 1. Position view from front, press 'P'
+# 1. Position view from front, press 'S'
 #    → screenshot_2025-01-27_100500.png
 #
-# 2. Rotate to side view, press 'P'
+# 2. Rotate to side view, press 'S'
 #    → screenshot_2025-01-27_100512.png
 #
-# 3. Rotate to top view, press 'P'
+# 3. Rotate to top view, press 'S'
 #    → screenshot_2025-01-27_100525.png
 ```
 
@@ -89,11 +89,11 @@ Capture screenshots with different background themes:
 cargo run --release -- ../../test_files/material/kinect_scan.3mf --ui
 
 # While running:
-# 1. Default dark theme, press 'P'
-# 2. Press 'T' to cycle to light theme, press 'P'
-# 3. Press 'T' to cycle to blue theme, press 'P'
-# 4. Press 'T' to cycle to white theme, press 'P'
-# 5. Press 'T' to cycle to black theme, press 'P'
+# 1. Default dark theme, press 'S'
+# 2. Press 'T' to cycle to light theme, press 'S'
+# 3. Press 'T' to cycle to blue theme, press 'S'
+# 4. Press 'T' to cycle to white theme, press 'S'
+# 5. Press 'T' to cycle to black theme, press 'S'
 ```
 
 ### With/Without Axes
@@ -103,18 +103,18 @@ cargo run --release -- ../../test_files/material/kinect_scan.3mf --ui
 cargo run --release -- ../../test_files/core/torus.3mf --ui
 
 # While running:
-# 1. With axes visible (default), press 'P'
+# 1. With axes visible (default), press 'S'
 # 2. Press 'A' to hide axes
-# 3. Press 'P' to capture without axes
+# 3. Press 'S' to capture without axes
 ```
 
 ## Keyboard Shortcut
 
 | Key | Action |
 |-----|--------|
-| **P** | Capture screenshot |
+| **S** | Capture screenshot |
 
-Press 'P' at any time while the viewer window is active to capture a screenshot of the current view.
+Press 'S' at any time while the viewer window is active to capture a screenshot of the current view.
 
 ## Output Format
 

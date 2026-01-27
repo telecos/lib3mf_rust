@@ -328,10 +328,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     show_axes = !show_axes;
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
-                WindowEvent::Key(Key::P, Action::Release, _) => {
-                    // P key: Capture screenshot
+                WindowEvent::Key(Key::S, Action::Release, _) => {
+                    // S key: Capture screenshot
                     if let Err(e) = capture_screenshot(&window) {
                         eprintln!("\n✗ Error capturing screenshot: {}", e);
+                    }
                 }
                 WindowEvent::Key(Key::M, Action::Release, _) => {
                     // M key: Toggle menu display
@@ -442,7 +443,7 @@ fn print_controls() {
     println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
     println!("  ⌨️  B                  : Toggle beam lattice");
-    println!("  ⌨️  P                  : Capture screenshot");
+    println!("  ⌨️  S                  : Capture screenshot");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
