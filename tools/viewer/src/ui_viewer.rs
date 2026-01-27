@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::menu_ui::{MenuAction, MenuBar};
 use image::{Rgb, RgbImage};
 use kiss3d::camera::ArcBall;
 use kiss3d::event::{Action, Key, WindowEvent};
@@ -346,7 +347,6 @@ struct ViewerState {
     theme: Theme,
     boolean_mode: BooleanMode,
     print_area: PrintArea,
-    show_menu: bool,
     slice_view: SliceView,
     show_displacement: bool,
     show_materials: bool,
@@ -364,7 +364,6 @@ impl ViewerState {
             theme: Theme::Dark,
             boolean_mode: BooleanMode::Normal,
             print_area: PrintArea::new(),
-            show_menu: false,
             slice_view: SliceView::new(),
             show_displacement: false,
             show_materials: true,
@@ -385,7 +384,6 @@ impl ViewerState {
             theme: Theme::Dark,
             boolean_mode: BooleanMode::Normal,
             print_area: PrintArea::new(),
-            show_menu: false,
             slice_view,
             show_displacement: false,
             show_materials: true,
@@ -469,6 +467,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     // Track axis visualization state (default: visible)
     let mut show_axes = true;
 
+    // Initialize menu bar
+    let mut menu_bar = MenuBar::new();
+
     // Calculate axis length based on model size (if model is loaded)
     let mut axis_length = 100.0; // Default length for empty scene
     if let Some(ref model) = state.model {
@@ -484,8 +485,25 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
     // Main event loop
     while window.render_with_camera(&mut camera) {
+        // Update menu bar dimensions
+        let size = window.size();
+        menu_bar.update_dimensions(size.x, size.y);
+        
         // Handle window events
         for event in window.events().iter() {
+            // Let menu bar handle event first
+            if let Some(action) = menu_bar.handle_event(&event.value) {
+                handle_menu_action(
+                    action,
+                    &mut window,
+                    &mut state,
+                    &mut camera,
+                    &mut show_axes,
+                    &mut axis_length,
+                    &mut menu_bar,
+                );
+            }
+            
             match event.value {
                 WindowEvent::Key(Key::O, Action::Press, modifiers)
                     if modifiers.contains(kiss3d::event::Modifiers::Control) =>
@@ -671,13 +689,12 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     }
                 }
                 WindowEvent::Key(Key::M, Action::Release, _) => {
-                    // M key: Toggle menu display
-                    state.show_menu = !state.show_menu;
-                    if state.show_menu {
-                        print_menu(&state);
-                    } else {
-                        println!("Menu hidden");
-                    }
+                    // M key: Toggle menu bar visibility
+                    menu_bar.toggle_visibility();
+                    println!(
+                        "Menu Bar: {}",
+                        if menu_bar.visible { "ON" } else { "OFF" }
+                    );
                 }
                 WindowEvent::Key(Key::R, Action::Release, _) => {
                     // R key: Toggle material rendering
@@ -1182,9 +1199,205 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 }
             }
         }
+        
+        // Draw menu bar (rendered last so it's on top)
+        menu_bar.render(&mut window);
     }
 
     Ok(())
+}
+
+/// Handle menu action triggered by the menu bar
+#[allow(clippy::too_many_arguments)]
+fn handle_menu_action(
+    action: MenuAction,
+    window: &mut Window,
+    state: &mut ViewerState,
+    camera: &mut ArcBall,
+    show_axes: &mut bool,
+    axis_length: &mut f32,
+    menu_bar: &mut MenuBar,
+) {
+    match action {
+        MenuAction::Open => {
+            if let Some(path) = open_file_dialog() {
+                match state.load_file(path) {
+                    Ok(()) => {
+                        // Hide existing nodes
+                        for node in &mut state.mesh_nodes {
+                            node.set_visible(false);
+                        }
+                        state.mesh_nodes.clear();
+                        for node in &mut state.beam_nodes {
+                            node.set_visible(false);
+                        }
+                        state.beam_nodes.clear();
+
+                        // Create new nodes
+                        if let Some(ref model) = state.model {
+                            state.mesh_nodes = create_mesh_nodes_with_displacement(
+                                window,
+                                model,
+                                state.boolean_mode,
+                                state.show_displacement,
+                            );
+                            state.beam_nodes = create_beam_lattice_nodes(window, model);
+                            window.set_title(&state.window_title());
+                            println!("\n✓ File loaded successfully!");
+                            print_model_info(model);
+
+                            // Reset camera
+                            *camera = create_camera_for_model(state.model.as_ref());
+                            
+                            // Update axis length
+                            let (min_bound, max_bound) = calculate_model_bounds(model);
+                            let size = Vector3::new(
+                                max_bound.0 - min_bound.0,
+                                max_bound.1 - min_bound.1,
+                                max_bound.2 - min_bound.2,
+                            );
+                            let max_size = size.x.max(size.y).max(size.z);
+                            *axis_length = max_size * 0.5;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error loading file: {}", e);
+                    }
+                }
+            }
+        }
+        MenuAction::BrowseTests => {
+            println!("\nBrowse test suites feature requires restart with --browse-tests flag");
+        }
+        MenuAction::ExportScreenshot => {
+            if let Err(e) = capture_screenshot(window) {
+                eprintln!("Error capturing screenshot: {}", e);
+            }
+        }
+        MenuAction::Exit => {
+            window.close();
+        }
+        MenuAction::ToggleAxes => {
+            *show_axes = !*show_axes;
+            menu_bar.set_checked(MenuAction::ToggleAxes, *show_axes);
+            println!("Axes: {}", if *show_axes { "ON" } else { "OFF" });
+        }
+        MenuAction::TogglePrintBed => {
+            state.print_area.toggle_visibility();
+            menu_bar.set_checked(MenuAction::TogglePrintBed, state.print_area.visible);
+            println!("Print Bed: {}", if state.print_area.visible { "ON" } else { "OFF" });
+        }
+        MenuAction::ToggleGrid => {
+            println!("Grid toggle not yet implemented");
+        }
+        MenuAction::ToggleRulers => {
+            println!("Rulers toggle not yet implemented");
+        }
+        MenuAction::ResetCamera => {
+            *camera = create_camera_for_model(state.model.as_ref());
+            println!("Camera reset to default position");
+        }
+        MenuAction::FitToModel => {
+            if let Some(ref model) = state.model {
+                *camera = create_camera_for_model(Some(model));
+                println!("Camera fitted to model");
+            }
+        }
+        MenuAction::TopView | MenuAction::FrontView | MenuAction::SideView => {
+            println!("View presets not yet implemented");
+        }
+        MenuAction::ThemeLight => {
+            state.theme = Theme::Light;
+            let bg = state.theme.background_color();
+            window.set_background_color(bg.0, bg.1, bg.2);
+            println!("Theme: Light");
+        }
+        MenuAction::ThemeDark => {
+            state.theme = Theme::Dark;
+            let bg = state.theme.background_color();
+            window.set_background_color(bg.0, bg.1, bg.2);
+            println!("Theme: Dark");
+        }
+        MenuAction::ThemeCustom => {
+            println!("Custom theme not yet implemented");
+        }
+        MenuAction::PrintBedSettings => {
+            println!("Print bed settings - use 'C' key to configure");
+        }
+        MenuAction::Preferences => {
+            println!("Preferences dialog not yet implemented");
+        }
+        MenuAction::ToggleMaterials => {
+            println!("Materials are always enabled");
+        }
+        MenuAction::ToggleBeamLattice => {
+            state.show_beams = !state.show_beams;
+            for node in &mut state.beam_nodes {
+                node.set_visible(state.show_beams);
+            }
+            menu_bar.set_checked(MenuAction::ToggleBeamLattice, state.show_beams);
+            println!("Beam Lattice: {}", if state.show_beams { "ON" } else { "OFF" });
+        }
+        MenuAction::ToggleSliceStack => {
+            state.slice_view.toggle_visibility();
+            menu_bar.set_checked(MenuAction::ToggleSliceStack, state.slice_view.visible);
+            println!("Slice View: {}", if state.slice_view.visible { "ON" } else { "OFF" });
+        }
+        MenuAction::ToggleDisplacement => {
+            state.show_displacement = !state.show_displacement;
+            menu_bar.set_checked(MenuAction::ToggleDisplacement, state.show_displacement);
+            
+            // Rebuild mesh nodes with/without displacement
+            for node in &mut state.mesh_nodes {
+                node.set_visible(false);
+            }
+            state.mesh_nodes.clear();
+            
+            if let Some(ref model) = state.model {
+                state.mesh_nodes = create_mesh_nodes_with_displacement(
+                    window,
+                    model,
+                    state.boolean_mode,
+                    state.show_displacement,
+                );
+            }
+            
+            println!("Displacement: {}", if state.show_displacement { "ON" } else { "OFF" });
+        }
+        MenuAction::ToggleBooleanOps => {
+            state.boolean_mode = state.boolean_mode.next();
+            println!("Boolean mode: {}", state.boolean_mode.name());
+            
+            // Rebuild mesh nodes with new boolean mode
+            for node in &mut state.mesh_nodes {
+                node.set_visible(false);
+            }
+            state.mesh_nodes.clear();
+            
+            if let Some(ref model) = state.model {
+                state.mesh_nodes = create_mesh_nodes_with_displacement(
+                    window,
+                    model,
+                    state.boolean_mode,
+                    state.show_displacement,
+                );
+            }
+        }
+        MenuAction::KeyboardShortcuts => {
+            print_controls();
+        }
+        MenuAction::About => {
+            println!("\n═══════════════════════════════════════════════════════════");
+            println!("  3MF Viewer");
+            println!("  Version: 0.1.0");
+            println!("  A viewer for 3D Manufacturing Format files");
+            println!("  Built with lib3mf_rust");
+            println!("═══════════════════════════════════════════════════════════\n");
+        }
+        MenuAction::OpenRecent | MenuAction::None => {
+            // Not implemented
+        }
+    }
 }
 
 /// Open a file dialog to select a 3MF file
@@ -2425,6 +2638,8 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
 }
 
 /// Print the menu with current settings
+/// Print menu information (kept for potential future use)
+#[allow(dead_code)]
 fn print_menu(state: &ViewerState) {
     println!();
     println!("═══════════════════════════════════════════════════════════");

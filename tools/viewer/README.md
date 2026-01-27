@@ -5,17 +5,22 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
 ## Features
 
 - **Interactive 3D Viewer**: Real-time 3D visualization with mouse controls
+  - **GUI Menu Bar** (NEW!): Clickable menu bar with File, View, Settings, Extensions, and Help menus
+    - Press 'M' to show/hide menu bar
+    - Click menu items for easy access to all features
+    - Visual checkmarks show active features
+    - Keyboard shortcuts displayed alongside menu items
+    - See [GUI_MENU_FEATURE.md](GUI_MENU_FEATURE.md) for detailed documentation
   - **Rotate view**: Left mouse drag
   - **Pan view**: Right mouse drag  
   - **Zoom**: Mouse scroll wheel
   - **XYZ Axes**: Toggle coordinate axes with 'A' key (X=Red, Y=Green, Z=Blue)
   - **Screenshot capture**: Save current view to PNG with 'S' key (auto-timestamped filenames)
-  - **Print Area Visualization** (NEW!): Configurable build volume wireframe box
+  - **Print Area Visualization**: Configurable build volume wireframe box
     - Toggle visibility with 'P' key
     - Configure dimensions with 'C' key
     - Default: 200x200x200mm
-  - **Menu System** (NEW!): Press 'M' to view current settings
-  - **2D Slice View** (NEW!): Interactive cross-section visualization
+  - **2D Slice View**: Interactive cross-section visualization
     - **Toggle slice view**: Press 'Z' to enable/disable 2D slice visualization
     - **Adjust Z height**: Use Shift+Up/Down to move the slice plane
     - **Slice plane**: Yellow rectangle showing the current slice position
@@ -125,13 +130,32 @@ cargo run --release -- <path-to-3mf-file> --ui
 ```
 
 **Controls:**
+
+**GUI Menu Bar** (NEW!):
+- Click on menu labels (File, View, Settings, Extensions, Help) to access features
+- ⌨️ **M Key**: Toggle menu bar visibility
+- See [GUI_MENU_FEATURE.md](GUI_MENU_FEATURE.md) for complete menu documentation
+
+**Mouse Controls:**
 - 🖱️ **Left Mouse + Drag**: Rotate view around the model
 - 🖱️ **Right Mouse + Drag**: Pan the view
 - 🖱️ **Scroll Wheel**: Zoom in/out
-- ⌨️ **Arrow Keys**: Pan the view
+
+**Keyboard Shortcuts:**
+- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
+- ⌨️ **Ctrl+T**: Browse test suites from GitHub
+- ⌨️ **S**: Capture screenshot to PNG file (timestamped filename)
+- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
+- ⌨️ **P Key**: Toggle print area visibility
+- ⌨️ **C Key**: Configure print area dimensions
 - ⌨️ **T**: Cycle through background themes (Dark, Light, Blue, White, Black)
 - ⌨️ **V**: Cycle through boolean operation visualization modes
 - ⌨️ **B**: Toggle beam lattice (if present)
+- ⌨️ **D**: Toggle displacement visualization
+- ⌨️ **Z**: Toggle 2D slice view
+- ⌨️ **F**: Fit model to view
+- ⌨️ **Home**: Reset camera to default position
+- ⌨️ **Arrow Keys**: Pan the view
 - ⌨️ **A Key**: Toggle XYZ axes (default: visible)
 - ⌨️ **M Key**: Toggle menu display (NEW!)
 - ⌨️ **R Key**: Toggle material rendering (ON = show colors, OFF = default gray) (NEW!)
