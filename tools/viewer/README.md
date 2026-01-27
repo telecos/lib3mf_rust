@@ -23,6 +23,14 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Export to PNG**: Press 'X' to export current slice with grid and contours
     - **Toggle plane**: Press 'L' to show/hide the slice plane rectangle
     - See [SLICE_VIEW_FEATURE.md](SLICE_VIEW_FEATURE.md) for detailed documentation
+  - **Slice Stack Visualization** (NEW!): Comprehensive slice extension support
+    - **Automatic detection**: Recognizes 3MF files with pre-computed slices
+    - **Single slice navigation**: Step through slices with Up/Down arrows
+    - **3D stack mode**: View all slices simultaneously with color gradient
+    - **Animation**: Play/pause with Space, adjust speed with [/]
+    - **Spread control**: Separate slices in 3D with Shift+Up/Down
+    - **Rendering modes**: Toggle filled/outline with 'N'
+    - See [SLICE_STACK_FEATURE.md](SLICE_STACK_FEATURE.md) for detailed documentation
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
