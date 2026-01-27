@@ -15,6 +15,14 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - Configure dimensions with 'C' key
     - Default: 200x200x200mm
   - **Menu System** (NEW!): Press 'M' to view current settings
+  - **2D Slice View** (NEW!): Interactive cross-section visualization
+    - **Toggle slice view**: Press 'Z' to enable/disable 2D slice visualization
+    - **Adjust Z height**: Use Shift+Up/Down to move the slice plane
+    - **Slice plane**: Yellow rectangle showing the current slice position
+    - **Contour display**: Red lines showing model intersection with the plane
+    - **Export to PNG**: Press 'X' to export current slice with grid and contours
+    - **Toggle plane**: Press 'L' to show/hide the slice plane rectangle
+    - See [SLICE_VIEW_FEATURE.md](SLICE_VIEW_FEATURE.md) for detailed documentation
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
