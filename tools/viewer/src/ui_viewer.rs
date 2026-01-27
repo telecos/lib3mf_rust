@@ -102,6 +102,34 @@ impl BooleanMode {
     }
 }
 
+/// Print area configuration for build volume visualization
+#[derive(Debug, Clone)]
+struct PrintArea {
+    width: f32,   // X dimension
+    depth: f32,   // Y dimension
+    height: f32,  // Z dimension
+    unit: String, // "mm", "inch", etc.
+    visible: bool,
+}
+
+impl PrintArea {
+    /// Create a new print area with default settings
+    fn new() -> Self {
+        Self {
+            width: 200.0,
+            depth: 200.0,
+            height: 200.0,
+            unit: "mm".to_string(),
+            visible: true,
+        }
+    }
+
+    /// Toggle visibility of the print area
+    fn toggle_visibility(&mut self) {
+        self.visible = !self.visible;
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
@@ -111,6 +139,8 @@ struct ViewerState {
     show_beams: bool,
     theme: Theme,
     boolean_mode: BooleanMode,
+    print_area: PrintArea,
+    show_menu: bool,
 }
 
 impl ViewerState {
@@ -124,6 +154,8 @@ impl ViewerState {
             show_beams: true,
             theme: Theme::Dark,
             boolean_mode: BooleanMode::Normal,
+            print_area: PrintArea::new(),
+            show_menu: false,
         }
     }
 
@@ -137,6 +169,8 @@ impl ViewerState {
             show_beams: true,
             theme: Theme::Dark,
             boolean_mode: BooleanMode::Normal,
+            print_area: PrintArea::new(),
+            show_menu: false,
         }
     }
 
@@ -366,6 +400,49 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     show_axes = !show_axes;
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
                 }
+                WindowEvent::Key(Key::M, Action::Release, _) => {
+                    // M key: Toggle menu display
+                    state.show_menu = !state.show_menu;
+                    if state.show_menu {
+                        print_menu(&state);
+                    } else {
+                        println!("Menu hidden");
+                    }
+                }
+                WindowEvent::Key(Key::P, Action::Release, _) => {
+                    // P key: Toggle print area visibility
+                    state.print_area.toggle_visibility();
+                    println!(
+                        "Print Area: {}",
+                        if state.print_area.visible { "ON" } else { "OFF" }
+                    );
+                }
+                WindowEvent::Key(Key::C, Action::Release, _) => {
+                    // C key: Configure print area
+                    println!("\n═══════════════════════════════════════════════════════════");
+                    println!("  Configure Print Area");
+                    println!("═══════════════════════════════════════════════════════════");
+                    println!();
+                    println!("Current settings:");
+                    println!("  Width (X):  {} {}", state.print_area.width, state.print_area.unit);
+                    println!("  Depth (Y):  {} {}", state.print_area.depth, state.print_area.unit);
+                    println!("  Height (Z): {} {}", state.print_area.height, state.print_area.unit);
+                    println!();
+                    println!("To change settings, use the console:");
+                    println!("  - Enter new dimensions when prompted");
+                    println!("  - Press Enter to keep current value");
+                    println!();
+                    println!("═══════════════════════════════════════════════════════════");
+                    
+                    // Simple console-based configuration
+                    if let Ok(new_config) = configure_print_area(&state.print_area) {
+                        state.print_area = new_config;
+                        println!("\n✓ Print area updated successfully!");
+                        println!("  Width (X):  {} {}", state.print_area.width, state.print_area.unit);
+                        println!("  Depth (Y):  {} {}", state.print_area.depth, state.print_area.unit);
+                        println!("  Height (Z): {} {}", state.print_area.height, state.print_area.unit);
+                    }
+                }
                 _ => {}
             }
         }
@@ -373,6 +450,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         // Draw XYZ axes if visible
         if show_axes {
             draw_axes(&mut window, axis_length);
+        }
+
+        // Draw print area if visible
+        if state.print_area.visible {
+            draw_print_area(&mut window, &state.print_area);
         }
     }
 
@@ -399,6 +481,9 @@ fn print_controls() {
     println!("  🖱️  Scroll Wheel       : Zoom in/out");
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  A Key              : Toggle XYZ axes");
+    println!("  ⌨️  M Key              : Toggle menu");
+    println!("  ⌨️  P Key              : Toggle print area");
+    println!("  ⌨️  C Key              : Configure print area");
     println!("  ⌨️  Ctrl+O             : Open file");
     println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
@@ -1116,10 +1201,152 @@ fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> V
 
     nodes
 }
+  
+/// Draw print area as a wireframe box (12 lines)
+fn draw_print_area(window: &mut Window, area: &PrintArea) {
+    // Calculate half dimensions for centering at origin
+    let half_width = area.width / 2.0;
+    let half_depth = area.depth / 2.0;
+
+    // Define 8 corners of the box
+    let corners = [
+        Point3::new(-half_width, -half_depth, 0.0),           // 0: bottom front left
+        Point3::new(half_width, -half_depth, 0.0),            // 1: bottom front right
+        Point3::new(half_width, half_depth, 0.0),             // 2: bottom back right
+        Point3::new(-half_width, half_depth, 0.0),            // 3: bottom back left
+        Point3::new(-half_width, -half_depth, area.height),   // 4: top front left
+        Point3::new(half_width, -half_depth, area.height),    // 5: top front right
+        Point3::new(half_width, half_depth, area.height),     // 6: top back right
+        Point3::new(-half_width, half_depth, area.height),    // 7: top back left
+    ];
+
+    // Color for print area - light blue/gray
+    let color = Point3::new(0.5, 0.7, 0.9);
+
+    // Draw bottom face (4 lines)
+    window.draw_line(&corners[0], &corners[1], &color);
+    window.draw_line(&corners[1], &corners[2], &color);
+    window.draw_line(&corners[2], &corners[3], &color);
+    window.draw_line(&corners[3], &corners[0], &color);
+
+    // Draw top face (4 lines)
+    window.draw_line(&corners[4], &corners[5], &color);
+    window.draw_line(&corners[5], &corners[6], &color);
+    window.draw_line(&corners[6], &corners[7], &color);
+    window.draw_line(&corners[7], &corners[4], &color);
+
+    // Draw vertical edges (4 lines)
+    window.draw_line(&corners[0], &corners[4], &color);
+    window.draw_line(&corners[1], &corners[5], &color);
+    window.draw_line(&corners[2], &corners[6], &color);
+    window.draw_line(&corners[3], &corners[7], &color);
+}
+
+/// Print the menu with current settings
+fn print_menu(state: &ViewerState) {
+    println!();
+    println!("═══════════════════════════════════════════════════════════");
+    println!("  Menu - Current Settings");
+    println!("═══════════════════════════════════════════════════════════");
+    println!();
+    println!("  Theme:           {}", state.theme.name());
+    println!("  Print Area:      {}", if state.print_area.visible { "ON" } else { "OFF" });
+    println!("    Width (X):     {} {}", state.print_area.width, state.print_area.unit);
+    println!("    Depth (Y):     {} {}", state.print_area.depth, state.print_area.unit);
+    println!("    Height (Z):    {} {}", state.print_area.height, state.print_area.unit);
+    if let Some(ref path) = state.file_path {
+        println!("  File:            {}", path.file_name().unwrap_or_default().to_string_lossy());
+    }
+    println!();
+    println!("  Press M to hide menu");
+    println!("  Press C to configure print area");
+    println!("═══════════════════════════════════════════════════════════");
+    println!();
+}
+
+/// Configure print area dimensions via console input
+fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::error::Error>> {
+    use std::io::{self, Write};
+
+    let mut new_area = current.clone();
+
+    // Helper function to read a line
+    fn read_line() -> Result<String, io::Error> {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        Ok(input.trim().to_string())
+    }
+
+    // Helper function to read and validate a positive dimension
+    fn read_dimension(prompt: &str, current_value: f32, unit: &str) -> Result<f32, io::Error> {
+        print!("{} in {} [{}]: ", prompt, unit, current_value);
+        io::stdout().flush()?;
+        let input = read_line()?;
+        if !input.is_empty() {
+            if let Ok(val) = input.parse::<f32>() {
+                if val > 0.0 {
+                    return Ok(val);
+                }
+            }
+        }
+        Ok(current_value)
+    }
+
+    // Configure width
+    new_area.width = read_dimension("Enter width (X)", current.width, &current.unit)?;
+
+    // Configure depth
+    new_area.depth = read_dimension("Enter depth (Y)", current.depth, &current.unit)?;
+
+    // Configure height
+    new_area.height = read_dimension("Enter height (Z)", current.height, &current.unit)?;
+
+    // Configure unit with validation
+    print!("Enter unit (mm/inch/cm) [{}]: ", current.unit);
+    io::stdout().flush()?;
+    let input = read_line()?;
+    if !input.is_empty() {
+        // Validate unit against allowed values
+        let normalized = input.to_lowercase();
+        match normalized.as_str() {
+            "mm" | "millimeter" | "millimeters" => new_area.unit = "mm".to_string(),
+            "cm" | "centimeter" | "centimeters" => new_area.unit = "cm".to_string(),
+            "inch" | "inches" | "in" => new_area.unit = "inch".to_string(),
+            "m" | "meter" | "meters" => new_area.unit = "m".to_string(),
+            _ => {
+                println!("Warning: Unknown unit '{}', keeping '{}'", input, current.unit);
+            }
+        }
+    }
+
+    Ok(new_area)
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_print_area_new() {
+        let area = PrintArea::new();
+        assert_eq!(area.width, 200.0);
+        assert_eq!(area.depth, 200.0);
+        assert_eq!(area.height, 200.0);
+        assert_eq!(area.unit, "mm");
+        assert!(area.visible);
+    }
+
+    #[test]
+    fn test_print_area_toggle_visibility() {
+        let mut area = PrintArea::new();
+        assert!(area.visible);
+        
+        area.toggle_visibility();
+        assert!(!area.visible);
+        
+        area.toggle_visibility();
+        assert!(area.visible);
+    }
 
     #[test]
     fn test_theme_cycling() {
