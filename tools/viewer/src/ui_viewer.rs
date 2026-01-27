@@ -283,7 +283,8 @@ impl SliceView {
             let slices_elapsed = (self.animation_time * self.animation_speed) as usize;
             
             if slices_elapsed > 0 {
-                self.animation_time = 0.0;
+                // Preserve fractional part for more accurate timing
+                self.animation_time -= slices_elapsed as f32 / self.animation_speed;
                 self.current_slice_index += slices_elapsed;
                 
                 if self.current_slice_index >= self.total_slices {
@@ -799,7 +800,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     println!("  Up/Down arrows     - Navigate slices");
                                     println!("  Home/End           - Jump to first/last slice");
                                     println!("  Space              - Play/pause animation");
-                                    println!("  Ctrl+=/Ctrl+-      - Adjust animation speed");
+                                    println!("  [ / ]              - Adjust animation speed");
                                     println!("  Shift+Up/Down      - Adjust spread factor (in 3D mode)");
                                     println!("  S                  - Toggle slice stack mode");
                                     println!("  K                  - Toggle 3D stack visualization");
@@ -2460,7 +2461,8 @@ fn draw_slice_contours(window: &mut Window, slice_view: &SliceView) {
 fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &lib3mf::model::SliceStack) {
     use lib3mf::model::Vertex2D;
     
-    if slice_view.current_slice_index >= stack.slices.len() {
+    // Early return if slice stack is empty or index is out of bounds
+    if stack.slices.is_empty() || slice_view.current_slice_index >= stack.slices.len() {
         return;
     }
     
@@ -2468,7 +2470,7 @@ fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &
     let z = slice.ztop as f32;
     
     // Color based on position in stack (gradient from blue to red)
-    let t = slice_view.current_slice_index as f32 / stack.slices.len().max(1) as f32;
+    let t = slice_view.current_slice_index as f32 / stack.slices.len() as f32;
     let color = Point3::new(t, 0.0, 1.0 - t);
     
     // Draw each polygon in the slice
@@ -2522,12 +2524,17 @@ fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &
 fn draw_slice_stack_3d(window: &mut Window, slice_view: &SliceView, stack: &lib3mf::model::SliceStack) {
     use lib3mf::model::Vertex2D;
     
+    // Early return if slice stack is empty
+    if stack.slices.is_empty() {
+        return;
+    }
+    
     for (slice_idx, slice) in stack.slices.iter().enumerate() {
         // Apply spread factor
         let z = slice.ztop as f32 * slice_view.spread_factor;
         
         // Color gradient from blue (bottom) to red (top)
-        let t = slice_idx as f32 / stack.slices.len().max(1) as f32;
+        let t = slice_idx as f32 / stack.slices.len() as f32;
         let color = Point3::new(t, 0.0, 1.0 - t);
         
         // Highlight current slice with brighter color
