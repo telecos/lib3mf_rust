@@ -16,6 +16,12 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
+// Constants for beam lattice rendering
+const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
+const GEOMETRY_SEGMENTS: u32 = 8; // Number of segments for cylinder/sphere meshes
+const IDENTITY_SCALE: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0); // Identity scale for meshes
+
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
@@ -639,15 +645,14 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
 
                         // Get beam radii (use beam radius or beamset default)
                         let r1 = beam.r1.unwrap_or(beamset.radius) as f32;
-                        let r2 = beam.r2.unwrap_or(r1 as f64) as f32;
+                        let r2 = beam.r2.map(|r| r as f32).unwrap_or(r1);
 
                         // Create cylinder mesh for the beam
-                        let cylinder = create_cylinder_mesh(p1, p2, r1, r2, 8);
-                        let scale = Vector3::new(1.0, 1.0, 1.0);
-                        let mut mesh_node = window.add_trimesh(cylinder, scale);
+                        let cylinder = create_cylinder_mesh(p1, p2, r1, r2, GEOMETRY_SEGMENTS);
+                        let mut mesh_node = window.add_trimesh(cylinder, IDENTITY_SCALE);
                         
-                        // Set beam color (orange/yellow to distinguish from mesh)
-                        mesh_node.set_color(1.0, 0.6, 0.0);
+                        // Set beam color
+                        mesh_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
                         
                         nodes.push(mesh_node);
                     }
@@ -681,10 +686,9 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                                     })
                                     .fold(beamset.radius, f64::max) as f32;
 
-                                let sphere = create_sphere_mesh(center, max_radius, 8);
-                                let scale = Vector3::new(1.0, 1.0, 1.0);
-                                let mut sphere_node = window.add_trimesh(sphere, scale);
-                                sphere_node.set_color(1.0, 0.6, 0.0);
+                                let sphere = create_sphere_mesh(center, max_radius, GEOMETRY_SEGMENTS);
+                                let mut sphere_node = window.add_trimesh(sphere, IDENTITY_SCALE);
+                                sphere_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
                                 
                                 nodes.push(sphere_node);
                             }
