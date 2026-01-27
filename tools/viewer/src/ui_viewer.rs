@@ -23,6 +23,7 @@ use std::path::PathBuf;
 const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
 const GEOMETRY_SEGMENTS: u32 = 8; // Number of segments for cylinder/sphere meshes
 const IDENTITY_SCALE: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0); // Identity scale for meshes
+const CIRCLE_APPROXIMATION_SEGMENTS: u32 = 16; // Number of segments for circle approximations in slices
 
 // Constants for camera controls
 const CAMERA_DISTANCE_MULTIPLIER: f32 = 1.5; // Factor for comfortable viewing distance
@@ -2608,6 +2609,123 @@ fn triangle_plane_intersection(
     }
 }
 
+/// Compute beam-plane intersection for a cylindrical beam
+/// Returns a circle in 2D if the beam crosses the Z plane
+/// 
+/// # Arguments
+/// * `p1` - First endpoint of the beam (x, y, z)
+/// * `p2` - Second endpoint of the beam (x, y, z)
+/// * `r1` - Radius at first endpoint (must be positive)
+/// * `r2` - Radius at second endpoint (must be positive)
+/// * `z_height` - Z coordinate of the plane
+fn beam_plane_intersection(
+    p1: (f32, f32, f32),
+    p2: (f32, f32, f32),
+    r1: f32,
+    r2: f32,
+    z_height: f32,
+) -> Option<(Point2D, f32)> {
+    let (x1, y1, z1) = p1;
+    let (x2, y2, z2) = p2;
+
+    // Validate radii
+    if r1 <= 0.0 || r2 <= 0.0 {
+        return None; // Invalid radius
+    }
+
+    // Check if beam crosses Z plane (endpoints on different sides)
+    if (z1 - z_height) * (z2 - z_height) > 0.0 {
+        return None; // Both endpoints on same side
+    }
+
+    // Handle edge case where beam is exactly on the plane
+    // Use epsilon appropriate for f32 precision
+    let epsilon = 1e-5;
+    if (z1 - z_height).abs() < epsilon && (z2 - z_height).abs() < epsilon {
+        return None; // Beam lies in plane - degenerate case
+    }
+
+    // Find intersection point along beam axis
+    let t = (z_height - z1) / (z2 - z1);
+    
+    // Clamp t to [0, 1] to handle numerical precision issues
+    let t = t.clamp(0.0, 1.0);
+    
+    let center_x = x1 + t * (x2 - x1);
+    let center_y = y1 + t * (y2 - y1);
+
+    // Interpolate radius for tapered beams
+    let radius = r1 + t * (r2 - r1);
+
+    Some((Point2D { x: center_x, y: center_y }, radius))
+}
+
+/// Compute ball-plane intersection for a spherical ball joint
+/// Returns a circle in 2D if the sphere intersects the Z plane
+///
+/// # Arguments
+/// * `center` - Center of the sphere (x, y, z)
+/// * `radius` - Radius of the sphere (must be positive)
+/// * `z_height` - Z coordinate of the plane
+fn ball_plane_intersection(
+    center: (f32, f32, f32),
+    radius: f32,
+    z_height: f32,
+) -> Option<(Point2D, f32)> {
+    let (x, y, z) = center;
+
+    // Validate radius
+    if radius <= 0.0 {
+        return None; // Invalid radius
+    }
+    
+    let dz = (z - z_height).abs();
+    
+    if dz > radius {
+        return None; // Plane doesn't intersect sphere
+    }
+
+    // Circle radius at slice height (from sphere geometry: r^2 = r_slice^2 + dz^2)
+    let slice_radius = (radius * radius - dz * dz).sqrt();
+
+    Some((Point2D { x, y }, slice_radius))
+}
+
+/// Convert a circle to a polygon approximation with specified number of segments
+/// 
+/// # Arguments
+/// * `center` - Center of the circle
+/// * `radius` - Radius of the circle (should be positive)
+/// * `segments` - Number of segments (must be >= 3)
+fn circle_to_line_segments(center: Point2D, radius: f32, segments: u32) -> Vec<LineSegment2D> {
+    // Validate input
+    if segments < 3 {
+        // Return a minimal triangle for degenerate cases
+        return Vec::new();
+    }
+
+    let mut line_segments = Vec::with_capacity(segments as usize);
+    let two_pi = 2.0 * std::f32::consts::PI;
+    
+    for i in 0..segments {
+        let angle1 = two_pi * (i as f32) / (segments as f32);
+        let angle2 = two_pi * ((i + 1) as f32) / (segments as f32);
+        
+        let p1 = Point2D {
+            x: center.x + radius * angle1.cos(),
+            y: center.y + radius * angle1.sin(),
+        };
+        let p2 = Point2D {
+            x: center.x + radius * angle2.cos(),
+            y: center.y + radius * angle2.sin(),
+        };
+        
+        line_segments.push(LineSegment2D { start: p1, end: p2 });
+    }
+    
+    line_segments
+}
+
 /// Compute all slice contours for a model at a given Z height
 fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
     let mut segments = Vec::new();
@@ -2640,6 +2758,53 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
 
                     if let Some(segment) = triangle_plane_intersection(p1, p2, p3, z_height) {
                         segments.push(segment);
+                    }
+                }
+
+                // Process beam lattices (NEW)
+                if let Some(ref beamset) = mesh.beamset {
+                    // Process beams
+                    for beam in &beamset.beams {
+                        // Validate vertex indices
+                        if beam.v1 >= mesh.vertices.len() || beam.v2 >= mesh.vertices.len() {
+                            continue; // Skip invalid beams
+                        }
+
+                        let v1 = &mesh.vertices[beam.v1];
+                        let v2 = &mesh.vertices[beam.v2];
+
+                        let p1 = (v1.x as f32, v1.y as f32, v1.z as f32);
+                        let p2 = (v2.x as f32, v2.y as f32, v2.z as f32);
+
+                        // Get beam radii (with fallbacks to beamset defaults)
+                        let r1 = beam.r1.unwrap_or(beamset.radius) as f32;
+                        let r2 = beam.r2.or(beam.r1).unwrap_or(beamset.radius) as f32;
+
+                        if let Some((center, radius)) = beam_plane_intersection(p1, p2, r1, r2, z_height) {
+                            // Convert circle to polygon segments
+                            segments.extend(circle_to_line_segments(center, radius, CIRCLE_APPROXIMATION_SEGMENTS));
+                        }
+                    }
+
+                    // Process ball joints (if present)
+                    for ball in &beamset.balls {
+                        // Validate vertex index
+                        if ball.vindex >= mesh.vertices.len() {
+                            continue; // Skip invalid balls
+                        }
+
+                        let vertex = &mesh.vertices[ball.vindex];
+                        let center = (vertex.x as f32, vertex.y as f32, vertex.z as f32);
+
+                        // Get ball radius (with fallback to beamset ball_radius or default radius)
+                        let radius = ball.radius
+                            .or(beamset.ball_radius)
+                            .unwrap_or(beamset.radius) as f32;
+
+                        if let Some((center_2d, slice_radius)) = ball_plane_intersection(center, radius, z_height) {
+                            // Convert circle to polygon segments
+                            segments.extend(circle_to_line_segments(center_2d, slice_radius, CIRCLE_APPROXIMATION_SEGMENTS));
+                        }
                     }
                 }
             }
@@ -3057,5 +3222,181 @@ mod tests {
         assert!(after_pan.x > initial_at.x, "Pan right should increase X coordinate");
         assert_eq!(after_pan.y, initial_at.y, "Pan right should not change Y");
         assert_eq!(after_pan.z, initial_at.z, "Pan right should not change Z");
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_crossing() {
+        // Beam crossing Z plane at z=5
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (10.0, 10.0, 10.0);
+        let r1 = 2.0;
+        let r2 = 4.0;
+        let z_height = 5.0;
+        
+        let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
+        assert!(result.is_some(), "Beam crossing plane should intersect");
+        
+        let (center, radius) = result.unwrap();
+        // At z=5, t should be 0.5
+        assert!((center.x - 5.0).abs() < 0.001, "X should be at midpoint");
+        assert!((center.y - 5.0).abs() < 0.001, "Y should be at midpoint");
+        assert!((radius - 3.0).abs() < 0.001, "Radius should be interpolated to 3.0");
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_invalid_radius() {
+        // Test negative radius
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (10.0, 10.0, 10.0);
+        let z_height = 5.0;
+        
+        let result = beam_plane_intersection(p1, p2, -1.0, 2.0, z_height);
+        assert!(result.is_none(), "Negative radius should return None");
+        
+        let result = beam_plane_intersection(p1, p2, 2.0, 0.0, z_height);
+        assert!(result.is_none(), "Zero radius should return None");
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_no_crossing() {
+        // Beam entirely above Z plane
+        let p1 = (0.0, 0.0, 10.0);
+        let p2 = (10.0, 10.0, 20.0);
+        let r1 = 2.0;
+        let r2 = 4.0;
+        let z_height = 5.0;
+        
+        let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
+        assert!(result.is_none(), "Beam not crossing plane should not intersect");
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_constant_radius() {
+        // Beam with constant radius
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (0.0, 0.0, 10.0);
+        let r1 = 2.5;
+        let r2 = 2.5;
+        let z_height = 7.0;
+        
+        let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
+        assert!(result.is_some(), "Vertical beam should intersect");
+        
+        let (center, radius) = result.unwrap();
+        assert!((center.x - 0.0).abs() < 0.001, "X should be at beam center");
+        assert!((center.y - 0.0).abs() < 0.001, "Y should be at beam center");
+        assert!((radius - 2.5).abs() < 0.001, "Radius should remain constant");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_crossing() {
+        // Ball centered at z=5 with radius 3
+        let center = (10.0, 20.0, 5.0);
+        let radius = 3.0;
+        let z_height = 6.0; // 1 unit above center
+        
+        let result = ball_plane_intersection(center, radius, z_height);
+        assert!(result.is_some(), "Ball should intersect plane");
+        
+        let (center_2d, slice_radius) = result.unwrap();
+        assert!((center_2d.x - 10.0).abs() < 0.001, "X should match ball center");
+        assert!((center_2d.y - 20.0).abs() < 0.001, "Y should match ball center");
+        
+        // At dz=1, slice_radius = sqrt(3^2 - 1^2) = sqrt(8) ≈ 2.828
+        let expected_radius = (radius * radius - 1.0 * 1.0).sqrt();
+        assert!((slice_radius - expected_radius).abs() < 0.001, "Slice radius should be sqrt(8)");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_no_crossing() {
+        // Ball far from plane
+        let center = (10.0, 20.0, 5.0);
+        let radius = 2.0;
+        let z_height = 10.0; // 5 units above center
+        
+        let result = ball_plane_intersection(center, radius, z_height);
+        assert!(result.is_none(), "Ball should not intersect distant plane");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_invalid_radius() {
+        // Test negative and zero radius
+        let center = (10.0, 20.0, 5.0);
+        let z_height = 5.0;
+        
+        let result = ball_plane_intersection(center, -1.0, z_height);
+        assert!(result.is_none(), "Negative radius should return None");
+        
+        let result = ball_plane_intersection(center, 0.0, z_height);
+        assert!(result.is_none(), "Zero radius should return None");
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_at_center() {
+        // Plane passing through ball center
+        let center = (10.0, 20.0, 5.0);
+        let radius = 3.0;
+        let z_height = 5.0;
+        
+        let result = ball_plane_intersection(center, radius, z_height);
+        assert!(result.is_some(), "Ball should intersect plane at center");
+        
+        let (_, slice_radius) = result.unwrap();
+        assert!((slice_radius - radius).abs() < 0.001, "Slice radius should equal ball radius");
+    }
+
+    #[test]
+    fn test_circle_to_line_segments() {
+        let center = Point2D { x: 10.0, y: 20.0 };
+        let radius = 5.0;
+        let segments = 8;
+        
+        let line_segs = circle_to_line_segments(center, radius, segments);
+        
+        assert_eq!(line_segs.len(), segments as usize, "Should have correct number of segments");
+        
+        // Check that all segments are connected (end of one is start of next)
+        for i in 0..segments as usize {
+            let current = &line_segs[i];
+            let next = &line_segs[(i + 1) % segments as usize];
+            
+            assert!((current.end.x - next.start.x).abs() < 0.001, "Segments should be connected");
+            assert!((current.end.y - next.start.y).abs() < 0.001, "Segments should be connected");
+        }
+        
+        // Check that points are approximately at the right distance from center
+        for seg in &line_segs {
+            let dx_start = seg.start.x - center.x;
+            let dy_start = seg.start.y - center.y;
+            let dist_start = (dx_start * dx_start + dy_start * dy_start).sqrt();
+            
+            assert!((dist_start - radius).abs() < 0.001, "Start point should be at radius distance");
+        }
+    }
+
+    #[test]
+    fn test_compute_slice_with_beam_lattice() {
+        use std::fs::File;
+        
+        // Load the pyramid beam lattice test file
+        let file = File::open("../../test_files/beam_lattice/pyramid.3mf")
+            .expect("Failed to open pyramid.3mf test file");
+        let model = Model::from_reader(file).expect("Failed to parse pyramid.3mf");
+        
+        // Compute slices at different heights
+        let z_heights = [0.0, 25.0, 50.0, 75.0, 100.0];
+        
+        for z_height in z_heights {
+            let segments = compute_slice_contours(&model, z_height);
+            
+            // At each height, we should have some segments from beams crossing
+            // The exact number depends on the beam lattice structure
+            // For z > 0 and z < 100, we expect some beam intersections
+            if z_height > 0.0 && z_height < 100.0 {
+                assert!(segments.len() > 0, 
+                    "Expected beam lattice slices at z={}, but got {} segments", 
+                    z_height, segments.len());
+            }
+        }
     }
 }
