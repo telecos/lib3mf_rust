@@ -16,6 +16,11 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
+// Constants for beam lattice rendering
+const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
+const GEOMETRY_SEGMENTS: u32 = 8; // Number of segments for cylinder/sphere meshes
+const IDENTITY_SCALE: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0); // Identity scale for meshes
+
 /// Color themes for the viewer background
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Theme {
@@ -71,6 +76,8 @@ struct ViewerState {
     model: Option<Model>,
     file_path: Option<PathBuf>,
     mesh_nodes: Vec<SceneNode>,
+    beam_nodes: Vec<SceneNode>,
+    show_beams: bool,
     theme: Theme,
 }
 
@@ -81,6 +88,8 @@ impl ViewerState {
             model: None,
             file_path: None,
             mesh_nodes: Vec::new(),
+            beam_nodes: Vec::new(),
+            show_beams: true,
             theme: Theme::Dark,
         }
     }
@@ -91,6 +100,8 @@ impl ViewerState {
             model: Some(model),
             file_path: Some(file_path),
             mesh_nodes: Vec::new(),
+            beam_nodes: Vec::new(),
+            show_beams: true,
             theme: Theme::Dark,
         }
     }
@@ -151,6 +162,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     // Create meshes from the model if one is loaded
     if state.model.is_some() {
         state.mesh_nodes = create_mesh_nodes(&mut window, state.model.as_ref().unwrap());
+        state.beam_nodes = create_beam_lattice_nodes(&mut window, state.model.as_ref().unwrap());
         print_model_info(state.model.as_ref().unwrap());
     } else {
         print_empty_scene_info();
@@ -192,9 +204,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 }
                                 state.mesh_nodes.clear();
 
-                                // Create new mesh nodes
+                                // Hide existing beam nodes
+                                for node in &mut state.beam_nodes {
+                                    node.set_visible(false);
+                                }
+                                state.beam_nodes.clear();
+
+                                // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
                                     state.mesh_nodes = create_mesh_nodes(&mut window, model);
+                                    state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
@@ -234,9 +253,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 }
                                 state.mesh_nodes.clear();
 
-                                // Create new mesh nodes
+                                // Hide existing beam nodes
+                                for node in &mut state.beam_nodes {
+                                    node.set_visible(false);
+                                }
+                                state.beam_nodes.clear();
+
+                                // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
                                     state.mesh_nodes = create_mesh_nodes(&mut window, model);
+                                    state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
                                     window.set_title(&state.window_title());
                                     println!("\n✓ File loaded successfully!");
                                     print_model_info(model);
@@ -248,12 +274,19 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
+                WindowEvent::Key(Key::B, Action::Press, _) => {
+                    // B: Toggle beam lattice visibility
+                    state.show_beams = !state.show_beams;
+                    for node in &mut state.beam_nodes {
+                        node.set_visible(state.show_beams);
+                    }
+                    println!(
+                        "\nBeam lattice: {}",
+                        if state.show_beams { "visible" } else { "hidden" }
+                    );
+                }
                 WindowEvent::Key(Key::T, Action::Press, _) => {
                     // T: Cycle through themes
-                    state.cycle_theme(&mut window);
-                }
-                WindowEvent::Key(Key::B, Action::Press, _) => {
-                    // B: Cycle through themes (alternative to T key)
                     state.cycle_theme(&mut window);
                 }
                 WindowEvent::Key(Key::A, Action::Release, _) => {
@@ -295,8 +328,9 @@ fn print_controls() {
     println!("  ⌨️  Arrow Keys         : Pan view");
     println!("  ⌨️  A Key              : Toggle XYZ axes");
     println!("  ⌨️  Ctrl+O             : Open file");
-    println!("  ⌨️  T or B             : Cycle themes");
+    println!("  ⌨️  T                  : Cycle themes");
     println!("  ⌨️  Ctrl+T             : Browse test suites");
+    println!("  ⌨️  B                  : Toggle beam lattice");
     println!("  ⌨️  ESC / Close Window : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -318,6 +352,8 @@ fn print_empty_scene_info() {
 
 /// Print model information
 fn print_model_info(model: &Model) {
+    let beam_count = count_beams(model);
+    
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!("  Model Information:");
@@ -325,6 +361,9 @@ fn print_model_info(model: &Model) {
     println!("  - Triangles: {}", count_triangles(model));
     println!("  - Vertices: {}", count_vertices(model));
     println!("  - Unit: {}", model.unit);
+    if beam_count > 0 {
+        println!("  - Beam Lattice: {} beams", beam_count);
+    }
     println!();
     println!("═══════════════════════════════════════════════════════════");
 }
@@ -477,6 +516,289 @@ fn count_vertices(model: &Model) -> usize {
         }
     }
     total
+}
+
+/// Count total beams in the model
+fn count_beams(model: &Model) -> usize {
+    let mut total = 0;
+    for item in &model.build.items {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            if let Some(ref mesh) = obj.mesh {
+                if let Some(ref beamset) = mesh.beamset {
+                    total += beamset.beams.len();
+                }
+            }
+        }
+    }
+    total
+}
+
+/// Create a cylinder mesh between two points with specified radii
+///
+/// Creates a tapered cylinder (cone if r1 != r2) connecting p1 and p2.
+/// The cylinder is generated with the specified number of segments around the circumference.
+fn create_cylinder_mesh(
+    p1: Point3<f32>,
+    p2: Point3<f32>,
+    r1: f32,
+    r2: f32,
+    segments: u32,
+) -> TriMesh<f32> {
+    let mut vertices = Vec::new();
+    let mut faces = Vec::new();
+
+    // Calculate cylinder axis and length
+    let axis = p2 - p1;
+    let length = axis.norm();
+    
+    if length < 1e-6 {
+        // Degenerate cylinder, return empty mesh
+        return TriMesh::new(vertices, None, None, Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)));
+    }
+
+    let axis_normalized = axis.normalize();
+
+    // Find perpendicular vectors for circle generation
+    let up = if axis_normalized.y.abs() < 0.9 {
+        Vector3::new(0.0, 1.0, 0.0)
+    } else {
+        Vector3::new(1.0, 0.0, 0.0)
+    };
+    let right = axis_normalized.cross(&up).normalize();
+    let forward = axis_normalized.cross(&right).normalize();
+
+    // Generate vertices for both circles
+    for i in 0..segments {
+        let angle = 2.0 * std::f32::consts::PI * (i as f32) / (segments as f32);
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+
+        // Bottom circle (at p1)
+        let offset1 = right * (cos_a * r1) + forward * (sin_a * r1);
+        vertices.push(p1 + offset1);
+
+        // Top circle (at p2)
+        let offset2 = right * (cos_a * r2) + forward * (sin_a * r2);
+        vertices.push(p2 + offset2);
+    }
+
+    // Generate faces connecting the two circles
+    for i in 0..segments {
+        let next_i = (i + 1) % segments;
+        
+        let b1 = i * 2;
+        let t1 = i * 2 + 1;
+        let b2 = next_i * 2;
+        let t2 = next_i * 2 + 1;
+
+        // Two triangles per quad
+        faces.push(Point3::new(b1, t1, b2));
+        faces.push(Point3::new(b2, t1, t2));
+    }
+
+    // Add end caps if radii are non-zero
+    let base_vertex_count = vertices.len();
+    
+    // Bottom cap (at p1)
+    if r1 > 1e-6 {
+        vertices.push(p1); // Center vertex
+        let center_idx = base_vertex_count as u32;
+        for i in 0..segments {
+            let next_i = (i + 1) % segments;
+            let v1 = i * 2;
+            let v2 = next_i * 2;
+            faces.push(Point3::new(center_idx, v2, v1));
+        }
+    }
+
+    // Top cap (at p2)
+    if r2 > 1e-6 {
+        let cap_vertex_count = vertices.len();
+        vertices.push(p2); // Center vertex
+        let center_idx = cap_vertex_count as u32;
+        for i in 0..segments {
+            let next_i = (i + 1) % segments;
+            let v1 = i * 2 + 1;
+            let v2 = next_i * 2 + 1;
+            faces.push(Point3::new(center_idx, v1, v2));
+        }
+    }
+
+    TriMesh::new(
+        vertices,
+        None, // No normals, will be computed
+        None, // No UVs
+        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+    )
+}
+
+/// Create a sphere mesh at a given center point with specified radius
+fn create_sphere_mesh(center: Point3<f32>, radius: f32, segments: u32) -> TriMesh<f32> {
+    let mut vertices = Vec::new();
+    let mut faces = Vec::new();
+
+    // Add top vertex
+    vertices.push(center + Vector3::new(0.0, 0.0, radius));
+
+    // Generate rings of vertices
+    let rings = segments / 2;
+    for ring in 1..rings {
+        let phi = std::f32::consts::PI * (ring as f32) / (rings as f32);
+        let sin_phi = phi.sin();
+        let cos_phi = phi.cos();
+
+        for seg in 0..segments {
+            let theta = 2.0 * std::f32::consts::PI * (seg as f32) / (segments as f32);
+            let sin_theta = theta.sin();
+            let cos_theta = theta.cos();
+
+            let x = sin_phi * cos_theta * radius;
+            let y = sin_phi * sin_theta * radius;
+            let z = cos_phi * radius;
+
+            vertices.push(center + Vector3::new(x, y, z));
+        }
+    }
+
+    // Add bottom vertex
+    vertices.push(center + Vector3::new(0.0, 0.0, -radius));
+
+    // Generate faces for top cap
+    for seg in 0..segments {
+        let next_seg = (seg + 1) % segments;
+        faces.push(Point3::new(
+            0,
+            seg + 1,
+            next_seg + 1,
+        ));
+    }
+
+    // Generate faces for middle rings
+    for ring in 0..(rings - 2) {
+        let ring_start = 1 + ring * segments;
+        let next_ring_start = ring_start + segments;
+
+        for seg in 0..segments {
+            let next_seg = (seg + 1) % segments;
+
+            let v1 = ring_start + seg;
+            let v2 = ring_start + next_seg;
+            let v3 = next_ring_start + seg;
+            let v4 = next_ring_start + next_seg;
+
+            faces.push(Point3::new(v1, v3, v2));
+            faces.push(Point3::new(v2, v3, v4));
+        }
+    }
+
+    // Generate faces for bottom cap
+    let last_ring_start = 1 + (rings - 2) * segments;
+    let bottom_vertex = (vertices.len() - 1) as u32;
+    for seg in 0..segments {
+        let next_seg = (seg + 1) % segments;
+        faces.push(Point3::new(
+            bottom_vertex,
+            last_ring_start + next_seg,
+            last_ring_start + seg,
+        ));
+    }
+
+    TriMesh::new(
+        vertices,
+        None, // No normals, will be computed
+        None, // No UVs
+        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+    )
+}
+
+/// Create beam lattice nodes from beamsets in the model
+fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    let mut nodes = Vec::new();
+
+    for item in &model.build.items {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            if let Some(ref mesh_data) = obj.mesh {
+                if let Some(ref beamset) = mesh_data.beamset {
+                    // Generate beam cylinders
+                    for beam in &beamset.beams {
+                        // Get vertex positions
+                        if beam.v1 >= mesh_data.vertices.len() || beam.v2 >= mesh_data.vertices.len() {
+                            continue; // Skip invalid beam
+                        }
+
+                        let v1 = &mesh_data.vertices[beam.v1];
+                        let v2 = &mesh_data.vertices[beam.v2];
+
+                        let p1 = Point3::new(v1.x as f32, v1.y as f32, v1.z as f32);
+                        let p2 = Point3::new(v2.x as f32, v2.y as f32, v2.z as f32);
+
+                        // Get beam radii (use beam radius or beamset default)
+                        let r1 = beam.r1.unwrap_or(beamset.radius) as f32;
+                        let r2 = beam.r2.map(|r| r as f32).unwrap_or(r1);
+
+                        // Create cylinder mesh for the beam
+                        let cylinder = create_cylinder_mesh(p1, p2, r1, r2, GEOMETRY_SEGMENTS);
+                        let mut mesh_node = window.add_trimesh(cylinder, IDENTITY_SCALE);
+                        
+                        // Set beam color
+                        mesh_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
+                        
+                        nodes.push(mesh_node);
+                    }
+
+                    // Add spherical joints at highly connected vertices
+                    // (only for sphere cap mode)
+                    if beamset.cap_mode == lib3mf::BeamCapMode::Sphere {
+                        use std::collections::HashMap;
+                        let mut vertex_connections: HashMap<usize, usize> = HashMap::new();
+                        
+                        for beam in &beamset.beams {
+                            *vertex_connections.entry(beam.v1).or_insert(0) += 1;
+                            *vertex_connections.entry(beam.v2).or_insert(0) += 1;
+                        }
+
+                        // Add spheres at vertices with multiple connections
+                        for (vertex_idx, connection_count) in vertex_connections.iter() {
+                            if *connection_count >= 2 && *vertex_idx < mesh_data.vertices.len() {
+                                let v = &mesh_data.vertices[*vertex_idx];
+                                let center = Point3::new(v.x as f32, v.y as f32, v.z as f32);
+                                
+                                // Use the maximum radius of beams connected to this vertex
+                                let max_radius = beamset.beams.iter()
+                                    .filter(|b| b.v1 == *vertex_idx || b.v2 == *vertex_idx)
+                                    .map(|b| {
+                                        if b.v1 == *vertex_idx {
+                                            b.r1.unwrap_or(beamset.radius)
+                                        } else {
+                                            b.r2.unwrap_or(b.r1.unwrap_or(beamset.radius))
+                                        }
+                                    })
+                                    .fold(beamset.radius, f64::max) as f32;
+
+                                let sphere = create_sphere_mesh(center, max_radius, GEOMETRY_SEGMENTS);
+                                let mut sphere_node = window.add_trimesh(sphere, IDENTITY_SCALE);
+                                sphere_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
+                                
+                                nodes.push(sphere_node);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    nodes
 }
 
 /// Draw XYZ coordinate axes
