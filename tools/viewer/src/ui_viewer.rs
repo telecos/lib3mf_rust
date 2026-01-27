@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+use image::{Rgb, RgbImage};
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
@@ -130,6 +131,75 @@ impl PrintArea {
     }
 }
 
+/// 2D point for slice contours
+#[derive(Debug, Clone, Copy)]
+struct Point2D {
+    x: f32,
+    y: f32,
+}
+
+/// Line segment in 2D space for slice contours
+#[derive(Debug, Clone, Copy)]
+struct LineSegment2D {
+    start: Point2D,
+    end: Point2D,
+}
+
+/// Slice view state
+#[derive(Debug, Clone)]
+struct SliceView {
+    /// Current Z height for the slice plane
+    z_height: f32,
+    /// Minimum Z bound of the model
+    min_z: f32,
+    /// Maximum Z bound of the model
+    max_z: f32,
+    /// Whether the slice view is visible
+    visible: bool,
+    /// Whether to show the slice plane in 3D view
+    show_plane: bool,
+    /// Computed contour line segments at current Z height
+    contours: Vec<LineSegment2D>,
+}
+
+impl SliceView {
+    /// Create a new slice view with default settings
+    fn new() -> Self {
+        Self {
+            z_height: 0.0,
+            min_z: 0.0,
+            max_z: 100.0,
+            visible: false,
+            show_plane: true,
+            contours: Vec::new(),
+        }
+    }
+
+    /// Initialize slice view with model bounds
+    fn initialize_from_model(&mut self, model: &Model) {
+        let (min_bound, max_bound) = calculate_model_bounds(model);
+        self.min_z = min_bound.2;
+        self.max_z = max_bound.2;
+        // Start at middle of the model
+        self.z_height = (self.min_z + self.max_z) / 2.0;
+    }
+
+    /// Move the slice plane up or down
+    fn adjust_z(&mut self, delta: f32) {
+        self.z_height = (self.z_height + delta).clamp(self.min_z, self.max_z);
+    }
+
+    /// Toggle visibility of the slice view
+    fn toggle_visibility(&mut self) {
+        self.visible = !self.visible;
+    }
+
+    /// Toggle visibility of the slice plane in 3D view
+    fn toggle_plane(&mut self) {
+        self.show_plane = !self.show_plane;
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
@@ -141,6 +211,7 @@ struct ViewerState {
     boolean_mode: BooleanMode,
     print_area: PrintArea,
     show_menu: bool,
+    slice_view: SliceView,
 }
 
 impl ViewerState {
@@ -156,11 +227,15 @@ impl ViewerState {
             boolean_mode: BooleanMode::Normal,
             print_area: PrintArea::new(),
             show_menu: false,
+            slice_view: SliceView::new(),
         }
     }
 
     /// Create a viewer state with a loaded model
     fn with_model(model: Model, file_path: PathBuf) -> Self {
+        let mut slice_view = SliceView::new();
+        slice_view.initialize_from_model(&model);
+        
         Self {
             model: Some(model),
             file_path: Some(file_path),
@@ -171,6 +246,7 @@ impl ViewerState {
             boolean_mode: BooleanMode::Normal,
             print_area: PrintArea::new(),
             show_menu: false,
+            slice_view,
         }
     }
 
@@ -178,6 +254,10 @@ impl ViewerState {
     fn load_file(&mut self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::open(&path)?;
         let model = Model::from_reader(file)?;
+        
+        // Reinitialize slice view for new model
+        self.slice_view.initialize_from_model(&model);
+        
         self.model = Some(model);
         self.file_path = Some(path);
         Ok(())
@@ -477,6 +557,101 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         );
                     }
                 }
+                WindowEvent::Key(Key::Z, Action::Release, _) => {
+                    // Z key: Toggle slice view
+                    if state.model.is_some() {
+                        state.slice_view.toggle_visibility();
+                        if state.slice_view.visible {
+                            // Compute contours when enabling
+                            if let Some(ref model) = state.model {
+                                state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                println!(
+                                    "\nSlice View: ON at Z = {:.2} {} ({} segments)",
+                                    state.slice_view.z_height,
+                                    model.unit,
+                                    state.slice_view.contours.len()
+                                );
+                                println!("  Z range: {:.2} to {:.2} {}", 
+                                    state.slice_view.min_z, 
+                                    state.slice_view.max_z,
+                                    model.unit
+                                );
+                                println!("  Use Up/Down arrows (with Shift) to adjust Z height");
+                                println!("  Use X to export slice to PNG");
+                                println!("  Use L to toggle slice plane visibility");
+                            }
+                        } else {
+                            println!("\nSlice View: OFF");
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::Up, Action::Press, modifiers)
+                    if modifiers.contains(kiss3d::event::Modifiers::Shift) =>
+                {
+                    // Shift+Up: Increase Z height
+                    if state.slice_view.visible && state.model.is_some() {
+                        let delta = (state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
+                        state.slice_view.adjust_z(delta);
+                        
+                        // Recompute contours
+                        if let Some(ref model) = state.model {
+                            state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                            println!(
+                                "Slice Z: {:.2} {} ({} segments)",
+                                state.slice_view.z_height,
+                                model.unit,
+                                state.slice_view.contours.len()
+                            );
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::Down, Action::Press, modifiers)
+                    if modifiers.contains(kiss3d::event::Modifiers::Shift) =>
+                {
+                    // Shift+Down: Decrease Z height
+                    if state.slice_view.visible && state.model.is_some() {
+                        let delta = -(state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
+                        state.slice_view.adjust_z(delta);
+                        
+                        // Recompute contours
+                        if let Some(ref model) = state.model {
+                            state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                            println!(
+                                "Slice Z: {:.2} {} ({} segments)",
+                                state.slice_view.z_height,
+                                model.unit,
+                                state.slice_view.contours.len()
+                            );
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::L, Action::Release, _) => {
+                    // L key: Toggle slice plane visibility
+                    if state.slice_view.visible {
+                        state.slice_view.toggle_plane();
+                        println!(
+                            "Slice Plane: {}",
+                            if state.slice_view.show_plane {
+                                "ON"
+                            } else {
+                                "OFF"
+                            }
+                        );
+                    }
+                }
+                WindowEvent::Key(Key::X, Action::Release, _) => {
+                    // X key: Export slice to PNG
+                    if state.slice_view.visible && state.model.is_some() {
+                        if let Some(ref model) = state.model {
+                            let bounds = calculate_model_bounds(model);
+                            if let Err(e) = export_slice_to_png(&state.slice_view, bounds, &model.unit) {
+                                eprintln!("\n✗ Error exporting slice: {}", e);
+                            }
+                        }
+                    } else if !state.slice_view.visible {
+                        println!("\nSlice view is not enabled. Press Z to enable it first.");
+                    }
+                }
                 _ => {}
             }
         }
@@ -489,6 +664,21 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         // Draw print area if visible
         if state.print_area.visible {
             draw_print_area(&mut window, &state.print_area);
+        }
+
+        // Draw slice view if visible
+        if state.slice_view.visible && state.model.is_some() {
+            if let Some(ref model) = state.model {
+                let bounds = calculate_model_bounds(model);
+                
+                // Draw slice plane if enabled
+                if state.slice_view.show_plane {
+                    draw_slice_plane(&mut window, &state.slice_view, bounds);
+                }
+                
+                // Draw slice contours
+                draw_slice_contours(&mut window, &state.slice_view);
+            }
         }
     }
 
@@ -531,21 +721,25 @@ fn print_controls() {
     println!("  Interactive 3D Viewer Controls");
     println!("═══════════════════════════════════════════════════════════");
     println!();
-    println!("  🖱️  Left Mouse + Drag  : Rotate view");
-    println!("  🖱️  Right Mouse + Drag : Pan view");
-    println!("  🖱️  Scroll Wheel       : Zoom in/out");
-    println!("  ⌨️  Arrow Keys         : Pan view");
-    println!("  ⌨️  A Key              : Toggle XYZ axes");
-    println!("  ⌨️  M Key              : Toggle menu");
-    println!("  ⌨️  P Key              : Toggle print area");
-    println!("  ⌨️  C Key              : Configure print area");
-    println!("  ⌨️  Ctrl+O             : Open file");
-    println!("  ⌨️  T                  : Cycle themes");
-    println!("  ⌨️  Ctrl+T             : Browse test suites");
-    println!("  ⌨️  B                  : Toggle beam lattice");
-    println!("  ⌨️  V                  : Cycle boolean visualization mode");
-    println!("  ⌨️  S                  : Capture screenshot");
-    println!("  ⌨️  ESC / Close Window : Exit viewer");
+    println!("  🖱️  Left Mouse + Drag      : Rotate view");
+    println!("  🖱️  Right Mouse + Drag     : Pan view");
+    println!("  🖱️  Scroll Wheel           : Zoom in/out");
+    println!("  ⌨️  Arrow Keys             : Pan view");
+    println!("  ⌨️  A Key                  : Toggle XYZ axes");
+    println!("  ⌨️  M Key                  : Toggle menu");
+    println!("  ⌨️  P Key                  : Toggle print area");
+    println!("  ⌨️  C Key                  : Configure print area");
+    println!("  ⌨️  Z Key                  : Toggle 2D slice view");
+    println!("  ⌨️  Shift+Up/Down          : Adjust slice Z height");
+    println!("  ⌨️  L Key                  : Toggle slice plane");
+    println!("  ⌨️  X Key                  : Export slice to PNG");
+    println!("  ⌨️  Ctrl+O                 : Open file");
+    println!("  ⌨️  T                      : Cycle themes");
+    println!("  ⌨️  Ctrl+T                 : Browse test suites");
+    println!("  ⌨️  B                      : Toggle beam lattice");
+    println!("  ⌨️  V                      : Cycle boolean visualization mode");
+    println!("  ⌨️  S                      : Capture screenshot");
+    println!("  ⌨️  ESC / Close Window     : Exit viewer");
     println!();
     println!("═══════════════════════════════════════════════════════════");
 }
@@ -1399,6 +1593,284 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
     }
 
     Ok(new_area)
+}
+
+/// Compute intersection of a line segment with a horizontal plane at z_height
+/// Returns the intersection point in 2D (x, y) if it exists
+fn line_plane_intersection(
+    p1: (f32, f32, f32),
+    p2: (f32, f32, f32),
+    z_height: f32,
+) -> Option<Point2D> {
+    let (x1, y1, z1) = p1;
+    let (x2, y2, z2) = p2;
+
+    // Check if line segment crosses the plane
+    if (z1 <= z_height && z2 <= z_height) || (z1 >= z_height && z2 >= z_height) {
+        return None; // Both points on same side of plane
+    }
+
+    // Calculate intersection parameter t
+    let t = (z_height - z1) / (z2 - z1);
+    
+    // Calculate intersection point
+    let x = x1 + t * (x2 - x1);
+    let y = y1 + t * (y2 - y1);
+
+    Some(Point2D { x, y })
+}
+
+/// Compute the intersection of a triangle with a horizontal plane at z_height
+/// Returns a line segment (0, 1, or 2 points - if 2 points, they form a line segment)
+fn triangle_plane_intersection(
+    v1: (f32, f32, f32),
+    v2: (f32, f32, f32),
+    v3: (f32, f32, f32),
+    z_height: f32,
+) -> Option<LineSegment2D> {
+    let mut intersections = Vec::new();
+
+    // Check each edge of the triangle
+    if let Some(p) = line_plane_intersection(v1, v2, z_height) {
+        intersections.push(p);
+    }
+    if let Some(p) = line_plane_intersection(v2, v3, z_height) {
+        intersections.push(p);
+    }
+    if let Some(p) = line_plane_intersection(v3, v1, z_height) {
+        intersections.push(p);
+    }
+
+    // A triangle can intersect a plane at 0, 1 (vertex touch), or 2 points (edge crossing)
+    if intersections.len() == 2 {
+        Some(LineSegment2D {
+            start: intersections[0],
+            end: intersections[1],
+        })
+    } else {
+        None
+    }
+}
+
+/// Compute all slice contours for a model at a given Z height
+fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
+    let mut segments = Vec::new();
+
+    // Iterate through all build items
+    for item in &model.build.items {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            if let Some(ref mesh) = obj.mesh {
+                // For each triangle, check if it intersects the Z plane
+                for triangle in &mesh.triangles {
+                    if triangle.v1 >= mesh.vertices.len()
+                        || triangle.v2 >= mesh.vertices.len()
+                        || triangle.v3 >= mesh.vertices.len()
+                    {
+                        continue; // Skip invalid triangles
+                    }
+
+                    let v1 = &mesh.vertices[triangle.v1];
+                    let v2 = &mesh.vertices[triangle.v2];
+                    let v3 = &mesh.vertices[triangle.v3];
+
+                    let p1 = (v1.x as f32, v1.y as f32, v1.z as f32);
+                    let p2 = (v2.x as f32, v2.y as f32, v2.z as f32);
+                    let p3 = (v3.x as f32, v3.y as f32, v3.z as f32);
+
+                    if let Some(segment) = triangle_plane_intersection(p1, p2, p3, z_height) {
+                        segments.push(segment);
+                    }
+                }
+            }
+        }
+    }
+
+    segments
+}
+
+/// Draw slice plane in 3D view
+fn draw_slice_plane(window: &mut Window, slice_view: &SliceView, model_bounds: ((f32, f32, f32), (f32, f32, f32))) {
+    let (min_bound, max_bound) = model_bounds;
+    let z = slice_view.z_height;
+    
+    // Define corners of the plane slightly larger than model bounds
+    let margin = 10.0;
+    let x_min = min_bound.0 - margin;
+    let x_max = max_bound.0 + margin;
+    let y_min = min_bound.1 - margin;
+    let y_max = max_bound.1 + margin;
+
+    // Draw plane outline as 4 lines
+    let color = Point3::new(1.0, 1.0, 0.0); // Yellow color for slice plane
+    
+    window.draw_line(
+        &Point3::new(x_min, y_min, z),
+        &Point3::new(x_max, y_min, z),
+        &color,
+    );
+    window.draw_line(
+        &Point3::new(x_max, y_min, z),
+        &Point3::new(x_max, y_max, z),
+        &color,
+    );
+    window.draw_line(
+        &Point3::new(x_max, y_max, z),
+        &Point3::new(x_min, y_max, z),
+        &color,
+    );
+    window.draw_line(
+        &Point3::new(x_min, y_max, z),
+        &Point3::new(x_min, y_min, z),
+        &color,
+    );
+}
+
+/// Draw slice contours in 3D view at the slice plane
+fn draw_slice_contours(window: &mut Window, slice_view: &SliceView) {
+    let z = slice_view.z_height;
+    let color = Point3::new(1.0, 0.0, 0.0); // Red color for contour lines
+
+    for segment in &slice_view.contours {
+        window.draw_line(
+            &Point3::new(segment.start.x, segment.start.y, z),
+            &Point3::new(segment.end.x, segment.end.y, z),
+            &color,
+        );
+    }
+}
+
+/// Export slice view to PNG file
+fn export_slice_to_png(
+    slice_view: &SliceView,
+    model_bounds: ((f32, f32, f32), (f32, f32, f32)),
+    unit: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use image::{ImageBuffer, Rgb, RgbImage};
+
+    if slice_view.contours.is_empty() {
+        println!("No contours to export at Z = {}", slice_view.z_height);
+        return Ok(());
+    }
+
+    let (min_bound, max_bound) = model_bounds;
+    
+    // Calculate bounds for the 2D view
+    let x_min = min_bound.0;
+    let x_max = max_bound.0;
+    let y_min = min_bound.1;
+    let y_max = max_bound.1;
+    
+    let width_units = x_max - x_min;
+    let height_units = y_max - y_min;
+    
+    // Image dimensions (pixels) - scale to a reasonable size
+    let scale = 10.0; // pixels per unit
+    let img_width = (width_units * scale).max(100.0) as u32;
+    let img_height = (height_units * scale).max(100.0) as u32;
+    
+    // Create white background image
+    let mut img: RgbImage = ImageBuffer::from_pixel(img_width, img_height, Rgb([255, 255, 255]));
+    
+    // Draw grid lines
+    let grid_color = Rgb([220, 220, 220]);
+    let grid_spacing = 10.0; // units
+    
+    // Vertical grid lines
+    let mut x = (x_min / grid_spacing).ceil() * grid_spacing;
+    while x <= x_max {
+        let px = ((x - x_min) * scale) as u32;
+        if px < img_width {
+            for py in 0..img_height {
+                if let Some(pixel) = img.get_pixel_mut_checked(px, py) {
+                    *pixel = grid_color;
+                }
+            }
+        }
+        x += grid_spacing;
+    }
+    
+    // Horizontal grid lines
+    let mut y = (y_min / grid_spacing).ceil() * grid_spacing;
+    while y <= y_max {
+        let py = img_height - ((y - y_min) * scale) as u32 - 1;
+        if py < img_height {
+            for px in 0..img_width {
+                if let Some(pixel) = img.get_pixel_mut_checked(px, py) {
+                    *pixel = grid_color;
+                }
+            }
+        }
+        y += grid_spacing;
+    }
+    
+    // Draw contour lines in red
+    let line_color = Rgb([255, 0, 0]);
+    for segment in &slice_view.contours {
+        let x1 = ((segment.start.x - x_min) * scale) as i32;
+        let y1 = img_height as i32 - ((segment.start.y - y_min) * scale) as i32 - 1;
+        let x2 = ((segment.end.x - x_min) * scale) as i32;
+        let y2 = img_height as i32 - ((segment.end.y - y_min) * scale) as i32 - 1;
+        
+        // Simple line drawing using Bresenham's algorithm
+        draw_line(&mut img, x1, y1, x2, y2, line_color);
+    }
+    
+    // Generate filename with Z height
+    let now = chrono::Local::now();
+    let filename = format!(
+        "slice_z_{:.2}{unit}_{}.png",
+        slice_view.z_height,
+        now.format("%Y%m%d_%H%M%S")
+    );
+    
+    // Save image
+    img.save(&filename)?;
+    println!("\n✓ Slice exported to: {}", filename);
+    println!("  Z height: {} {}", slice_view.z_height, unit);
+    println!("  Contours: {} segments", slice_view.contours.len());
+    
+    Ok(())
+}
+
+/// Simple line drawing using Bresenham's algorithm
+fn draw_line(img: &mut RgbImage, x1: i32, y1: i32, x2: i32, y2: i32, color: Rgb<u8>) {
+    let dx = (x2 - x1).abs();
+    let dy = (y2 - y1).abs();
+    let sx = if x1 < x2 { 1 } else { -1 };
+    let sy = if y1 < y2 { 1 } else { -1 };
+    let mut err = dx - dy;
+    let mut x = x1;
+    let mut y = y1;
+
+    let (width, height) = img.dimensions();
+
+    loop {
+        // Draw pixel if within bounds
+        if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
+            if let Some(pixel) = img.get_pixel_mut_checked(x as u32, y as u32) {
+                *pixel = color;
+            }
+        }
+
+        if x == x2 && y == y2 {
+            break;
+        }
+
+        let e2 = 2 * err;
+        if e2 > -dy {
+            err -= dy;
+            x += sx;
+        }
+        if e2 < dx {
+            err += dx;
+            y += sy;
+        }
+    }
 }
 
 #[cfg(test)]
