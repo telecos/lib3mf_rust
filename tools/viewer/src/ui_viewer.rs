@@ -206,7 +206,11 @@ fn pick_object(
                     
                     // Test intersection
                     if let Some(distance) = ray_triangle_intersection(&ray, &v0, &v1, &v2) {
-                        if closest_hit.is_none_or(|(_, d)| distance < d) {
+                        let should_update = match closest_hit {
+                            None => true,
+                            Some((_, d)) => distance < d,
+                        };
+                        if should_update {
                             closest_hit = Some((mesh_index, distance));
                         }
                     }
