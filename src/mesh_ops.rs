@@ -461,8 +461,8 @@ pub enum SubdivisionMethod {
     /// Simple midpoint subdivision (fast, no smoothing)
     /// Each triangle is split into 4 by adding midpoint vertices
     Midpoint,
-    /// Loop subdivision (smoother, more computation)
-    /// Applies edge vertex averaging for smoother surfaces
+    /// Loop subdivision (planned - currently same as Midpoint)
+    /// TODO: Implement proper Loop subdivision with edge vertex averaging
     Loop,
     /// Catmull-Clark subdivision (for quad-dominant meshes)
     /// Note: Currently not implemented
@@ -476,9 +476,11 @@ pub struct SubdivisionOptions {
     pub method: SubdivisionMethod,
     /// Number of subdivision levels to apply
     pub levels: u32,
-    /// Whether to preserve boundary edges (not currently used)
+    /// Whether to preserve boundary edges
+    /// Note: Not yet implemented - currently has no effect
     pub preserve_boundaries: bool,
-    /// Whether to interpolate UV coordinates (not currently used)
+    /// Whether to interpolate UV coordinates
+    /// Note: Not yet implemented - currently has no effect
     pub interpolate_uvs: bool,
 }
 
@@ -599,11 +601,12 @@ pub fn subdivide_midpoint(mesh: &Mesh) -> Mesh {
     }
 
     // Pre-allocate capacity for new mesh
-    // Each triangle becomes 4, and we add 3 new vertices per triangle
+    // Estimate: Original vertices + ~1.5 edges per triangle (Euler's formula for closed meshes)
+    // Each edge adds one midpoint vertex
+    let estimated_new_vertices = mesh.vertices.len() + (mesh.triangles.len() * 3 / 2);
     let new_triangle_count = mesh.triangles.len() * 4;
-    let new_vertex_count = mesh.vertices.len() + mesh.triangles.len() * 3;
 
-    let mut result = Mesh::with_capacity(new_vertex_count, new_triangle_count);
+    let mut result = Mesh::with_capacity(estimated_new_vertices, new_triangle_count);
     
     // Copy original vertices
     result.vertices.extend_from_slice(&mesh.vertices);
@@ -704,43 +707,31 @@ fn get_or_create_midpoint(
 
 /// Perform Loop subdivision for smoother surfaces
 ///
-/// Loop subdivision is a smooth subdivision scheme that produces
-/// better quality surfaces than simple midpoint subdivision.
-/// It uses weighted averaging of neighboring vertices.
+/// **Note: Loop subdivision is not yet fully implemented.**
+/// This function currently performs the same midpoint subdivision as `subdivide_midpoint()`.
+/// Proper Loop subdivision would use weighted averaging of neighboring vertices
+/// to produce smoother surfaces.
 ///
-/// Note: This is a simplified implementation that provides smoothing
-/// without full topological analysis. For non-manifold meshes or
-/// boundary edges, behavior may not match the full Loop subdivision spec.
+/// A full Loop subdivision implementation would require:
+/// 1. Build edge-vertex connectivity
+/// 2. Compute valence for each vertex
+/// 3. Apply Loop weights (beta for old vertices, 3/8, 1/8 for edge vertices)
+///
+/// For now, this serves as a placeholder for future implementation.
+/// Use `SubdivisionMethod::Midpoint` for the same behavior with clearer intent.
 ///
 /// # Arguments
 /// * `mesh` - The mesh to subdivide
 ///
 /// # Returns
-/// A new smoothly subdivided mesh
+/// A new subdivided mesh (using midpoint subdivision)
 pub fn subdivide_loop(mesh: &Mesh) -> Mesh {
     if mesh.triangles.is_empty() {
         return mesh.clone();
     }
 
-    // For Loop subdivision, we need to adjust vertex positions
-    // This is a simplified version that smooths the midpoint vertices
-    // based on their neighbors
-    
-    // For now, we'll use a simple smoothing approach:
-    // - Original vertices are slightly relaxed toward their neighbors
-    // - New edge vertices are positioned using weighted average
-    
-    // A full Loop subdivision would require:
-    // 1. Build edge-vertex connectivity
-    // 2. Compute valence for each vertex
-    // 3. Apply Loop weights (beta for old vertices, 3/8, 1/8 for edge vertices)
-    
-    // For simplicity and to avoid complex topology analysis,
-    // we'll return the midpoint subdivision result with slight smoothing
-    
-    // TODO: Implement full Loop subdivision with proper weights
-    // For now, midpoint subdivision is adequate for displacement mapping
-    
+    // TODO: Implement full Loop subdivision with proper vertex weighting
+    // For now, use midpoint subdivision
     subdivide_midpoint(mesh)
 }
 

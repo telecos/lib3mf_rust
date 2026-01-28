@@ -77,6 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("    Triangles: {}", subdivided_midpoint.triangles.len());
     println!();
 
+    // Note: Loop subdivision is planned but not yet fully implemented
+    // It currently produces the same result as midpoint subdivision
+    println!("  Loop method (planned feature, currently same as Midpoint):");
     let options_loop = SubdivisionOptions {
         method: SubdivisionMethod::Loop,
         levels: 1,
@@ -84,7 +87,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     
     let subdivided_loop = subdivide(&mesh, &options_loop);
-    println!("  Loop method (1 level):");
     println!("    Vertices: {}", subdivided_loop.vertices.len());
     println!("    Triangles: {}", subdivided_loop.triangles.len());
     println!();
@@ -138,9 +140,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Use Cases:");
     println!("----------");
     println!("• Displacement map rendering - increase vertex density for detail");
-    println!("• Smooth surface generation - Loop subdivision for organic shapes");
     println!("• Mesh refinement - improve triangle quality before operations");
     println!("• LOD generation - create multiple detail levels");
+    println!();
+    
+    println!("Note:");
+    println!("-----");
+    println!("• Loop subdivision is planned but not yet fully implemented");
+    println!("• It currently produces the same result as midpoint subdivision");
     println!();
 
     println!("✓ Subdivision demonstration complete!");

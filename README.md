@@ -571,21 +571,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let subdivided = subdivide(&mesh, &options);
 
-    // Loop subdivision for smoother surfaces
-    let options = SubdivisionOptions {
-        method: SubdivisionMethod::Loop,
-        levels: 1,
-        ..Default::default()
-    };
-    let smooth_mesh = subdivide(&mesh, &options);
-
+    // Note: Loop subdivision is planned but not yet implemented
+    // Currently it produces the same result as Midpoint subdivision
+    
     Ok(())
 }
 ```
 
 **Subdivision Features:**
 - **Midpoint Subdivision**: Fast, simple subdivision that splits each triangle into 4
-- **Loop Subdivision**: Smoother subdivision scheme for organic shapes
+- **Loop Subdivision**: Planned feature for smoother surfaces (currently same as Midpoint)
 - **Property Preservation**: Triangle properties (pid, p1, p2, p3) are preserved during subdivision
 - **Shared Edge Optimization**: Vertices on shared edges are reused to avoid duplicates
 - **Iterative Subdivision**: Apply subdivision multiple times for higher density
@@ -598,7 +593,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 **Use Cases:**
 - Displacement map rendering - increase vertex density for surface detail
-- Smooth surface generation - Loop subdivision for organic shapes
 - Mesh refinement - improve triangle quality before operations
 - LOD generation - create multiple detail levels
 
