@@ -324,6 +324,20 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             "Configure print bed",
             Category::Settings,
         ),
+        KeyBinding::new(
+            Some(Key::U),
+            Modifiers::empty(),
+            "U",
+            "Toggle ruler",
+            Category::Settings,
+        ),
+        KeyBinding::new(
+            Some(Key::J),
+            Modifiers::empty(),
+            "J",
+            "Toggle scale bar",
+            Category::Settings,
+        ),
         // HELP category
         // Note: Both H and ? (Shift+/) are handled to show help, but we only need
         // one entry since they perform the same action and display_key shows both
