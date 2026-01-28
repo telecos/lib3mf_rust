@@ -1473,7 +1473,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     let path = PathBuf::from(path_str);
                     
                     // Check if it's a .3mf file
-                    if path.extension().map_or(false, |ext| ext == "3mf") {
+                    if path.extension().is_some_and(|ext| ext == "3mf") {
                         println!("\nLoading dropped file: {}", path.display());
                         match state.load_file(path) {
                             Ok(()) => {

@@ -12,12 +12,14 @@ use std::time::Instant;
 const WINDOW_WIDTH: usize = 800;
 /// Height of the slice preview window in pixels
 const WINDOW_HEIGHT: usize = 600;
-/// Background color (light gray)
-const BG_COLOR: u32 = 0x00F0F0F0;
+/// Background color (white)
+const BG_COLOR: u32 = 0x00FFFFFF;
 /// Grid color (medium gray)
 const GRID_COLOR: u32 = 0x00C0C0C0;
 /// Contour line color (red)
 const CONTOUR_COLOR: u32 = 0x00FF0000;
+/// Fill color for solid rendering (dark gray/black)
+const FILL_COLOR: u32 = 0x00303030;
 /// Text color (dark gray)
 const TEXT_COLOR: u32 = 0x00202020;
 /// UI panel background (white)
@@ -60,7 +62,7 @@ impl Default for SliceConfig {
             z_height: 0.0,
             min_z: 0.0,
             max_z: 100.0,
-            filled_mode: false,
+            filled_mode: true, // Default to filled mode for solid rendering
             show_grid: true,
             contours: Vec::new(),
         }
@@ -221,6 +223,63 @@ impl SlicePreviewWindow {
         }
     }
 
+    /// Fill a polygon using scanline algorithm
+    /// Points should form a closed polygon
+    fn fill_polygon(&mut self, points: &[(i32, i32)], color: u32) {
+        if points.len() < 3 {
+            return; // Need at least 3 points for a polygon
+        }
+
+        // Find bounding box
+        let mut min_y = i32::MAX;
+        let mut max_y = i32::MIN;
+        for &(_, y) in points {
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
+        }
+
+        // Clamp to screen bounds
+        min_y = min_y.max(0);
+        max_y = max_y.min(WINDOW_HEIGHT as i32 - 1);
+
+        // For each scanline
+        for y in min_y..=max_y {
+            let mut intersections = Vec::new();
+
+            // Find intersections with polygon edges
+            for i in 0..points.len() {
+                let j = (i + 1) % points.len();
+                let (x1, y1) = points[i];
+                let (x2, y2) = points[j];
+
+                // Check if edge crosses scanline
+                if (y1 <= y && y < y2) || (y2 <= y && y < y1) {
+                    // Calculate x intersection
+                    let x = if y2 == y1 {
+                        x1
+                    } else {
+                        x1 + ((y - y1) * (x2 - x1)) / (y2 - y1)
+                    };
+                    intersections.push(x);
+                }
+            }
+
+            // Sort intersections
+            intersections.sort_unstable();
+
+            // Fill between pairs of intersections
+            for chunk in intersections.chunks(2) {
+                if chunk.len() == 2 {
+                    let x_start = chunk[0].max(0);
+                    let x_end = chunk[1].min(WINDOW_WIDTH as i32 - 1);
+                    for x in x_start..=x_end {
+                        self.draw_pixel(x, y, color);
+                    }
+                }
+            }
+        }
+    }
+
     /// Draw the coordinate grid
     fn draw_grid(&mut self) {
         if !self.config.show_grid {
@@ -258,11 +317,119 @@ impl SlicePreviewWindow {
     fn draw_contours(&mut self) {
         // Clone contours to avoid borrow issues
         let contours = self.config.contours.clone();
-        for segment in &contours {
-            let (x0, y0) = self.to_screen(segment.start.x, segment.start.y);
-            let (x1, y1) = self.to_screen(segment.end.x, segment.end.y);
-            self.draw_line(x0, y0, x1, y1, CONTOUR_COLOR);
+        
+        if self.config.filled_mode {
+            // Build polygons from line segments and fill them
+            let polygons = self.build_polygons_from_segments(&contours);
+            
+            for polygon in &polygons {
+                // Convert model coordinates to screen coordinates
+                let screen_points: Vec<(i32, i32)> = polygon
+                    .iter()
+                    .map(|&(x, y)| self.to_screen(x, y))
+                    .collect();
+                
+                // Fill the polygon
+                self.fill_polygon(&screen_points, FILL_COLOR);
+                
+                // Also draw outline for better visibility
+                for i in 0..screen_points.len() {
+                    let j = (i + 1) % screen_points.len();
+                    self.draw_line(
+                        screen_points[i].0,
+                        screen_points[i].1,
+                        screen_points[j].0,
+                        screen_points[j].1,
+                        CONTOUR_COLOR,
+                    );
+                }
+            }
+        } else {
+            // Just draw outlines
+            for segment in &contours {
+                let (x0, y0) = self.to_screen(segment.start.x, segment.start.y);
+                let (x1, y1) = self.to_screen(segment.end.x, segment.end.y);
+                self.draw_line(x0, y0, x1, y1, CONTOUR_COLOR);
+            }
         }
+    }
+
+    /// Build closed polygons from line segments
+    /// This connects line segments into closed loops
+    fn build_polygons_from_segments(&self, segments: &[LineSegment2D]) -> Vec<Vec<(f32, f32)>> {
+        if segments.is_empty() {
+            return Vec::new();
+        }
+
+        let mut polygons = Vec::new();
+        let mut used = vec![false; segments.len()];
+        const EPSILON: f32 = 0.001;
+
+        // Helper to check if two points are the same
+        let points_equal = |p1: Point2D, p2: Point2D| -> bool {
+            (p1.x - p2.x).abs() < EPSILON && (p1.y - p2.y).abs() < EPSILON
+        };
+
+        // Try to build a polygon starting from each unused segment
+        for start_idx in 0..segments.len() {
+            if used[start_idx] {
+                continue;
+            }
+
+            let mut polygon = Vec::new();
+            let mut current_idx = start_idx;
+            let start_point = segments[start_idx].start;
+
+            loop {
+                if used[current_idx] {
+                    break;
+                }
+
+                used[current_idx] = true;
+                let segment = &segments[current_idx];
+                polygon.push((segment.start.x, segment.start.y));
+
+                // Try to find next connected segment
+                let next_point = segment.end;
+                let mut found_next = false;
+
+                for (idx, seg) in segments.iter().enumerate() {
+                    if used[idx] {
+                        continue;
+                    }
+
+                    if points_equal(next_point, seg.start) {
+                        current_idx = idx;
+                        found_next = true;
+                        break;
+                    } else if points_equal(next_point, seg.end) {
+                        // Need to reverse this segment
+                        // For simplicity, we'll just add the point
+                        current_idx = idx;
+                        found_next = true;
+                        break;
+                    }
+                }
+
+                // Check if we've closed the loop
+                if points_equal(next_point, start_point) {
+                    break;
+                }
+
+                if !found_next {
+                    // Can't continue this polygon, add what we have
+                    polygon.push((next_point.x, next_point.y));
+                    break;
+                }
+            }
+
+            // Only add polygons with at least 3 points
+            if polygon.len() >= 3 {
+                polygons.push(polygon);
+            }
+        }
+
+        polygons
     }
 
     /// Draw UI panel with Z height controls
