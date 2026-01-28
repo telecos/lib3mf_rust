@@ -84,6 +84,7 @@ pub struct SlicePreviewWindow {
     offset_x: f32,
     offset_y: f32,
     /// Last frame time for FPS calculation
+    #[allow(dead_code)]
     last_frame: Instant,
     /// Whether the window is visible
     visible: bool,
@@ -360,16 +361,19 @@ impl SlicePreviewWindow {
     }
 
     /// Set the Z height (for synchronization from 3D view)
+    #[allow(dead_code)]
     pub fn set_z_height(&mut self, z: f32) {
         self.config.z_height = z.clamp(self.config.min_z, self.config.max_z);
     }
 
     /// Check if the window is visible
+    #[allow(dead_code)]
     pub fn is_visible(&self) -> bool {
         self.visible && self.window.is_open()
     }
 
     /// Export current slice to PNG
+    #[allow(dead_code)]
     pub fn export_to_png(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         use image::{ImageBuffer, Rgb};
 
