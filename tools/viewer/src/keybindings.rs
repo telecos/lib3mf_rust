@@ -231,6 +231,13 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Category::Slice,
         ),
         KeyBinding::new(
+            Some(Key::W),
+            Modifiers::empty(),
+            "W",
+            "Toggle slice preview window",
+            Category::Slice,
+        ),
+        KeyBinding::new(
             Some(Key::Up),
             Modifiers::Shift,
             "Shift+↑",
