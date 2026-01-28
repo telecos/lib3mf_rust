@@ -8,7 +8,7 @@ use crate::model::{Extension, Model};
 ///
 /// This handler validates secure content metadata including keystore structure,
 /// consumer definitions, and encryption references. It does not perform actual
-/// cryptographic operations - see SECURE_CONTENT_SUPPORT.md for details.
+/// cryptographic operations.
 ///
 /// # Example
 ///

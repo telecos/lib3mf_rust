@@ -423,8 +423,6 @@ The polygon clipping module provides:
 
 Based on the Clipper2 library (successor to polyclipping used in C++ lib3mf).
 
-See [POLYGON_CLIPPING.md](POLYGON_CLIPPING.md) for detailed documentation and examples.
-
 
 ### Custom Extension Support
 
@@ -780,7 +778,7 @@ The parser successfully handles files using all 3MF extensions including:
 1. **Test-only decryption** using Suite 8 test keys for conformance validation
 2. **Complete keystore metadata extraction** for production applications
 
-Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automatically decrypted during parsing. For production applications, access all encryption metadata (consumers, encryption parameters, access rights) and implement decryption using external cryptographic libraries. **Never use embedded test keys in production.** See [SECURE_CONTENT_SUPPORT.md](SECURE_CONTENT_SUPPORT.md) for detailed information.
+Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automatically decrypted during parsing. For production applications, access all encryption metadata (consumers, encryption parameters, access rights) and implement decryption using external cryptographic libraries. **Never use embedded test keys in production.**
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
@@ -804,8 +802,6 @@ cargo bench -- parse_large
 - Small files (1,000 vertices): ~1 ms
 - Medium files (10,000 vertices): ~7 ms
 - Large files (100,000 vertices): ~70 ms
-
-See [PERFORMANCE.md](PERFORMANCE.md) for detailed performance characteristics, optimization strategies, and profiling guidance.
 
 ## Safety
 
@@ -846,7 +842,6 @@ at your option.
 - [3MF Specification](https://3mf.io/specification/)
 - [3MF Consortium](https://3mf.io/)
 - [lib3mf (Official C++ implementation)](https://github.com/3MFConsortium/lib3mf)
-- [Migration Guide from C++ lib3mf](MIGRATION_FROM_CPP.md) - Comprehensive guide for migrating from the C++ implementation
 
 ## Acknowledgments
 

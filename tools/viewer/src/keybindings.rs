@@ -131,6 +131,13 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Category::View,
         ),
         KeyBinding::new(
+            Some(Key::I),
+            Modifiers::empty(),
+            "I",
+            "Toggle model information",
+            Category::View,
+        ),
+        KeyBinding::new(
             Some(Key::R),
             Modifiers::empty(),
             "R",
