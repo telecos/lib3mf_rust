@@ -72,6 +72,7 @@ pub mod model;
 pub mod opc;
 pub mod parser;
 pub mod polygon_clipping;
+pub mod polygon_triangulation;
 pub mod streaming;
 pub mod validator;
 mod writer;
