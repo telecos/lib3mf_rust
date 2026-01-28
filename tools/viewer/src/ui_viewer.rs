@@ -1475,7 +1475,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     let path = PathBuf::from(path_str);
                     
                     // Check if it's a .3mf file
-                    if path.extension().map_or(false, |ext| ext == "3mf") {
+                    if path.extension().is_some_and(|ext| ext == "3mf") {
                         println!("\nLoading dropped file: {}", path.display());
                         match state.load_file(path) {
                             Ok(()) => {
@@ -3344,13 +3344,21 @@ fn sample_displacement_texture(
     value as f64 / 255.0
 }
 
-/// Create mesh nodes with displacement highlighting (without actual displacement)
-/// This function is kept for backward compatibility but now calls the new implementation
+/// Create mesh nodes with displacement highlighting and actual displacement rendering
 fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, file_path: Option<&PathBuf>) -> Vec<SceneNode> {
-    // This is now a wrapper that loads displacement maps and applies displacement
-    // For now, we'll just highlight in cyan without actual displacement
-    // The actual displacement rendering will be added in subsequent commits
     let mut nodes = Vec::new();
+
+    // Load displacement maps if file_path is available
+    let displacement_maps = if let Some(path) = file_path {
+        if !model.resources.displacement_maps.is_empty() {
+            println!("\n  Loading displacement maps...");
+            load_displacement_maps_from_package(path, model)
+        } else {
+            HashMap::new()
+        }
+    } else {
+        HashMap::new()
+    };
 
     // Collect objects with displacement meshes
     let displacement_object_ids: HashSet<usize> = model
@@ -3368,7 +3376,21 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
             .iter()
             .find(|o| o.id == item.objectid)
         {
-            if let Some(ref mesh_data) = obj.mesh {
+            // Handle objects with displacement meshes
+            if let Some(ref disp_mesh) = obj.displacement_mesh {
+                // Render displacement mesh with actual displacement applied
+                if let Some(node) = create_displaced_mesh_node(
+                    window,
+                    model,
+                    obj,
+                    disp_mesh,
+                    &displacement_maps,
+                ) {
+                    nodes.push(node);
+                }
+            }
+            // Handle regular meshes (highlight if they have displacement data)
+            else if let Some(ref mesh_data) = obj.mesh {
                 // Convert vertices to nalgebra Point3
                 let vertices: Vec<Point3<f32>> = mesh_data
                     .vertices
@@ -3410,6 +3432,183 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
     }
 
     nodes
+}
+
+/// Create a mesh node with displacement applied
+/// Returns None if displacement cannot be applied
+fn create_displaced_mesh_node(
+    window: &mut Window,
+    model: &Model,
+    _obj: &lib3mf::Object,
+    disp_mesh: &lib3mf::DisplacementMesh,
+    displacement_maps: &HashMap<usize, Rc<image::DynamicImage>>,
+) -> Option<SceneNode> {
+    // Calculate vertex normals for the base mesh
+    let mut temp_mesh = lib3mf::Mesh::new();
+    temp_mesh.vertices = disp_mesh.vertices.clone();
+    
+    // Convert displacement triangles to regular triangles for normal calculation
+    for dt in &disp_mesh.triangles {
+        temp_mesh.triangles.push(lib3mf::Triangle {
+            v1: dt.v1,
+            v2: dt.v2,
+            v3: dt.v3,
+            pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
+        });
+    }
+    
+    let vertex_normals = lib3mf::mesh_ops::calculate_vertex_normals(&temp_mesh);
+    
+    // Create displaced vertices
+    let mut displaced_vertices = disp_mesh.vertices.clone();
+    
+    // Track which vertices have been displaced
+    let mut vertex_displaced = vec![false; displaced_vertices.len()];
+    
+    // Process each triangle to apply displacement
+    for triangle in &disp_mesh.triangles {
+        // Check if this triangle has displacement data
+        if let (Some(did), Some(d1), Some(d2), Some(d3)) = (triangle.did, triangle.d1, triangle.d2, triangle.d3) {
+            // Find the displacement group
+            if let Some(disp_group) = model.resources.disp2d_groups.iter().find(|g| g.id == did) {
+                // Find the displacement map
+                if let Some(disp_map_image) = displacement_maps.get(&disp_group.dispid) {
+                    // Find the displacement map resource for channel info
+                    if let Some(disp_map) = model.resources.displacement_maps.iter().find(|m| m.id == disp_group.dispid) {
+                        // Apply displacement to each vertex of the triangle if not already displaced
+                        let displacement_info = DisplacementInfo {
+                            disp_group,
+                            disp_map_image,
+                            disp_map,
+                        };
+                        
+                        apply_displacement_to_vertex(
+                            &mut displaced_vertices,
+                            &vertex_normals,
+                            &mut vertex_displaced,
+                            triangle.v1,
+                            d1,
+                            &displacement_info,
+                        );
+                        
+                        apply_displacement_to_vertex(
+                            &mut displaced_vertices,
+                            &vertex_normals,
+                            &mut vertex_displaced,
+                            triangle.v2,
+                            d2,
+                            &displacement_info,
+                        );
+                        
+                        apply_displacement_to_vertex(
+                            &mut displaced_vertices,
+                            &vertex_normals,
+                            &mut vertex_displaced,
+                            triangle.v3,
+                            d3,
+                            &displacement_info,
+                        );
+                    }
+                }
+            }
+        }
+    }
+    
+    // Convert displaced vertices to nalgebra Point3
+    let vertices: Vec<Point3<f32>> = displaced_vertices
+        .iter()
+        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+        .collect();
+
+    // Convert triangles to face indices
+    let faces: Vec<Point3<u32>> = disp_mesh
+        .triangles
+        .iter()
+        .filter(|t| {
+            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
+        })
+        .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
+        .collect();
+
+    // Create TriMesh
+    let tri_mesh = TriMesh::new(
+        vertices,
+        None,
+        None,
+        Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+    );
+
+    // Use cyan color for displaced meshes to indicate they have been processed
+    let mut mesh_node = window.add_trimesh(tri_mesh, IDENTITY_SCALE);
+    mesh_node.set_color(0.0, 1.0, 1.0); // Bright cyan
+
+    Some(mesh_node)
+}
+
+/// Helper struct to pass displacement information
+struct DisplacementInfo<'a> {
+    disp_group: &'a lib3mf::Disp2DGroup,
+    disp_map_image: &'a image::DynamicImage,
+    disp_map: &'a lib3mf::Displacement2D,
+}
+
+/// Apply displacement to a single vertex
+fn apply_displacement_to_vertex(
+    vertices: &mut [lib3mf::Vertex],
+    vertex_normals: &[(f64, f64, f64)],
+    vertex_displaced: &mut [bool],
+    vertex_index: usize,
+    coord_index: usize,
+    info: &DisplacementInfo,
+) {
+    // Skip if already displaced or invalid index
+    if vertex_index >= vertices.len() || vertex_displaced[vertex_index] {
+        return;
+    }
+    
+    // Skip if coordinate index is out of bounds
+    if coord_index >= info.disp_group.coords.len() {
+        return;
+    }
+    
+    let coord = &info.disp_group.coords[coord_index];
+    
+    // Sample the displacement texture at UV coordinates
+    let displacement_value = sample_displacement_texture(
+        info.disp_map_image,
+        coord.u,
+        coord.v,
+        info.disp_map.channel,
+    );
+    
+    // Get the normal vector
+    // The coord.n is an index into the norm vector group
+    let normal = if coord.n < vertex_normals.len() {
+        vertex_normals[coord.n]
+    } else {
+        // Fallback to vertex normal if index is invalid
+        if vertex_index < vertex_normals.len() {
+            vertex_normals[vertex_index]
+        } else {
+            (0.0, 0.0, 1.0) // Default up vector
+        }
+    };
+    
+    // Calculate displacement amount: (texture_value * height + offset) * factor
+    let displacement_amount = (displacement_value * info.disp_group.height + info.disp_group.offset) * coord.f;
+    
+    // Displace the vertex along the normal
+    let vertex = &mut vertices[vertex_index];
+    vertex.x += normal.0 * displacement_amount;
+    vertex.y += normal.1 * displacement_amount;
+    vertex.z += normal.2 * displacement_amount;
+    
+    // Mark as displaced
+    vertex_displaced[vertex_index] = true;
 }
 
 /// Create mesh nodes with boolean inputs shown in different colors

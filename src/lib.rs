@@ -96,10 +96,11 @@ pub use model::{
     BooleanOpType, BooleanRef, BooleanShape, Build, BuildItem, CEKParams, Channel, ColorGroup,
     Component, Composite, CompositeMaterials, Consumer, CustomElementHandler, CustomElementResult,
     CustomExtensionContext, CustomExtensionInfo, CustomValidationHandler, Disp2DCoords,
-    Disp2DGroup, Displacement2D, Extension, FilterMode, KEKParams, Material, Mesh, MetadataEntry,
-    Model, Multi, MultiProperties, NormVector, NormVectorGroup, Object, ObjectType, ParserConfig,
-    ProductionInfo, ResourceData, ResourceDataGroup, Resources, SecureContentInfo, Tex2Coord,
-    Texture2D, Texture2DGroup, Thumbnail, TileStyle, Triangle, Vertex,
+    Disp2DGroup, Displacement2D, DisplacementMesh, DisplacementTriangle, Extension, FilterMode,
+    KEKParams, Material, Mesh, MetadataEntry, Model, Multi, MultiProperties, NormVector,
+    NormVectorGroup, Object, ObjectType, ParserConfig, ProductionInfo, ResourceData,
+    ResourceDataGroup, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup,
+    Thumbnail, TileStyle, Triangle, Vertex,
 };
 
 use std::io::Read;
