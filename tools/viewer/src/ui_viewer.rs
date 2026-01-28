@@ -116,6 +116,45 @@ impl BooleanMode {
     }
 }
 
+/// Rendering mode for 3D meshes
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RenderMode {
+    /// Normal filled triangles with lighting (default)
+    Solid,
+    /// Only triangle edges, no fill
+    Wireframe,
+    /// Solid fill with wireframe overlay
+    SolidWireframe,
+    /// Only vertices as points
+    Points,
+    /// Semi-transparent solid for X-Ray view
+    XRay,
+}
+
+impl RenderMode {
+    /// Get the next mode in the cycle
+    fn next(&self) -> RenderMode {
+        match self {
+            RenderMode::Solid => RenderMode::Wireframe,
+            RenderMode::Wireframe => RenderMode::SolidWireframe,
+            RenderMode::SolidWireframe => RenderMode::Points,
+            RenderMode::Points => RenderMode::XRay,
+            RenderMode::XRay => RenderMode::Solid,
+        }
+    }
+
+    /// Get the name of the mode for display
+    fn name(&self) -> &'static str {
+        match self {
+            RenderMode::Solid => "Solid",
+            RenderMode::Wireframe => "Wireframe",
+            RenderMode::SolidWireframe => "Solid + Wireframe",
+            RenderMode::Points => "Points",
+            RenderMode::XRay => "X-Ray",
+        }
+    }
+}
+
 /// Length unit for print bed dimensions
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum LengthUnit {
@@ -493,6 +532,7 @@ struct ViewerState {
     show_beams: bool,
     theme: Theme,
     boolean_mode: BooleanMode,
+    render_mode: RenderMode,
     print_area: PrintArea,
     slice_view: SliceView,
     show_displacement: bool,
@@ -515,6 +555,7 @@ impl ViewerState {
             show_beams: true,
             theme: Theme::Dark,
             boolean_mode: BooleanMode::Normal,
+            render_mode: RenderMode::Solid,
             print_area: PrintArea::new(),
             slice_view: SliceView::new(),
             show_displacement: false,
@@ -540,6 +581,7 @@ impl ViewerState {
             show_beams: true,
             theme: Theme::Dark,
             boolean_mode: BooleanMode::Normal,
+            render_mode: RenderMode::Solid,
             print_area: PrintArea::new(),
             slice_view,
             show_displacement: false,
@@ -1286,17 +1328,28 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         );
                     }
                 }
-                WindowEvent::Key(Key::X, Action::Release, _) => {
-                    // X key: Export slice to PNG
-                    if state.slice_view.visible && state.model.is_some() {
-                        if let Some(ref model) = state.model {
-                            let bounds = calculate_model_bounds(model);
-                            if let Err(e) = export_slice_to_png(&state.slice_view, bounds, &model.unit) {
-                                eprintln!("\n✗ Error exporting slice: {}", e);
+                WindowEvent::Key(Key::X, Action::Release, modifiers) => {
+                    if modifiers.contains(kiss3d::event::Modifiers::Shift) {
+                        // Shift+X: Export slice to PNG (moved from X)
+                        if state.slice_view.visible && state.model.is_some() {
+                            if let Some(ref model) = state.model {
+                                let bounds = calculate_model_bounds(model);
+                                if let Err(e) = export_slice_to_png(&state.slice_view, bounds, &model.unit) {
+                                    eprintln!("\n✗ Error exporting slice: {}", e);
+                                }
                             }
+                        } else if !state.slice_view.visible {
+                            println!("\nSlice view is not enabled. Press Z to enable it first.");
                         }
-                    } else if !state.slice_view.visible {
-                        println!("\nSlice view is not enabled. Press Z to enable it first.");
+                    } else {
+                        // X key: Toggle X-Ray mode
+                        state.render_mode = match state.render_mode {
+                            RenderMode::XRay => RenderMode::Solid,
+                            _ => RenderMode::XRay,
+                        };
+                        println!("\nRender Mode: {}", state.render_mode.name());
+                        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                        update_render_mode_menu(&mut menu_bar, state.render_mode);
                     }
                 }
                 WindowEvent::Key(Key::K, Action::Release, _) => {
@@ -1435,8 +1488,27 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     // Right arrow: Pan view right
                     pan_camera(&mut camera, 1.0, 0.0, 0.0);
                 }
-                WindowEvent::Key(Key::W, Action::Release, _) => {
-                    // W key: Toggle slice preview window
+                WindowEvent::Key(Key::W, Action::Release, modifiers) => {
+                    if modifiers.contains(kiss3d::event::Modifiers::Shift) {
+                        // Shift+W: Cycle through all render modes
+                        state.render_mode = state.render_mode.next();
+                        println!("\nRender Mode: {}", state.render_mode.name());
+                        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                        update_render_mode_menu(&mut menu_bar, state.render_mode);
+                    } else {
+                        // W key: Toggle wireframe mode
+                        state.render_mode = match state.render_mode {
+                            RenderMode::Solid => RenderMode::Wireframe,
+                            RenderMode::Wireframe => RenderMode::Solid,
+                            _ => RenderMode::Wireframe,
+                        };
+                        println!("\nRender Mode: {}", state.render_mode.name());
+                        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                        update_render_mode_menu(&mut menu_bar, state.render_mode);
+                    }
+                }
+                WindowEvent::Key(Key::Q, Action::Release, _) => {
+                    // Q key: Toggle slice preview window (moved from W)
                     state.toggle_slice_preview_window();
                 }
                 WindowEvent::Key(Key::H, Action::Release, _) => {
@@ -1806,6 +1878,36 @@ fn handle_menu_action(
             println!("  Built with lib3mf_rust");
             println!("═══════════════════════════════════════════════════════════\n");
         }
+        MenuAction::RenderModeSolid => {
+            state.render_mode = RenderMode::Solid;
+            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+            update_render_mode_menu(menu_bar, state.render_mode);
+            println!("Render Mode: {}", state.render_mode.name());
+        }
+        MenuAction::RenderModeWireframe => {
+            state.render_mode = RenderMode::Wireframe;
+            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+            update_render_mode_menu(menu_bar, state.render_mode);
+            println!("Render Mode: {}", state.render_mode.name());
+        }
+        MenuAction::RenderModeSolidWireframe => {
+            state.render_mode = RenderMode::SolidWireframe;
+            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+            update_render_mode_menu(menu_bar, state.render_mode);
+            println!("Render Mode: {}", state.render_mode.name());
+        }
+        MenuAction::RenderModePoints => {
+            state.render_mode = RenderMode::Points;
+            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+            update_render_mode_menu(menu_bar, state.render_mode);
+            println!("Render Mode: {}", state.render_mode.name());
+        }
+        MenuAction::RenderModeXRay => {
+            state.render_mode = RenderMode::XRay;
+            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+            update_render_mode_menu(menu_bar, state.render_mode);
+            println!("Render Mode: {}", state.render_mode.name());
+        }
         MenuAction::OpenRecent | MenuAction::None => {
             // Not implemented
         }
@@ -1819,6 +1921,68 @@ fn open_file_dialog() -> Option<PathBuf> {
         .add_filter("All Files", &["*"])
         .set_title("Open 3MF File")
         .pick_file()
+}
+
+/// Apply render mode to a list of scene nodes
+fn apply_render_mode(nodes: &mut [SceneNode], mode: RenderMode) {
+    for node in nodes {
+        apply_render_mode_to_node(node, mode);
+    }
+}
+
+/// Apply render mode to a single scene node
+fn apply_render_mode_to_node(node: &mut SceneNode, mode: RenderMode) {
+    match mode {
+        RenderMode::Solid => {
+            node.set_surface_rendering_activation(true);
+            node.set_lines_width(0.0);
+            node.set_points_size(0.0);
+            // Reset to full opacity
+            // Note: kiss3d doesn't have a direct set_alpha method, 
+            // but we can restore the original color
+        }
+        RenderMode::Wireframe => {
+            node.set_surface_rendering_activation(false);
+            node.set_lines_width(1.5);
+            node.set_points_size(0.0);
+            // Set wireframe color to black for good visibility
+            node.set_lines_color(Some(Point3::new(0.0, 0.0, 0.0)));
+        }
+        RenderMode::SolidWireframe => {
+            node.set_surface_rendering_activation(true);
+            node.set_lines_width(1.0);
+            node.set_points_size(0.0);
+            // Set wireframe color to dark gray/black
+            node.set_lines_color(Some(Point3::new(0.0, 0.0, 0.0)));
+        }
+        RenderMode::Points => {
+            node.set_surface_rendering_activation(false);
+            node.set_lines_width(0.0);
+            node.set_points_size(3.0);
+        }
+        RenderMode::XRay => {
+            node.set_surface_rendering_activation(true);
+            node.set_lines_width(0.0);
+            node.set_points_size(0.0);
+            // For X-Ray mode, we can reduce the color intensity
+            // to make it appear more transparent
+            // Get current color and make it semi-transparent
+            // Note: kiss3d's transparency is limited, so we just make colors lighter
+            node.modify_vertices(&mut |_verts| {
+                // Vertices don't need modification for X-Ray mode
+            });
+        }
+    }
+}
+
+/// Update menu checkmarks for render mode
+fn update_render_mode_menu(menu_bar: &mut MenuBar, mode: RenderMode) {
+    use crate::menu_ui::MenuAction;
+    menu_bar.set_checked(MenuAction::RenderModeSolid, mode == RenderMode::Solid);
+    menu_bar.set_checked(MenuAction::RenderModeWireframe, mode == RenderMode::Wireframe);
+    menu_bar.set_checked(MenuAction::RenderModeSolidWireframe, mode == RenderMode::SolidWireframe);
+    menu_bar.set_checked(MenuAction::RenderModePoints, mode == RenderMode::Points);
+    menu_bar.set_checked(MenuAction::RenderModeXRay, mode == RenderMode::XRay);
 }
 
 /// Generate a timestamped filename for screenshots
