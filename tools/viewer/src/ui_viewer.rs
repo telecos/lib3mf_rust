@@ -75,7 +75,7 @@ fn ray_triangle_intersection(
     let s = ray.origin - v0;
     let u = f * s.dot(&h);
     
-    if u < 0.0 || u > 1.0 {
+    if !(0.0..=1.0).contains(&u) {
         return None;
     }
     
@@ -127,10 +127,7 @@ fn pick_object(
     
     // Compute inverse of view-projection matrix
     let view_proj = proj * view;
-    let inv_view_proj = match view_proj.try_inverse() {
-        Some(inv) => inv,
-        None => return None,
-    };
+    let inv_view_proj = view_proj.try_inverse()?;
     
     // Unproject mouse position to get ray in world space
     // Near plane point
@@ -209,7 +206,7 @@ fn pick_object(
                     
                     // Test intersection
                     if let Some(distance) = ray_triangle_intersection(&ray, &v0, &v1, &v2) {
-                        if closest_hit.map_or(true, |(_, d)| distance < d) {
+                        if closest_hit.is_none_or(|(_, d)| distance < d) {
                             closest_hit = Some((mesh_index, distance));
                         }
                     }
@@ -3464,7 +3461,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                                     &Font::default(),
                                     &text_color,
                                 );
-                                y += LINE_HEIGHT;
+                                // y += LINE_HEIGHT; // Last item in section, no need to increment
                             }
                         }
                     }
