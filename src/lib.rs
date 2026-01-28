@@ -15,6 +15,7 @@
 //! - Support for materials and colors
 //! - Metadata extraction and writing
 //! - Round-trip support (read-write-read)
+//! - **Mesh-plane slicing with contour extraction**
 //!
 //! ## Reading Example
 //!
@@ -57,6 +58,30 @@
 //!
 //! // Write to file
 //! model.write_to_file("output.3mf")?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Mesh Slicing Example
+//!
+//! ```no_run
+//! use lib3mf::{collect_intersection_segments, assemble_contours, Mesh, Vertex, Triangle};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create or load a mesh
+//! let mut mesh = Mesh::new();
+//! // ... add vertices and triangles ...
+//!
+//! // Slice the mesh at Z=5.0
+//! let segments = collect_intersection_segments(&mesh, 5.0);
+//!
+//! // Assemble segments into closed contours
+//! let contours = assemble_contours(segments, 1e-6);
+//!
+//! println!("Found {} contours at Z=5.0", contours.len());
+//! for (i, contour) in contours.iter().enumerate() {
+//!     println!("Contour {} has {} vertices", i, contour.len());
+//! }
 //! # Ok(())
 //! # }
 //! ```
