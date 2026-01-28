@@ -90,7 +90,10 @@ pub use extensions::{
     ProductionExtensionHandler, SecureContentExtensionHandler, SliceExtensionHandler,
 };
 pub use key_provider::KeyProvider;
-pub use mesh_ops::{subdivide, subdivide_simple, SubdivisionMethod, SubdivisionOptions};
+pub use mesh_ops::{
+    assemble_contours, collect_intersection_segments, subdivide, subdivide_simple,
+    triangle_plane_intersection, Point2D, SubdivisionMethod, SubdivisionOptions,
+};
 pub use model::{
     AccessRight, BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod,
     BooleanOpType, BooleanRef, BooleanShape, Build, BuildItem, CEKParams, Channel, ColorGroup,

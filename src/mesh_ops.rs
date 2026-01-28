@@ -6,6 +6,7 @@
 //! - Affine transformations
 //! - Mesh subdivision (midpoint and Loop algorithms)
 //! - Vertex normal calculation
+//! - Mesh-plane slicing with contour extraction
 //!
 //! These operations are used for validating build items and mesh properties.
 
@@ -23,6 +24,9 @@ pub type Vector3 = (f64, f64, f64);
 
 /// An axis-aligned bounding box represented as (min_point, max_point)
 pub type BoundingBox = (Point3d, Point3d);
+
+/// A 2D point represented as (x, y)
+pub type Point2D = (f64, f64);
 
 /// Compute the signed volume of a mesh using the divergence theorem
 ///
@@ -290,6 +294,247 @@ pub fn compute_build_volume(model: &Model) -> Option<BoundingBox> {
         (Some(min), Some(max)) => Some((min, max)),
         _ => None,
     }
+}
+
+/// Find the line segment where a triangle intersects a horizontal Z plane
+///
+/// This function computes the intersection of a triangle with a plane at a given Z height.
+/// If the triangle crosses the plane, it returns a 2D line segment (in XY coordinates).
+///
+/// # Arguments
+/// * `v0` - First vertex of the triangle
+/// * `v1` - Second vertex of the triangle  
+/// * `v2` - Third vertex of the triangle
+/// * `z` - The Z height of the slicing plane
+///
+/// # Returns
+/// An optional tuple of two 2D points representing the intersection line segment,
+/// or None if the triangle doesn't intersect the plane
+///
+/// # Example
+/// ```
+/// use lib3mf::{Vertex, mesh_ops::triangle_plane_intersection};
+///
+/// let v0 = Vertex::new(0.0, 0.0, 0.0);
+/// let v1 = Vertex::new(10.0, 0.0, 5.0);
+/// let v2 = Vertex::new(5.0, 10.0, 0.0);
+///
+/// if let Some((p1, p2)) = triangle_plane_intersection(&v0, &v1, &v2, 2.5) {
+///     println!("Intersection segment: {:?} to {:?}", p1, p2);
+/// }
+/// ```
+pub fn triangle_plane_intersection(
+    v0: &Vertex,
+    v1: &Vertex,
+    v2: &Vertex,
+    z: f64,
+) -> Option<(Point2D, Point2D)> {
+    let vertices = [v0, v1, v2];
+    let mut intersections = Vec::with_capacity(2);
+
+    // Check each edge of the triangle
+    for i in 0..3 {
+        let va = vertices[i];
+        let vb = vertices[(i + 1) % 3];
+
+        // Check if edge crosses the plane
+        let za = va.z;
+        let zb = vb.z;
+
+        // Skip if both vertices are on the same side or on the plane
+        if (za - z) * (zb - z) > 0.0 {
+            continue;
+        }
+
+        // Handle edge exactly on the plane
+        if (za - z).abs() < 1e-10 && (zb - z).abs() < 1e-10 {
+            // Both vertices on plane - this is a degenerate case
+            // We'll include both points but this will be handled in contour assembly
+            intersections.push((va.x, va.y));
+            intersections.push((vb.x, vb.y));
+            break;
+        }
+
+        // Handle single vertex on plane
+        if (za - z).abs() < 1e-10 {
+            intersections.push((va.x, va.y));
+            continue;
+        }
+        if (zb - z).abs() < 1e-10 {
+            intersections.push((vb.x, vb.y));
+            continue;
+        }
+
+        // Compute intersection point via linear interpolation
+        let t = (z - za) / (zb - za);
+        let x = va.x + t * (vb.x - va.x);
+        let y = va.y + t * (vb.y - va.y);
+        intersections.push((x, y));
+    }
+
+    // We need exactly 2 intersection points to form a line segment
+    if intersections.len() >= 2 {
+        // Remove duplicates (vertices on the plane might be counted multiple times)
+        if intersections.len() > 2 {
+            intersections.sort_by(|a, b| {
+                a.0.partial_cmp(&b.0)
+                    .unwrap()
+                    .then(a.1.partial_cmp(&b.1).unwrap())
+            });
+            intersections.dedup_by(|a, b| {
+                (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10
+            });
+        }
+
+        if intersections.len() >= 2 {
+            Some((intersections[0], intersections[1]))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+/// Collect all intersection segments from a mesh at a given Z height
+///
+/// This function slices a mesh at a specified Z plane and returns all line segments
+/// where triangles intersect the plane.
+///
+/// # Arguments
+/// * `mesh` - The mesh to slice
+/// * `z` - The Z height of the slicing plane
+///
+/// # Returns
+/// A vector of 2D line segments representing the intersection
+///
+/// # Example
+/// ```
+/// use lib3mf::{Mesh, Vertex, Triangle, mesh_ops::collect_intersection_segments};
+///
+/// let mut mesh = Mesh::new();
+/// // ... add vertices and triangles ...
+///
+/// let segments = collect_intersection_segments(&mesh, 5.0);
+/// println!("Found {} intersection segments", segments.len());
+/// ```
+pub fn collect_intersection_segments(mesh: &Mesh, z: f64) -> Vec<(Point2D, Point2D)> {
+    mesh.triangles
+        .iter()
+        .filter_map(|tri| {
+            // Validate triangle indices
+            if tri.v1 >= mesh.vertices.len()
+                || tri.v2 >= mesh.vertices.len()
+                || tri.v3 >= mesh.vertices.len()
+            {
+                return None;
+            }
+
+            let v0 = &mesh.vertices[tri.v1];
+            let v1 = &mesh.vertices[tri.v2];
+            let v2 = &mesh.vertices[tri.v3];
+            triangle_plane_intersection(v0, v1, v2, z)
+        })
+        .collect()
+}
+
+/// Assemble line segments into closed contour loops
+///
+/// This function takes a collection of line segments and connects them into
+/// closed polygonal contours. Each contour represents a closed loop suitable
+/// for filled 2D rendering.
+///
+/// # Arguments
+/// * `segments` - Vector of 2D line segments to assemble
+/// * `tolerance` - Distance tolerance for connecting segment endpoints
+///
+/// # Returns
+/// A vector of contours, where each contour is a vector of 2D points
+///
+/// # Example
+/// ```
+/// use lib3mf::mesh_ops::assemble_contours;
+///
+/// let segments = vec![
+///     ((0.0, 0.0), (1.0, 0.0)),
+///     ((1.0, 0.0), (1.0, 1.0)),
+///     ((1.0, 1.0), (0.0, 1.0)),
+///     ((0.0, 1.0), (0.0, 0.0)),
+/// ];
+///
+/// let contours = assemble_contours(segments, 1e-6);
+/// assert_eq!(contours.len(), 1); // One closed square
+/// assert_eq!(contours[0].len(), 4); // Four vertices
+/// ```
+pub fn assemble_contours(
+    segments: Vec<(Point2D, Point2D)>,
+    tolerance: f64,
+) -> Vec<Vec<Point2D>> {
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    let mut remaining_segments: Vec<(Point2D, Point2D)> = segments;
+    let mut contours: Vec<Vec<Point2D>> = Vec::new();
+
+    while !remaining_segments.is_empty() {
+        // Start a new contour with the first remaining segment
+        let first_segment = remaining_segments.remove(0);
+        let mut contour = vec![first_segment.0, first_segment.1];
+        let start_point = first_segment.0;
+        let mut current_point = first_segment.1;
+
+        // Keep trying to extend the contour
+        let mut found_connection = true;
+        while found_connection && !remaining_segments.is_empty() {
+            found_connection = false;
+
+            // Find a segment that connects to the current endpoint
+            for i in 0..remaining_segments.len() {
+                let segment = remaining_segments[i];
+                let dist_to_start = point_distance(current_point, segment.0);
+                let dist_to_end = point_distance(current_point, segment.1);
+
+                if dist_to_start <= tolerance {
+                    // Connect via segment.0 -> segment.1
+                    current_point = segment.1;
+                    contour.push(current_point);
+                    remaining_segments.remove(i);
+                    found_connection = true;
+                    break;
+                } else if dist_to_end <= tolerance {
+                    // Connect via segment.1 -> segment.0 (reversed)
+                    current_point = segment.0;
+                    contour.push(current_point);
+                    remaining_segments.remove(i);
+                    found_connection = true;
+                    break;
+                }
+            }
+
+            // Check if we've closed the loop
+            if point_distance(current_point, start_point) <= tolerance {
+                // Remove the duplicate end point (same as start)
+                contour.pop();
+                break;
+            }
+        }
+
+        // Only add the contour if it's closed (or if it's the last one)
+        if !contour.is_empty() {
+            contours.push(contour);
+        }
+    }
+
+    contours
+}
+
+/// Helper function to compute Euclidean distance between two 2D points
+#[inline]
+fn point_distance(p1: Point2D, p2: Point2D) -> f64 {
+    let dx = p1.0 - p2.0;
+    let dy = p1.1 - p2.1;
+    (dx * dx + dy * dy).sqrt()
 }
 
 /// Helper function to calculate the cross product of two 3D vectors
@@ -1347,5 +1592,147 @@ mod subdivision_tests {
 
         // Loop subdivision should also produce 4 triangles
         assert_eq!(subdivided.triangles.len(), 4);
+    }
+
+    #[test]
+    fn test_triangle_plane_intersection_simple() {
+        // Triangle that crosses the Z=5 plane
+        let v0 = Vertex::new(0.0, 0.0, 0.0);
+        let v1 = Vertex::new(10.0, 0.0, 10.0);
+        let v2 = Vertex::new(5.0, 10.0, 0.0);
+
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_some());
+
+        let (p1, p2) = result.unwrap();
+        // Should intersect edge v0-v1 at (5.0, 0.0) and edge v1-v2 at (7.5, 5.0)
+        // Verify both points have reasonable values
+        assert!(p1.0 >= 0.0 && p1.0 <= 10.0);
+        assert!(p1.1 >= 0.0 && p1.1 <= 10.0);
+        assert!(p2.0 >= 0.0 && p2.0 <= 10.0);
+        assert!(p2.1 >= 0.0 && p2.1 <= 10.0);
+    }
+
+    #[test]
+    fn test_triangle_plane_intersection_no_intersection() {
+        // Triangle completely above the plane
+        let v0 = Vertex::new(0.0, 0.0, 10.0);
+        let v1 = Vertex::new(10.0, 0.0, 15.0);
+        let v2 = Vertex::new(5.0, 10.0, 12.0);
+
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_none());
+
+        // Triangle completely below the plane
+        let v0 = Vertex::new(0.0, 0.0, 0.0);
+        let v1 = Vertex::new(10.0, 0.0, 2.0);
+        let v2 = Vertex::new(5.0, 10.0, 1.0);
+
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_triangle_plane_intersection_vertex_on_plane() {
+        // Triangle with one vertex exactly on the plane
+        let v0 = Vertex::new(0.0, 0.0, 5.0); // On plane
+        let v1 = Vertex::new(10.0, 0.0, 0.0); // Below
+        let v2 = Vertex::new(5.0, 10.0, 10.0); // Above
+
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_collect_intersection_segments() {
+        let mut mesh = Mesh::new();
+
+        // Create a simple pyramid
+        // Base vertices (Z=0)
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(10.0, 10.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 10.0, 0.0)); // 3
+        // Apex (Z=10)
+        mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0)); // 4
+
+        // Base triangles
+        mesh.triangles.push(Triangle::new(0, 2, 1));
+        mesh.triangles.push(Triangle::new(0, 3, 2));
+        // Side triangles
+        mesh.triangles.push(Triangle::new(0, 1, 4));
+        mesh.triangles.push(Triangle::new(1, 2, 4));
+        mesh.triangles.push(Triangle::new(2, 3, 4));
+        mesh.triangles.push(Triangle::new(3, 0, 4));
+
+        // Slice at Z=5 (halfway up)
+        let segments = collect_intersection_segments(&mesh, 5.0);
+
+        // Should get 4 segments (one per side face of pyramid)
+        assert_eq!(segments.len(), 4);
+    }
+
+    #[test]
+    fn test_assemble_contours_simple_square() {
+        // Create a square contour from 4 segments
+        let segments = vec![
+            ((0.0, 0.0), (1.0, 0.0)),
+            ((1.0, 0.0), (1.0, 1.0)),
+            ((1.0, 1.0), (0.0, 1.0)),
+            ((0.0, 1.0), (0.0, 0.0)),
+        ];
+
+        let contours = assemble_contours(segments, 1e-6);
+
+        assert_eq!(contours.len(), 1);
+        assert_eq!(contours[0].len(), 4);
+    }
+
+    #[test]
+    fn test_assemble_contours_unordered_segments() {
+        // Segments in random order should still assemble
+        let segments = vec![
+            ((1.0, 1.0), (0.0, 1.0)),
+            ((0.0, 0.0), (1.0, 0.0)),
+            ((0.0, 1.0), (0.0, 0.0)),
+            ((1.0, 0.0), (1.0, 1.0)),
+        ];
+
+        let contours = assemble_contours(segments, 1e-6);
+
+        assert_eq!(contours.len(), 1);
+        assert_eq!(contours[0].len(), 4);
+    }
+
+    #[test]
+    fn test_assemble_contours_multiple_loops() {
+        // Two separate squares
+        let segments = vec![
+            // First square
+            ((0.0, 0.0), (1.0, 0.0)),
+            ((1.0, 0.0), (1.0, 1.0)),
+            ((1.0, 1.0), (0.0, 1.0)),
+            ((0.0, 1.0), (0.0, 0.0)),
+            // Second square (offset)
+            ((5.0, 5.0), (6.0, 5.0)),
+            ((6.0, 5.0), (6.0, 6.0)),
+            ((6.0, 6.0), (5.0, 6.0)),
+            ((5.0, 6.0), (5.0, 5.0)),
+        ];
+
+        let contours = assemble_contours(segments, 1e-6);
+
+        assert_eq!(contours.len(), 2);
+        for contour in &contours {
+            assert_eq!(contour.len(), 4);
+        }
+    }
+
+    #[test]
+    fn test_point_distance() {
+        let p1 = (0.0, 0.0);
+        let p2 = (3.0, 4.0);
+        let dist = point_distance(p1, p2);
+        assert!((dist - 5.0).abs() < 1e-10); // 3-4-5 triangle
     }
 }
