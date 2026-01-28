@@ -607,7 +607,7 @@ pub fn subdivide_midpoint(mesh: &Mesh) -> Mesh {
     let new_triangle_count = mesh.triangles.len() * 4;
 
     let mut result = Mesh::with_capacity(estimated_new_vertices, new_triangle_count);
-    
+
     // Copy original vertices
     result.vertices.extend_from_slice(&mesh.vertices);
 
@@ -800,7 +800,7 @@ mod subdivision_tests {
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
-        
+
         let mut triangle = Triangle::new(0, 1, 2);
         triangle.pid = Some(5);
         triangle.p1 = Some(1);
@@ -823,7 +823,7 @@ mod subdivision_tests {
     fn test_subdivide_empty_mesh() {
         let mesh = Mesh::new();
         let subdivided = subdivide_simple(&mesh, 1);
-        
+
         assert_eq!(subdivided.vertices.len(), 0);
         assert_eq!(subdivided.triangles.len(), 0);
     }
@@ -836,7 +836,7 @@ mod subdivision_tests {
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
         mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0)); // 2
         mesh.vertices.push(Vertex::new(0.5, -1.0, 0.0)); // 3
-        
+
         mesh.triangles.push(Triangle::new(0, 1, 2));
         mesh.triangles.push(Triangle::new(0, 3, 1));
 
@@ -844,7 +844,7 @@ mod subdivision_tests {
 
         // 2 triangles become 8 triangles
         assert_eq!(subdivided.triangles.len(), 8);
-        
+
         // Should reuse midpoint on shared edge (0,1)
         // Original: 4 vertices
         // Triangle 1 adds: 3 midpoints
@@ -869,10 +869,10 @@ mod subdivision_tests {
             let v0 = &subdivided.vertices[tri.v1];
             let v1 = &subdivided.vertices[tri.v2];
             let v2 = &subdivided.vertices[tri.v3];
-            
+
             // Compute signed area using cross product
             let area = (v1.x - v0.x) * (v2.y - v0.y) - (v2.x - v0.x) * (v1.y - v0.y);
-            
+
             // All subdivided triangles should have positive area (CCW winding)
             assert!(area > 0.0, "Triangle winding order not preserved");
         }
@@ -912,7 +912,7 @@ mod subdivision_tests {
         };
 
         let subdivided = subdivide(&mesh, &options);
-        
+
         // Loop subdivision should also produce 4 triangles
         assert_eq!(subdivided.triangles.len(), 4);
     }

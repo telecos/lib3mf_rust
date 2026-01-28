@@ -5,7 +5,9 @@
 //! 2. Subdivide it using different methods and levels
 //! 3. Compare the results
 
-use lib3mf::{subdivide, subdivide_simple, Mesh, SubdivisionMethod, SubdivisionOptions, Triangle, Vertex};
+use lib3mf::{
+    subdivide, subdivide_simple, Mesh, SubdivisionMethod, SubdivisionOptions, Triangle, Vertex,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Mesh Subdivision Example\n");
@@ -31,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let vertex_count = subdivided.vertices.len();
         let triangle_count = subdivided.triangles.len();
         let multiplier = triangle_count as f64 / mesh.triangles.len() as f64;
-        
+
         println!(
             "  Level {}: {} vertices, {} triangles ({}× increase)",
             level, vertex_count, triangle_count, multiplier as u32
@@ -63,14 +65,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Demonstrate subdivision with options
     println!("Using SubdivisionOptions:");
     println!("-------------------------");
-    
+
     let options_midpoint = SubdivisionOptions {
         method: SubdivisionMethod::Midpoint,
         levels: 2,
         preserve_boundaries: true,
         interpolate_uvs: true,
     };
-    
+
     let subdivided_midpoint = subdivide(&mesh, &options_midpoint);
     println!("  Midpoint method (2 levels):");
     println!("    Vertices: {}", subdivided_midpoint.vertices.len());
@@ -85,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         levels: 1,
         ..Default::default()
     };
-    
+
     let subdivided_loop = subdivide(&mesh, &options_loop);
     println!("    Vertices: {}", subdivided_loop.vertices.len());
     println!("    Triangles: {}", subdivided_loop.triangles.len());
@@ -98,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     mesh_with_props.vertices.push(Vertex::new(0.0, 0.0, 0.0));
     mesh_with_props.vertices.push(Vertex::new(1.0, 0.0, 0.0));
     mesh_with_props.vertices.push(Vertex::new(0.5, 1.0, 0.0));
-    
+
     let mut tri = Triangle::new(0, 1, 2);
     tri.pid = Some(5);
     tri.p1 = Some(1);
@@ -108,7 +110,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("  Original triangle properties:");
     println!("    pid: {:?}", mesh_with_props.triangles[0].pid);
-    println!("    p1, p2, p3: {:?}, {:?}, {:?}", 
+    println!(
+        "    p1, p2, p3: {:?}, {:?}, {:?}",
         mesh_with_props.triangles[0].p1,
         mesh_with_props.triangles[0].p2,
         mesh_with_props.triangles[0].p3
@@ -118,8 +121,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let subdivided_props = subdivide_simple(&mesh_with_props, 1);
     println!("  After subdivision (all 4 child triangles):");
     for (i, tri) in subdivided_props.triangles.iter().enumerate() {
-        println!("    Triangle {}: pid={:?}, p1={:?}, p2={:?}, p3={:?}",
-            i, tri.pid, tri.p1, tri.p2, tri.p3);
+        println!(
+            "    Triangle {}: pid={:?}, p1={:?}, p2={:?}, p3={:?}",
+            i, tri.pid, tri.p1, tri.p2, tri.p3
+        );
     }
     println!();
 
@@ -128,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("==========================");
     println!("| Level | Triangles | Multiplier |");
     println!("|-------|-----------|------------|");
-    
+
     let base_triangles = 1000;
     for level in 0..=4 {
         let multiplier = 4_u32.pow(level);
@@ -143,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("• Mesh refinement - improve triangle quality before operations");
     println!("• LOD generation - create multiple detail levels");
     println!();
-    
+
     println!("Note:");
     println!("-----");
     println!("• Loop subdivision is planned but not yet fully implemented");
