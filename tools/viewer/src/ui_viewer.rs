@@ -138,7 +138,7 @@ impl LengthUnit {
     }
     
     /// Convert a value from this unit to millimeters
-    fn to_mm(&self, value: f32) -> f32 {
+    fn to_mm(self, value: f32) -> f32 {
         match self {
             LengthUnit::Millimeters => value,
             LengthUnit::Inches => value * 25.4,
@@ -146,7 +146,8 @@ impl LengthUnit {
     }
     
     /// Convert a value from millimeters to this unit
-    fn from_mm(&self, value: f32) -> f32 {
+    #[allow(clippy::wrong_self_convention)]
+    fn from_mm(self, value: f32) -> f32 {
         match self {
             LengthUnit::Millimeters => value,
             LengthUnit::Inches => value / 25.4,
