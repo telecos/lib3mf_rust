@@ -33,6 +33,16 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Export to PNG**: Press 'X' to export current slice with grid and contours
     - **Toggle plane**: Press 'L' to show/hide the slice plane rectangle
     - See [SLICE_VIEW_FEATURE.md](SLICE_VIEW_FEATURE.md) for detailed documentation
+  - **Live Slice Preview Window** (NEW!): Secondary 2D window for real-time slice viewing
+    - **Dual window setup**: Separate 2D window alongside 3D viewer
+    - **Real-time updates**: Slice preview updates instantly as Z-height changes
+    - **Toggle preview**: Press 'W' to open/close the slice preview window
+    - **Independent controls**: Up/Down arrows and PageUp/PageDown in preview window
+    - **Bidirectional sync**: Changes in either window affect both views
+    - **Visual Z-slider**: See current slice position at a glance
+    - **Grid overlay**: Toggle with 'G' key for coordinate reference
+    - **Export capability**: PNG export from preview window
+    - See [LIVE_SLICE_PREVIEW.md](LIVE_SLICE_PREVIEW.md) for detailed documentation
   - **Material Rendering** (NEW!): View materials and colors from 3MF files
     - **Toggle materials**: Press 'R' to toggle between material colors and default gray
     - **Per-triangle colors**: Supports different colors for each triangle face

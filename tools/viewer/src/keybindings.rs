@@ -238,6 +238,13 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Category::Slice,
         ),
         KeyBinding::new(
+            Some(Key::W),
+            Modifiers::empty(),
+            "W",
+            "Toggle slice preview window",
+            Category::Slice,
+        ),
+        KeyBinding::new(
             Some(Key::Up),
             Modifiers::Shift,
             "Shift+↑",
@@ -329,6 +336,20 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Modifiers::empty(),
             "C",
             "Configure print bed",
+            Category::Settings,
+        ),
+        KeyBinding::new(
+            Some(Key::U),
+            Modifiers::empty(),
+            "U",
+            "Toggle ruler",
+            Category::Settings,
+        ),
+        KeyBinding::new(
+            Some(Key::J),
+            Modifiers::empty(),
+            "J",
+            "Toggle scale bar",
             Category::Settings,
         ),
         // HELP category
