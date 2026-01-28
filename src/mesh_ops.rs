@@ -290,6 +290,18 @@ pub fn compute_build_volume(model: &Model) -> Option<BoundingBox> {
     }
 }
 
+/// Helper function to calculate the cross product of two 3D vectors
+///
+/// Returns the cross product v1 × v2
+#[inline]
+fn cross_product(v1: (f64, f64, f64), v2: (f64, f64, f64)) -> Vector3 {
+    (
+        v1.1 * v2.2 - v1.2 * v2.1,
+        v1.2 * v2.0 - v1.0 * v2.2,
+        v1.0 * v2.1 - v1.1 * v2.0,
+    )
+}
+
 /// Calculate the normal vector for a single triangle face
 ///
 /// The normal is computed using the cross product of two edges of the triangle.
@@ -321,11 +333,7 @@ pub fn calculate_face_normal(v0: &Vertex, v1: &Vertex, v2: &Vertex) -> Vector3 {
     let edge2 = (v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
 
     // Calculate cross product: edge1 × edge2
-    let cross = (
-        edge1.1 * edge2.2 - edge1.2 * edge2.1,
-        edge1.2 * edge2.0 - edge1.0 * edge2.2,
-        edge1.0 * edge2.1 - edge1.1 * edge2.0,
-    );
+    let cross = cross_product(edge1, edge2);
 
     // Calculate magnitude
     let magnitude = (cross.0 * cross.0 + cross.1 * cross.1 + cross.2 * cross.2).sqrt();
@@ -396,15 +404,9 @@ pub fn calculate_vertex_normals(mesh: &Mesh) -> Vec<Vector3> {
         let edge2 = (v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
 
         // Calculate cross product (unnormalized normal)
-        let cross = (
-            edge1.1 * edge2.2 - edge1.2 * edge2.1,
-            edge1.2 * edge2.0 - edge1.0 * edge2.2,
-            edge1.0 * edge2.1 - edge1.1 * edge2.0,
-        );
-
         // The magnitude of the cross product is 2 * triangle area
         // So we can use the unnormalized cross product directly for area weighting
-        let area_weighted_normal = cross;
+        let area_weighted_normal = cross_product(edge1, edge2);
 
         // Skip degenerate triangles
         let magnitude = (area_weighted_normal.0 * area_weighted_normal.0
