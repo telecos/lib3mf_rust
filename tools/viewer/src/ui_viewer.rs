@@ -1618,6 +1618,8 @@ fn print_controls() {
     println!("  ⌨️  M Key                  : Toggle menu");
     println!("  ⌨️  P Key                  : Toggle print area");
     println!("  ⌨️  C Key                  : Configure print area");
+    println!("  ⌨️  U Key                  : Toggle ruler");
+    println!("  ⌨️  J Key                  : Toggle scale bar");
     println!("  ⌨️  Z Key                  : Toggle 2D slice view");
     println!("  ⌨️  Shift+Up/Down          : Adjust slice Z height");
     println!("  ⌨️  L Key                  : Toggle slice plane");
@@ -3720,7 +3722,7 @@ mod tests {
         assert_eq!(area.width, 200.0);
         assert_eq!(area.depth, 200.0);
         assert_eq!(area.height, 200.0);
-        assert_eq!(area.unit, "mm");
+        assert!(matches!(area.unit, LengthUnit::Millimeters));
         assert!(area.visible);
     }
 
@@ -3995,5 +3997,119 @@ mod tests {
                     z_height, segments.len());
             }
         }
+    }
+    
+    #[test]
+    fn test_length_unit_conversions() {
+        // Test mm to mm
+        assert!((LengthUnit::Millimeters.to_mm(100.0) - 100.0).abs() < 0.01);
+        assert!((LengthUnit::Millimeters.from_mm(100.0) - 100.0).abs() < 0.01);
+        
+        // Test inches to mm
+        assert!((LengthUnit::Inches.to_mm(1.0) - 25.4).abs() < 0.01);
+        assert!((LengthUnit::Inches.from_mm(25.4) - 1.0).abs() < 0.01);
+        
+        // Test round trip conversion
+        let original = 100.0;
+        let converted = LengthUnit::Inches.to_mm(original);
+        let back = LengthUnit::Inches.from_mm(converted);
+        assert!((back - original).abs() < 0.01);
+    }
+    
+    #[test]
+    fn test_print_area_dimensions() {
+        let mut area = PrintArea::new();
+        
+        // Test default values
+        assert_eq!(area.width, 200.0);
+        assert_eq!(area.depth, 200.0);
+        assert_eq!(area.height, 200.0);
+        assert!(matches!(area.unit, LengthUnit::Millimeters));
+        assert!(matches!(area.origin, Origin::Corner));
+        
+        // Test width_mm, depth_mm, height_mm
+        assert!((area.width_mm() - 200.0).abs() < 0.01);
+        assert!((area.depth_mm() - 200.0).abs() < 0.01);
+        assert!((area.height_mm() - 200.0).abs() < 0.01);
+        
+        // Test with inches
+        area.unit = LengthUnit::Inches;
+        area.width = 10.0;
+        area.depth = 8.0;
+        area.height = 10.0;
+        
+        assert!((area.width_mm() - 254.0).abs() < 0.1);
+        assert!((area.depth_mm() - 203.2).abs() < 0.1);
+        assert!((area.height_mm() - 254.0).abs() < 0.1);
+    }
+    
+    #[test]
+    fn test_printer_presets() {
+        let presets = printer_presets();
+        
+        // Check we have expected presets
+        assert!(presets.len() >= 4);
+        
+        // Check Prusa MK3S+ preset
+        let prusa = presets.iter().find(|p| p.name == "Prusa MK3S+").unwrap();
+        assert_eq!(prusa.width, 250.0);
+        assert_eq!(prusa.depth, 210.0);
+        assert_eq!(prusa.height, 210.0);
+        
+        // Check Ender 3 preset
+        let ender = presets.iter().find(|p| p.name == "Ender 3").unwrap();
+        assert_eq!(ender.width, 220.0);
+        assert_eq!(ender.depth, 220.0);
+        assert_eq!(ender.height, 250.0);
+        
+        // Check Bambu Lab X1 preset
+        let bambu = presets.iter().find(|p| p.name == "Bambu Lab X1").unwrap();
+        assert_eq!(bambu.width, 256.0);
+        assert_eq!(bambu.depth, 256.0);
+        assert_eq!(bambu.height, 256.0);
+    }
+    
+    #[test]
+    fn test_calculate_tick_spacing() {
+        assert_eq!(calculate_tick_spacing(30.0), 5.0);
+        assert_eq!(calculate_tick_spacing(100.0), 10.0);
+        assert_eq!(calculate_tick_spacing(300.0), 25.0);
+        assert_eq!(calculate_tick_spacing(700.0), 50.0);
+        assert_eq!(calculate_tick_spacing(1500.0), 100.0);
+    }
+    
+    #[test]
+    fn test_round_to_nice_number() {
+        // Test various inputs round to nice numbers
+        assert!((round_to_nice_number(12.5) - 10.0).abs() < 0.01);
+        assert!((round_to_nice_number(23.0) - 20.0).abs() < 0.01);
+        assert!((round_to_nice_number(47.0) - 50.0).abs() < 0.01);
+        assert!((round_to_nice_number(89.0) - 100.0).abs() < 0.01);
+    }
+    
+    #[test]
+    fn test_print_area_toggles() {
+        let mut area = PrintArea::new();
+        
+        // Test visibility toggle
+        assert!(area.visible);
+        area.toggle_visibility();
+        assert!(!area.visible);
+        area.toggle_visibility();
+        assert!(area.visible);
+        
+        // Test ruler toggle
+        assert!(!area.show_ruler);
+        area.toggle_ruler();
+        assert!(area.show_ruler);
+        area.toggle_ruler();
+        assert!(!area.show_ruler);
+        
+        // Test scale bar toggle
+        assert!(!area.show_scale_bar);
+        area.toggle_scale_bar();
+        assert!(area.show_scale_bar);
+        area.toggle_scale_bar();
+        assert!(!area.show_scale_bar);
     }
 }
