@@ -112,7 +112,7 @@ pub fn triangulate_simple(polygon: &[Vertex2D]) -> Result<Vec<usize>, Triangulat
 ///
 /// A vector of triangle indices referring to vertices in the combined vertex array.
 /// The outer polygon vertices come first, followed by hole vertices in order.
-/// For example, if outer has 4 vertices and holes[0] has 3 vertices, then:
+/// For example, if outer has 4 vertices and holes\[0\] has 3 vertices, then:
 /// - Indices 0-3 refer to outer vertices
 /// - Indices 4-6 refer to first hole vertices
 ///
