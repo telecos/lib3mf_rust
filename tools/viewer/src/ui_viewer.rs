@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::keybindings;
 use crate::menu_ui::{MenuAction, MenuBar};
 use image::{Rgb, RgbImage};
 use kiss3d::camera::ArcBall;
@@ -1603,38 +1604,7 @@ fn capture_screenshot(window: &Window) -> Result<(), Box<dyn std::error::Error>>
 
 /// Print controls information
 fn print_controls() {
-    println!("═══════════════════════════════════════════════════════════");
-    println!("  Interactive 3D Viewer Controls");
-    println!("═══════════════════════════════════════════════════════════");
-    println!();
-    println!("  🖱️  Left Mouse + Drag      : Rotate view");
-    println!("  🖱️  Right Mouse + Drag     : Pan view");
-    println!("  🖱️  Scroll Wheel           : Zoom in/out");
-    println!("  ⌨️  +/- or PgUp/PgDn       : Zoom in/out");
-    println!("  ⌨️  Arrow Keys             : Pan view (Up/Down/Left/Right)");
-    println!("  ⌨️  Shift+Up/Down          : Adjust slice Z height");
-    println!("  ⌨️  F                      : Fit model to view");
-    println!("  ⌨️  Home                   : Reset camera to default");
-    println!("  ⌨️  A Key                  : Toggle XYZ axes");
-    println!("  ⌨️  M Key                  : Toggle menu");
-    println!("  ⌨️  P Key                  : Toggle print area");
-    println!("  ⌨️  C Key                  : Configure print area");
-    println!("  ⌨️  U Key                  : Toggle ruler");
-    println!("  ⌨️  J Key                  : Toggle scale bar");
-    println!("  ⌨️  Z Key                  : Toggle 2D slice view");
-    println!("  ⌨️  Shift+Up/Down          : Adjust slice Z height");
-    println!("  ⌨️  L Key                  : Toggle slice plane");
-    println!("  ⌨️  X Key                  : Export slice to PNG");
-    println!("  ⌨️  Ctrl+O                 : Open file");
-    println!("  ⌨️  T                      : Cycle themes");
-    println!("  ⌨️  Ctrl+T                 : Browse test suites");
-    println!("  ⌨️  B                      : Toggle beam lattice");
-    println!("  ⌨️  V                      : Cycle boolean visualization mode");
-    println!("  ⌨️  D                      : Toggle displacement visualization");
-    println!("  ⌨️  S                      : Capture screenshot");
-    println!("  ⌨️  ESC / Close Window     : Exit viewer");
-    println!();
-    println!("═══════════════════════════════════════════════════════════");
+    keybindings::print_help();
 }
 
 /// Print empty scene information
