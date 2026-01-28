@@ -5,6 +5,11 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
 ## Features
 
 - **Interactive 3D Viewer**: Real-time 3D visualization with mouse controls
+  - **Drag-and-Drop File Loading** (NEW!): Simply drag .3mf files onto the viewer window to load them
+    - **Visual feedback**: Blue overlay for valid .3mf files, red for invalid files
+    - **File name display**: Shows the name of the file being dragged
+    - **Instant loading**: Dropped files load immediately with automatic camera adjustment
+    - **Cross-platform**: Works on Windows, macOS, and Linux
   - **GUI Menu Bar** (NEW!): Clickable menu bar with File, View, Settings, Extensions, and Help menus
     - Press 'M' to show/hide menu bar
     - Click menu items for easy access to all features
@@ -157,6 +162,7 @@ For a complete, organized list of all keyboard shortcuts, press **H** or **?** i
 
 Key shortcuts include:
 - ⌨️ **H or ?**: Show complete help with all shortcuts
+- 🖱️ **Drag & Drop**: Drag .3mf files onto the window to load them (NEW!)
 - ⌨️ **Ctrl+O**: Open file dialog
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **S**: Capture screenshot
