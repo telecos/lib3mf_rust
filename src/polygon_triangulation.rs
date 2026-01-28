@@ -170,7 +170,8 @@ pub fn triangulate_with_holes(
 
     // Convert vertices to flat coordinate array
     // Format: [outer_x0, outer_y0, ..., hole1_x0, hole1_y0, ..., hole2_x0, ...]
-    let mut coords = Vec::with_capacity((outer.len() + holes.iter().map(|h| h.len()).sum::<usize>()) * 2);
+    let mut coords =
+        Vec::with_capacity((outer.len() + holes.iter().map(|h| h.len()).sum::<usize>()) * 2);
 
     // Add outer boundary
     for vertex in outer {
@@ -243,7 +244,7 @@ mod tests {
 
         // A triangle should produce 1 triangle (3 indices)
         assert_eq!(triangles.len(), 3, "Expected 1 triangle (3 indices)");
-        
+
         // Verify all indices are valid (0-2 for 3 vertices)
         for &idx in &triangles {
             assert!(idx < 3, "Triangle index {} out of bounds", idx);
@@ -309,10 +310,7 @@ mod tests {
             .expect("Failed to triangulate polygon with hole");
 
         // Should produce multiple triangles
-        assert!(
-            !triangles.is_empty(),
-            "Expected at least one triangle"
-        );
+        assert!(!triangles.is_empty(), "Expected at least one triangle");
 
         // All indices should be valid (0-6: 4 outer + 3 hole vertices)
         for &idx in &triangles {
@@ -357,10 +355,7 @@ mod tests {
             .expect("Failed to triangulate polygon with two holes");
 
         // Should produce multiple triangles
-        assert!(
-            !triangles.is_empty(),
-            "Expected at least one triangle"
-        );
+        assert!(!triangles.is_empty(), "Expected at least one triangle");
 
         // All indices should be valid (0-11: 4 outer + 4 hole1 + 4 hole2 vertices)
         for &idx in &triangles {

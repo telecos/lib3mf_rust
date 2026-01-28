@@ -157,9 +157,7 @@ fn demo_polygon_with_multiple_holes() {
         Vertex2D::new(70.0, 90.0),
     ];
 
-    println!(
-        "   Input: Square (4 vertices) with 2 rectangular holes (4 vertices each)"
-    );
+    println!("   Input: Square (4 vertices) with 2 rectangular holes (4 vertices each)");
 
     match triangulate_with_holes(&outer, &[hole1, hole2]) {
         Ok(triangles) => {
