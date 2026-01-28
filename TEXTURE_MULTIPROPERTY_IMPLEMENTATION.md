@@ -2,37 +2,55 @@
 
 ## Summary
 
-This implementation adds support for rendering multiproperties and composite materials from the 3MF Materials extension in the viewer. Texture support is provided with a fallback visualization.
+This implementation adds full support for rendering textures, multiproperties, and composite materials from the 3MF Materials extension in the viewer.
 
 ## Changes Made
 
-### 1. Multiproperty Color Resolution (`resolve_multiproperty_color`)
+### 1. Texture Loading and Rendering (`load_textures_from_package`)
+
+Loads texture images from the 3MF package ZIP archive:
+- Opens the 3MF file as a ZIP archive
+- Extracts texture image files referenced by Texture2D resources
+- Loads images using the `image` crate
+- Returns a HashMap mapping texture IDs to loaded image data
+
+### 2. UV Coordinate Mapping
+
+Properly maps UV coordinates to triangle vertices:
+- Duplicates vertices per triangle to assign correct UV coordinates
+- Maps vertex indices to UV coordinates from Tex2DGroup
+- Creates TriMesh with UV data using `TriMesh::new()` with uvs parameter
+- Applies textures using `set_texture_from_memory()`
+
+### 3. Multiproperty Color Resolution (`resolve_multiproperty_color`)
 
 Blends colors from multiple property groups referenced by a multiproperty:
 - Retrieves colors from each referenced property group (color groups or base material groups)
 - Averages the colors (simplified Mix blend method)
 - Falls back to magenta if resolution fails (for debugging)
 
-### 2. Composite Material Color Resolution (`resolve_composite_color`)
+### 4. Composite Material Color Resolution (`resolve_composite_color`)
 
 Blends base materials according to composite mixing ratios:
 - Finds the base material group referenced by the composite
 - Blends materials using the composite values (proportions)
+- Normalizes by sum of values to handle non-unity proportions
 - Falls back to purple if resolution fails (for debugging)
 
-### 3. Enhanced Triangle Color Resolution (`get_triangle_color`)
+### 5. Enhanced Mesh Creation
 
-Extended to support additional material types:
-- **Texture2D groups**: Displays with teal color (#00CCCC) to indicate texture mapping
-  - Note: Full UV-mapped texture rendering requires custom shaders not supported in kiss3d v0.35
-- **Composite materials**: Calls `resolve_composite_color` for proper blending
-- **Multi-properties**: Calls `resolve_multiproperty_color` for property layering
+Updated mesh creation pipeline to support textures:
+- Groups triangles by property type (color vs texture)
+- Creates separate meshes for textured and colored triangles
+- Passes file path through rendering pipeline for texture loading
+- Applies loaded textures or falls back to teal indicator color
 
-### 4. Code Quality
+### 6. Code Quality
 
 - Fixed clippy warning in `menu_ui.rs` (collapsible if statement)
 - All existing tests pass
 - Added examples to create test files with multiproperties and composites
+- Added zip dependency for texture extraction
 
 ## Testing
 
@@ -74,24 +92,35 @@ The viewer successfully loads and displays material information:
 └────────────────────────────────────────────────────────┘
 ```
 
-## Known Limitations
+## Texture Support
 
-### Texture Rendering
-Full UV-mapped texture rendering is not implemented because:
-- kiss3d v0.35 uses a simplified rendering pipeline
-- Proper texture mapping would require:
-  - Custom GLSL shaders
-  - Mesh restructuring to include UV coordinates per vertex
-  - Texture loading and binding infrastructure
+### Implemented Features
+- ✅ Texture image loading from 3MF package
+- ✅ UV coordinate mapping from Tex2DGroup
+- ✅ Texture application to mesh surfaces
+- ✅ Support for PNG and JPEG texture formats
+- ✅ Multiple textures in same model
+- ⚠️ Basic tile style support (via kiss3d defaults)
 
-This would constitute a major change beyond the scope of "minimal modifications."
+### Technical Implementation Details
 
-**Current behavior**: Triangles using texture2d groups display in teal color as a visual indicator.
+**Texture Loading Process:**
+1. Open 3MF file as ZIP archive using `zip` crate
+2. Iterate through Texture2D resources in the model
+3. Extract image files from the package
+4. Load images using `image::load_from_memory()`
+5. Store in HashMap for quick lookup during rendering
 
-**Workaround**: For production texture viewing, consider:
-- Upgrading to a more full-featured 3D rendering library
-- Using external 3D modeling software to view textured 3MF files
-- Implementing custom shader support in a future update
+**UV Coordinate Mapping:**
+- Each triangle with textures gets its vertices duplicated
+- UV coordinates from Tex2DGroup are mapped to each vertex
+- TriMesh created with uvs parameter: `TriMesh::new(vertices, normals, Some(uvs), indices)`
+- Textures applied using `set_texture_from_memory()` with RGBA8 format
+
+**Fallback Behavior:**
+- If texture file not found: teal color indicator (#00CCCC)
+- If texture fails to load: teal color indicator
+- If no UV coordinates: teal color indicator
 
 ### Blend Methods
 Currently only the "Mix" blend method is fully implemented (simple averaging).
@@ -99,7 +128,8 @@ The "Multiply" blend method could be added in the future.
 
 ## Files Modified
 
-- `tools/viewer/src/ui_viewer.rs`: Added multiproperty/composite/texture support
+- `tools/viewer/src/ui_viewer.rs`: Added texture loading, UV mapping, multiproperty/composite support
 - `tools/viewer/src/menu_ui.rs`: Fixed clippy warning
+- `tools/viewer/Cargo.toml`: Added zip dependency
 - `examples/create_multiproperty_test.rs`: New test file generator
 - `examples/create_composite_test.rs`: New test file generator
