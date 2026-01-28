@@ -620,12 +620,12 @@ impl SceneNode {
     }
 
     /// The data of this scene node.
-    pub fn data(&self) -> Ref<SceneNodeData> {
+    pub fn data(&self) -> Ref<'_, SceneNodeData> {
         self.data.borrow()
     }
 
     /// The data of this scene node.
-    pub fn data_mut(&mut self) -> RefMut<SceneNodeData> {
+    pub fn data_mut(&mut self) -> RefMut<'_, SceneNodeData> {
         self.data.borrow_mut()
     }
 

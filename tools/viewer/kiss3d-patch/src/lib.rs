@@ -130,6 +130,8 @@ Thanks to all the Rustaceans for their help, and their OpenGL bindings.
 #![allow(missing_copy_implementations)]
 #![allow(static_mut_refs)]  // Added for compatibility with newer Rust
 #![allow(unused_parens)]  // Added for compatibility with newer Rust
+#![allow(elided_lifetimes_in_paths)]  // Added for compatibility with newer Rust
+#![allow(unexpected_cfgs)]  // Added for compatibility with newer Rust (asmjs deprecated)
 #![doc(html_root_url = "http://kiss3d.org/doc")]
 
 #[macro_use]
