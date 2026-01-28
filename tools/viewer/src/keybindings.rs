@@ -17,6 +17,7 @@ pub enum Category {
     File,
     View,
     Camera,
+    Selection,
     Slice,
     Theme,
     Settings,
@@ -31,6 +32,7 @@ impl Category {
             Category::File => "FILE",
             Category::View => "VIEW",
             Category::Camera => "CAMERA",
+            Category::Selection => "SELECTION",
             Category::Slice => "SLICE",
             Category::Theme => "THEME",
             Category::Settings => "SETTINGS",
@@ -92,13 +94,6 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Modifiers::empty(),
             "S",
             "Save screenshot",
-            Category::File,
-        ),
-        KeyBinding::new(
-            Some(Key::Escape),
-            Modifiers::empty(),
-            "Escape",
-            "Exit",
             Category::File,
         ),
         KeyBinding::new(
@@ -167,13 +162,6 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
         ),
         // CAMERA category
         KeyBinding::new(
-            Some(Key::F),
-            Modifiers::empty(),
-            "F",
-            "Fit model to view",
-            Category::Camera,
-        ),
-        KeyBinding::new(
             Some(Key::Home),
             Modifiers::empty(),
             "Home",
@@ -221,6 +209,49 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             "Arrow Keys",
             "Pan view",
             Category::Camera,
+        ),
+        // SELECTION category
+        KeyBinding::new(
+            None,
+            Modifiers::empty(),
+            "Left Click",
+            "Select object",
+            Category::Selection,
+        ),
+        KeyBinding::new(
+            None,
+            Modifiers::Control,
+            "Ctrl+Click",
+            "Multi-select object",
+            Category::Selection,
+        ),
+        KeyBinding::new(
+            Some(Key::Escape),
+            Modifiers::empty(),
+            "Escape",
+            "Clear selection",
+            Category::Selection,
+        ),
+        KeyBinding::new(
+            Some(Key::F),
+            Modifiers::empty(),
+            "F",
+            "Focus on selected / Fit all",
+            Category::Selection,
+        ),
+        KeyBinding::new(
+            Some(Key::J),
+            Modifiers::empty(),
+            "J",
+            "Hide/show selected",
+            Category::Selection,
+        ),
+        KeyBinding::new(
+            Some(Key::Y),
+            Modifiers::empty(),
+            "Y",
+            "Isolate selected",
+            Category::Selection,
         ),
         // SLICE category
         KeyBinding::new(
@@ -350,6 +381,7 @@ pub fn print_help() {
         Category::File,
         Category::View,
         Category::Camera,
+        Category::Selection,
         Category::Slice,
         Category::Animation,
         Category::Theme,
@@ -396,9 +428,9 @@ mod tests {
         for binding in &bindings {
             if let Some(key) = binding.key {
                 let combo = (format!("{:?}", key), format!("{:?}", binding.modifiers));
-                // Note: Some keys like Home are used in different contexts (camera vs animation)
+                // Note: Some keys like Home, Escape, and F are used in different contexts
                 // This is acceptable as the context determines which handler is active
-                if !seen.insert(combo.clone()) && key != Key::Home {
+                if !seen.insert(combo.clone()) && key != Key::Home && key != Key::Escape && key != Key::F {
                     panic!("Duplicate keybinding found: {:?}", combo);
                 }
             }
@@ -412,6 +444,7 @@ mod tests {
             Category::File,
             Category::View,
             Category::Camera,
+            Category::Selection,
             Category::Slice,
             Category::Animation,
             Category::Theme,
