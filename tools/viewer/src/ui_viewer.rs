@@ -3467,6 +3467,13 @@ fn create_displaced_mesh_node(
     let mut displaced_vertices = disp_mesh.vertices.clone();
     
     // Track which vertices have been displaced
+    // NOTE: This implementation applies displacement only once per vertex.
+    // If a vertex is shared by multiple triangles with different displacement
+    // coordinates, only the first encountered displacement will be applied.
+    // A more accurate implementation would either:
+    // 1. Duplicate vertices so each triangle-vertex pair has independent displacement
+    // 2. Average or blend multiple displacement values for shared vertices
+    // For the initial implementation, we use the simpler approach.
     let mut vertex_displaced = vec![false; displaced_vertices.len()];
     
     // Process each triangle to apply displacement
@@ -3475,43 +3482,47 @@ fn create_displaced_mesh_node(
         if let (Some(did), Some(d1), Some(d2), Some(d3)) = (triangle.did, triangle.d1, triangle.d2, triangle.d3) {
             // Find the displacement group
             if let Some(disp_group) = model.resources.disp2d_groups.iter().find(|g| g.id == did) {
-                // Find the displacement map
-                if let Some(disp_map_image) = displacement_maps.get(&disp_group.dispid) {
-                    // Find the displacement map resource for channel info
-                    if let Some(disp_map) = model.resources.displacement_maps.iter().find(|m| m.id == disp_group.dispid) {
-                        // Apply displacement to each vertex of the triangle if not already displaced
-                        let displacement_info = DisplacementInfo {
-                            disp_group,
-                            disp_map_image,
-                            disp_map,
-                        };
-                        
-                        apply_displacement_to_vertex(
-                            &mut displaced_vertices,
-                            &vertex_normals,
-                            &mut vertex_displaced,
-                            triangle.v1,
-                            d1,
-                            &displacement_info,
-                        );
-                        
-                        apply_displacement_to_vertex(
-                            &mut displaced_vertices,
-                            &vertex_normals,
-                            &mut vertex_displaced,
-                            triangle.v2,
-                            d2,
-                            &displacement_info,
-                        );
-                        
-                        apply_displacement_to_vertex(
-                            &mut displaced_vertices,
-                            &vertex_normals,
-                            &mut vertex_displaced,
-                            triangle.v3,
-                            d3,
-                            &displacement_info,
-                        );
+                // Find the normal vector group
+                if let Some(norm_group) = model.resources.norm_vector_groups.iter().find(|g| g.id == disp_group.nid) {
+                    // Find the displacement map
+                    if let Some(disp_map_image) = displacement_maps.get(&disp_group.dispid) {
+                        // Find the displacement map resource for channel info
+                        if let Some(disp_map) = model.resources.displacement_maps.iter().find(|m| m.id == disp_group.dispid) {
+                            // Apply displacement to each vertex of the triangle if not already displaced
+                            let displacement_info = DisplacementInfo {
+                                disp_group,
+                                norm_group,
+                                disp_map_image,
+                                disp_map,
+                            };
+                            
+                            apply_displacement_to_vertex(
+                                &mut displaced_vertices,
+                                &vertex_normals,
+                                &mut vertex_displaced,
+                                triangle.v1,
+                                d1,
+                                &displacement_info,
+                            );
+                            
+                            apply_displacement_to_vertex(
+                                &mut displaced_vertices,
+                                &vertex_normals,
+                                &mut vertex_displaced,
+                                triangle.v2,
+                                d2,
+                                &displacement_info,
+                            );
+                            
+                            apply_displacement_to_vertex(
+                                &mut displaced_vertices,
+                                &vertex_normals,
+                                &mut vertex_displaced,
+                                triangle.v3,
+                                d3,
+                                &displacement_info,
+                            );
+                        }
                     }
                 }
             }
@@ -3552,6 +3563,7 @@ fn create_displaced_mesh_node(
 /// Helper struct to pass displacement information
 struct DisplacementInfo<'a> {
     disp_group: &'a lib3mf::Disp2DGroup,
+    norm_group: &'a lib3mf::NormVectorGroup,
     disp_map_image: &'a image::DynamicImage,
     disp_map: &'a lib3mf::Displacement2D,
 }
@@ -3585,10 +3597,11 @@ fn apply_displacement_to_vertex(
         info.disp_map.channel,
     );
     
-    // Get the normal vector
-    // The coord.n is an index into the norm vector group
-    let normal = if coord.n < vertex_normals.len() {
-        vertex_normals[coord.n]
+    // Get the normal vector from the norm vector group
+    // The coord.n is an index into the norm vector group's vectors
+    let normal = if coord.n < info.norm_group.vectors.len() {
+        let norm_vec = &info.norm_group.vectors[coord.n];
+        (norm_vec.x, norm_vec.y, norm_vec.z)
     } else {
         // Fallback to vertex normal if index is invalid
         if vertex_index < vertex_normals.len() {
