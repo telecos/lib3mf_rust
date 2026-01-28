@@ -674,6 +674,10 @@ pub fn subdivide_midpoint(mesh: &Mesh) -> Mesh {
 /// Get or create a midpoint vertex between two vertices
 ///
 /// Uses a hashmap to avoid creating duplicate vertices for shared edges.
+///
+/// # Safety
+/// This function assumes `v1` and `v2` are valid indices into `original_vertices`.
+/// The caller must ensure the mesh has been validated before calling subdivision.
 fn get_or_create_midpoint(
     vertices: &mut Vec<Vertex>,
     edge_midpoints: &mut HashMap<(usize, usize), usize>,
