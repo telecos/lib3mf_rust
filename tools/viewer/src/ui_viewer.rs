@@ -11,15 +11,17 @@ use image::{Rgb, RgbImage};
 use kiss3d::camera::ArcBall;
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Point3, Vector3}; // Use nalgebra from kiss3d
+use kiss3d::nalgebra::{Point2, Point3, Vector3}; // Use nalgebra from kiss3d
 use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use lib3mf::Model;
 use rfd::FileDialog;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::io::Read;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 // Constants for beam lattice rendering
 const BEAM_COLOR: (f32, f32, f32) = (1.0, 0.6, 0.0); // Orange color for beams
@@ -476,6 +478,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
             state.show_materials,
             state.boolean_mode,
             state.show_displacement,
+            state.file_path.as_ref(),
         );
         state.beam_nodes = create_beam_lattice_nodes(&mut window, state.model.as_ref().unwrap());
         print_model_info(state.model.as_ref().unwrap());
@@ -662,6 +665,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             state.show_materials,
                             state.boolean_mode,
                             state.show_displacement,
+                            state.file_path.as_ref(),
                         );
 
                         // Print boolean operation information if in special mode
@@ -750,6 +754,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             state.show_materials,
                             state.boolean_mode,
                             state.show_displacement,
+                            state.file_path.as_ref(),
                         );
                     }
                 }
@@ -842,6 +847,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 state.show_materials,
                                 state.boolean_mode,
                                 state.show_displacement,
+                                state.file_path.as_ref(),
                             );
                         } else {
                             println!("\nNo displacement data in this model");
@@ -1756,6 +1762,197 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
     (100.0 / 255.0, 150.0 / 255.0, 200.0 / 255.0)
 }
 
+/// Load textures from a 3MF package file
+/// Returns a HashMap mapping texture IDs to loaded texture data
+fn load_textures_from_package(
+    file_path: &PathBuf,
+    model: &Model,
+) -> HashMap<usize, Rc<image::DynamicImage>> {
+    let mut textures = HashMap::new();
+    
+    // Open the 3MF file as a ZIP archive
+    let file = match File::open(file_path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open 3MF file for texture loading: {}", e);
+            return textures;
+        }
+    };
+    
+    let mut archive = match zip::ZipArchive::new(file) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("Failed to open 3MF as ZIP archive: {}", e);
+            return textures;
+        }
+    };
+    
+    // Load each texture2d resource
+    for texture2d in &model.resources.texture2d_resources {
+        // Normalize path (remove leading slash if present)
+        let normalized_path = texture2d.path.trim_start_matches('/');
+        
+        // Try both path variants and read the file
+        let image_data = {
+            let mut buffer = Vec::new();
+            let mut found = false;
+            
+            // Try normalized path first
+            if let Ok(mut file) = archive.by_name(normalized_path) {
+                if file.read_to_end(&mut buffer).is_ok() {
+                    found = true;
+                }
+            }
+            
+            // Try original path if normalized didn't work
+            if !found {
+                buffer.clear();
+                if let Ok(mut file) = archive.by_name(&texture2d.path) {
+                    if file.read_to_end(&mut buffer).is_ok() {
+                        found = true;
+                    }
+                }
+            }
+            
+            if !found {
+                eprintln!(
+                    "Texture file '{}' not found in 3MF package",
+                    texture2d.path
+                );
+                continue;
+            }
+            
+            buffer
+        };
+        
+        // Load the image from memory
+        match image::load_from_memory(&image_data) {
+            Ok(img) => {
+                println!(
+                    "  ✓ Loaded texture ID {}: {} ({}x{})",
+                    texture2d.id,
+                    texture2d.path,
+                    img.width(),
+                    img.height()
+                );
+                textures.insert(texture2d.id, Rc::new(img));
+            }
+            Err(e) => {
+                eprintln!(
+                    "Failed to decode texture image '{}': {}",
+                    texture2d.path, e
+                );
+            }
+        }
+    }
+    
+    if !textures.is_empty() {
+        println!("  Loaded {} texture(s) from 3MF package", textures.len());
+    }
+    
+    textures
+}
+
+/// Resolve composite material color by blending base materials
+fn resolve_composite_color(
+    model: &Model,
+    comp: &lib3mf::CompositeMaterials,
+    composite_idx: usize,
+) -> (f32, f32, f32) {
+    // Get the composite definition
+    let composite = &comp.composites[composite_idx];
+    
+    // Find the base material group this composite references
+    if let Some(base_group) = model.resources.base_material_groups.iter().find(|bg| bg.id == comp.matid) {
+        // Blend colors according to the composite values
+        let mut r_total = 0.0_f32;
+        let mut g_total = 0.0_f32;
+        let mut b_total = 0.0_f32;
+        
+        // Iterate up to the minimum of values and matindices length to prevent out-of-bounds
+        let blend_count = composite.values.len().min(comp.matindices.len());
+        
+        for i in 0..blend_count {
+            let value = composite.values[i];
+            let mat_idx = comp.matindices[i];
+            
+            if mat_idx < base_group.materials.len() {
+                let (r, g, b, _) = base_group.materials[mat_idx].displaycolor;
+                r_total += (r as f32 / 255.0) * value;
+                g_total += (g as f32 / 255.0) * value;
+                b_total += (b as f32 / 255.0) * value;
+            }
+        }
+        
+        // Normalize by sum of values to handle cases where values don't sum to 1.0
+        // This ensures proper color intensity regardless of value distribution
+        let sum: f32 = composite.values.iter().take(blend_count).sum();
+        if sum > 0.0 {
+            r_total /= sum;
+            g_total /= sum;
+            b_total /= sum;
+        }
+        
+        return (r_total, g_total, b_total);
+    }
+    
+    // Fallback to purple to indicate composite material that couldn't be resolved
+    (0.8, 0.0, 0.8)
+}
+
+/// Resolve multi-property color by blending multiple property groups
+fn resolve_multiproperty_color(
+    model: &Model,
+    multi: &lib3mf::MultiProperties,
+    multi_idx: usize,
+) -> (f32, f32, f32) {
+    // Get the multi element
+    let multi_elem = &multi.multis[multi_idx];
+    
+    // Get colors from each referenced property group
+    let mut colors = Vec::new();
+    
+    for (i, &pid) in multi.pids.iter().enumerate() {
+        if i < multi_elem.pindices.len() {
+            let pindex = multi_elem.pindices[i];
+            
+            // Try to get color from each property group type
+            if let Some(cg) = model.resources.color_groups.iter().find(|c| c.id == pid) {
+                if pindex < cg.colors.len() {
+                    let (r, g, b, _) = cg.colors[pindex];
+                    colors.push((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0));
+                }
+            } else if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+                if pindex < bmg.materials.len() {
+                    let (r, g, b, _) = bmg.materials[pindex].displaycolor;
+                    colors.push((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0));
+                }
+            }
+        }
+    }
+    
+    if colors.is_empty() {
+        // Fallback to magenta to indicate multi-property that couldn't be resolved
+        return (1.0, 0.0, 1.0);
+    }
+    
+    // Blend colors based on blend methods
+    // For simplicity, we average the colors (Mix blend method)
+    // A more sophisticated implementation would handle Multiply and other blend modes
+    let mut r_total = 0.0_f32;
+    let mut g_total = 0.0_f32;
+    let mut b_total = 0.0_f32;
+    
+    for (r, g, b) in &colors {
+        r_total += r;
+        g_total += g;
+        b_total += b;
+    }
+    
+    let count = colors.len() as f32;
+    (r_total / count, g_total / count, b_total / count)
+}
+
 /// Get color for a specific triangle based on material properties
 fn get_triangle_color(
     model: &Model,
@@ -1799,6 +1996,30 @@ fn get_triangle_color(
                 // No specific index, use first material
                 let (r, g, b, _) = bmg.materials[0].displaycolor;
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+        }
+        
+        // Try to find in composite materials
+        if let Some(comp) = model.resources.composite_materials.iter().find(|c| c.id == pid) {
+            if let Some(idx) = pindex {
+                if idx < comp.composites.len() {
+                    return resolve_composite_color(model, comp, idx);
+                }
+            } else if !comp.composites.is_empty() {
+                // Use first composite
+                return resolve_composite_color(model, comp, 0);
+            }
+        }
+        
+        // Try to find in multi-properties
+        if let Some(multi) = model.resources.multi_properties.iter().find(|m| m.id == pid) {
+            if let Some(idx) = pindex {
+                if idx < multi.multis.len() {
+                    return resolve_multiproperty_color(model, multi, idx);
+                }
+            } else if !multi.multis.is_empty() {
+                // Use first multi
+                return resolve_multiproperty_color(model, multi, 0);
             }
         }
     }
@@ -2327,6 +2548,7 @@ fn create_mesh_nodes_with_materials(
     show_materials: bool,
     mode: BooleanMode,
     show_displacement: bool,
+    file_path: Option<&PathBuf>,
 ) -> Vec<SceneNode> {
     // If materials are disabled, use default rendering
     if !show_materials {
@@ -2342,12 +2564,46 @@ fn create_mesh_nodes_with_materials(
         return create_mesh_nodes_with_boolean_mode(window, model, mode);
     }
     
-    // Create nodes with per-triangle material colors
-    create_mesh_nodes_with_triangle_colors(window, model)
+    // Create nodes with per-triangle material colors and textures
+    if let Some(path) = file_path {
+        create_mesh_nodes_with_triangle_colors_and_textures(window, model, path)
+    } else {
+        create_mesh_nodes_with_triangle_colors(window, model)
+    }
 }
 
-/// Create mesh nodes with per-triangle color support
+/// Create mesh nodes with per-triangle color support and texture mapping
 fn create_mesh_nodes_with_triangle_colors(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    create_mesh_nodes_with_triangle_colors_impl(window, model, None)
+}
+
+/// Create mesh nodes with per-triangle color support, texture mapping, and file path for loading textures
+fn create_mesh_nodes_with_triangle_colors_and_textures(
+    window: &mut Window,
+    model: &Model,
+    file_path: &PathBuf,
+) -> Vec<SceneNode> {
+    // Load textures from the 3MF package
+    let textures = if !model.resources.texture2d_resources.is_empty() {
+        println!("\n  Loading textures from 3MF package...");
+        let loaded = load_textures_from_package(file_path, model);
+        if loaded.is_empty() {
+            println!("  No textures loaded");
+        }
+        Some(loaded)
+    } else {
+        None
+    };
+    
+    create_mesh_nodes_with_triangle_colors_impl(window, model, textures.as_ref())
+}
+
+/// Implementation of mesh node creation with optional texture support
+fn create_mesh_nodes_with_triangle_colors_impl(
+    window: &mut Window,
+    model: &Model,
+    textures: Option<&HashMap<usize, Rc<image::DynamicImage>>>,
+) -> Vec<SceneNode> {
     let mut nodes = Vec::new();
 
     for item in &model.build.items {
@@ -2358,62 +2614,151 @@ fn create_mesh_nodes_with_triangle_colors(window: &mut Window, model: &Model) ->
             .find(|o| o.id == item.objectid)
         {
             if let Some(ref mesh_data) = obj.mesh {
-                // Check if mesh has per-triangle colors
-                let has_triangle_colors = mesh_data.triangles.iter().any(|t| t.pid.is_some());
+                // Check if mesh has per-triangle colors or textures
+                let has_triangle_properties = mesh_data.triangles.iter().any(|t| t.pid.is_some());
                 
-                if has_triangle_colors {
-                    // Create separate mesh for each color group to support per-triangle colors
-                    // Group triangles by their color
-                    let mut color_groups: std::collections::HashMap<(u8, u8, u8), Vec<usize>> = 
-                        std::collections::HashMap::new();
+                if has_triangle_properties {
+                    // Group triangles by their material property ID
+                    let mut property_groups: HashMap<(Option<usize>, Option<usize>), Vec<usize>> = 
+                        HashMap::new();
                     
                     for (tri_idx, triangle) in mesh_data.triangles.iter().enumerate() {
-                        let color = get_triangle_color(model, obj, triangle);
-                        let color_key = (
-                            (color.0 * 255.0) as u8,
-                            (color.1 * 255.0) as u8,
-                            (color.2 * 255.0) as u8,
-                        );
-                        color_groups.entry(color_key).or_default().push(tri_idx);
+                        // Group by (pid, pindex) to handle both colors and textures
+                        let key = (triangle.pid, triangle.pindex.or(triangle.p1));
+                        property_groups.entry(key).or_default().push(tri_idx);
                     }
                     
-                    // Create a mesh for each color group
-                    for ((r, g, b), tri_indices) in color_groups.iter() {
-                        let vertices: Vec<Point3<f32>> = mesh_data
-                            .vertices
-                            .iter()
-                            .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
-                            .collect();
-
-                        let faces: Vec<Point3<u32>> = tri_indices
-                            .iter()
-                            .map(|&idx| {
-                                let t = &mesh_data.triangles[idx];
-                                Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32)
-                            })
-                            .collect();
-
-                        if !faces.is_empty() {
-                            let tri_mesh = TriMesh::new(
-                                vertices,
-                                None,
-                                None,
-                                Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                    // Create a mesh for each property group
+                    for ((pid_opt, pindex_opt), tri_indices) in property_groups.iter() {
+                        // Check if this group uses a texture
+                        let texture_info = if let (Some(pid), Some(pindex)) = (pid_opt, pindex_opt) {
+                            // Check if this pid refers to a texture2d group
+                            model.resources.texture2d_groups.iter()
+                                .find(|tg| tg.id == *pid)
+                                .map(|tg| (*pid, tg.texid, *pindex))
+                        } else {
+                            None
+                        };
+                        
+                        if let Some((tex_group_id, tex_id, _)) = texture_info {
+                            // This group uses textures - create mesh with UV coordinates
+                            let tex_group = model.resources.texture2d_groups.iter()
+                                .find(|tg| tg.id == tex_group_id).unwrap();
+                            
+                            // Create vertices and UV coordinates
+                            let mut vertices = Vec::new();
+                            let mut uvs = Vec::new();
+                            let mut faces = Vec::new();
+                            
+                            for &tri_idx in tri_indices.iter() {
+                                let triangle = &mesh_data.triangles[tri_idx];
+                                let base_idx = vertices.len() as u32;
+                                
+                                // Add vertices for this triangle
+                                for &v_idx in &[triangle.v1, triangle.v2, triangle.v3] {
+                                    if v_idx < mesh_data.vertices.len() {
+                                        let v = &mesh_data.vertices[v_idx];
+                                        vertices.push(Point3::new(v.x as f32, v.y as f32, v.z as f32));
+                                        
+                                        // Add corresponding UV coordinate
+                                        if v_idx < tex_group.tex2coords.len() {
+                                            let uv = &tex_group.tex2coords[v_idx];
+                                            uvs.push(Point2::new(uv.u, uv.v));
+                                        } else {
+                                            uvs.push(Point2::new(0.0, 0.0));
+                                        }
+                                    }
+                                }
+                                
+                                // Add face
+                                faces.push(Point3::new(base_idx, base_idx + 1, base_idx + 2));
+                            }
+                            
+                            if !faces.is_empty() {
+                                let tri_mesh = TriMesh::new(
+                                    vertices,
+                                    None,
+                                    Some(uvs),
+                                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                                );
+                                
+                                let scale = Vector3::new(1.0, 1.0, 1.0);
+                                let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                                
+                                // Try to apply texture if available
+                                if let Some(texture_map) = textures {
+                                    if let Some(texture_img) = texture_map.get(&tex_id) {
+                                        // Convert image to RGBA8 format
+                                        let rgba_img = texture_img.to_rgba8();
+                                        let raw_data = rgba_img.into_raw();
+                                        
+                                        // Create a unique texture name
+                                        let texture_name = format!("texture_{}", tex_id);
+                                        
+                                        // Apply texture from memory
+                                        mesh_node.set_texture_from_memory(&raw_data, &texture_name);
+                                    } else {
+                                        // Texture not loaded, use teal indicator color
+                                        mesh_node.set_color(0.0, 0.8, 0.8);
+                                    }
+                                } else {
+                                    // No textures loaded, use teal indicator color
+                                    mesh_node.set_color(0.0, 0.8, 0.8);
+                                }
+                                
+                                nodes.push(mesh_node);
+                            }
+                        } else {
+                            // This group uses colors (not textures)
+                            let color = if let Some(_pid) = pid_opt {
+                                let triangle = &mesh_data.triangles[tri_indices[0]];
+                                get_triangle_color(model, obj, triangle)
+                            } else {
+                                get_object_color(model, obj)
+                            };
+                            
+                            let color_key = (
+                                (color.0 * 255.0) as u8,
+                                (color.1 * 255.0) as u8,
+                                (color.2 * 255.0) as u8,
                             );
+                            
+                            let vertices: Vec<Point3<f32>> = mesh_data
+                                .vertices
+                                .iter()
+                                .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+                                .collect();
 
-                            let scale = Vector3::new(1.0, 1.0, 1.0);
-                            let mut mesh_node = window.add_trimesh(tri_mesh, scale);
-                            mesh_node.set_color(
-                                *r as f32 / 255.0,
-                                *g as f32 / 255.0,
-                                *b as f32 / 255.0,
-                            );
+                            let faces: Vec<Point3<u32>> = tri_indices
+                                .iter()
+                                .map(|&idx| {
+                                    let t = &mesh_data.triangles[idx];
+                                    Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32)
+                                })
+                                .collect();
 
-                            nodes.push(mesh_node);
+                            if !faces.is_empty() {
+                                let tri_mesh = TriMesh::new(
+                                    vertices,
+                                    None,
+                                    None,
+                                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                                );
+
+                                let scale = Vector3::new(1.0, 1.0, 1.0);
+                                let mut mesh_node = window.add_trimesh(tri_mesh, scale);
+                                mesh_node.set_color(
+                                    color_key.0 as f32 / 255.0,
+                                    color_key.1 as f32 / 255.0,
+                                    color_key.2 as f32 / 255.0,
+                                );
+
+                                nodes.push(mesh_node);
+                            }
                         }
                     }
                 } else {
-                    // No per-triangle colors, use object-level color
+                    // No per-triangle properties, use object-level color
                     let vertices: Vec<Point3<f32>> = mesh_data
                         .vertices
                         .iter()
