@@ -2,6 +2,7 @@
 //!
 //! This module provides an interactive 3D viewer using kiss3d
 //! for rendering 3MF models with mouse controls and real-time interaction.
+//! Updated: 2026-01-28 for object selection feature
 
 #![forbid(unsafe_code)]
 
