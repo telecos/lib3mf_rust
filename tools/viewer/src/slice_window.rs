@@ -616,13 +616,12 @@ impl SlicePreviewWindow {
 
         // Create renderer and render
         let renderer = slice_renderer::SliceRenderer::new(width, height);
-        let image = if self.config.filled_mode {
-            renderer.render_slice(&contours, &bounds)
-        } else {
-            // For outline mode, just render with thin contours
-            // (could be enhanced to draw outlines instead of fills)
-            renderer.render_slice(&contours, &bounds)
-        };
+        
+        // TODO: Outline mode is not yet implemented in the slice_renderer.
+        // For now, always render filled polygons regardless of mode.
+        // To implement outline mode, we would need to add a separate method
+        // to render just the polygon boundaries without filling.
+        let image = renderer.render_slice(&contours, &bounds);
 
         // Save
         renderer.save_png(&image, path)?;
