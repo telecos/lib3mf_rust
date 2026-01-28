@@ -4,7 +4,6 @@
 //! and properly handles files that declare it in requiredextensions.
 //!
 //! **Note**: These tests do NOT implement cryptographic operations.
-//! See SECURE_CONTENT_SUPPORT.md for security considerations.
 
 use lib3mf::{CEKParams, Consumer, Extension, KEKParams, Model, ParserConfig};
 use std::fs::File;

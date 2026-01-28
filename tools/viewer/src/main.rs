@@ -23,6 +23,7 @@ use std::path::PathBuf;
 
 mod browser_ui;
 mod github_api;
+mod keybindings;
 mod menu_ui;
 mod slice_window;
 mod ui_viewer;

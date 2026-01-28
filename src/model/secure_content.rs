@@ -16,8 +16,7 @@
 ///
 /// **Security Warning**: This does NOT decrypt content or verify signatures.
 /// Applications must implement their own cryptographic operations using established
-/// libraries (e.g., ring, RustCrypto, OpenSSL). See SECURE_CONTENT_SUPPORT.md for
-/// security considerations.
+/// libraries (e.g., ring, RustCrypto, OpenSSL).
 #[derive(Debug, Clone, Default)]
 pub struct SecureContentInfo {
     /// UUID of the keystore (if present)

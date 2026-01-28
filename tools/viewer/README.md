@@ -152,29 +152,21 @@ cargo run --release -- <path-to-3mf-file> --ui
 - 🖱️ **Scroll Wheel**: Zoom in/out
 
 **Keyboard Shortcuts:**
-- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
+
+For a complete, organized list of all keyboard shortcuts, press **H** or **?** in the viewer, or see [KEYBOARD_CONTROLS_GUIDE.md](KEYBOARD_CONTROLS_GUIDE.md).
+
+Key shortcuts include:
+- ⌨️ **H or ?**: Show complete help with all shortcuts
+- ⌨️ **Ctrl+O**: Open file dialog
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
-- ⌨️ **S**: Capture screenshot to PNG file (timestamped filename)
-- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
-- ⌨️ **P Key**: Toggle print area visibility
-- ⌨️ **C Key**: Configure print area dimensions
-- ⌨️ **T**: Cycle through background themes (Dark, Light, Blue, White, Black)
-- ⌨️ **V**: Cycle through boolean operation visualization modes
-- ⌨️ **B**: Toggle beam lattice (if present)
-- ⌨️ **D**: Toggle displacement visualization
-- ⌨️ **Z**: Toggle 2D slice view
+- ⌨️ **S**: Capture screenshot
+- ⌨️ **A**: Toggle XYZ axes
+- ⌨️ **M**: Toggle menu bar
+- ⌨️ **T**: Cycle background themes
 - ⌨️ **F**: Fit model to view
-- ⌨️ **Home**: Reset camera to default position
-- ⌨️ **Arrow Keys**: Pan the view
-- ⌨️ **A Key**: Toggle XYZ axes (default: visible)
-- ⌨️ **M Key**: Toggle menu display (NEW!)
-- ⌨️ **R Key**: Toggle material rendering (ON = show colors, OFF = default gray) (NEW!)
-- ⌨️ **P Key**: Toggle print area visibility (NEW!)
-- ⌨️ **C Key**: Configure print area dimensions (NEW!)
-- ⌨️ **Ctrl+O**: Open file dialog to load a new 3MF file
-- ⌨️ **S**: Capture screenshot to PNG file (timestamped filename)
-- ⌨️ **Ctrl+T**: Browse test suites from GitHub
-- ⌨️ **ESC / Close Window**: Exit viewer
+- ⌨️ **ESC**: Exit viewer
+
+See the full categorized list in the viewer (press **H**) or in [KEYBOARD_CONTROLS_GUIDE.md](KEYBOARD_CONTROLS_GUIDE.md).
 
 ### Command-Line Mode
 
