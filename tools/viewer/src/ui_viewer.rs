@@ -1745,16 +1745,28 @@ fn resolve_composite_color(
         let mut g_total = 0.0_f32;
         let mut b_total = 0.0_f32;
         
-        for (i, &value) in composite.values.iter().enumerate() {
-            if i < comp.matindices.len() {
-                let mat_idx = comp.matindices[i];
-                if mat_idx < base_group.materials.len() {
-                    let (r, g, b, _) = base_group.materials[mat_idx].displaycolor;
-                    r_total += (r as f32 / 255.0) * value;
-                    g_total += (g as f32 / 255.0) * value;
-                    b_total += (b as f32 / 255.0) * value;
-                }
+        // Iterate up to the minimum of values and matindices length to prevent out-of-bounds
+        let blend_count = composite.values.len().min(comp.matindices.len());
+        
+        for i in 0..blend_count {
+            let value = composite.values[i];
+            let mat_idx = comp.matindices[i];
+            
+            if mat_idx < base_group.materials.len() {
+                let (r, g, b, _) = base_group.materials[mat_idx].displaycolor;
+                r_total += (r as f32 / 255.0) * value;
+                g_total += (g as f32 / 255.0) * value;
+                b_total += (b as f32 / 255.0) * value;
             }
+        }
+        
+        // Normalize by sum of values to handle cases where values don't sum to 1.0
+        // This ensures proper color intensity regardless of value distribution
+        let sum: f32 = composite.values.iter().take(blend_count).sum();
+        if sum > 0.0 {
+            r_total /= sum;
+            g_total /= sum;
+            b_total /= sum;
         }
         
         return (r_total, g_total, b_total);
