@@ -16,12 +16,9 @@ include = [
     "src/**/*.frag",
     "src/**/*.vert",
     "src/text/*.ttf",
-    "examples/**/*.rs",
-    "examples/media",
-    "examples/Cargo.toml",
     "Cargo.toml",
     "LICENSE",
-    "Readme.md",
+    "README.md",
 ]
 
 
