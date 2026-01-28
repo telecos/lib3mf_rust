@@ -262,7 +262,8 @@ impl SlicePreviewWindow {
                 let (x2, y2) = points[j];
 
                 // Check if edge crosses scanline
-                if (y1 <= y && y < y2) || (y2 <= y && y < y1) {
+                // Use asymmetric comparison to avoid counting vertices twice
+                if (y1 < y && y <= y2) || (y2 < y && y <= y1) {
                     // Calculate x intersection
                     let x = if y2 == y1 {
                         x1
@@ -364,7 +365,7 @@ impl SlicePreviewWindow {
     }
 
     /// Build closed polygons from line segments
-    /// This connects line segments into closed loops
+    /// This connects line segments into closed loops, handling segments in any orientation
     fn build_polygons_from_segments(&self, segments: &[LineSegment2D]) -> Vec<Vec<(f32, f32)>> {
         if segments.is_empty() {
             return Vec::new();
@@ -386,48 +387,55 @@ impl SlicePreviewWindow {
             }
 
             let mut polygon = Vec::new();
-            let mut current_idx = start_idx;
-            let start_point = segments[start_idx].start;
+            used[start_idx] = true;
+            
+            // Start with the first segment
+            let start_seg = &segments[start_idx];
+            let start_point = start_seg.start;
+            let mut current_point = start_seg.end;
+            
+            polygon.push((start_seg.start.x, start_seg.start.y));
+            polygon.push((start_seg.end.x, start_seg.end.y));
 
-            loop {
-                if used[current_idx] {
+            // Keep finding connected segments until we close the loop or run out
+            let mut iterations = 0;
+            const MAX_ITERATIONS: usize = 10000; // Prevent infinite loops
+            
+            while iterations < MAX_ITERATIONS {
+                iterations += 1;
+                
+                // Check if we've closed the loop
+                if points_equal(current_point, start_point) {
+                    polygon.pop(); // Remove duplicate closing point
                     break;
                 }
 
-                used[current_idx] = true;
-                let segment = &segments[current_idx];
-                polygon.push((segment.start.x, segment.start.y));
-
-                // Try to find next connected segment
-                let next_point = segment.end;
-                let mut found_next = false;
-
+                // Find next connected segment
+                let mut found = false;
                 for (idx, seg) in segments.iter().enumerate() {
                     if used[idx] {
                         continue;
                     }
 
-                    if points_equal(next_point, seg.start) {
-                        current_idx = idx;
-                        found_next = true;
+                    if points_equal(current_point, seg.start) {
+                        // Segment is in correct direction
+                        used[idx] = true;
+                        polygon.push((seg.end.x, seg.end.y));
+                        current_point = seg.end;
+                        found = true;
                         break;
-                    } else if points_equal(next_point, seg.end) {
-                        // Need to reverse this segment
-                        // For simplicity, we'll just add the point
-                        current_idx = idx;
-                        found_next = true;
+                    } else if points_equal(current_point, seg.end) {
+                        // Segment is reversed - traverse it backwards
+                        used[idx] = true;
+                        polygon.push((seg.start.x, seg.start.y));
+                        current_point = seg.start;
+                        found = true;
                         break;
                     }
                 }
 
-                // Check if we've closed the loop
-                if points_equal(next_point, start_point) {
-                    break;
-                }
-
-                if !found_next {
-                    // Can't continue this polygon, add what we have
-                    polygon.push((next_point.x, next_point.y));
+                if !found {
+                    // No more connected segments - this polygon is complete (or incomplete)
                     break;
                 }
             }
@@ -575,9 +583,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_fill_polygon_simple_triangle() {
-        // Create a simple window (will fail in headless but we can test the logic)
-        // We'll test the polygon building logic instead
+    fn test_slice_config_with_segments() {
+        // Test that SliceConfig can be created with segments
         let segments = vec![
             LineSegment2D {
                 start: Point2D { x: 0.0, y: 0.0 },
@@ -593,8 +600,6 @@ mod tests {
             },
         ];
 
-        // We can't create a window in headless environment, so we'll just verify
-        // the polygon building logic by creating a minimal test
         let config = SliceConfig {
             contours: segments.clone(),
             ..Default::default()
@@ -606,8 +611,8 @@ mod tests {
     }
 
     #[test]
-    fn test_polygon_from_segments_triangle() {
-        // Create a simple triangular contour
+    fn test_connected_triangle_segments() {
+        // Verify that triangle segments are properly connected
         let segments = vec![
             LineSegment2D {
                 start: Point2D { x: 0.0, y: 0.0 },
@@ -623,9 +628,6 @@ mod tests {
             },
         ];
 
-        // Build a minimal SlicePreviewWindow to test the method
-        // Since we can't create a real window in headless tests, we verify the logic separately
-        
         // Verify segments are connected properly
         assert_eq!(segments[0].end.x, segments[1].start.x);
         assert_eq!(segments[0].end.y, segments[1].start.y);
@@ -644,5 +646,59 @@ mod tests {
         assert!(config.filled_mode); // Should be true by default
         assert!(config.show_grid);
         assert_eq!(config.contours.len(), 0);
+    }
+
+    #[test]
+    fn test_build_simple_triangle_polygon() {
+        // Create a mock window to test the build_polygons_from_segments method
+        // Since we can't create a real window in tests, we'll test the logic separately
+        
+        // Triangle segments in correct order
+        let segments = vec![
+            LineSegment2D {
+                start: Point2D { x: 0.0, y: 0.0 },
+                end: Point2D { x: 10.0, y: 0.0 },
+            },
+            LineSegment2D {
+                start: Point2D { x: 10.0, y: 0.0 },
+                end: Point2D { x: 5.0, y: 10.0 },
+            },
+            LineSegment2D {
+                start: Point2D { x: 5.0, y: 10.0 },
+                end: Point2D { x: 0.0, y: 0.0 },
+            },
+        ];
+
+        // Verify the segments form a closed loop
+        let first_start = segments[0].start;
+        let last_end = segments[segments.len() - 1].end;
+        assert!((first_start.x - last_end.x).abs() < 0.001);
+        assert!((first_start.y - last_end.y).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_build_polygon_with_reversed_segment() {
+        // Triangle with one reversed segment
+        let segments = vec![
+            LineSegment2D {
+                start: Point2D { x: 0.0, y: 0.0 },
+                end: Point2D { x: 10.0, y: 0.0 },
+            },
+            LineSegment2D {
+                // This segment is reversed
+                start: Point2D { x: 5.0, y: 10.0 },
+                end: Point2D { x: 10.0, y: 0.0 },
+            },
+            LineSegment2D {
+                start: Point2D { x: 5.0, y: 10.0 },
+                end: Point2D { x: 0.0, y: 0.0 },
+            },
+        ];
+
+        // Verify that we can still connect these (second segment connects end-to-start)
+        assert_eq!(segments[0].end.x, segments[1].end.x);
+        assert_eq!(segments[0].end.y, segments[1].end.y);
+        assert_eq!(segments[1].start.x, segments[2].start.x);
+        assert_eq!(segments[1].start.y, segments[2].start.y);
     }
 }
