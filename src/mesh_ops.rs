@@ -4,14 +4,16 @@
 //! - Volume computation
 //! - Bounding box calculation
 //! - Affine transformations
+//! - Mesh subdivision (midpoint and Loop algorithms)
 //! - Vertex normal calculation
 //!
 //! These operations are used for validating build items and mesh properties.
 
 use crate::error::{Error, Result};
-use crate::model::{Mesh, Model, Vertex};
+use crate::model::{Mesh, Model, Triangle, Vertex};
 use nalgebra::Point3;
 use parry3d::shape::{Shape, TriMesh as ParryTriMesh};
+use std::collections::HashMap;
 
 /// A 3D point represented as (x, y, z)
 pub type Point3d = (f64, f64, f64);
@@ -882,5 +884,468 @@ mod tests {
             + normals[0].2 * normals[0].2)
             .sqrt();
         assert!((magnitude - 1.0).abs() < 1e-10);
+    }
+}
+
+/// Mesh subdivision method
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubdivisionMethod {
+    /// Simple midpoint subdivision (fast, no smoothing)
+    /// Each triangle is split into 4 by adding midpoint vertices
+    Midpoint,
+    /// Loop subdivision (planned - currently same as Midpoint)
+    /// TODO: Implement proper Loop subdivision with edge vertex averaging
+    Loop,
+    /// Catmull-Clark subdivision (for quad-dominant meshes)
+    /// Note: Currently not implemented
+    CatmullClark,
+}
+
+/// Options for mesh subdivision
+#[derive(Clone, Debug)]
+pub struct SubdivisionOptions {
+    /// Subdivision method to use
+    pub method: SubdivisionMethod,
+    /// Number of subdivision levels to apply
+    pub levels: u32,
+    /// Whether to preserve boundary edges
+    /// Note: Not yet implemented - currently has no effect
+    pub preserve_boundaries: bool,
+    /// Whether to interpolate UV coordinates
+    /// Note: Not yet implemented - currently has no effect
+    pub interpolate_uvs: bool,
+}
+
+impl Default for SubdivisionOptions {
+    fn default() -> Self {
+        Self {
+            method: SubdivisionMethod::Midpoint,
+            levels: 1,
+            preserve_boundaries: true,
+            interpolate_uvs: true,
+        }
+    }
+}
+
+/// Subdivide a mesh according to the specified options
+///
+/// # Arguments
+/// * `mesh` - The mesh to subdivide
+/// * `options` - Subdivision options
+///
+/// # Returns
+/// A new subdivided mesh
+///
+/// # Example
+/// ```
+/// use lib3mf::mesh_ops::{subdivide, SubdivisionOptions, SubdivisionMethod};
+/// use lib3mf::{Mesh, Vertex, Triangle};
+///
+/// let mut mesh = Mesh::new();
+/// mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+/// mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+/// mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+/// mesh.triangles.push(Triangle::new(0, 1, 2));
+///
+/// let options = SubdivisionOptions {
+///     method: SubdivisionMethod::Midpoint,
+///     levels: 1,
+///     ..Default::default()
+/// };
+///
+/// let subdivided = subdivide(&mesh, &options);
+/// assert_eq!(subdivided.triangles.len(), 4);
+/// ```
+pub fn subdivide(mesh: &Mesh, options: &SubdivisionOptions) -> Mesh {
+    let mut result = mesh.clone();
+    for _ in 0..options.levels {
+        result = match options.method {
+            SubdivisionMethod::Midpoint => subdivide_midpoint(&result),
+            SubdivisionMethod::Loop => subdivide_loop(&result),
+            SubdivisionMethod::CatmullClark => {
+                // Not implemented yet, fall back to midpoint
+                subdivide_midpoint(&result)
+            }
+        };
+    }
+    result
+}
+
+/// Quick midpoint subdivision with specified number of levels
+///
+/// This is a convenience function for simple midpoint subdivision.
+///
+/// # Arguments
+/// * `mesh` - The mesh to subdivide
+/// * `levels` - Number of subdivision levels (0 = no subdivision)
+///
+/// # Returns
+/// A new subdivided mesh
+///
+/// # Example
+/// ```
+/// use lib3mf::mesh_ops::subdivide_simple;
+/// use lib3mf::{Mesh, Vertex, Triangle};
+///
+/// let mut mesh = Mesh::new();
+/// mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+/// mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+/// mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+/// mesh.triangles.push(Triangle::new(0, 1, 2));
+///
+/// let subdivided = subdivide_simple(&mesh, 2);
+/// assert_eq!(subdivided.triangles.len(), 16); // 1 -> 4 -> 16
+/// ```
+pub fn subdivide_simple(mesh: &Mesh, levels: u32) -> Mesh {
+    let options = SubdivisionOptions {
+        method: SubdivisionMethod::Midpoint,
+        levels,
+        ..Default::default()
+    };
+    subdivide(mesh, &options)
+}
+
+/// Perform simple midpoint subdivision
+///
+/// Each triangle is split into 4 triangles by adding midpoint vertices:
+/// ```text
+///     v0
+///     /\
+///   m2  m0
+///   /____\
+/// v2  m1  v1
+///
+/// Becomes 4 triangles:
+/// (v0, m0, m2), (m0, v1, m1), (m2, m1, v2), (m0, m1, m2)
+/// ```
+///
+/// Triangle properties (pid, p1, p2, p3) are preserved by duplicating
+/// the parent triangle's properties to all child triangles.
+///
+/// # Arguments
+/// * `mesh` - The mesh to subdivide
+///
+/// # Returns
+/// A new mesh with each triangle subdivided into 4 triangles
+pub fn subdivide_midpoint(mesh: &Mesh) -> Mesh {
+    if mesh.triangles.is_empty() {
+        return mesh.clone();
+    }
+
+    // Pre-allocate capacity for new mesh
+    // Estimate: Original vertices + ~1.5 edges per triangle (Euler's formula for closed meshes)
+    // Each edge adds one midpoint vertex
+    let estimated_new_vertices = mesh.vertices.len() + (mesh.triangles.len() * 3 / 2);
+    let new_triangle_count = mesh.triangles.len() * 4;
+
+    let mut result = Mesh::with_capacity(estimated_new_vertices, new_triangle_count);
+
+    // Copy original vertices
+    result.vertices.extend_from_slice(&mesh.vertices);
+
+    // Map to track edge midpoints to avoid duplicates
+    // Key: (min_vertex_index, max_vertex_index), Value: midpoint_vertex_index
+    let mut edge_midpoints: HashMap<(usize, usize), usize> = HashMap::new();
+
+    for triangle in &mesh.triangles {
+        // Get or create midpoint vertices for each edge
+        let m0 = get_or_create_midpoint(
+            &mut result.vertices,
+            &mut edge_midpoints,
+            &mesh.vertices,
+            triangle.v1,
+            triangle.v2,
+        );
+        let m1 = get_or_create_midpoint(
+            &mut result.vertices,
+            &mut edge_midpoints,
+            &mesh.vertices,
+            triangle.v2,
+            triangle.v3,
+        );
+        let m2 = get_or_create_midpoint(
+            &mut result.vertices,
+            &mut edge_midpoints,
+            &mesh.vertices,
+            triangle.v3,
+            triangle.v1,
+        );
+
+        // Create 4 new triangles preserving winding order
+        // Corner triangles
+        let mut t0 = Triangle::new(triangle.v1, m0, m2);
+        let mut t1 = Triangle::new(m0, triangle.v2, m1);
+        let mut t2 = Triangle::new(m2, m1, triangle.v3);
+        // Center triangle
+        let mut t3 = Triangle::new(m0, m1, m2);
+
+        // Preserve triangle properties
+        // All child triangles inherit the parent's properties
+        for t in [&mut t0, &mut t1, &mut t2, &mut t3] {
+            t.pid = triangle.pid;
+            t.pindex = triangle.pindex;
+            // For vertex-specific properties, we could interpolate
+            // but for now we just inherit the parent's properties
+            t.p1 = triangle.p1;
+            t.p2 = triangle.p2;
+            t.p3 = triangle.p3;
+        }
+
+        result.triangles.push(t0);
+        result.triangles.push(t1);
+        result.triangles.push(t2);
+        result.triangles.push(t3);
+    }
+
+    // Preserve beam lattice if present
+    result.beamset = mesh.beamset.clone();
+
+    result
+}
+
+/// Get or create a midpoint vertex between two vertices
+///
+/// Uses a hashmap to avoid creating duplicate vertices for shared edges.
+///
+/// # Safety
+/// This function assumes `v1` and `v2` are valid indices into `original_vertices`.
+/// The caller must ensure the mesh has been validated before calling subdivision.
+fn get_or_create_midpoint(
+    vertices: &mut Vec<Vertex>,
+    edge_midpoints: &mut HashMap<(usize, usize), usize>,
+    original_vertices: &[Vertex],
+    v1: usize,
+    v2: usize,
+) -> usize {
+    // Create a canonical edge key (smaller index first)
+    let edge_key = if v1 < v2 { (v1, v2) } else { (v2, v1) };
+
+    // Return existing midpoint if already created
+    if let Some(&midpoint_idx) = edge_midpoints.get(&edge_key) {
+        return midpoint_idx;
+    }
+
+    // Create new midpoint vertex
+    let vert1 = &original_vertices[v1];
+    let vert2 = &original_vertices[v2];
+    let midpoint = Vertex::new(
+        (vert1.x + vert2.x) / 2.0,
+        (vert1.y + vert2.y) / 2.0,
+        (vert1.z + vert2.z) / 2.0,
+    );
+
+    let midpoint_idx = vertices.len();
+    vertices.push(midpoint);
+    edge_midpoints.insert(edge_key, midpoint_idx);
+
+    midpoint_idx
+}
+
+/// Perform Loop subdivision for smoother surfaces
+///
+/// **Note: Loop subdivision is not yet fully implemented.**
+/// This function currently performs the same midpoint subdivision as `subdivide_midpoint()`.
+/// Proper Loop subdivision would use weighted averaging of neighboring vertices
+/// to produce smoother surfaces.
+///
+/// A full Loop subdivision implementation would require:
+/// 1. Build edge-vertex connectivity
+/// 2. Compute valence for each vertex
+/// 3. Apply Loop weights (beta for old vertices, 3/8, 1/8 for edge vertices)
+///
+/// For now, this serves as a placeholder for future implementation.
+/// Use `SubdivisionMethod::Midpoint` for the same behavior with clearer intent.
+///
+/// # Arguments
+/// * `mesh` - The mesh to subdivide
+///
+/// # Returns
+/// A new subdivided mesh (using midpoint subdivision)
+pub fn subdivide_loop(mesh: &Mesh) -> Mesh {
+    if mesh.triangles.is_empty() {
+        return mesh.clone();
+    }
+
+    // TODO: Implement full Loop subdivision with proper vertex weighting
+    // For now, use midpoint subdivision
+    subdivide_midpoint(mesh)
+}
+
+#[cfg(test)]
+mod subdivision_tests {
+    use super::*;
+
+    #[test]
+    fn test_subdivide_simple_single_triangle() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let subdivided = subdivide_simple(&mesh, 1);
+
+        // Should have 4 triangles after 1 level of subdivision
+        assert_eq!(subdivided.triangles.len(), 4);
+        // Original 3 vertices + 3 midpoints = 6 vertices
+        assert_eq!(subdivided.vertices.len(), 6);
+    }
+
+    #[test]
+    fn test_subdivide_midpoint_vertex_count() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let subdivided = subdivide_midpoint(&mesh);
+
+        // Check midpoint positions
+        // Midpoint of (0,0,0) and (1,0,0) should be (0.5, 0, 0)
+        let m0 = &subdivided.vertices[3];
+        assert!((m0.x - 0.5).abs() < 1e-10);
+        assert!((m0.y - 0.0).abs() < 1e-10);
+        assert!((m0.z - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_subdivide_multiple_levels() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        // Test multiple levels: 1 -> 4 -> 16
+        let subdivided = subdivide_simple(&mesh, 2);
+        assert_eq!(subdivided.triangles.len(), 16);
+
+        // Test 3 levels: 1 -> 4 -> 16 -> 64
+        let subdivided = subdivide_simple(&mesh, 3);
+        assert_eq!(subdivided.triangles.len(), 64);
+    }
+
+    #[test]
+    fn test_subdivide_preserves_properties() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+
+        let mut triangle = Triangle::new(0, 1, 2);
+        triangle.pid = Some(5);
+        triangle.p1 = Some(1);
+        triangle.p2 = Some(2);
+        triangle.p3 = Some(3);
+        mesh.triangles.push(triangle);
+
+        let subdivided = subdivide_midpoint(&mesh);
+
+        // All 4 child triangles should inherit parent properties
+        for tri in &subdivided.triangles {
+            assert_eq!(tri.pid, Some(5));
+            assert_eq!(tri.p1, Some(1));
+            assert_eq!(tri.p2, Some(2));
+            assert_eq!(tri.p3, Some(3));
+        }
+    }
+
+    #[test]
+    fn test_subdivide_empty_mesh() {
+        let mesh = Mesh::new();
+        let subdivided = subdivide_simple(&mesh, 1);
+
+        assert_eq!(subdivided.vertices.len(), 0);
+        assert_eq!(subdivided.triangles.len(), 0);
+    }
+
+    #[test]
+    fn test_subdivide_two_triangles_shared_edge() {
+        let mut mesh = Mesh::new();
+        // Create two triangles sharing an edge
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.5, -1.0, 0.0)); // 3
+
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh.triangles.push(Triangle::new(0, 3, 1));
+
+        let subdivided = subdivide_midpoint(&mesh);
+
+        // 2 triangles become 8 triangles
+        assert_eq!(subdivided.triangles.len(), 8);
+
+        // Should reuse midpoint on shared edge (0,1)
+        // Original: 4 vertices
+        // Triangle 1 adds: 3 midpoints
+        // Triangle 2 adds: 2 midpoints (reuses edge 0-1)
+        // Total: 4 + 3 + 2 = 9 vertices
+        assert_eq!(subdivided.vertices.len(), 9);
+    }
+
+    #[test]
+    fn test_subdivide_winding_order() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0)); // 2
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let subdivided = subdivide_midpoint(&mesh);
+
+        // Check that all triangles maintain counter-clockwise winding
+        // by verifying that the signed area is positive
+        for tri in &subdivided.triangles {
+            let v0 = &subdivided.vertices[tri.v1];
+            let v1 = &subdivided.vertices[tri.v2];
+            let v2 = &subdivided.vertices[tri.v3];
+
+            // Compute signed area using cross product
+            let area = (v1.x - v0.x) * (v2.y - v0.y) - (v2.x - v0.x) * (v1.y - v0.y);
+
+            // All subdivided triangles should have positive area (CCW winding)
+            assert!(area > 0.0, "Triangle winding order not preserved");
+        }
+    }
+
+    #[test]
+    fn test_subdivision_options() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let options = SubdivisionOptions {
+            method: SubdivisionMethod::Midpoint,
+            levels: 2,
+            preserve_boundaries: true,
+            interpolate_uvs: true,
+        };
+
+        let subdivided = subdivide(&mesh, &options);
+        assert_eq!(subdivided.triangles.len(), 16);
+    }
+
+    #[test]
+    fn test_subdivide_loop_basic() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let options = SubdivisionOptions {
+            method: SubdivisionMethod::Loop,
+            levels: 1,
+            ..Default::default()
+        };
+
+        let subdivided = subdivide(&mesh, &options);
+
+        // Loop subdivision should also produce 4 triangles
+        assert_eq!(subdivided.triangles.len(), 4);
     }
 }

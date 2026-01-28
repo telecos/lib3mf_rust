@@ -543,6 +543,61 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 See `examples/mesh_analysis.rs` for a complete demonstration.
 
+### Mesh Subdivision
+
+The library provides mesh subdivision utilities for increasing vertex density, which is essential for displacement mapping and other mesh processing operations:
+
+```rust
+use lib3mf::{subdivide_simple, subdivide, Mesh, Vertex, Triangle, SubdivisionMethod, SubdivisionOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a simple mesh
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+    mesh.triangles.push(Triangle::new(0, 1, 2));
+
+    // Simple midpoint subdivision
+    let subdivided = subdivide_simple(&mesh, 2);
+    println!("After 2 levels: {} triangles", subdivided.triangles.len()); // 16 triangles
+
+    // Using subdivision options
+    let options = SubdivisionOptions {
+        method: SubdivisionMethod::Midpoint,
+        levels: 1,
+        preserve_boundaries: true,
+        interpolate_uvs: true,
+    };
+    let subdivided = subdivide(&mesh, &options);
+
+    // Note: Loop subdivision is planned but not yet implemented
+    // Currently it produces the same result as Midpoint subdivision
+    
+    Ok(())
+}
+```
+
+**Subdivision Features:**
+- **Midpoint Subdivision**: Fast, simple subdivision that splits each triangle into 4
+- **Loop Subdivision**: Planned feature for smoother surfaces (currently same as Midpoint)
+- **Property Preservation**: Triangle properties (pid, p1, p2, p3) are preserved during subdivision
+- **Shared Edge Optimization**: Vertices on shared edges are reused to avoid duplicates
+- **Iterative Subdivision**: Apply subdivision multiple times for higher density
+
+**Growth Rates:**
+- Level 1: 4× triangles (1 → 4)
+- Level 2: 16× triangles (1 → 16)
+- Level 3: 64× triangles (1 → 64)
+- Level 4: 256× triangles (1 → 256)
+
+**Use Cases:**
+- Displacement map rendering - increase vertex density for surface detail
+- Mesh refinement - improve triangle quality before operations
+- LOD generation - create multiple detail levels
+
+See `examples/mesh_subdivision.rs` for a complete demonstration.
+
 ### Running Examples
 
 The repository includes several comprehensive examples demonstrating different features:

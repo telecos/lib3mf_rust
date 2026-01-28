@@ -60,6 +60,13 @@ Demonstrates triangle mesh operations including volume computation, bounding box
 cargo run --example mesh_analysis test_files/core/box.3mf
 ```
 
+#### `mesh_subdivision.rs` - Mesh Subdivision
+Shows how to subdivide meshes for displacement mapping and other mesh processing operations. Demonstrates midpoint and Loop subdivision methods.
+
+```bash
+cargo run --example mesh_subdivision
+```
+
 #### `build_transformations.rs` - Build Items & Transformations
 Shows how to work with build items, parse transformation matrices, and apply transformations to geometry.
 
@@ -173,6 +180,7 @@ cargo run --example extract_thumbnail test_files/core/box.3mf
 
 **Intermediate:**
 - `mesh_analysis.rs` - Work with mesh geometry
+- `mesh_subdivision.rs` - Mesh subdivision for displacement mapping
 - `build_transformations.rs` - Handle transformations
 - `validation_errors.rs` - Robust error handling
 - `extract_colors.rs` - Material and color mapping
@@ -204,6 +212,7 @@ cargo run --example extract_thumbnail test_files/core/box.3mf
 **Rendering/Visualization:**
 - `extract_colors.rs` - Color data for rendering
 - `mesh_analysis.rs` - Bounding boxes and volumes
+- `mesh_subdivision.rs` - Mesh refinement for displacement mapping
 - `extract_thumbnail.rs` - Preview images
 
 ## Notes
