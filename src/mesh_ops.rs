@@ -340,7 +340,11 @@ pub fn calculate_face_normal(v0: &Vertex, v1: &Vertex, v2: &Vertex) -> Vector3 {
 
     // Normalize (return zero vector if degenerate)
     if magnitude > 0.0 {
-        (cross.0 / magnitude, cross.1 / magnitude, cross.2 / magnitude)
+        (
+            cross.0 / magnitude,
+            cross.1 / magnitude,
+            cross.2 / magnitude,
+        )
     } else {
         (0.0, 0.0, 0.0)
     }
@@ -650,8 +654,7 @@ mod tests {
         let normal = calculate_face_normal(&v0, &v1, &v2);
 
         // The normal should be normalized
-        let magnitude =
-            (normal.0 * normal.0 + normal.1 * normal.1 + normal.2 * normal.2).sqrt();
+        let magnitude = (normal.0 * normal.0 + normal.1 * normal.1 + normal.2 * normal.2).sqrt();
         assert!((magnitude - 1.0).abs() < 1e-10, "Magnitude: {}", magnitude);
 
         // All components should be equal for this symmetric triangle
@@ -874,9 +877,10 @@ mod tests {
         assert!((normals[0].2 - 1.0).abs() < 1e-10);
 
         // The normal should be normalized
-        let magnitude =
-            (normals[0].0 * normals[0].0 + normals[0].1 * normals[0].1 + normals[0].2 * normals[0].2)
-                .sqrt();
+        let magnitude = (normals[0].0 * normals[0].0
+            + normals[0].1 * normals[0].1
+            + normals[0].2 * normals[0].2)
+            .sqrt();
         assert!((magnitude - 1.0).abs() < 1e-10);
     }
 }

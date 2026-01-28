@@ -20,7 +20,10 @@ fn main() {
     println!("    v0: ({}, {}, {})", v0.x, v0.y, v0.z);
     println!("    v1: ({}, {}, {})", v1.x, v1.y, v1.z);
     println!("    v2: ({}, {}, {})", v2.x, v2.y, v2.z);
-    println!("  Face normal: ({:.6}, {:.6}, {:.6})", normal.0, normal.1, normal.2);
+    println!(
+        "  Face normal: ({:.6}, {:.6}, {:.6})",
+        normal.0, normal.1, normal.2
+    );
     println!("  (Expected: pointing in +Z direction)\n");
 
     // Example 2: Calculate vertex normals for a simple mesh
@@ -32,9 +35,16 @@ fn main() {
     mesh.triangles.push(Triangle::new(0, 1, 2));
 
     let normals = calculate_vertex_normals(&mesh);
-    println!("  Mesh has {} vertices and {} triangles", mesh.vertices.len(), mesh.triangles.len());
+    println!(
+        "  Mesh has {} vertices and {} triangles",
+        mesh.vertices.len(),
+        mesh.triangles.len()
+    );
     for (i, normal) in normals.iter().enumerate() {
-        println!("  Vertex {} normal: ({:.6}, {:.6}, {:.6})", i, normal.0, normal.1, normal.2);
+        println!(
+            "  Vertex {} normal: ({:.6}, {:.6}, {:.6})",
+            i, normal.0, normal.1, normal.2
+        );
     }
     println!();
 
@@ -73,7 +83,11 @@ fn main() {
     cube.triangles.push(Triangle::new(1, 6, 5));
 
     let cube_normals = calculate_vertex_normals(&cube);
-    println!("  Cube has {} vertices and {} triangles", cube.vertices.len(), cube.triangles.len());
+    println!(
+        "  Cube has {} vertices and {} triangles",
+        cube.vertices.len(),
+        cube.triangles.len()
+    );
     println!("  Corner vertex normals (averaged from 3 adjacent faces):");
     for (i, normal) in cube_normals.iter().enumerate() {
         let vertex = &cube.vertices[i];
