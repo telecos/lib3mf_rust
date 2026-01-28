@@ -8,7 +8,7 @@
 use crate::keybindings;
 use crate::menu_ui::{MenuAction, MenuBar};
 use crate::slice_window::{LineSegment2D, Point2D, SliceConfig, SlicePreviewWindow};
-use image::{Rgb, RgbImage};
+use image::{GenericImageView, Rgb, RgbImage};
 use kiss3d::camera::ArcBall;
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
@@ -776,6 +776,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                         model,
                                         state.boolean_mode,
                                         state.show_displacement,
+                                        state.file_path.as_ref(),
                                     );
                                     state.beam_nodes =
                                         create_beam_lattice_nodes(&mut window, model);
@@ -834,6 +835,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                         model,
                                         state.boolean_mode,
                                         state.show_displacement,
+                                        state.file_path.as_ref(),
                                     );
                                     state.beam_nodes =
                                         create_beam_lattice_nodes(&mut window, model);
@@ -1496,6 +1498,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                         model,
                                         state.boolean_mode,
                                         state.show_displacement,
+                                        state.file_path.as_ref(),
                                     );
                                     state.beam_nodes =
                                         create_beam_lattice_nodes(&mut window, model);
@@ -1638,6 +1641,7 @@ fn handle_menu_action(
                                 model,
                                 state.boolean_mode,
                                 state.show_displacement,
+                                state.file_path.as_ref(),
                             );
                             state.beam_nodes = create_beam_lattice_nodes(window, model);
                             window.set_title(&state.window_title());
@@ -1765,6 +1769,7 @@ fn handle_menu_action(
                     model,
                     state.boolean_mode,
                     state.show_displacement,
+                    state.file_path.as_ref(),
                 );
             }
             
@@ -1786,6 +1791,7 @@ fn handle_menu_action(
                     model,
                     state.boolean_mode,
                     state.show_displacement,
+                    state.file_path.as_ref(),
                 );
             }
         }
@@ -2949,9 +2955,10 @@ fn create_mesh_nodes_with_displacement(
     model: &Model,
     mode: BooleanMode,
     show_displacement: bool,
+    file_path: Option<&PathBuf>,
 ) -> Vec<SceneNode> {
     if show_displacement && has_displacement_data(model) {
-        create_mesh_nodes_highlight_displacement(window, model)
+        create_mesh_nodes_highlight_displacement(window, model, file_path)
     } else {
         create_mesh_nodes_with_boolean_mode(window, model, mode)
     }
@@ -2968,12 +2975,12 @@ fn create_mesh_nodes_with_materials(
 ) -> Vec<SceneNode> {
     // If materials are disabled, use default rendering
     if !show_materials {
-        return create_mesh_nodes_with_displacement(window, model, mode, show_displacement);
+        return create_mesh_nodes_with_displacement(window, model, mode, show_displacement, file_path);
     }
     
     // If displacement or boolean modes are active, use those instead
     if show_displacement && has_displacement_data(model) {
-        return create_mesh_nodes_highlight_displacement(window, model);
+        return create_mesh_nodes_highlight_displacement(window, model, file_path);
     }
     
     if mode != BooleanMode::Normal {
@@ -3211,8 +3218,138 @@ fn create_mesh_nodes_with_triangle_colors_impl(
     nodes
 }
 
-/// Create mesh nodes with displacement highlighting
-fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+/// Load displacement texture maps from a 3MF package file
+/// Returns a HashMap mapping displacement map IDs to loaded texture data
+fn load_displacement_maps_from_package(
+    file_path: &PathBuf,
+    model: &Model,
+) -> HashMap<usize, Rc<image::DynamicImage>> {
+    let mut displacement_maps = HashMap::new();
+    
+    // Open the 3MF file as a ZIP archive
+    let file = match File::open(file_path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open 3MF file for displacement map loading: {}", e);
+            return displacement_maps;
+        }
+    };
+    
+    let mut archive = match zip::ZipArchive::new(file) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("Failed to open 3MF as ZIP archive: {}", e);
+            return displacement_maps;
+        }
+    };
+    
+    // Load each displacement2d resource
+    for displacement_map in &model.resources.displacement_maps {
+        // Normalize path (remove leading slash if present)
+        let normalized_path = displacement_map.path.trim_start_matches('/');
+        
+        // Try both path variants and read the file
+        let image_data = {
+            let mut buffer = Vec::new();
+            let mut found = false;
+            
+            // Try normalized path first
+            if let Ok(mut file) = archive.by_name(normalized_path) {
+                if file.read_to_end(&mut buffer).is_ok() {
+                    found = true;
+                }
+            }
+            
+            // Try original path if normalized didn't work
+            if !found {
+                buffer.clear();
+                if let Ok(mut file) = archive.by_name(&displacement_map.path) {
+                    if file.read_to_end(&mut buffer).is_ok() {
+                        found = true;
+                    }
+                }
+            }
+            
+            if !found {
+                eprintln!(
+                    "Displacement map file '{}' not found in 3MF package",
+                    displacement_map.path
+                );
+                continue;
+            }
+            
+            buffer
+        };
+        
+        // Load the image from memory
+        match image::load_from_memory(&image_data) {
+            Ok(img) => {
+                println!(
+                    "  ✓ Loaded displacement map ID {}: {} ({}x{})",
+                    displacement_map.id,
+                    displacement_map.path,
+                    img.width(),
+                    img.height()
+                );
+                displacement_maps.insert(displacement_map.id, Rc::new(img));
+            }
+            Err(e) => {
+                eprintln!(
+                    "Failed to decode displacement map image '{}': {}",
+                    displacement_map.path, e
+                );
+            }
+        }
+    }
+    
+    if !displacement_maps.is_empty() {
+        println!("  Loaded {} displacement map(s) from 3MF package", displacement_maps.len());
+    }
+    
+    displacement_maps
+}
+
+/// Sample a displacement value from a texture at given UV coordinates
+/// Returns a normalized displacement value [0.0, 1.0]
+fn sample_displacement_texture(
+    image: &image::DynamicImage,
+    u: f64,
+    v: f64,
+    channel: lib3mf::Channel,
+) -> f64 {
+    let width = image.width() as f64;
+    let height = image.height() as f64;
+    
+    // Clamp UV to [0, 1] range
+    let u = u.clamp(0.0, 1.0);
+    let v = v.clamp(0.0, 1.0);
+    
+    // Convert UV to pixel coordinates
+    // Note: V coordinate is typically flipped in textures
+    let x = ((u * width).floor() as u32).min(image.width() - 1);
+    let y = (((1.0 - v) * height).floor() as u32).min(image.height() - 1);
+    
+    // Sample the pixel
+    let pixel = image.get_pixel(x, y);
+    
+    // Extract the appropriate channel value
+    let value = match channel {
+        lib3mf::Channel::R => pixel[0],
+        lib3mf::Channel::G => pixel[1],
+        lib3mf::Channel::B => pixel[2],
+        lib3mf::Channel::A => if pixel.0.len() > 3 { pixel[3] } else { 255 },
+    };
+    
+    // Normalize to [0.0, 1.0]
+    value as f64 / 255.0
+}
+
+/// Create mesh nodes with displacement highlighting (without actual displacement)
+/// This function is kept for backward compatibility but now calls the new implementation
+fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, file_path: Option<&PathBuf>) -> Vec<SceneNode> {
+    // This is now a wrapper that loads displacement maps and applies displacement
+    // For now, we'll just highlight in cyan without actual displacement
+    // The actual displacement rendering will be added in subsequent commits
     let mut nodes = Vec::new();
 
     // Collect objects with displacement meshes
