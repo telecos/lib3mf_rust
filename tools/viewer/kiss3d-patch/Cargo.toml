@@ -48,8 +48,7 @@ serde_derive = "1"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glutin = "0.26"
 
-# We repeat all three targets instead of any(target_arch = "wasm32", target_arch = "asmjs")
-# to avoid https://github.com/koute/stdweb/issues/135
+# WASM-specific dependencies
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
