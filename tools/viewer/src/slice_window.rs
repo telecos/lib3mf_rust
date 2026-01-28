@@ -97,7 +97,7 @@ impl SlicePreviewWindow {
             WINDOW_WIDTH,
             WINDOW_HEIGHT,
             WindowOptions {
-                resize: true,
+                resize: false, // Disable resizing to keep buffer size consistent
                 ..WindowOptions::default()
             },
         )?;
@@ -139,19 +139,24 @@ impl SlicePreviewWindow {
         let model_width = self.model_max.0 - self.model_min.0;
         let model_height = self.model_max.1 - self.model_min.1;
 
+        // Handle degenerate cases where model has zero or very small dimensions
+        const MIN_DIMENSION: f32 = 0.001;
+        let width = if model_width < MIN_DIMENSION { 1.0 } else { model_width };
+        let height = if model_height < MIN_DIMENSION { 1.0 } else { model_height };
+
         // Add some margin
         let margin = 50.0;
         let available_width = WINDOW_WIDTH as f32 - 2.0 * margin;
         let available_height = WINDOW_HEIGHT as f32 - 100.0 - 2.0 * margin; // Reserve 100px for UI panel
 
         // Calculate scale to fit model in window
-        let scale_x = available_width / model_width;
-        let scale_y = available_height / model_height;
+        let scale_x = available_width / width;
+        let scale_y = available_height / height;
         self.scale = scale_x.min(scale_y);
 
         // Calculate offsets to center the model
-        self.offset_x = margin + (available_width - model_width * self.scale) / 2.0;
-        self.offset_y = margin + (available_height - model_height * self.scale) / 2.0;
+        self.offset_x = margin + (available_width - width * self.scale) / 2.0;
+        self.offset_y = margin + (available_height - height * self.scale) / 2.0;
     }
 
     /// Transform model coordinates to screen coordinates
@@ -347,6 +352,11 @@ impl SlicePreviewWindow {
     /// Get the current Z height (for synchronization with 3D view)
     pub fn get_z_height(&self) -> f32 {
         self.config.z_height
+    }
+
+    /// Get the current grid visibility state
+    pub fn get_show_grid(&self) -> bool {
+        self.config.show_grid
     }
 
     /// Set the Z height (for synchronization from 3D view)

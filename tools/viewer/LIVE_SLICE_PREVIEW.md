@@ -4,9 +4,6 @@
 
 The Live Slice Preview feature adds a **secondary 2D window** that displays real-time cross-sections of your 3D model. This window updates automatically as you adjust the Z-height, providing an instant visual feedback for layer-by-layer analysis.
 
-![Dual Window Setup](images/dual-window-concept.png)
-*Conceptual view: 3D viewer on the left, 2D slice preview on the right*
-
 ## Features
 
 ### 1. Secondary Window

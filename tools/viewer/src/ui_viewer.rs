@@ -176,6 +176,8 @@ struct SliceView {
     show_stack_3d: bool,
     /// Render mode: true = filled, false = outline
     filled_mode: bool,
+    /// Show grid in slice preview window
+    show_grid: bool,
 }
 
 impl SliceView {
@@ -198,6 +200,7 @@ impl SliceView {
             spread_factor: 1.0,
             show_stack_3d: false,
             filled_mode: false,
+            show_grid: true,
         }
     }
 
@@ -442,29 +445,15 @@ impl ViewerState {
 
     /// Sync slice preview window with current slice view state
     fn sync_slice_preview_window(&mut self, window: &mut SlicePreviewWindow) {
-        // Convert contours to the format expected by the preview window
-        let contours: Vec<LineSegment2D> = self
-            .slice_view
-            .contours
-            .iter()
-            .map(|seg| LineSegment2D {
-                start: Point2D {
-                    x: seg.start.x,
-                    y: seg.start.y,
-                },
-                end: Point2D {
-                    x: seg.end.x,
-                    y: seg.end.y,
-                },
-            })
-            .collect();
+        // Simply clone the contours vector (already correct type from slice_window)
+        let contours = self.slice_view.contours.clone();
 
         let config = SliceConfig {
             z_height: self.slice_view.z_height,
             min_z: self.slice_view.min_z,
             max_z: self.slice_view.max_z,
             filled_mode: self.slice_view.filled_mode,
-            show_grid: true,
+            show_grid: self.slice_view.show_grid,
             contours,
         };
 
@@ -490,6 +479,9 @@ impl ViewerState {
                 self.slice_view.contours = compute_slice_contours(model, self.slice_view.z_height);
             }
         }
+        
+        // Sync grid state from window to view state
+        self.slice_view.show_grid = window.get_show_grid();
         
         // Sync current state to preview window
         self.sync_slice_preview_window(&mut window);
