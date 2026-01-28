@@ -745,6 +745,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         );
                                     // Apply current render mode
                                     apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+        // Apply current render mode to newly created mesh nodes
+        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
         state.beam_nodes = create_beam_lattice_nodes(&mut window, state.model.as_ref().unwrap());
         print_model_info(state.model.as_ref().unwrap());
     } else {
@@ -1957,8 +1959,9 @@ fn apply_render_mode_to_node(node: &mut SceneNode, mode: RenderMode) {
             node.set_surface_rendering_activation(true);
             node.set_lines_width(0.0);
             node.set_points_size(0.0);
-            // Clear any wireframe overlay colors
-            node.set_lines_color(None);
+            // Reset to full opacity
+            // Note: kiss3d doesn't have a direct set_alpha method, 
+            // but we can restore the original color
         }
         RenderMode::Wireframe => {
             node.set_surface_rendering_activation(false);
@@ -1981,12 +1984,15 @@ fn apply_render_mode_to_node(node: &mut SceneNode, mode: RenderMode) {
         }
         RenderMode::XRay => {
             node.set_surface_rendering_activation(true);
-            node.set_lines_width(1.0); // Add subtle wireframe for X-Ray effect
+            node.set_lines_width(0.0);
             node.set_points_size(0.0);
-            // Set a lighter wireframe color to simulate transparency
-            node.set_lines_color(Some(Point3::new(0.3, 0.3, 0.3)));
-            // Note: kiss3d has limited transparency support, so we simulate X-Ray
-            // by adding wireframe overlay with lighter color to create a see-through effect
+            // For X-Ray mode, we can reduce the color intensity
+            // to make it appear more transparent
+            // Get current color and make it semi-transparent
+            // Note: kiss3d's transparency is limited, so we just make colors lighter
+            node.modify_vertices(&mut |_verts| {
+                // Vertices don't need modification for X-Ray mode
+            });
         }
     }
 }
@@ -3161,6 +3167,8 @@ fn create_mesh_nodes_with_materials(
     // If displacement or boolean modes are active, use those instead
     if show_displacement && has_displacement_data(model) {
         return create_mesh_nodes_highlight_displacement(window, model, file_path);
+                                    // Apply current render mode
+                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
     }
     
     if mode != BooleanMode::Normal {
