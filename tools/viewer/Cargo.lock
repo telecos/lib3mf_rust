@@ -2348,6 +2348,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "zip",
 ]
 
 [[package]]

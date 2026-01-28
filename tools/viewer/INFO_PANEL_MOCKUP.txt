@@ -1,0 +1,57 @@
+===============================================================================
+3MF Viewer - Model Information Panel Mockup
+===============================================================================
+
+The panel appears as an overlay on the left side of the 3D view when toggled
+with the 'I' key or via View → Model Information menu.
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 3D View (3MF Model Rendered Here)                                      │
+│                                                                         │
+│  ┌─ Model Information ─────────┐                                       │
+│  │                              │                                       │
+│  │ File: cube_gears.3mf        │          ╱╲                          │
+│  │ Size: 2.45 MB               │         ╱  ╲                         │
+│  │                              │        ╱    ╲                        │
+│  │ Geometry                     │       ╱  3D  ╲                       │
+│  │   Vertices: 12,450          │      ╱  Model ╲                      │
+│  │   Triangles: 24,896         │     ╱__________╲                     │
+│  │   Objects: 3                 │                                       │
+│  │   Components: 5              │                                       │
+│  │   Bounds: 150×100×80 mm     │                                       │
+│  │                              │                                       │
+│  │ Extensions                   │                                       │
+│  │   ✓ Materials (3, 2 groups) │                                       │
+│  │   ✓ Beam Lattice (45)       │                                       │
+│  │   ✓ Production (2 items)    │                                       │
+│  │                              │                                       │
+│  │ Objects                      │                                       │
+│  │   Main Body (mesh)          │                                       │
+│  │   Support (mesh)            │                                       │
+│  │   Logo (component)          │                                       │
+│  │   ... and 2 more            │                                       │
+│  │                              │                                       │
+│  └──────────────────────────────┘                                       │
+│                                                                         │
+│                                                                         │
+│  Controls: I=Toggle Info   M=Menu   H=Help                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Key Features:
+=============
+
+1. TOGGLE: Press 'I' to show/hide
+2. AUTOMATIC UPDATES: Panel refreshes when loading new files
+3. COMPREHENSIVE: Shows file info, geometry stats, extensions, and objects
+4. CLEAN DESIGN: Organized sections with headers and clear formatting
+5. MINIMAL: Only shows relevant information, no clutter
+
+Implementation:
+==============
+
+- Panel state tracked in ViewerState.info_panel
+- Rendering via render_model_info_panel() function
+- Uses kiss3d text rendering
+- Positioned at (10, 40) pixels from top-left
+- Light gray text on semi-transparent background
+- Yellow headers for section titles
