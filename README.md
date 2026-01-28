@@ -780,6 +780,8 @@ The parser successfully handles files using all 3MF extensions including:
 
 Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automatically decrypted during parsing. For production applications, access all encryption metadata (consumers, encryption parameters, access rights) and implement decryption using external cryptographic libraries. **Never use embedded test keys in production.**
 
+See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
+
 ## Performance
 
 The library is optimized for parsing large 3MF files efficiently:

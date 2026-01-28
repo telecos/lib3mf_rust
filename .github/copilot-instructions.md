@@ -162,6 +162,7 @@ test_files/             # Test data organized by extension
 - Target 100% pass rate on positive tests (valid 3MF files)
 - Properly reject invalid files in negative tests
 - Document any intentional deviations from spec with rationale
+- See `CONFORMANCE_REPORT.md` for current status
 
 ## Git Workflow
 
@@ -191,3 +192,4 @@ test_files/             # Test data organized by extension
 ## Additional Resources
 
 - [3MF Specification](https://3mf.io/specification/) - Official format documentation
+- `CONFORMANCE_REPORT.md` - Current conformance test results
