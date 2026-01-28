@@ -5,6 +5,7 @@
 //! - Bounding box calculation
 //! - Affine transformations
 //! - Mesh subdivision (midpoint and Loop algorithms)
+//! - Vertex normal calculation
 //!
 //! These operations are used for validating build items and mesh properties.
 
@@ -16,6 +17,9 @@ use std::collections::HashMap;
 
 /// A 3D point represented as (x, y, z)
 pub type Point3d = (f64, f64, f64);
+
+/// A 3D vector represented as (x, y, z)
+pub type Vector3 = (f64, f64, f64);
 
 /// An axis-aligned bounding box represented as (min_point, max_point)
 pub type BoundingBox = (Point3d, Point3d);
@@ -288,6 +292,164 @@ pub fn compute_build_volume(model: &Model) -> Option<BoundingBox> {
     }
 }
 
+/// Helper function to calculate the cross product of two 3D vectors
+///
+/// Returns the cross product v1 × v2
+#[inline]
+fn cross_product(v1: (f64, f64, f64), v2: (f64, f64, f64)) -> Vector3 {
+    (
+        v1.1 * v2.2 - v1.2 * v2.1,
+        v1.2 * v2.0 - v1.0 * v2.2,
+        v1.0 * v2.1 - v1.1 * v2.0,
+    )
+}
+
+/// Calculate the normal vector for a single triangle face
+///
+/// The normal is computed using the cross product of two edges of the triangle.
+/// The result is normalized to unit length. If the triangle is degenerate
+/// (zero area), returns a zero vector.
+///
+/// # Arguments
+/// * `v0` - First vertex of the triangle
+/// * `v1` - Second vertex of the triangle
+/// * `v2` - Third vertex of the triangle
+///
+/// # Returns
+/// A normalized vector perpendicular to the triangle face, or (0, 0, 0) for degenerate triangles
+///
+/// # Example
+/// ```
+/// use lib3mf::{Vertex, mesh_ops::calculate_face_normal};
+///
+/// let v0 = Vertex::new(0.0, 0.0, 0.0);
+/// let v1 = Vertex::new(1.0, 0.0, 0.0);
+/// let v2 = Vertex::new(0.0, 1.0, 0.0);
+///
+/// let normal = calculate_face_normal(&v0, &v1, &v2);
+/// // Normal should point in +Z direction: (0, 0, 1)
+/// ```
+pub fn calculate_face_normal(v0: &Vertex, v1: &Vertex, v2: &Vertex) -> Vector3 {
+    // Calculate edges
+    let edge1 = (v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+    let edge2 = (v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+
+    // Calculate cross product: edge1 × edge2
+    let cross = cross_product(edge1, edge2);
+
+    // Calculate magnitude
+    let magnitude = (cross.0 * cross.0 + cross.1 * cross.1 + cross.2 * cross.2).sqrt();
+
+    // Normalize (return zero vector if degenerate)
+    if magnitude > 0.0 {
+        (
+            cross.0 / magnitude,
+            cross.1 / magnitude,
+            cross.2 / magnitude,
+        )
+    } else {
+        (0.0, 0.0, 0.0)
+    }
+}
+
+/// Calculate area-weighted vertex normals for an entire mesh
+///
+/// For each vertex, computes the average of all adjacent face normals,
+/// weighted by the face areas. This produces smooth normals suitable for
+/// rendering and displacement mapping.
+///
+/// The algorithm:
+/// 1. For each triangle, calculate its face normal and area
+/// 2. Add the area-weighted normal to each of the triangle's vertices
+/// 3. Normalize the accumulated normals
+///
+/// Degenerate triangles (zero area) are skipped. Invalid triangle indices
+/// are also skipped. If a vertex is not referenced by any valid triangle,
+/// its normal will be (0, 0, 0).
+///
+/// # Arguments
+/// * `mesh` - The mesh to calculate vertex normals for
+///
+/// # Returns
+/// A vector of normalized vertex normals, one per vertex in the mesh.
+/// The order matches the mesh's vertex order.
+///
+/// # Example
+/// ```
+/// use lib3mf::{Mesh, Vertex, Triangle, mesh_ops::calculate_vertex_normals};
+///
+/// let mut mesh = Mesh::new();
+/// mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+/// mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+/// mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+/// mesh.triangles.push(Triangle::new(0, 1, 2));
+///
+/// let normals = calculate_vertex_normals(&mesh);
+/// // All three vertices should have similar normals pointing in +Z
+/// ```
+pub fn calculate_vertex_normals(mesh: &Mesh) -> Vec<Vector3> {
+    // Initialize accumulator for each vertex
+    let mut normals: Vec<(f64, f64, f64)> = vec![(0.0, 0.0, 0.0); mesh.vertices.len()];
+
+    // Process each triangle
+    for triangle in &mesh.triangles {
+        // Validate triangle indices
+        if triangle.v1 >= mesh.vertices.len()
+            || triangle.v2 >= mesh.vertices.len()
+            || triangle.v3 >= mesh.vertices.len()
+        {
+            continue; // Skip invalid triangles
+        }
+
+        let v0 = &mesh.vertices[triangle.v1];
+        let v1 = &mesh.vertices[triangle.v2];
+        let v2 = &mesh.vertices[triangle.v3];
+
+        // Calculate edges
+        let edge1 = (v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+        let edge2 = (v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+
+        // Calculate cross product (unnormalized normal)
+        // The magnitude of the cross product is 2 * triangle area
+        // So we can use the unnormalized cross product directly for area weighting
+        let area_weighted_normal = cross_product(edge1, edge2);
+
+        // Skip degenerate triangles
+        let magnitude = (area_weighted_normal.0 * area_weighted_normal.0
+            + area_weighted_normal.1 * area_weighted_normal.1
+            + area_weighted_normal.2 * area_weighted_normal.2)
+            .sqrt();
+
+        if magnitude > 0.0 {
+            // Add area-weighted normal to each vertex of the triangle
+            normals[triangle.v1].0 += area_weighted_normal.0;
+            normals[triangle.v1].1 += area_weighted_normal.1;
+            normals[triangle.v1].2 += area_weighted_normal.2;
+
+            normals[triangle.v2].0 += area_weighted_normal.0;
+            normals[triangle.v2].1 += area_weighted_normal.1;
+            normals[triangle.v2].2 += area_weighted_normal.2;
+
+            normals[triangle.v3].0 += area_weighted_normal.0;
+            normals[triangle.v3].1 += area_weighted_normal.1;
+            normals[triangle.v3].2 += area_weighted_normal.2;
+        }
+    }
+
+    // Normalize all vertex normals
+    normals
+        .into_iter()
+        .map(|(x, y, z)| {
+            let magnitude = (x * x + y * y + z * z).sqrt();
+            if magnitude > 0.0 {
+                (x / magnitude, y / magnitude, z / magnitude)
+            } else {
+                (0.0, 0.0, 0.0)
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -452,6 +614,276 @@ mod tests {
         let result = compute_mesh_aabb(&mesh);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("no triangles"));
+    }
+
+    #[test]
+    fn test_calculate_face_normal_simple() {
+        // Triangle in XY plane with vertices in counter-clockwise order
+        let v0 = Vertex::new(0.0, 0.0, 0.0);
+        let v1 = Vertex::new(1.0, 0.0, 0.0);
+        let v2 = Vertex::new(0.0, 1.0, 0.0);
+
+        let normal = calculate_face_normal(&v0, &v1, &v2);
+
+        // Normal should point in +Z direction
+        assert!((normal.0 - 0.0).abs() < 1e-10, "X component: {}", normal.0);
+        assert!((normal.1 - 0.0).abs() < 1e-10, "Y component: {}", normal.1);
+        assert!((normal.2 - 1.0).abs() < 1e-10, "Z component: {}", normal.2);
+    }
+
+    #[test]
+    fn test_calculate_face_normal_negative_z() {
+        // Triangle in XY plane with vertices in clockwise order (reversed)
+        let v0 = Vertex::new(0.0, 0.0, 0.0);
+        let v1 = Vertex::new(0.0, 1.0, 0.0);
+        let v2 = Vertex::new(1.0, 0.0, 0.0);
+
+        let normal = calculate_face_normal(&v0, &v1, &v2);
+
+        // Normal should point in -Z direction
+        assert!((normal.0 - 0.0).abs() < 1e-10);
+        assert!((normal.1 - 0.0).abs() < 1e-10);
+        assert!((normal.2 - (-1.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_calculate_face_normal_arbitrary() {
+        // Triangle in 3D space
+        let v0 = Vertex::new(1.0, 0.0, 0.0);
+        let v1 = Vertex::new(0.0, 1.0, 0.0);
+        let v2 = Vertex::new(0.0, 0.0, 1.0);
+
+        let normal = calculate_face_normal(&v0, &v1, &v2);
+
+        // The normal should be normalized
+        let magnitude = (normal.0 * normal.0 + normal.1 * normal.1 + normal.2 * normal.2).sqrt();
+        assert!((magnitude - 1.0).abs() < 1e-10, "Magnitude: {}", magnitude);
+
+        // All components should be equal for this symmetric triangle
+        assert!(
+            (normal.0 - normal.1).abs() < 1e-10,
+            "X: {}, Y: {}",
+            normal.0,
+            normal.1
+        );
+        assert!(
+            (normal.1 - normal.2).abs() < 1e-10,
+            "Y: {}, Z: {}",
+            normal.1,
+            normal.2
+        );
+    }
+
+    #[test]
+    fn test_calculate_face_normal_degenerate() {
+        // Degenerate triangle (all vertices collinear)
+        let v0 = Vertex::new(0.0, 0.0, 0.0);
+        let v1 = Vertex::new(1.0, 0.0, 0.0);
+        let v2 = Vertex::new(2.0, 0.0, 0.0);
+
+        let normal = calculate_face_normal(&v0, &v1, &v2);
+
+        // Should return zero vector
+        assert_eq!(normal, (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_calculate_face_normal_zero_area() {
+        // Triangle with zero area (duplicate vertices)
+        let v0 = Vertex::new(1.0, 2.0, 3.0);
+        let v1 = Vertex::new(1.0, 2.0, 3.0);
+        let v2 = Vertex::new(4.0, 5.0, 6.0);
+
+        let normal = calculate_face_normal(&v0, &v1, &v2);
+
+        // Should return zero vector
+        assert_eq!(normal, (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_calculate_vertex_normals_single_triangle() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let normals = calculate_vertex_normals(&mesh);
+
+        assert_eq!(normals.len(), 3);
+
+        // All three vertices should have the same normal pointing in +Z
+        for normal in &normals {
+            assert!((normal.0 - 0.0).abs() < 1e-10, "X: {}", normal.0);
+            assert!((normal.1 - 0.0).abs() < 1e-10, "Y: {}", normal.1);
+            assert!((normal.2 - 1.0).abs() < 1e-10, "Z: {}", normal.2);
+        }
+    }
+
+    #[test]
+    fn test_calculate_vertex_normals_cube() {
+        // Create a unit cube
+        let mut mesh = Mesh::new();
+
+        // Vertices
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(1.0, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // 3
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 1.0)); // 4
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 1.0)); // 5
+        mesh.vertices.push(Vertex::new(1.0, 1.0, 1.0)); // 6
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 1.0)); // 7
+
+        // Triangles (counter-clockwise winding)
+        // Bottom face (z=0)
+        mesh.triangles.push(Triangle::new(0, 2, 1));
+        mesh.triangles.push(Triangle::new(0, 3, 2));
+        // Top face (z=1)
+        mesh.triangles.push(Triangle::new(4, 5, 6));
+        mesh.triangles.push(Triangle::new(4, 6, 7));
+        // Front face (y=0)
+        mesh.triangles.push(Triangle::new(0, 1, 5));
+        mesh.triangles.push(Triangle::new(0, 5, 4));
+        // Back face (y=1)
+        mesh.triangles.push(Triangle::new(3, 7, 6));
+        mesh.triangles.push(Triangle::new(3, 6, 2));
+        // Left face (x=0)
+        mesh.triangles.push(Triangle::new(0, 4, 7));
+        mesh.triangles.push(Triangle::new(0, 7, 3));
+        // Right face (x=1)
+        mesh.triangles.push(Triangle::new(1, 2, 6));
+        mesh.triangles.push(Triangle::new(1, 6, 5));
+
+        let normals = calculate_vertex_normals(&mesh);
+
+        assert_eq!(normals.len(), 8);
+
+        // Each vertex is at the corner of three faces, so the normal should be
+        // the normalized average of three perpendicular directions
+        // For example, vertex 0 is at (0,0,0) and is part of:
+        // - Bottom face (normal: 0, 0, -1)
+        // - Front face (normal: 0, -1, 0)
+        // - Left face (normal: -1, 0, 0)
+        // Average: (-1, -1, -1), normalized: (-1/√3, -1/√3, -1/√3)
+
+        let expected = 1.0 / (3.0_f64).sqrt();
+
+        // Vertex 0: (-1, -1, -1) normalized
+        assert!(
+            (normals[0].0 - (-expected)).abs() < 1e-10,
+            "V0 X: {}",
+            normals[0].0
+        );
+        assert!(
+            (normals[0].1 - (-expected)).abs() < 1e-10,
+            "V0 Y: {}",
+            normals[0].1
+        );
+        assert!(
+            (normals[0].2 - (-expected)).abs() < 1e-10,
+            "V0 Z: {}",
+            normals[0].2
+        );
+
+        // Verify all normals are normalized
+        for (i, normal) in normals.iter().enumerate() {
+            let magnitude =
+                (normal.0 * normal.0 + normal.1 * normal.1 + normal.2 * normal.2).sqrt();
+            assert!(
+                (magnitude - 1.0).abs() < 1e-10,
+                "Vertex {} normal magnitude: {}",
+                i,
+                magnitude
+            );
+        }
+    }
+
+    #[test]
+    fn test_calculate_vertex_normals_empty_mesh() {
+        let mesh = Mesh::new();
+        let normals = calculate_vertex_normals(&mesh);
+        assert_eq!(normals.len(), 0);
+    }
+
+    #[test]
+    fn test_calculate_vertex_normals_with_degenerate_triangles() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.vertices.push(Vertex::new(2.0, 0.0, 0.0)); // collinear with 0,1
+
+        // Valid triangle
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        // Degenerate triangle (collinear vertices)
+        mesh.triangles.push(Triangle::new(0, 1, 3));
+
+        let normals = calculate_vertex_normals(&mesh);
+
+        assert_eq!(normals.len(), 4);
+
+        // Vertices 0, 1, 2 should have valid normals from the first triangle
+        assert!((normals[0].2 - 1.0).abs() < 1e-10);
+        assert!((normals[1].2 - 1.0).abs() < 1e-10);
+        assert!((normals[2].2 - 1.0).abs() < 1e-10);
+
+        // Vertex 3 is only in the degenerate triangle, should have zero normal
+        assert_eq!(normals[3], (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_calculate_vertex_normals_with_invalid_indices() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+
+        // Valid triangle
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        // Triangle with out-of-bounds index (should be skipped)
+        mesh.triangles.push(Triangle::new(0, 1, 10));
+
+        let normals = calculate_vertex_normals(&mesh);
+
+        assert_eq!(normals.len(), 3);
+
+        // All three vertices should have normals from only the first triangle
+        for normal in &normals {
+            assert!((normal.2 - 1.0).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_calculate_vertex_normals_area_weighting() {
+        let mut mesh = Mesh::new();
+
+        // Create a vertex shared by two triangles of different sizes
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0 - shared vertex
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(2.0, 0.0, 0.0)); // 3
+        mesh.vertices.push(Vertex::new(0.0, 2.0, 0.0)); // 4
+
+        // Small triangle with area 0.5
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        // Large triangle with area 2.0
+        mesh.triangles.push(Triangle::new(0, 3, 4));
+
+        let normals = calculate_vertex_normals(&mesh);
+
+        // Both triangles have normals pointing in +Z
+        // Vertex 0 normal should still point in +Z (weighted average of same direction)
+        assert!((normals[0].0 - 0.0).abs() < 1e-10);
+        assert!((normals[0].1 - 0.0).abs() < 1e-10);
+        assert!((normals[0].2 - 1.0).abs() < 1e-10);
+
+        // The normal should be normalized
+        let magnitude = (normals[0].0 * normals[0].0
+            + normals[0].1 * normals[0].1
+            + normals[0].2 * normals[0].2)
+            .sqrt();
+        assert!((magnitude - 1.0).abs() < 1e-10);
     }
 }
 

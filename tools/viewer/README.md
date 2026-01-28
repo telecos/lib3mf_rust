@@ -5,6 +5,11 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
 ## Features
 
 - **Interactive 3D Viewer**: Real-time 3D visualization with mouse controls
+  - **Drag-and-Drop File Loading** (NEW!): Simply drag .3mf files onto the viewer window to load them
+    - **Visual feedback**: Blue overlay for valid .3mf files, red for invalid files
+    - **File name display**: Shows the name of the file being dragged
+    - **Instant loading**: Dropped files load immediately with automatic camera adjustment
+    - **Cross-platform**: Works on Windows, macOS, and Linux
   - **GUI Menu Bar** (NEW!): Clickable menu bar with File, View, Settings, Extensions, and Help menus
     - Press 'M' to show/hide menu bar
     - Click menu items for easy access to all features
@@ -28,6 +33,16 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Export to PNG**: Press 'X' to export current slice with grid and contours
     - **Toggle plane**: Press 'L' to show/hide the slice plane rectangle
     - See [SLICE_VIEW_FEATURE.md](SLICE_VIEW_FEATURE.md) for detailed documentation
+  - **Live Slice Preview Window** (NEW!): Secondary 2D window for real-time slice viewing
+    - **Dual window setup**: Separate 2D window alongside 3D viewer
+    - **Real-time updates**: Slice preview updates instantly as Z-height changes
+    - **Toggle preview**: Press 'W' to open/close the slice preview window
+    - **Independent controls**: Up/Down arrows and PageUp/PageDown in preview window
+    - **Bidirectional sync**: Changes in either window affect both views
+    - **Visual Z-slider**: See current slice position at a glance
+    - **Grid overlay**: Toggle with 'G' key for coordinate reference
+    - **Export capability**: PNG export from preview window
+    - See [LIVE_SLICE_PREVIEW.md](LIVE_SLICE_PREVIEW.md) for detailed documentation
   - **Material Rendering** (NEW!): View materials and colors from 3MF files
     - **Toggle materials**: Press 'R' to toggle between material colors and default gray
     - **Per-triangle colors**: Supports different colors for each triangle face
@@ -147,6 +162,7 @@ For a complete, organized list of all keyboard shortcuts, press **H** or **?** i
 
 Key shortcuts include:
 - ⌨️ **H or ?**: Show complete help with all shortcuts
+- 🖱️ **Drag & Drop**: Drag .3mf files onto the window to load them (NEW!)
 - ⌨️ **Ctrl+O**: Open file dialog
 - ⌨️ **Ctrl+T**: Browse test suites from GitHub
 - ⌨️ **S**: Capture screenshot

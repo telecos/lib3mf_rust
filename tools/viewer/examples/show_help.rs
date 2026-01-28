@@ -50,6 +50,7 @@ fn print_help() {
 
     print_section("SLICE", &[
         ("Z", "Toggle slice view"),
+        ("W", "Toggle slice preview window"),
         ("Shift+↑", "Move slice up"),
         ("Shift+↓", "Move slice down"),
         ("L", "Toggle slice plane"),
