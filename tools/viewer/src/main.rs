@@ -25,6 +25,7 @@ mod browser_ui;
 mod github_api;
 mod keybindings;
 mod menu_ui;
+mod slice_renderer;
 mod slice_window;
 mod ui_viewer;
 
