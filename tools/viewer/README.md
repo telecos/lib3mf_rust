@@ -18,7 +18,12 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
   - **Screenshot capture**: Save current view to PNG with 'S' key (auto-timestamped filenames)
   - **Print Area Visualization**: Configurable build volume wireframe box
     - Toggle visibility with 'P' key
-    - Configure dimensions with 'C' key
+    - Configure dimensions, units, and origin with 'C' key
+    - Printer presets (Prusa MK3S+, Ender 3, Bambu Lab X1, etc.)
+    - Ruler visualization with 'U' key
+    - Scale bar with 'J' key
+    - Origin modes: Corner or Center Bottom
+    - Unit support: millimeters or inches
     - Default: 200x200x200mm
   - **2D Slice View**: Interactive cross-section visualization
     - **Toggle slice view**: Press 'Z' to enable/disable 2D slice visualization
@@ -343,14 +348,26 @@ The viewer provides:
 
 ## Print Area Visualization
 
-The viewer includes a configurable print area (build volume) visualization feature:
+The viewer includes a comprehensive configurable print area (build volume) visualization feature:
 
 - **Toggle Visibility**: Press `P` to show/hide the print area wireframe
-- **Configure Dimensions**: Press `C` to set custom dimensions (width, depth, height)
-- **View Menu**: Press `M` to see current print area settings
+- **Configure**: Press `C` to access full configuration dialog with:
+  - Printer presets (Prusa MK3S+, Ender 3, Bambu Lab X1, Creality CR-10, Custom)
+  - Custom dimensions (width, depth, height)
+  - Unit selection (millimeters or inches with automatic conversion)
+  - Origin mode (corner or center bottom)
+  - Ruler and scale bar toggles
+- **Ruler**: Press `U` to toggle graduated rulers along X, Y, Z axes
+  - Automatic tick spacing based on bed size
+  - Major and minor tick marks
+- **Scale Bar**: Press `J` to toggle reference scale bar
+  - Shows "nice" rounded reference length
+  - Helps understand model scale
+- **Origin Indicator**: RGB axes showing coordinate system origin
+  - Red = X axis, Green = Y axis, Blue = Z axis
 - **Default Size**: 200x200x200mm (suitable for common desktop 3D printers)
-- **Visual Style**: Light blue/gray wireframe box that doesn't obscure the model
-- **Coordinate System**: Centered at origin, extends from Z=0 (build plate) upward
+- **Visual Style**: Light blue/gray wireframe box with optional rulers and scale
+- **Coordinate System**: Configurable (corner or center origin), Z=0 at build plate
 
 See [PRINT_AREA_FEATURE.md](PRINT_AREA_FEATURE.md) for detailed documentation.
 
