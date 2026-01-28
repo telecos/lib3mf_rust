@@ -33,7 +33,7 @@ const ZOOM_STEP: f32 = 0.9; // Zoom in multiplier (0.9 = 10% closer)
 const PAN_STEP: f32 = 0.05; // Pan amount as percentage of camera distance
 
 // Constants for object selection
-const SELECTION_HIGHLIGHT_INTENSITY: f32 = 0.5; // Brightness increase for selected objects
+const SELECTION_HIGHLIGHT_INTENSITY: f32 = 0.5; // Blend intensity for selected objects (0.0-1.0)
 
 /// Ray structure for ray casting
 #[derive(Debug, Clone, Copy)]
@@ -49,11 +49,6 @@ impl Ray {
             origin,
             direction: direction.normalize(),
         }
-    }
-    
-    /// Get a point along the ray at distance t
-    fn point_at(&self, t: f32) -> Point3<f32> {
-        self.origin + self.direction * t
     }
 }
 
@@ -185,9 +180,32 @@ fn pick_object(
                     let v1_data = &mesh_data.vertices[triangle.v2];
                     let v2_data = &mesh_data.vertices[triangle.v3];
                     
-                    let v0 = Point3::new(v0_data.x as f32, v0_data.y as f32, v0_data.z as f32);
-                    let v1 = Point3::new(v1_data.x as f32, v1_data.y as f32, v1_data.z as f32);
-                    let v2 = Point3::new(v2_data.x as f32, v2_data.y as f32, v2_data.z as f32);
+                    // Apply transform if present
+                    let (v0, v1, v2) = if let Some(ref transform) = item.transform {
+                        let apply_transform_point = |v: &lib3mf::Vertex| {
+                            let x = v.x as f32;
+                            let y = v.y as f32;
+                            let z = v.z as f32;
+                            
+                            Point3::new(
+                                transform[0] as f32 * x + transform[1] as f32 * y + transform[2] as f32 * z + transform[3] as f32,
+                                transform[4] as f32 * x + transform[5] as f32 * y + transform[6] as f32 * z + transform[7] as f32,
+                                transform[8] as f32 * x + transform[9] as f32 * y + transform[10] as f32 * z + transform[11] as f32,
+                            )
+                        };
+                        
+                        (
+                            apply_transform_point(v0_data),
+                            apply_transform_point(v1_data),
+                            apply_transform_point(v2_data),
+                        )
+                    } else {
+                        (
+                            Point3::new(v0_data.x as f32, v0_data.y as f32, v0_data.z as f32),
+                            Point3::new(v1_data.x as f32, v1_data.y as f32, v1_data.z as f32),
+                            Point3::new(v2_data.x as f32, v2_data.y as f32, v2_data.z as f32),
+                        )
+                    };
                     
                     // Test intersection
                     if let Some(distance) = ray_triangle_intersection(&ray, &v0, &v1, &v2) {
@@ -531,12 +549,8 @@ impl ModelInfoPanel {
 struct SelectionState {
     /// Set of selected object indices (indices into mesh_nodes Vec)
     selected_indices: HashSet<usize>,
-    /// Currently hovered object index
-    hover_index: Option<usize>,
     /// Highlight color for selected objects
     selection_color: (f32, f32, f32),
-    /// Original colors of meshes (for restoring after deselection)
-    original_colors: Vec<(f32, f32, f32)>,
 }
 
 impl SelectionState {
@@ -544,9 +558,7 @@ impl SelectionState {
     fn new() -> Self {
         Self {
             selected_indices: HashSet::new(),
-            hover_index: None,
             selection_color: (1.0, 1.0, 0.0), // Yellow highlight
-            original_colors: Vec::new(),
         }
     }
     
@@ -876,7 +888,6 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     apply_selection_highlight(
                                         &mut state.mesh_nodes,
                                         &state.selection,
-                                        &state.selection.original_colors,
                                         model,
                                     );
                                     
@@ -2109,46 +2120,28 @@ fn pan_camera(camera: &mut ArcBall, delta_x: f32, delta_y: f32, delta_z: f32) {
     ));
 }
 
-/// Store the original colors of all mesh nodes for later restoration
-fn store_mesh_colors(mesh_nodes: &[SceneNode], state: &mut ViewerState) {
-    state.selection.original_colors = mesh_nodes
-        .iter()
-        .map(|_node| {
-            // Note: kiss3d doesn't provide a way to get the current color,
-            // so we'll reconstruct it from the model
-            (0.5, 0.5, 0.5) // Default placeholder
-        })
-        .collect();
-}
-
 /// Apply highlighting to selected mesh nodes
 fn apply_selection_highlight(
     mesh_nodes: &mut [SceneNode],
     selection: &SelectionState,
-    original_colors: &[(f32, f32, f32)],
     model: &Model,
 ) {
     for (index, node) in mesh_nodes.iter_mut().enumerate() {
         if selection.is_selected(index) {
-            // Brighten the color for selected objects
-            let original_color = if index < original_colors.len() {
-                original_colors[index]
-            } else {
-                // Get color from model
-                if let Some(item) = model.build.items.get(index) {
-                    if let Some(obj) = model
-                        .resources
-                        .objects
-                        .iter()
-                        .find(|o| o.id == item.objectid)
-                    {
-                        get_object_color(model, obj)
-                    } else {
-                        (0.5, 0.5, 0.5)
-                    }
+            // Get original color from model
+            let original_color = if let Some(item) = model.build.items.get(index) {
+                if let Some(obj) = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|o| o.id == item.objectid)
+                {
+                    get_object_color(model, obj)
                 } else {
                     (0.5, 0.5, 0.5)
                 }
+            } else {
+                (0.5, 0.5, 0.5)
             };
             
             // Apply highlight by mixing with selection color
@@ -3455,13 +3448,13 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                         
                         // Transform info if not identity
                         if let Some(ref transform) = item.transform {
-                            let has_transform = !transform.iter().enumerate().all(|(i, &v)| {
-                                match i % 4 {
-                                    0 | 1 | 2 => v == if i / 4 == i % 4 { 1.0 } else { 0.0 },
-                                    3 => v == 0.0,
-                                    _ => false,
-                                }
-                            });
+                            // 4x3 affine matrix in row-major order: [m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23]
+                            // Identity matrix has 1.0 at indices 0, 5, 10 (diagonal) and 0.0 elsewhere
+                            let has_transform = !(
+                                (transform[0] - 1.0).abs() < 1e-6 && transform[1].abs() < 1e-6 && transform[2].abs() < 1e-6 && transform[3].abs() < 1e-6 &&
+                                transform[4].abs() < 1e-6 && (transform[5] - 1.0).abs() < 1e-6 && transform[6].abs() < 1e-6 && transform[7].abs() < 1e-6 &&
+                                transform[8].abs() < 1e-6 && transform[9].abs() < 1e-6 && (transform[10] - 1.0).abs() < 1e-6 && transform[11].abs() < 1e-6
+                            );
                             
                             if has_transform {
                                 window.draw_text(
