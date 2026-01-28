@@ -2,6 +2,15 @@
 //!
 //! This module provides a separate 2D window that displays live slice previews
 //! of the 3D model, updating in real-time as the user adjusts the Z height.
+//!
+//! ## Features
+//! - Pure white background (#FFFFFF) for print-preview style rendering
+//! - Filled solid polygon rendering for slice contours (default mode)
+//! - Switchable between filled and outline-only modes
+//! - Real-time synchronization with main 3D viewer
+//! - Grid overlay for coordinate reference
+//! - Visual Z-height slider control
+//! - PNG export capability
 
 #![forbid(unsafe_code)]
 

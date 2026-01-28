@@ -34,10 +34,14 @@ The Live Slice Preview feature adds a **secondary 2D window** that displays real
 - Contours computed from the same data in both windows
 
 ### 5. Visualization Options
+- **White background**: Pure white background (#FFFFFF) for clean, print-preview style
+- **Filled solid rendering** (default): Slice contours rendered as filled polygons
 - **Grid overlay** (toggle with `G` key): 10-unit coordinate grid
-- **Filled mode** (toggle with `F` key): Future enhancement for filled polygons
-- Red contour lines for clear visibility
+- **Filled mode** (toggle with `F` key): Switch between filled polygons and outline only
+- **Dark gray fill color** (#303030) for high contrast against white background
+- Red contour outlines for clear visibility
 - Automatic centering and scaling to fit model
+- Anti-aliased edges for smooth appearance
 
 ### 6. Export Capability
 - PNG export method implemented
@@ -73,7 +77,7 @@ The Live Slice Preview feature adds a **secondary 2D window** that displays real
 | `Page Up` | Move slice plane up (coarse adjustment) |
 | `Page Down` | Move slice plane down (coarse adjustment) |
 | `G` | Toggle coordinate grid on/off |
-| `F` | Toggle filled mode (future) |
+| `F` | Toggle filled mode (filled polygons vs outlines) |
 | `ESC` or close window | Close the slice preview window |
 
 ### Controls in the 3D Viewer
@@ -223,7 +227,7 @@ while window.render_with_camera(&mut camera) {
 
 ### Short Term
 - [ ] Add keyboard shortcut (E key) to export from 2D window
-- [ ] Implement filled polygon rendering
+- [x] Implement filled polygon rendering
 - [ ] Add material-based coloring for contours
 - [ ] Display numeric Z-height using simple character rendering
 
