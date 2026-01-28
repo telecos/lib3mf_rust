@@ -2777,10 +2777,10 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
         y += LINE_HEIGHT;
         
         // Bounding box
-        let (min_bound, max_bound) = calculate_model_bounds(model);
-        let size_x = max_bound.0 - min_bound.0;
-        let size_y = max_bound.1 - min_bound.1;
-        let size_z = max_bound.2 - min_bound.2;
+        let (_min_bound, max_bound) = calculate_model_bounds(model);
+        let size_x = max_bound.0 - _min_bound.0;
+        let size_y = max_bound.1 - _min_bound.1;
+        let size_z = max_bound.2 - _min_bound.2;
         
         window.draw_text(
             &format!("  Bounds: {:.1} × {:.1} × {:.1} {}", 
