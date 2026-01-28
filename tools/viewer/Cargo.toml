@@ -14,7 +14,7 @@ path = "src/main.rs"
 lib3mf = { path = "../.." }
 clap = { version = "4.5", features = ["derive"] }
 image = "0.25"
-kiss3d = "0.35"
+kiss3d = { path = "kiss3d-patch" }
 rfd = { version = "0.12", default-features = false, features = ["xdg-portal"] }
 chrono = "0.4"
 # GitHub test suite browser dependencies
