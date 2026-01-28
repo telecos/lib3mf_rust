@@ -338,6 +338,23 @@ impl SliceView {
     }
 }
 
+/// Model information panel state
+struct ModelInfoPanel {
+    visible: bool,
+}
+
+impl ModelInfoPanel {
+    /// Create a new model info panel (hidden by default)
+    fn new() -> Self {
+        Self { visible: false }
+    }
+
+    /// Toggle panel visibility
+    fn toggle_visibility(&mut self) {
+        self.visible = !self.visible;
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
@@ -351,6 +368,7 @@ struct ViewerState {
     slice_view: SliceView,
     show_displacement: bool,
     show_materials: bool,
+    info_panel: ModelInfoPanel,
 }
 
 impl ViewerState {
@@ -368,6 +386,7 @@ impl ViewerState {
             slice_view: SliceView::new(),
             show_displacement: false,
             show_materials: true,
+            info_panel: ModelInfoPanel::new(),
         }
     }
 
@@ -388,6 +407,7 @@ impl ViewerState {
             slice_view,
             show_displacement: false,
             show_materials: true,
+            info_panel: ModelInfoPanel::new(),
         }
     }
 
@@ -657,7 +677,17 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 WindowEvent::Key(Key::A, Action::Release, _) => {
                     // A key: Toggle XYZ axes
                     show_axes = !show_axes;
+                    menu_bar.set_checked(MenuAction::ToggleAxes, show_axes);
                     println!("XYZ Axes: {}", if show_axes { "ON" } else { "OFF" });
+                }
+                WindowEvent::Key(Key::I, Action::Release, _) => {
+                    // I key: Toggle model information panel
+                    state.info_panel.toggle_visibility();
+                    menu_bar.set_checked(MenuAction::ToggleModelInfo, state.info_panel.visible);
+                    println!(
+                        "Model Information Panel: {}",
+                        if state.info_panel.visible { "ON" } else { "OFF" }
+                    );
                 }
                 WindowEvent::Key(Key::S, Action::Release, _) => {
                     // S key: Toggle slice stack mode OR capture screenshot
@@ -1215,6 +1245,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
             }
         }
         
+        // Draw model information panel if visible
+        render_model_info_panel(&mut window, &state);
+        
         // Draw menu bar (rendered last so it's on top)
         menu_bar.render(&mut window);
     }
@@ -1304,6 +1337,14 @@ fn handle_menu_action(
         }
         MenuAction::ToggleGrid => {
             println!("Grid toggle not yet implemented");
+        }
+        MenuAction::ToggleModelInfo => {
+            state.info_panel.toggle_visibility();
+            menu_bar.set_checked(MenuAction::ToggleModelInfo, state.info_panel.visible);
+            println!(
+                "Model Information Panel: {}",
+                if state.info_panel.visible { "ON" } else { "OFF" }
+            );
         }
         MenuAction::ToggleRulers => {
             println!("Rulers toggle not yet implemented");
@@ -2621,6 +2662,280 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
     window.draw_line(&corners[1], &corners[5], &color);
     window.draw_line(&corners[2], &corners[6], &color);
     window.draw_line(&corners[3], &corners[7], &color);
+}
+
+/// Render the model information panel
+fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
+    if !state.info_panel.visible {
+        return;
+    }
+
+    use kiss3d::text::Font;
+    use kiss3d::nalgebra::Point2;
+    
+    const PANEL_X: f32 = 10.0;
+    const PANEL_Y: f32 = 40.0; // Below menu bar
+    const LINE_HEIGHT: f32 = 16.0;
+    const FONT_SIZE: f32 = 13.0;
+    const SECTION_SPACING: f32 = 8.0;
+    
+    let text_color = kiss3d::nalgebra::Point3::new(0.9, 0.9, 0.9);
+    let header_color = kiss3d::nalgebra::Point3::new(1.0, 1.0, 0.6);
+    
+    let mut y = PANEL_Y;
+    
+    // Title
+    window.draw_text(
+        "Model Information",
+        &Point2::new(PANEL_X, y),
+        FONT_SIZE + 2.0,
+        &Font::default(),
+        &header_color,
+    );
+    y += LINE_HEIGHT + SECTION_SPACING;
+    
+    if let Some(ref model) = state.model {
+        // File info
+        if let Some(ref path) = state.file_path {
+            let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            window.draw_text(
+                &format!("File: {}", filename),
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &text_color,
+            );
+            y += LINE_HEIGHT;
+            
+            // File size
+            if let Ok(metadata) = std::fs::metadata(path) {
+                let size_mb = metadata.len() as f64 / 1_048_576.0;
+                window.draw_text(
+                    &format!("Size: {:.2} MB", size_mb),
+                    &Point2::new(PANEL_X, y),
+                    FONT_SIZE,
+                    &Font::default(),
+                    &text_color,
+                );
+                y += LINE_HEIGHT;
+            }
+        }
+        
+        y += SECTION_SPACING;
+        
+        // Geometry section
+        window.draw_text(
+            "Geometry",
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &header_color,
+        );
+        y += LINE_HEIGHT;
+        
+        let vertex_count = count_vertices(model);
+        let triangle_count = count_triangles(model);
+        let object_count = model.resources.objects.len();
+        let component_count: usize = model.resources.objects.iter()
+            .map(|obj| obj.components.len())
+            .sum();
+        
+        window.draw_text(
+            &format!("  Vertices: {}", vertex_count),
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+        y += LINE_HEIGHT;
+        
+        window.draw_text(
+            &format!("  Triangles: {}", triangle_count),
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+        y += LINE_HEIGHT;
+        
+        window.draw_text(
+            &format!("  Objects: {}", object_count),
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+        y += LINE_HEIGHT;
+        
+        window.draw_text(
+            &format!("  Components: {}", component_count),
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+        y += LINE_HEIGHT;
+        
+        // Bounding box
+        let (_min_bound, max_bound) = calculate_model_bounds(model);
+        let size_x = max_bound.0 - _min_bound.0;
+        let size_y = max_bound.1 - _min_bound.1;
+        let size_z = max_bound.2 - _min_bound.2;
+        
+        window.draw_text(
+            &format!("  Bounds: {:.1} × {:.1} × {:.1} {}", 
+                size_x, size_y, size_z, model.unit),
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+        y += LINE_HEIGHT + SECTION_SPACING;
+        
+        // Extensions section
+        if !model.required_extensions.is_empty() || 
+           !model.resources.materials.is_empty() ||
+           !model.resources.color_groups.is_empty() ||
+           count_beams(model) > 0 ||
+           !model.resources.slice_stacks.is_empty() {
+            
+            window.draw_text(
+                "Extensions",
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &header_color,
+            );
+            y += LINE_HEIGHT;
+            
+            // Materials
+            let material_count = model.resources.materials.len();
+            let color_group_count = model.resources.color_groups.len();
+            if material_count > 0 || color_group_count > 0 {
+                window.draw_text(
+                    &format!("  ✓ Materials ({} mats, {} groups)", 
+                        material_count, color_group_count),
+                    &Point2::new(PANEL_X, y),
+                    FONT_SIZE,
+                    &Font::default(),
+                    &text_color,
+                );
+                y += LINE_HEIGHT;
+            }
+            
+            // Beam Lattice
+            let beam_count = count_beams(model);
+            if beam_count > 0 {
+                window.draw_text(
+                    &format!("  ✓ Beam Lattice ({} beams)", beam_count),
+                    &Point2::new(PANEL_X, y),
+                    FONT_SIZE,
+                    &Font::default(),
+                    &text_color,
+                );
+                y += LINE_HEIGHT;
+            }
+            
+            // Slice Stacks
+            if !model.resources.slice_stacks.is_empty() {
+                let slice_count: usize = model.resources.slice_stacks.iter()
+                    .map(|s| s.slices.len())
+                    .sum();
+                window.draw_text(
+                    &format!("  ✓ Slice ({} slices)", slice_count),
+                    &Point2::new(PANEL_X, y),
+                    FONT_SIZE,
+                    &Font::default(),
+                    &text_color,
+                );
+                y += LINE_HEIGHT;
+            }
+            
+            // Production
+            if !model.build.items.is_empty() {
+                let production_items: usize = model.build.items.iter()
+                    .filter(|item| item.production_uuid.is_some())
+                    .count();
+                if production_items > 0 {
+                    window.draw_text(
+                        &format!("  ✓ Production ({} items)", production_items),
+                        &Point2::new(PANEL_X, y),
+                        FONT_SIZE,
+                        &Font::default(),
+                        &text_color,
+                    );
+                    y += LINE_HEIGHT;
+                }
+            }
+            
+            y += SECTION_SPACING;
+        }
+        
+        // Objects section (show first few)
+        if !model.resources.objects.is_empty() {
+            window.draw_text(
+                "Objects",
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &header_color,
+            );
+            y += LINE_HEIGHT;
+            
+            for obj in model.resources.objects.iter().take(5) {
+                let obj_name = if let Some(ref name) = obj.name {
+                    name.clone()
+                } else {
+                    format!("Object {}", obj.id)
+                };
+                
+                let obj_type = if obj.mesh.is_some() {
+                    "mesh"
+                } else if !obj.components.is_empty() {
+                    "component"
+                } else {
+                    "other"
+                };
+                
+                window.draw_text(
+                    &format!("  {} ({})", obj_name, obj_type),
+                    &Point2::new(PANEL_X, y),
+                    FONT_SIZE - 1.0,
+                    &Font::default(),
+                    &text_color,
+                );
+                y += LINE_HEIGHT;
+            }
+            
+            if model.resources.objects.len() > 5 {
+                window.draw_text(
+                    &format!("  ... and {} more", model.resources.objects.len() - 5),
+                    &Point2::new(PANEL_X, y),
+                    FONT_SIZE - 1.0,
+                    &Font::default(),
+                    &text_color,
+                );
+                // No need to increment y here since it's the last item
+            }
+        }
+    } else {
+        // No model loaded
+        window.draw_text(
+            "No model loaded",
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+        y += LINE_HEIGHT;
+        window.draw_text(
+            "Press Ctrl+O to open a file",
+            &Point2::new(PANEL_X, y),
+            FONT_SIZE,
+            &Font::default(),
+            &text_color,
+        );
+    }
 }
 
 /// Print the menu with current settings

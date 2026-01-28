@@ -35,6 +35,7 @@ pub enum MenuAction {
     TogglePrintBed,
     ToggleGrid,
     ToggleRulers,
+    ToggleModelInfo,
     ResetCamera,
     FitToModel,
     TopView,
@@ -141,6 +142,13 @@ impl MenuBar {
                         label: "Show Grid".to_string(),
                         shortcut: Some("G".to_string()),
                         action: MenuAction::ToggleGrid,
+                        enabled: true,
+                        checked: false,
+                    },
+                    MenuItem {
+                        label: "Model Information".to_string(),
+                        shortcut: Some("I".to_string()),
+                        action: MenuAction::ToggleModelInfo,
                         enabled: true,
                         checked: false,
                     },
@@ -332,12 +340,11 @@ impl MenuBar {
                         && self.mouse_x < menu_x + MENU_ITEM_WIDTH
                         && self.mouse_y >= item_y
                         && self.mouse_y < item_y + MENU_ITEM_HEIGHT
+                        && item.enabled
                     {
-                        if item.enabled {
-                            let action = item.action;
-                            self.close_all_menus();
-                            return Some(action);
-                        }
+                        let action = item.action;
+                        self.close_all_menus();
+                        return Some(action);
                     }
                 }
             }
