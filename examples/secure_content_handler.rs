@@ -141,7 +141,6 @@ fn main() -> Result<()> {
     println!("  • Structural consistency of secure content data");
     println!("\nNote: This handler validates metadata only.");
     println!("Actual cryptographic operations are not performed.");
-    println!("See SECURE_CONTENT_SUPPORT.md for details.");
 
     Ok(())
 }
