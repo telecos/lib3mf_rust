@@ -351,6 +351,10 @@ struct ViewerState {
     slice_view: SliceView,
     show_displacement: bool,
     show_materials: bool,
+    // Drag and drop state
+    show_drop_zone: bool,
+    drop_file_valid: bool,
+    hovered_file_path: Option<String>,
 }
 
 impl ViewerState {
@@ -368,6 +372,9 @@ impl ViewerState {
             slice_view: SliceView::new(),
             show_displacement: false,
             show_materials: true,
+            show_drop_zone: false,
+            drop_file_valid: false,
+            hovered_file_path: None,
         }
     }
 
@@ -388,6 +395,9 @@ impl ViewerState {
             slice_view,
             show_displacement: false,
             show_materials: true,
+            show_drop_zone: false,
+            drop_file_valid: false,
+            hovered_file_path: None,
         }
     }
 
@@ -1166,6 +1176,81 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     keybindings::print_help();
                     println!();
                 }
+                WindowEvent::HoveredFile(ref path_str) => {
+                    // File is being dragged over the window
+                    state.show_drop_zone = true;
+                    state.hovered_file_path = Some(path_str.clone());
+                    // Check if it's a .3mf file
+                    state.drop_file_valid = path_str.to_lowercase().ends_with(".3mf");
+                }
+                WindowEvent::HoveredFileCancelled => {
+                    // File drag was cancelled
+                    state.show_drop_zone = false;
+                    state.drop_file_valid = false;
+                    state.hovered_file_path = None;
+                }
+                WindowEvent::DroppedFile(ref path_str) => {
+                    // File was dropped onto the window
+                    state.show_drop_zone = false;
+                    state.drop_file_valid = false;
+                    state.hovered_file_path = None;
+                    
+                    let path = PathBuf::from(path_str);
+                    
+                    // Check if it's a .3mf file
+                    if path.extension().map_or(false, |ext| ext == "3mf") {
+                        println!("\nLoading dropped file: {}", path.display());
+                        match state.load_file(path) {
+                            Ok(()) => {
+                                // Hide existing mesh nodes by setting them invisible
+                                for node in &mut state.mesh_nodes {
+                                    node.set_visible(false);
+                                }
+                                state.mesh_nodes.clear();
+
+                                // Hide existing beam nodes
+                                for node in &mut state.beam_nodes {
+                                    node.set_visible(false);
+                                }
+                                state.beam_nodes.clear();
+
+                                // Create new mesh and beam nodes
+                                if let Some(ref model) = state.model {
+                                    state.mesh_nodes = create_mesh_nodes_with_displacement(
+                                        &mut window,
+                                        model,
+                                        state.boolean_mode,
+                                        state.show_displacement,
+                                    );
+                                    state.beam_nodes =
+                                        create_beam_lattice_nodes(&mut window, model);
+                                    window.set_title(&state.window_title());
+                                    println!("\n✓ File loaded successfully!");
+                                    print_model_info(model);
+
+                                    // Reset camera to fit new model
+                                    camera = create_camera_for_model(state.model.as_ref());
+
+                                    // Recalculate axis length based on new model
+                                    let (min_bound, max_bound) = calculate_model_bounds(model);
+                                    let size = Vector3::new(
+                                        max_bound.0 - min_bound.0,
+                                        max_bound.1 - min_bound.1,
+                                        max_bound.2 - min_bound.2,
+                                    );
+                                    let max_size = size.x.max(size.y).max(size.z);
+                                    axis_length = max_size * 0.5;
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("\n✗ Error loading file: {}", e);
+                            }
+                        }
+                    } else {
+                        eprintln!("\n✗ Only .3mf files are supported");
+                        eprintln!("   Dropped file: {}", path.display());
+                    }
+                }
                 _ => {}
             }
         }
@@ -1213,6 +1298,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     draw_slice_contours(&mut window, &state.slice_view);
                 }
             }
+        }
+        
+        // Draw drop zone overlay if file is being dragged
+        if state.show_drop_zone {
+            draw_drop_zone_overlay(&mut window, state.drop_file_valid, &state.hovered_file_path);
         }
         
         // Draw menu bar (rendered last so it's on top)
@@ -2137,6 +2227,78 @@ fn draw_axes(window: &mut Window, length: f32) {
         &Point3::new(0.0, 0.0, length),
         &Point3::new(0.0, 0.0, 1.0), // Blue color
     );
+}
+
+/// Draw drag-and-drop overlay when a file is being dragged over the window
+fn draw_drop_zone_overlay(window: &mut Window, valid_file: bool, file_path: &Option<String>) {
+    use kiss3d::nalgebra::{Point2, Point3};
+    use kiss3d::text::Font;
+    
+    let size = window.size();
+    let width = size.x as f32;
+    let height = size.y as f32;
+    
+    // Choose color based on file validity
+    let (r, g, b) = if valid_file {
+        (0.2, 0.6, 1.0) // Blue tint for valid .3mf files
+    } else {
+        (1.0, 0.3, 0.3) // Red tint for invalid files
+    };
+    
+    // Draw semi-transparent fullscreen overlay using horizontal lines
+    let alpha = 0.3;
+    let line_spacing = 10.0;
+    
+    // Draw horizontal lines to create overlay effect
+    let mut y = 0.0;
+    while y < height {
+        window.draw_planar_line(
+            &Point2::new(0.0, y),
+            &Point2::new(width, y),
+            &Point3::new(r * alpha, g * alpha, b * alpha),
+        );
+        y += line_spacing;
+    }
+    
+    // Display message text in the center
+    let message = if valid_file {
+        "Drop to open file"
+    } else {
+        "Only .3mf files supported"
+    };
+    
+    // Draw text in center
+    let font = Font::default();
+    let font_size = 48.0;
+    let text_x = width / 2.0 - (message.len() as f32 * font_size * 0.3);
+    let text_y = height / 2.0;
+    
+    window.draw_text(
+        message,
+        &Point2::new(text_x, text_y),
+        font_size,
+        &font,
+        &Point3::new(1.0, 1.0, 1.0), // White text
+    );
+    
+    // Draw file name if available
+    if let Some(ref path) = file_path {
+        let file_name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path);
+        let fname_size = 32.0;
+        let fname_x = width / 2.0 - (file_name.len() as f32 * fname_size * 0.3);
+        let fname_y = text_y + 60.0;
+        
+        window.draw_text(
+            file_name,
+            &Point2::new(fname_x, fname_y),
+            fname_size,
+            &font,
+            &Point3::new(0.9, 0.9, 0.9), // Light gray text
+        );
+    }
 }
 
 /// Count total boolean operations in the model

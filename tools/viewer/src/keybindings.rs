@@ -81,6 +81,13 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
     vec![
         // FILE category
         KeyBinding::new(
+            None,
+            Modifiers::empty(),
+            "Drag & Drop",
+            "Drag .3mf file onto window to load",
+            Category::File,
+        ),
+        KeyBinding::new(
             Some(Key::O),
             Modifiers::Control,
             "Ctrl+O",
