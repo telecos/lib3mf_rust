@@ -1,6 +1,11 @@
 //! Example program to demonstrate the help display
 //! 
 //! This shows the organized keyboard controls without launching the UI.
+//! 
+//! NOTE: This example duplicates the help display logic rather than importing
+//! from the keybindings module because examples in Rust binary crates cannot
+//! easily import internal modules. This is a standalone demonstration of the
+//! help output format. The actual implementation is in src/keybindings.rs.
 
 #![forbid(unsafe_code)]
 

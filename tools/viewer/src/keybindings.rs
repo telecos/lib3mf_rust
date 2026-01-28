@@ -318,6 +318,8 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Category::Settings,
         ),
         // HELP category
+        // Note: Both H and ? (Shift+/) are handled to show help, but we only need
+        // one entry since they perform the same action and display_key shows both
         KeyBinding::new(
             Some(Key::H),
             Modifiers::empty(),
@@ -404,6 +406,7 @@ mod tests {
             Category::View,
             Category::Camera,
             Category::Slice,
+            Category::Animation,
             Category::Theme,
             Category::Settings,
             Category::Help,
