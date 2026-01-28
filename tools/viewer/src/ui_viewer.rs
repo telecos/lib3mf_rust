@@ -1455,10 +1455,51 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("Zoom out (distance: {:.1})", camera.dist());
                 }
                 WindowEvent::Key(Key::F, Action::Release, _) => {
-                    // F key: Fit model to view
+                    // F key: Focus camera on selected object, or fit to whole model if no selection
                     if let Some(ref model) = state.model {
-                        fit_camera_to_model(&mut camera, model);
-                        println!("Camera fit to model");
+                        if let Some(selected_index) = state.selection.get_first_selected() {
+                            focus_camera_on_object(&mut camera, model, selected_index);
+                            println!("Camera focused on selected object");
+                        } else {
+                            fit_camera_to_model(&mut camera, model);
+                            println!("Camera fit to model");
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::J, Action::Release, _) => {
+                    // J key: Toggle visibility of selected objects (hide/show)
+                    if !state.selection.selected_indices.is_empty() {
+                        for &index in &state.selection.selected_indices {
+                            if let Some(node) = state.mesh_nodes.get_mut(index) {
+                                let visible = !node.is_visible();
+                                node.set_visible(visible);
+                            }
+                        }
+                        println!("Toggled visibility of {} selected object(s)", 
+                                state.selection.selected_indices.len());
+                    }
+                }
+                WindowEvent::Key(Key::Y, Action::Release, _) => {
+                    // Y key: Isolate selected objects (hide all others)
+                    if let Some(ref _model) = state.model {
+                        if !state.selection.selected_indices.is_empty() {
+                            // Hide all objects
+                            for (index, node) in state.mesh_nodes.iter_mut().enumerate() {
+                                if state.selection.is_selected(index) {
+                                    node.set_visible(true);
+                                } else {
+                                    node.set_visible(false);
+                                }
+                            }
+                            println!("Isolated {} selected object(s)", 
+                                    state.selection.selected_indices.len());
+                        } else {
+                            // Show all objects if no selection
+                            for node in state.mesh_nodes.iter_mut() {
+                                node.set_visible(true);
+                            }
+                            println!("Showing all objects");
+                        }
                     }
                 }
                 WindowEvent::Key(Key::Home, Action::Release, _) => {
@@ -1998,6 +2039,56 @@ fn fit_camera_to_model(camera: &mut ArcBall, model: &Model) {
     // Set camera to look at center with appropriate distance
     camera.set_at(center);
     camera.set_dist(distance);
+}
+
+/// Focus camera on a specific object (selected object)
+fn focus_camera_on_object(camera: &mut ArcBall, model: &Model, object_index: usize) {
+    if let Some(item) = model.build.items.get(object_index) {
+        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+            if let Some(ref mesh) = obj.mesh {
+                // Calculate bounding box of this object
+                if mesh.vertices.is_empty() {
+                    return;
+                }
+                
+                let mut min_x = f32::MAX;
+                let mut min_y = f32::MAX;
+                let mut min_z = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut max_y = f32::MIN;
+                let mut max_z = f32::MIN;
+                
+                for v in &mesh.vertices {
+                    min_x = min_x.min(v.x as f32);
+                    min_y = min_y.min(v.y as f32);
+                    min_z = min_z.min(v.z as f32);
+                    max_x = max_x.max(v.x as f32);
+                    max_y = max_y.max(v.y as f32);
+                    max_z = max_z.max(v.z as f32);
+                }
+                
+                // Calculate center
+                let center = Point3::new(
+                    (min_x + max_x) / 2.0,
+                    (min_y + max_y) / 2.0,
+                    (min_z + max_z) / 2.0,
+                );
+                
+                // Calculate diagonal distance for camera positioning
+                let size = Vector3::new(
+                    max_x - min_x,
+                    max_y - min_y,
+                    max_z - min_z,
+                );
+                let diagonal = size.magnitude();
+                let distance = diagonal * CAMERA_DISTANCE_MULTIPLIER;
+                
+                // Set camera
+                camera.set_at(center);
+                camera.set_dist(distance);
+            }
+        }
+    }
 }
 
 /// Zoom the camera by a given factor
@@ -3280,7 +3371,111 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                     &Font::default(),
                     &text_color,
                 );
-                // No need to increment y here since it's the last item
+                y += LINE_HEIGHT;
+            }
+            
+            y += SECTION_SPACING;
+        }
+        
+        // Selection section - show info about selected objects
+        if !state.selection.selected_indices.is_empty() {
+            window.draw_text(
+                "Selection",
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &header_color,
+            );
+            y += LINE_HEIGHT;
+            
+            window.draw_text(
+                &format!("  Selected: {} object(s)", state.selection.selected_indices.len()),
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &text_color,
+            );
+            y += LINE_HEIGHT;
+            
+            // Show details of first selected object
+            if let Some(&first_index) = state.selection.selected_indices.iter().next() {
+                if let Some(item) = model.build.items.get(first_index) {
+                    if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+                        // Object name/ID
+                        let obj_label = if let Some(ref name) = obj.name {
+                            format!("  {} (ID: {})", name, obj.id)
+                        } else {
+                            format!("  Object ID: {}", obj.id)
+                        };
+                        window.draw_text(
+                            &obj_label,
+                            &Point2::new(PANEL_X, y),
+                            FONT_SIZE,
+                            &Font::default(),
+                            &text_color,
+                        );
+                        y += LINE_HEIGHT;
+                        
+                        // Mesh details if available
+                        if let Some(ref mesh) = obj.mesh {
+                            window.draw_text(
+                                &format!("  Vertices: {}", mesh.vertices.len()),
+                                &Point2::new(PANEL_X, y),
+                                FONT_SIZE,
+                                &Font::default(),
+                                &text_color,
+                            );
+                            y += LINE_HEIGHT;
+                            
+                            window.draw_text(
+                                &format!("  Triangles: {}", mesh.triangles.len()),
+                                &Point2::new(PANEL_X, y),
+                                FONT_SIZE,
+                                &Font::default(),
+                                &text_color,
+                            );
+                            y += LINE_HEIGHT;
+                        }
+                        
+                        // Material/Color info
+                        if let Some(pid) = obj.pid {
+                            // Check material name
+                            if let Some(mat) = model.resources.materials.iter().find(|m| m.id == pid) {
+                                let mat_name = mat.name.as_deref().unwrap_or("Unknown");
+                                window.draw_text(
+                                    &format!("  Material: {}", mat_name),
+                                    &Point2::new(PANEL_X, y),
+                                    FONT_SIZE,
+                                    &Font::default(),
+                                    &text_color,
+                                );
+                                y += LINE_HEIGHT;
+                            }
+                        }
+                        
+                        // Transform info if not identity
+                        if let Some(ref transform) = item.transform {
+                            let has_transform = !transform.iter().enumerate().all(|(i, &v)| {
+                                match i % 4 {
+                                    0 | 1 | 2 => v == if i / 4 == i % 4 { 1.0 } else { 0.0 },
+                                    3 => v == 0.0,
+                                    _ => false,
+                                }
+                            });
+                            
+                            if has_transform {
+                                window.draw_text(
+                                    "  Transform: Yes",
+                                    &Point2::new(PANEL_X, y),
+                                    FONT_SIZE,
+                                    &Font::default(),
+                                    &text_color,
+                                );
+                                y += LINE_HEIGHT;
+                            }
+                        }
+                    }
+                }
             }
         }
     } else {
