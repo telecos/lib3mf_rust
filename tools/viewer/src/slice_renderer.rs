@@ -76,6 +76,7 @@ impl SliceContour {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_holes(boundary: Vec<Point2D>, holes: Vec<Vec<Point2D>>) -> Self {
         Self { boundary, holes }
     }
@@ -131,18 +132,21 @@ impl SliceRenderer {
     }
 
     /// Set the margin in pixels
+    #[allow(dead_code)]
     pub fn with_margin(mut self, margin: f64) -> Self {
         self.margin = margin;
         self
     }
 
     /// Set the background color
+    #[allow(dead_code)]
     pub fn with_background(mut self, color: Rgb<u8>) -> Self {
         self.background = color;
         self
     }
 
     /// Set the default fill color
+    #[allow(dead_code)]
     pub fn with_default_fill(mut self, color: Rgb<u8>) -> Self {
         self.default_fill = color;
         self
@@ -161,6 +165,7 @@ impl SliceRenderer {
     }
 
     /// Render a slice with multiple colored objects
+    #[allow(dead_code)]
     pub fn render_slice_multi_color(
         &self,
         objects: &[(SliceContour, Rgb<u8>)],
@@ -499,5 +504,95 @@ mod tests {
 
         assert_eq!(image.width(), 200);
         assert_eq!(image.height(), 200);
+    }
+
+    #[test]
+    fn test_empty_contour_list() {
+        let renderer = SliceRenderer::new(100, 100);
+        let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
+        
+        // Should handle empty contour list gracefully
+        let image = renderer.render_slice(&[], &bounds);
+        
+        assert_eq!(image.width(), 100);
+        assert_eq!(image.height(), 100);
+        // All pixels should be background color
+        assert_eq!(image.get_pixel(50, 50), &Rgb([255, 255, 255]));
+    }
+
+    #[test]
+    fn test_large_resolution() {
+        let renderer = SliceRenderer::new(2048, 2048);
+        
+        let contour = SliceContour::new(vec![
+            Point2D::new(10.0, 10.0),
+            Point2D::new(90.0, 10.0),
+            Point2D::new(50.0, 80.0),
+        ]);
+        
+        let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
+        let image = renderer.render_slice(&[contour], &bounds);
+        
+        assert_eq!(image.width(), 2048);
+        assert_eq!(image.height(), 2048);
+    }
+
+    #[test]
+    fn test_custom_background_and_fill() {
+        let renderer = SliceRenderer::new(200, 200)
+            .with_margin(10.0)
+            .with_background(Rgb([240, 240, 240]))
+            .with_default_fill(Rgb([100, 100, 100]));
+        
+        let contour = SliceContour::new(vec![
+            Point2D::new(25.0, 25.0),
+            Point2D::new(75.0, 25.0),
+            Point2D::new(50.0, 75.0),
+        ]);
+        
+        let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
+        let image = renderer.render_slice(&[contour], &bounds);
+        
+        // Check that corners have custom background color
+        let corner_pixel = image.get_pixel(0, 0);
+        assert_eq!(corner_pixel, &Rgb([240, 240, 240]));
+    }
+
+    #[test]
+    fn test_aspect_ratio_preservation() {
+        let renderer = SliceRenderer::new(800, 600);
+        
+        // Wide rectangle - should fit with vertical margins
+        let contour = SliceContour::new(vec![
+            Point2D::new(0.0, 0.0),
+            Point2D::new(200.0, 0.0),
+            Point2D::new(200.0, 50.0),
+            Point2D::new(0.0, 50.0),
+        ]);
+        
+        let bounds = BoundingBox2D::new(0.0, 0.0, 200.0, 50.0);
+        let image = renderer.render_slice(&[contour], &bounds);
+        
+        assert_eq!(image.width(), 800);
+        assert_eq!(image.height(), 600);
+    }
+
+    #[test]
+    fn test_very_small_bounds() {
+        let renderer = SliceRenderer::new(100, 100);
+        
+        // Very small triangle
+        let contour = SliceContour::new(vec![
+            Point2D::new(0.0, 0.0),
+            Point2D::new(0.001, 0.0),
+            Point2D::new(0.0005, 0.001),
+        ]);
+        
+        let bounds = BoundingBox2D::new(0.0, 0.0, 0.001, 0.001);
+        let image = renderer.render_slice(&[contour], &bounds);
+        
+        // Should handle tiny coordinates without panicking
+        assert_eq!(image.width(), 100);
+        assert_eq!(image.height(), 100);
     }
 }
