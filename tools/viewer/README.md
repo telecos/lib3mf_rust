@@ -15,7 +15,6 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - Click menu items for easy access to all features
     - Visual checkmarks show active features
     - Keyboard shortcuts displayed alongside menu items
-    - See [GUI_MENU_FEATURE.md](GUI_MENU_FEATURE.md) for detailed documentation
   - **Rotate view**: Left mouse drag
   - **Pan view**: Right mouse drag  
   - **Zoom**: Mouse scroll wheel
@@ -32,7 +31,6 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Contour display**: Red lines showing model intersection with the plane
     - **Export to PNG**: Press 'X' to export current slice with grid and contours
     - **Toggle plane**: Press 'L' to show/hide the slice plane rectangle
-    - See [SLICE_VIEW_FEATURE.md](SLICE_VIEW_FEATURE.md) for detailed documentation
   - **Live Slice Preview Window** (NEW!): Secondary 2D window for real-time slice viewing
     - **Dual window setup**: Separate 2D window alongside 3D viewer
     - **White background**: Clean, print-preview style with pure white background
@@ -58,7 +56,6 @@ A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, b
     - **Animation**: Play/pause with Space, adjust speed with [/]
     - **Spread control**: Separate slices in 3D with Shift+Up/Down
     - **Rendering modes**: Toggle filled/outline with 'N'
-    - See [SLICE_STACK_FEATURE.md](SLICE_STACK_FEATURE.md) for detailed documentation
   - **Hardware-accelerated rendering** using OpenGL
   - **Color support** from materials and color groups
   - **Theme customization**: 5 built-in background themes (Dark, Light, Blue, White, Black)
@@ -152,7 +149,6 @@ cargo run --release -- <path-to-3mf-file> --ui
 **GUI Menu Bar** (NEW!):
 - Click on menu labels (File, View, Settings, Extensions, Help) to access features
 - ⌨️ **M Key**: Toggle menu bar visibility
-- See [GUI_MENU_FEATURE.md](GUI_MENU_FEATURE.md) for complete menu documentation
 
 **Mouse Controls:**
 - 🖱️ **Left Mouse + Drag**: Rotate view around the model
@@ -362,8 +358,6 @@ The viewer includes a configurable print area (build volume) visualization featu
 - **Default Size**: 200x200x200mm (suitable for common desktop 3D printers)
 - **Visual Style**: Light blue/gray wireframe box that doesn't obscure the model
 - **Coordinate System**: Centered at origin, extends from Z=0 (build plate) upward
-
-See [PRINT_AREA_FEATURE.md](PRINT_AREA_FEATURE.md) for detailed documentation.
 
 ## Use Cases
 
