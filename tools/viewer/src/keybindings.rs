@@ -240,9 +240,9 @@ pub fn get_keybindings() -> Vec<KeyBinding> {
             Category::Selection,
         ),
         KeyBinding::new(
-            Some(Key::J),
+            Some(Key::G),
             Modifiers::empty(),
-            "J",
+            "G",
             "Hide/show selected",
             Category::Selection,
         ),

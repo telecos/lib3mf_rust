@@ -1479,8 +1479,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
-                WindowEvent::Key(Key::J, Action::Release, _) => {
-                    // J key: Toggle visibility of selected objects (hide/show)
+                WindowEvent::Key(Key::G, Action::Release, _) => {
+                    // G key: Toggle visibility of selected objects (hide/show)
                     if !state.selection.selected_indices.is_empty() {
                         for &index in &state.selection.selected_indices {
                             if let Some(node) = state.mesh_nodes.get_mut(index) {
