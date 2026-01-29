@@ -381,9 +381,7 @@ pub fn triangle_plane_intersection(
                     .unwrap()
                     .then(a.1.partial_cmp(&b.1).unwrap())
             });
-            intersections.dedup_by(|a, b| {
-                (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10
-            });
+            intersections.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10);
         }
 
         if intersections.len() >= 2 {
@@ -466,10 +464,7 @@ pub fn collect_intersection_segments(mesh: &Mesh, z: f64) -> Vec<(Point2D, Point
 /// assert_eq!(contours.len(), 1); // One closed square
 /// assert_eq!(contours[0].len(), 4); // Four vertices
 /// ```
-pub fn assemble_contours(
-    segments: Vec<(Point2D, Point2D)>,
-    tolerance: f64,
-) -> Vec<Vec<Point2D>> {
+pub fn assemble_contours(segments: Vec<(Point2D, Point2D)>, tolerance: f64) -> Vec<Vec<Point2D>> {
     if segments.is_empty() {
         return Vec::new();
     }
@@ -1653,7 +1648,7 @@ mod subdivision_tests {
         mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0)); // 1
         mesh.vertices.push(Vertex::new(10.0, 10.0, 0.0)); // 2
         mesh.vertices.push(Vertex::new(0.0, 10.0, 0.0)); // 3
-        // Apex (Z=10)
+                                                         // Apex (Z=10)
         mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0)); // 4
 
         // Base triangles

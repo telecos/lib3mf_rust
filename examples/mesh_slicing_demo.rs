@@ -38,7 +38,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args[2].parse::<f64>()?
         } else {
             // Calculate middle Z from vertices
-            let min_z = mesh.vertices.iter().map(|v| v.z).fold(f64::INFINITY, f64::min);
+            let min_z = mesh
+                .vertices
+                .iter()
+                .map(|v| v.z)
+                .fold(f64::INFINITY, f64::min);
             let max_z = mesh
                 .vertices
                 .iter()
