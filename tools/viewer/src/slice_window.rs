@@ -17,6 +17,8 @@
 use minifb::{Key, Window, WindowOptions};
 use std::time::Instant;
 
+use crate::slice_renderer;
+
 /// Width of the slice preview window in pixels
 const WINDOW_WIDTH: usize = 800;
 /// Height of the slice preview window in pixels
@@ -574,6 +576,55 @@ impl SlicePreviewWindow {
         }
 
         img.save(path)?;
+        Ok(())
+    }
+
+    /// Export current slice to high-quality PNG using the slice renderer
+    /// 
+    /// This method uses the slice_renderer module to create a high-quality
+    /// raster image with proper polygon triangulation and filling.
+    #[allow(dead_code)]
+    pub fn export_to_png_hq(
+        &self,
+        path: &std::path::Path,
+        width: u32,
+        height: u32,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Build polygons from line segments
+        let polygons = self.build_polygons_from_segments(&self.config.contours);
+
+        // Convert to slice_renderer format
+        let mut contours = Vec::new();
+        for polygon in polygons {
+            let points: Vec<slice_renderer::Point2D> = polygon
+                .iter()
+                .map(|&(x, y)| slice_renderer::Point2D::new(x as f64, y as f64))
+                .collect();
+            
+            if !points.is_empty() {
+                contours.push(slice_renderer::SliceContour::new(points));
+            }
+        }
+
+        // Calculate bounds
+        let bounds = slice_renderer::BoundingBox2D::new(
+            self.model_min.0 as f64,
+            self.model_min.1 as f64,
+            self.model_max.0 as f64,
+            self.model_max.1 as f64,
+        );
+
+        // Create renderer and render
+        let renderer = slice_renderer::SliceRenderer::new(width, height);
+        
+        // TODO: Outline mode is not yet implemented in the slice_renderer.
+        // For now, always render filled polygons regardless of mode.
+        // To implement outline mode, we would need to add a separate method
+        // to render just the polygon boundaries without filling.
+        let image = renderer.render_slice(&contours, &bounds);
+
+        // Save
+        renderer.save_png(&image, path)?;
         Ok(())
     }
 }
