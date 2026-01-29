@@ -31,10 +31,14 @@ fn print_help() {
         ("A", "Toggle axes"),
         ("P", "Toggle print bed"),
         ("M", "Toggle menu"),
+        ("I", "Toggle model information"),
         ("R", "Toggle materials"),
         ("B", "Toggle beam lattice"),
         ("V", "Cycle boolean visualization"),
         ("D", "Toggle displacement"),
+        ("W", "Toggle wireframe mode"),
+        ("Shift+W", "Cycle render modes"),
+        ("X", "Toggle X-Ray mode"),
     ]);
 
     print_section("CAMERA", &[
@@ -50,11 +54,11 @@ fn print_help() {
 
     print_section("SLICE", &[
         ("Z", "Toggle slice view"),
-        ("W", "Toggle slice preview window"),
+        ("Q", "Toggle slice preview window"),
         ("Shift+↑", "Move slice up"),
         ("Shift+↓", "Move slice down"),
         ("L", "Toggle slice plane"),
-        ("X", "Export slice to PNG"),
+        ("Shift+X", "Export slice to PNG"),
         ("K", "Toggle 3D stack view"),
         ("N", "Toggle filled/outline mode"),
     ]);
@@ -73,6 +77,8 @@ fn print_help() {
 
     print_section("SETTINGS", &[
         ("C", "Configure print bed"),
+        ("U", "Toggle ruler"),
+        ("J", "Toggle scale bar"),
     ]);
 
     print_section("HELP", &[

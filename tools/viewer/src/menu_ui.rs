@@ -42,6 +42,13 @@ pub enum MenuAction {
     FrontView,
     SideView,
     
+    // Render modes
+    RenderModeSolid,
+    RenderModeWireframe,
+    RenderModeSolidWireframe,
+    RenderModePoints,
+    RenderModeXRay,
+    
     // Settings menu
     ThemeLight,
     ThemeDark,
@@ -163,6 +170,49 @@ impl MenuBar {
                         label: "Fit to Model".to_string(),
                         shortcut: Some("F".to_string()),
                         action: MenuAction::FitToModel,
+                        enabled: true,
+                        checked: false,
+                    },
+                    // Separator-like item (disabled, no action)
+                    MenuItem {
+                        label: "─── Render Mode ───".to_string(),
+                        shortcut: None,
+                        action: MenuAction::None,
+                        enabled: false,
+                        checked: false,
+                    },
+                    MenuItem {
+                        label: "Solid".to_string(),
+                        shortcut: None,
+                        action: MenuAction::RenderModeSolid,
+                        enabled: true,
+                        checked: true,
+                    },
+                    MenuItem {
+                        label: "Wireframe".to_string(),
+                        shortcut: Some("W".to_string()),
+                        action: MenuAction::RenderModeWireframe,
+                        enabled: true,
+                        checked: false,
+                    },
+                    MenuItem {
+                        label: "Solid + Wireframe".to_string(),
+                        shortcut: None,
+                        action: MenuAction::RenderModeSolidWireframe,
+                        enabled: true,
+                        checked: false,
+                    },
+                    MenuItem {
+                        label: "Points".to_string(),
+                        shortcut: None,
+                        action: MenuAction::RenderModePoints,
+                        enabled: true,
+                        checked: false,
+                    },
+                    MenuItem {
+                        label: "X-Ray".to_string(),
+                        shortcut: Some("X".to_string()),
+                        action: MenuAction::RenderModeXRay,
                         enabled: true,
                         checked: false,
                     },
