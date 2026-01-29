@@ -1219,6 +1219,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "earcutr"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afc28d89ac6cb489f679fcf51aaa62b4667bb0fb73a30f1d4d23949069707c07"
+dependencies = [
+ "itertools 0.14.0",
+ "num-traits",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2367,6 +2377,7 @@ dependencies = [
  "aes-gcm",
  "base64",
  "clipper2",
+ "earcutr 0.5.0",
  "flate2",
  "nalgebra 0.33.2",
  "parry3d",
@@ -2387,7 +2398,7 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
- "earcutr",
+ "earcutr 0.4.3",
  "image 0.25.9",
  "kiss3d",
  "lib3mf",
