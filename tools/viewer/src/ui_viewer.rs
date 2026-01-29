@@ -2,6 +2,7 @@
 //!
 //! This module provides an interactive 3D viewer using kiss3d
 //! for rendering 3MF models with mouse controls and real-time interaction.
+//! Updated: 2026-01-28 for object selection feature
 
 #![forbid(unsafe_code)]
 
@@ -10,7 +11,7 @@ use crate::menu_ui::{MenuAction, MenuBar};
 use crate::slice_window::{LineSegment2D, Point2D, SliceConfig, SlicePreviewWindow};
 use image::{GenericImageView, Rgb, RgbImage};
 use kiss3d::camera::ArcBall;
-use kiss3d::event::{Action, Key, WindowEvent};
+use kiss3d::event::{Action, Key, MouseButton, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point2, Point3, Vector3}; // Use nalgebra from kiss3d
 use kiss3d::ncollide3d::procedural::TriMesh;
@@ -34,6 +35,196 @@ const CIRCLE_APPROXIMATION_SEGMENTS: u32 = 16; // Number of segments for circle 
 const CAMERA_DISTANCE_MULTIPLIER: f32 = 1.5; // Factor for comfortable viewing distance
 const ZOOM_STEP: f32 = 0.9; // Zoom in multiplier (0.9 = 10% closer)
 const PAN_STEP: f32 = 0.05; // Pan amount as percentage of camera distance
+
+// Constants for object selection
+const SELECTION_HIGHLIGHT_INTENSITY: f32 = 0.5; // Blend intensity for selected objects (0.0-1.0)
+
+/// Ray structure for ray casting
+#[derive(Debug, Clone, Copy)]
+struct Ray {
+    origin: Point3<f32>,
+    direction: Vector3<f32>,
+}
+
+impl Ray {
+    /// Create a new ray from origin and direction
+    fn new(origin: Point3<f32>, direction: Vector3<f32>) -> Self {
+        Self {
+            origin,
+            direction: direction.normalize(),
+        }
+    }
+}
+
+/// Möller-Trumbore ray-triangle intersection algorithm
+/// Returns the distance along the ray if there's an intersection, None otherwise
+fn ray_triangle_intersection(
+    ray: &Ray,
+    v0: &Point3<f32>,
+    v1: &Point3<f32>,
+    v2: &Point3<f32>,
+) -> Option<f32> {
+    let edge1 = v1 - v0;
+    let edge2 = v2 - v0;
+    
+    let h = ray.direction.cross(&edge2);
+    let a = edge1.dot(&h);
+    
+    // Ray is parallel to triangle
+    if a.abs() < 1e-8 {
+        return None;
+    }
+    
+    let f = 1.0 / a;
+    let s = ray.origin - v0;
+    let u = f * s.dot(&h);
+    
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+    
+    let q = s.cross(&edge1);
+    let v = f * ray.direction.dot(&q);
+    
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+    
+    let t = f * edge2.dot(&q);
+    
+    if t > 1e-8 {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+/// Pick an object from the scene using ray casting
+/// Returns the index of the closest intersected mesh node, or None if no intersection
+fn pick_object(
+    camera: &ArcBall,
+    window: &Window,
+    mouse_pos: (f32, f32),
+    model: &Model,
+) -> Option<usize> {
+    use kiss3d::camera::Camera;
+    
+    // Get window dimensions
+    let size = window.size();
+    let width = size.x as f32;
+    let height = size.y as f32;
+    
+    // Normalize mouse coordinates to [-1, 1] range
+    let x = (2.0 * mouse_pos.0) / width - 1.0;
+    let y = 1.0 - (2.0 * mouse_pos.1) / height;
+    
+    // Get camera view transformation matrix
+    let view = camera.view_transform().to_homogeneous();
+    
+    // Get projection matrix - need to manually compute it for ArcBall
+    let fov = std::f32::consts::PI / 4.0; // 45 degrees default
+    let aspect = width / height;
+    let near = 0.1;
+    let far = 10000.0;
+    
+    let proj = kiss3d::nalgebra::Perspective3::new(aspect, fov, near, far).to_homogeneous();
+    
+    // Compute inverse of view-projection matrix
+    let view_proj = proj * view;
+    let inv_view_proj = view_proj.try_inverse()?;
+    
+    // Unproject mouse position to get ray in world space
+    // Near plane point
+    let near_point_ndc = kiss3d::nalgebra::Vector4::new(x, y, -1.0, 1.0);
+    let near_point_world = inv_view_proj * near_point_ndc;
+    let near_point_world = Point3::new(
+        near_point_world.x / near_point_world.w,
+        near_point_world.y / near_point_world.w,
+        near_point_world.z / near_point_world.w,
+    );
+    
+    // Far plane point
+    let far_point_ndc = kiss3d::nalgebra::Vector4::new(x, y, 1.0, 1.0);
+    let far_point_world = inv_view_proj * far_point_ndc;
+    let far_point_world = Point3::new(
+        far_point_world.x / far_point_world.w,
+        far_point_world.y / far_point_world.w,
+        far_point_world.z / far_point_world.w,
+    );
+    
+    // Create ray from near to far point
+    let ray_direction = far_point_world - near_point_world;
+    let ray = Ray::new(near_point_world, ray_direction);
+    
+    // Test ray against all mesh triangles
+    let mut closest_hit: Option<(usize, f32)> = None;
+    
+    for (mesh_index, item) in model.build.items.iter().enumerate() {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
+            if let Some(ref mesh_data) = obj.mesh {
+                // Test each triangle in the mesh
+                for triangle in &mesh_data.triangles {
+                    // Get triangle vertices
+                    if triangle.v1 >= mesh_data.vertices.len()
+                        || triangle.v2 >= mesh_data.vertices.len()
+                        || triangle.v3 >= mesh_data.vertices.len()
+                    {
+                        continue;
+                    }
+                    
+                    let v0_data = &mesh_data.vertices[triangle.v1];
+                    let v1_data = &mesh_data.vertices[triangle.v2];
+                    let v2_data = &mesh_data.vertices[triangle.v3];
+                    
+                    // Apply transform if present
+                    let (v0, v1, v2) = if let Some(ref transform) = item.transform {
+                        let apply_transform_point = |v: &lib3mf::Vertex| {
+                            let x = v.x as f32;
+                            let y = v.y as f32;
+                            let z = v.z as f32;
+                            
+                            Point3::new(
+                                transform[0] as f32 * x + transform[1] as f32 * y + transform[2] as f32 * z + transform[3] as f32,
+                                transform[4] as f32 * x + transform[5] as f32 * y + transform[6] as f32 * z + transform[7] as f32,
+                                transform[8] as f32 * x + transform[9] as f32 * y + transform[10] as f32 * z + transform[11] as f32,
+                            )
+                        };
+                        
+                        (
+                            apply_transform_point(v0_data),
+                            apply_transform_point(v1_data),
+                            apply_transform_point(v2_data),
+                        )
+                    } else {
+                        (
+                            Point3::new(v0_data.x as f32, v0_data.y as f32, v0_data.z as f32),
+                            Point3::new(v1_data.x as f32, v1_data.y as f32, v1_data.z as f32),
+                            Point3::new(v2_data.x as f32, v2_data.y as f32, v2_data.z as f32),
+                        )
+                    };
+                    
+                    // Test intersection
+                    if let Some(distance) = ray_triangle_intersection(&ray, &v0, &v1, &v2) {
+                        let should_update = match closest_hit {
+                            None => true,
+                            Some((_, d)) => distance < d,
+                        };
+                        if should_update {
+                            closest_hit = Some((mesh_index, distance));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    closest_hit.map(|(index, _)| index)
+}
 
 /// Color themes for the viewer background
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -523,6 +714,54 @@ impl ModelInfoPanel {
     }
 }
 
+/// Selection state for tracking selected objects
+#[derive(Debug, Clone)]
+struct SelectionState {
+    /// Set of selected object indices (indices into mesh_nodes Vec)
+    selected_indices: HashSet<usize>,
+    /// Highlight color for selected objects
+    selection_color: (f32, f32, f32),
+}
+
+impl SelectionState {
+    /// Create a new empty selection state
+    fn new() -> Self {
+        Self {
+            selected_indices: HashSet::new(),
+            selection_color: (1.0, 1.0, 0.0), // Yellow highlight
+        }
+    }
+    
+    /// Toggle selection of an object index
+    fn toggle_selection(&mut self, index: usize, multi_select: bool) {
+        if multi_select {
+            if self.selected_indices.contains(&index) {
+                self.selected_indices.remove(&index);
+            } else {
+                self.selected_indices.insert(index);
+            }
+        } else {
+            self.selected_indices.clear();
+            self.selected_indices.insert(index);
+        }
+    }
+    
+    /// Clear all selections
+    fn clear_selection(&mut self) {
+        self.selected_indices.clear();
+    }
+    
+    /// Check if an index is selected
+    fn is_selected(&self, index: usize) -> bool {
+        self.selected_indices.contains(&index)
+    }
+    
+    /// Get the first selected index (for single selection operations)
+    fn get_first_selected(&self) -> Option<usize> {
+        self.selected_indices.iter().next().copied()
+    }
+}
+
 /// Viewer state that can optionally hold a loaded model
 struct ViewerState {
     model: Option<Model>,
@@ -542,6 +781,7 @@ struct ViewerState {
     hovered_file_path: Option<String>,
     slice_preview_window: Option<SlicePreviewWindow>,
     info_panel: ModelInfoPanel,
+    selection: SelectionState,
 }
 
 impl ViewerState {
@@ -565,6 +805,7 @@ impl ViewerState {
             hovered_file_path: None,
             slice_preview_window: None,
             info_panel: ModelInfoPanel::new(),
+            selection: SelectionState::new(),
         }
     }
 
@@ -591,6 +832,7 @@ impl ViewerState {
             hovered_file_path: None,
             slice_preview_window: None,
             info_panel: ModelInfoPanel::new(),
+            selection: SelectionState::new(),
         }
     }
 
@@ -898,6 +1140,69 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             Err(e) => {
                                 eprintln!("\n✗ Error loading file: {}", e);
                             }
+                        }
+                    }
+                }
+                WindowEvent::MouseButton(MouseButton::Button1, Action::Press, modifiers) => {
+                    // Left mouse button: Select object
+                    if let Some(ref model) = state.model {
+                        if !state.mesh_nodes.is_empty() {
+                            let cursor_pos = window.cursor_pos();
+                            if let Some((x, y)) = cursor_pos {
+                                // Perform ray casting to pick object
+                                if let Some(picked_index) = pick_object(&camera, &window, (x as f32, y as f32), model) {
+                                    // Check for multi-select with Ctrl
+                                    let multi_select = modifiers.contains(kiss3d::event::Modifiers::Control);
+                                    
+                                    // Restore colors before applying new selection
+                                    restore_mesh_colors(&mut state.mesh_nodes, model);
+                                    
+                                    // Toggle selection
+                                    state.selection.toggle_selection(picked_index, multi_select);
+                                    
+                                    // Apply highlighting
+                                    apply_selection_highlight(
+                                        &mut state.mesh_nodes,
+                                        &state.selection,
+                                        model,
+                                    );
+                                    
+                                    // Print selection info
+                                    if state.selection.is_selected(picked_index) {
+                                        if let Some(item) = model.build.items.get(picked_index) {
+                                            println!("\nSelected object #{} (ID: {})", picked_index, item.objectid);
+                                            if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+                                                if let Some(ref mesh) = obj.mesh {
+                                                    println!("  Vertices: {}", mesh.vertices.len());
+                                                    println!("  Triangles: {}", mesh.triangles.len());
+                                                }
+                                                if let Some(ref name) = obj.name {
+                                                    println!("  Name: {}", name);
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        println!("\nDeselected object #{}", picked_index);
+                                    }
+                                } else {
+                                    // Clicked on empty space - clear selection
+                                    if !modifiers.contains(kiss3d::event::Modifiers::Control) {
+                                        state.selection.clear_selection();
+                                        restore_mesh_colors(&mut state.mesh_nodes, model);
+                                        println!("\nSelection cleared");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::Escape, Action::Press, _) => {
+                    // Escape: Clear selection
+                    if let Some(ref model) = state.model {
+                        if !state.selection.selected_indices.is_empty() {
+                            state.selection.clear_selection();
+                            restore_mesh_colors(&mut state.mesh_nodes, model);
+                            println!("\nSelection cleared");
                         }
                     }
                 }
@@ -1481,10 +1786,51 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("Zoom out (distance: {:.1})", camera.dist());
                 }
                 WindowEvent::Key(Key::F, Action::Release, _) => {
-                    // F key: Fit model to view
+                    // F key: Focus camera on selected object, or fit to whole model if no selection
                     if let Some(ref model) = state.model {
-                        fit_camera_to_model(&mut camera, model);
-                        println!("Camera fit to model");
+                        if let Some(selected_index) = state.selection.get_first_selected() {
+                            focus_camera_on_object(&mut camera, model, selected_index);
+                            println!("Camera focused on selected object");
+                        } else {
+                            fit_camera_to_model(&mut camera, model);
+                            println!("Camera fit to model");
+                        }
+                    }
+                }
+                WindowEvent::Key(Key::G, Action::Release, _) => {
+                    // G key: Toggle visibility of selected objects (hide/show)
+                    if !state.selection.selected_indices.is_empty() {
+                        for &index in &state.selection.selected_indices {
+                            if let Some(node) = state.mesh_nodes.get_mut(index) {
+                                let visible = !node.is_visible();
+                                node.set_visible(visible);
+                            }
+                        }
+                        println!("Toggled visibility of {} selected object(s)", 
+                                state.selection.selected_indices.len());
+                    }
+                }
+                WindowEvent::Key(Key::Y, Action::Release, _) => {
+                    // Y key: Isolate selected objects (hide all others)
+                    if let Some(ref _model) = state.model {
+                        if !state.selection.selected_indices.is_empty() {
+                            // Hide all objects
+                            for (index, node) in state.mesh_nodes.iter_mut().enumerate() {
+                                if state.selection.is_selected(index) {
+                                    node.set_visible(true);
+                                } else {
+                                    node.set_visible(false);
+                                }
+                            }
+                            println!("Isolated {} selected object(s)", 
+                                    state.selection.selected_indices.len());
+                        } else {
+                            // Show all objects if no selection
+                            for node in state.mesh_nodes.iter_mut() {
+                                node.set_visible(true);
+                            }
+                            println!("Showing all objects");
+                        }
                     }
                 }
                 WindowEvent::Key(Key::Home, Action::Release, _) => {
@@ -2244,6 +2590,56 @@ fn fit_camera_to_model(camera: &mut ArcBall, model: &Model) {
     camera.set_dist(distance);
 }
 
+/// Focus camera on a specific object (selected object)
+fn focus_camera_on_object(camera: &mut ArcBall, model: &Model, object_index: usize) {
+    if let Some(item) = model.build.items.get(object_index) {
+        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+            if let Some(ref mesh) = obj.mesh {
+                // Calculate bounding box of this object
+                if mesh.vertices.is_empty() {
+                    return;
+                }
+                
+                let mut min_x = f32::MAX;
+                let mut min_y = f32::MAX;
+                let mut min_z = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut max_y = f32::MIN;
+                let mut max_z = f32::MIN;
+                
+                for v in &mesh.vertices {
+                    min_x = min_x.min(v.x as f32);
+                    min_y = min_y.min(v.y as f32);
+                    min_z = min_z.min(v.z as f32);
+                    max_x = max_x.max(v.x as f32);
+                    max_y = max_y.max(v.y as f32);
+                    max_z = max_z.max(v.z as f32);
+                }
+                
+                // Calculate center
+                let center = Point3::new(
+                    (min_x + max_x) / 2.0,
+                    (min_y + max_y) / 2.0,
+                    (min_z + max_z) / 2.0,
+                );
+                
+                // Calculate diagonal distance for camera positioning
+                let size = Vector3::new(
+                    max_x - min_x,
+                    max_y - min_y,
+                    max_z - min_z,
+                );
+                let diagonal = size.magnitude();
+                let distance = diagonal * CAMERA_DISTANCE_MULTIPLIER;
+                
+                // Set camera
+                camera.set_at(center);
+                camera.set_dist(distance);
+            }
+        }
+    }
+}
+
 /// Zoom the camera by a given factor
 fn zoom_camera(camera: &mut ArcBall, factor: f32) {
     let current_dist = camera.dist();
@@ -2260,6 +2656,61 @@ fn pan_camera(camera: &mut ArcBall, delta_x: f32, delta_y: f32, delta_z: f32) {
         at.y + delta_y * pan_amount,
         at.z + delta_z * pan_amount,
     ));
+}
+
+/// Apply highlighting to selected mesh nodes
+fn apply_selection_highlight(
+    mesh_nodes: &mut [SceneNode],
+    selection: &SelectionState,
+    model: &Model,
+) {
+    for (index, node) in mesh_nodes.iter_mut().enumerate() {
+        if selection.is_selected(index) {
+            // Get original color from model
+            let original_color = if let Some(item) = model.build.items.get(index) {
+                if let Some(obj) = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|o| o.id == item.objectid)
+                {
+                    get_object_color(model, obj)
+                } else {
+                    (0.5, 0.5, 0.5)
+                }
+            } else {
+                (0.5, 0.5, 0.5)
+            };
+            
+            // Apply highlight by mixing with selection color
+            let highlight = selection.selection_color;
+            let r = (original_color.0 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY) 
+                     + highlight.0 * SELECTION_HIGHLIGHT_INTENSITY).min(1.0);
+            let g = (original_color.1 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY) 
+                     + highlight.1 * SELECTION_HIGHLIGHT_INTENSITY).min(1.0);
+            let b = (original_color.2 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY) 
+                     + highlight.2 * SELECTION_HIGHLIGHT_INTENSITY).min(1.0);
+            
+            node.set_color(r, g, b);
+        }
+    }
+}
+
+/// Restore original colors to all mesh nodes (remove highlighting)
+fn restore_mesh_colors(mesh_nodes: &mut [SceneNode], model: &Model) {
+    for (index, node) in mesh_nodes.iter_mut().enumerate() {
+        if let Some(item) = model.build.items.get(index) {
+            if let Some(obj) = model
+                .resources
+                .objects
+                .iter()
+                .find(|o| o.id == item.objectid)
+            {
+                let color = get_object_color(model, obj);
+                node.set_color(color.0, color.1, color.2);
+            }
+        }
+    }
 }
 
 /// Get color for an object (from materials or default)
@@ -4363,7 +4814,111 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                     &Font::default(),
                     &text_color,
                 );
-                // No need to increment y here since it's the last item
+                y += LINE_HEIGHT;
+            }
+            
+            y += SECTION_SPACING;
+        }
+        
+        // Selection section - show info about selected objects
+        if !state.selection.selected_indices.is_empty() {
+            window.draw_text(
+                "Selection",
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &header_color,
+            );
+            y += LINE_HEIGHT;
+            
+            window.draw_text(
+                &format!("  Selected: {} object(s)", state.selection.selected_indices.len()),
+                &Point2::new(PANEL_X, y),
+                FONT_SIZE,
+                &Font::default(),
+                &text_color,
+            );
+            y += LINE_HEIGHT;
+            
+            // Show details of first selected object
+            if let Some(&first_index) = state.selection.selected_indices.iter().next() {
+                if let Some(item) = model.build.items.get(first_index) {
+                    if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+                        // Object name/ID
+                        let obj_label = if let Some(ref name) = obj.name {
+                            format!("  {} (ID: {})", name, obj.id)
+                        } else {
+                            format!("  Object ID: {}", obj.id)
+                        };
+                        window.draw_text(
+                            &obj_label,
+                            &Point2::new(PANEL_X, y),
+                            FONT_SIZE,
+                            &Font::default(),
+                            &text_color,
+                        );
+                        y += LINE_HEIGHT;
+                        
+                        // Mesh details if available
+                        if let Some(ref mesh) = obj.mesh {
+                            window.draw_text(
+                                &format!("  Vertices: {}", mesh.vertices.len()),
+                                &Point2::new(PANEL_X, y),
+                                FONT_SIZE,
+                                &Font::default(),
+                                &text_color,
+                            );
+                            y += LINE_HEIGHT;
+                            
+                            window.draw_text(
+                                &format!("  Triangles: {}", mesh.triangles.len()),
+                                &Point2::new(PANEL_X, y),
+                                FONT_SIZE,
+                                &Font::default(),
+                                &text_color,
+                            );
+                            y += LINE_HEIGHT;
+                        }
+                        
+                        // Material/Color info
+                        if let Some(pid) = obj.pid {
+                            // Check material name
+                            if let Some(mat) = model.resources.materials.iter().find(|m| m.id == pid) {
+                                let mat_name = mat.name.as_deref().unwrap_or("Unknown");
+                                window.draw_text(
+                                    &format!("  Material: {}", mat_name),
+                                    &Point2::new(PANEL_X, y),
+                                    FONT_SIZE,
+                                    &Font::default(),
+                                    &text_color,
+                                );
+                                y += LINE_HEIGHT;
+                            }
+                        }
+                        
+                        // Transform info if not identity
+                        if let Some(ref transform) = item.transform {
+                            // 4x3 affine matrix in row-major order: [m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23]
+                            // Identity matrix has 1.0 at indices 0, 5, 10 (diagonal) and 0.0 elsewhere
+                            let has_transform = !(
+                                (transform[0] - 1.0).abs() < 1e-6 && transform[1].abs() < 1e-6 && transform[2].abs() < 1e-6 && transform[3].abs() < 1e-6 &&
+                                transform[4].abs() < 1e-6 && (transform[5] - 1.0).abs() < 1e-6 && transform[6].abs() < 1e-6 && transform[7].abs() < 1e-6 &&
+                                transform[8].abs() < 1e-6 && transform[9].abs() < 1e-6 && (transform[10] - 1.0).abs() < 1e-6 && transform[11].abs() < 1e-6
+                            );
+                            
+                            if has_transform {
+                                window.draw_text(
+                                    "  Transform: Yes",
+                                    &Point2::new(PANEL_X, y),
+                                    FONT_SIZE,
+                                    &Font::default(),
+                                    &text_color,
+                                );
+                                // y += LINE_HEIGHT; // Last item in section, no need to increment
+                            }
+                        }
+                    }
+                }
             }
         }
     } else {
