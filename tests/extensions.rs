@@ -11,7 +11,6 @@ mod extensions {
 
     pub mod production {
         pub mod coordinates;
-        pub mod regression;
     }
 
     pub mod slice {
