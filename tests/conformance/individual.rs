@@ -10,6 +10,7 @@
 //! Each suite runs with the appropriate extension support enabled to ensure
 //! proper validation of extension-specific features.
 
+#[path = "../common/mod.rs"]
 mod common;
 
 use lib3mf::{Model, ParserConfig};

@@ -32,7 +32,7 @@ jobs:
         run: cargo test --features ci --lib
       
       - name: Run integration tests
-        run: cargo test --features ci --test integration_test --test test_real_files
+        run: cargo test --features ci --test core --test extensions --test validation --test infrastructure
   
   # Setup test suites once for all conformance jobs
   setup-test-suites:
@@ -136,7 +136,7 @@ jobs:
         id: run-tests
         run: |
           echo "Testing suite: ${{ matrix.suite.name }}"
-          cargo test --features ci --test conformance_tests ${{ matrix.suite.name }} -- --nocapture
+          cargo test --features ci --test conformance ${{ matrix.suite.name }} -- --nocapture
       
       - name: Generate suite report
         if: always()
