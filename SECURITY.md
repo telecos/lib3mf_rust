@@ -67,6 +67,13 @@ This library is designed with security in mind:
 - **Production Use**: For production applications, use external cryptographic libraries with your own keys
 - **Never Use Test Keys**: The embedded test keys are for conformance testing only and must not be used in production
 
+**Known Advisory**: RUSTSEC-2023-0071 (RSA timing sidechannel)
+- **Status**: No stable fix available (only RC versions)
+- **Severity**: Medium (5.9 CVSS)
+- **Impact**: Potential key recovery through timing sidechannels in RSA operations
+- **Mitigation**: The RSA dependency is only used for test-only decryption with test keys from the 3MF Consortium test suite. Production applications should implement their own secure decryption using external cryptographic libraries and never use the embedded test keys.
+- **Tracking**: We are monitoring the `rsa` crate for stable releases that address this issue.
+
 #### Recommended Practices
 
 When using lib3mf_rust in your application:
