@@ -200,9 +200,4 @@ If you discover a security vulnerability, please **do not** open a public issue.
 
 ## License
 
-By contributing to lib3mf_rust, you agree that your contributions will be licensed under either:
-
-- Apache License, Version 2.0 ([LICENSE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE](LICENSE) or http://opensource.org/licenses/MIT)
-
-at the user's option.
+By contributing to lib3mf_rust, you agree that your contributions will be licensed under the MIT License, the same as the project.

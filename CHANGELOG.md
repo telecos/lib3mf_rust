@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleaned up non-standard implementation documentation
   - Reorganized viewer documentation
 
-## [0.1.0] - 2024
+## [0.1.0] - 2024-01-01
 
 ### Added
 

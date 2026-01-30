@@ -885,12 +885,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
-This project is licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE) or http://opensource.org/licenses/MIT)
-
-at your option.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## References
 
