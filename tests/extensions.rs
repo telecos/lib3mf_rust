@@ -1,6 +1,6 @@
 //! 3MF extension tests
 //!
-//! Tests for all 3MF extensions including Material, Production, Slice, 
+//! Tests for all 3MF extensions including Material, Production, Slice,
 //! Beam Lattice, Boolean Operations, Displacement, and Secure Content
 
 mod extensions {
@@ -27,13 +27,13 @@ mod extensions {
     }
 
     pub mod displacement {
-        pub mod namespaces;
         pub mod integration;
+        pub mod namespaces;
     }
 
     pub mod secure_content {
-        pub mod integration;
         pub mod handler;
+        pub mod integration;
         pub mod key_provider;
     }
 }
