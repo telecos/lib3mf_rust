@@ -4,7 +4,7 @@ A pure Rust implementation for parsing 3MF (3D Manufacturing Format) files with 
 
 Note: Most part of this code has been vibe-coded using GitHub Copilot Agents
 
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Overview
 
@@ -885,12 +885,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
-This project is licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE) or http://opensource.org/licenses/MIT)
-
-at your option.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## References
 
