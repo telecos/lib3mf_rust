@@ -104,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ~90% negative test compliance
 - Overall ~97.6% conformance with official test suites
 - Comprehensive unit and integration tests
-- Property-based testing with proptest
+- Property-based testing with `proptest`
 
 ### Performance
 - Linear scaling with file size
