@@ -2,6 +2,7 @@
 //!
 //! This test validates that the expected failures mechanism works correctly.
 
+#[path = "../common/mod.rs"]
 mod common;
 
 use common::expected_failures::ExpectedFailuresManager;

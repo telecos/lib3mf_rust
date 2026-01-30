@@ -3,6 +3,7 @@
 //! This test ensures that each conformance suite is configured with the correct
 //! extensions based on the suite's purpose.
 
+#[path = "../common/mod.rs"]
 mod common;
 
 use lib3mf::Extension;
