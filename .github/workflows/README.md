@@ -19,7 +19,30 @@ This directory contains GitHub Actions workflows for automated testing and confo
 
 **Runtime**: ~2-5 minutes
 
-### 2. Conformance Workflow (`.github/workflows/conformance.yml`)
+### 2. Security Audit Workflow (`.github/workflows/security-audit.yml`)
+
+**Triggers**:
+- Push/PR to `main`/`develop`
+- Daily at 2:00 AM UTC (scheduled)
+- Manual trigger via Actions tab
+
+**Purpose**: Scan dependencies for known security vulnerabilities
+
+**What it does**:
+- ✅ Installs cargo-audit tool
+- ✅ Scans all dependencies against RustSec Advisory Database
+- ✅ Caches cargo-audit binary for faster runs
+- ✅ Fails build if vulnerabilities found
+
+**Runtime**: ~1-2 minutes (cached), ~3-5 minutes (first run)
+
+**How to run locally**:
+```bash
+cargo install cargo-audit
+cargo audit
+```
+
+### 3. Conformance Workflow (`.github/workflows/conformance.yml`)
 
 **Triggers**: 
 - Push/PR to `main`/`develop`
@@ -237,6 +260,36 @@ If adding private test suites:
 1. Create GitHub secret with access token
 2. Reference in workflow: `${{ secrets.TEST_SUITE_TOKEN }}`
 
+## Security
+
+### Dependency Scanning
+
+The security audit workflow runs daily to check for:
+- Known vulnerabilities in dependencies (via RustSec Advisory Database)
+- Unmaintained crates
+- Yanked crates
+
+**When vulnerabilities are found:**
+1. The workflow will fail and create a notification
+2. Review the advisory details in the workflow logs
+3. Update affected dependencies if possible
+4. If no fix is available, consider:
+   - Finding an alternative dependency
+   - Documenting the issue in SECURITY.md
+   - Using `--ignore` flag if false positive
+
+**To ignore a specific advisory:**
+```yaml
+- name: Run security audit
+  run: cargo audit --ignore RUSTSEC-2023-0071
+```
+
+### Best Practices
+- ✅ Keep dependencies up to date
+- ✅ Monitor security audit workflow failures
+- ✅ Review dependency tree for unnecessary dependencies
+- ✅ Use `cargo-deny` for more granular control (optional)
+
 ## Monitoring
 
 View workflow status:
@@ -244,6 +297,7 @@ View workflow status:
 - **Badges**: Add to README.md
   ```markdown
   ![CI](https://github.com/username/repo/workflows/CI/badge.svg)
+  ![Security Audit](https://github.com/username/repo/workflows/Security%20Audit/badge.svg)
   ![Conformance](https://github.com/username/repo/workflows/Conformance%20Tests/badge.svg)
   ```
 
@@ -255,6 +309,7 @@ Potential additions:
 - Performance benchmarking
 - Code coverage reporting
 - Automatic issue creation on conformance regression
+- Integration with Dependabot for automated dependency updates
 
 ## See Also
 

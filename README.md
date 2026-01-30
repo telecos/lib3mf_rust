@@ -779,6 +779,7 @@ cargo test --test conformance_tests suite3_core -- --nocapture
 The repository uses GitHub Actions for continuous integration with optimized parallel execution:
 
 - **Basic Tests Job**: Runs standard library and integration tests as a fast preliminary check
+- **Security Audit**: Automated daily dependency vulnerability scanning using `cargo-audit`
 - **Conformance Test Matrix**: Runs all 11 conformance test suites in parallel for faster feedback
   - suite1_core_slice_prod
   - suite2_core_prod_matl
@@ -866,6 +867,7 @@ This library is designed with safety in mind:
 - **Type safety** - Leverages Rust's type system for correctness
 - **Memory safety** - All memory management is handled by Rust's ownership system
 - **Error handling** - Comprehensive error types using `thiserror`
+- **Security audits** - Automated dependency vulnerability scanning via CI
 
 ## Dependencies
 
@@ -877,7 +879,15 @@ The library uses minimal, well-maintained dependencies:
 - `parry3d` - For triangle mesh geometric operations (volume, bounding boxes)
 - `nalgebra` - Linear algebra library (used by parry3d)
 
-All dependencies are regularly updated and checked for vulnerabilities.
+All dependencies are regularly monitored for security vulnerabilities using:
+- **Automated security audits**: Daily CI scans using `cargo-audit` against the RustSec Advisory Database
+- **Manual review**: Dependencies are updated and reviewed regularly
+
+To run a security audit locally:
+```bash
+cargo install cargo-audit
+cargo audit
+```
 
 ## Contributing
 
