@@ -4,7 +4,7 @@ A pure Rust implementation for parsing 3MF (3D Manufacturing Format) files with 
 
 Note: Most part of this code has been vibe-coded using GitHub Copilot Agents
 
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Overview
 
