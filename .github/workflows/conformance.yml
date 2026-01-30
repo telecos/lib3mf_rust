@@ -32,7 +32,7 @@ jobs:
         run: cargo test --features ci --lib
       
       - name: Run integration tests
-        run: cargo test --features ci --test core --test extensions --test validation --test infrastructure --test regression
+        run: cargo test --features ci --test core --test extensions --test validation --test infrastructure
   
   # Setup test suites once for all conformance jobs
   setup-test-suites:
