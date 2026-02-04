@@ -3,11 +3,21 @@ name = "lib3mf"
 version = "0.1.0"
 edition = "2021"
 authors = ["lib3mf_rust contributors"]
-description = "Pure Rust implementation for 3MF (3D Manufacturing Format) parsing"
+description = "Pure Rust implementation for 3MF (3D Manufacturing Format) parsing and writing"
 license = "MIT"
 repository = "https://github.com/telecos/lib3mf_rust"
+homepage = "https://github.com/telecos/lib3mf_rust"
+documentation = "https://docs.rs/lib3mf"
+readme = "README.md"
 keywords = ["3mf", "3d", "parsing", "manufacturing"]
 categories = ["parser-implementations", "encoding"]
+exclude = [
+    "tools/",
+    ".github/",
+    "*.sh",
+    "*.py",
+    "test_suites/",
+]
 
 [features]
 default = []
