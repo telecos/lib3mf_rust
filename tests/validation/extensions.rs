@@ -41,7 +41,9 @@ fn test_beam_lattice_requires_extension() {
                         );
                     }
                     _ => {
-                        println!("✓ File failed to parse without BeamLattice extension (different error)");
+                        println!(
+                            "✓ File failed to parse without BeamLattice extension (different error)"
+                        );
                     }
                 }
             } else {

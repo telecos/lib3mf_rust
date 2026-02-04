@@ -8,8 +8,8 @@ use lib3mf::{
 };
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Test extension handler that tracks whether post_parse was called
 struct TestExtensionHandler {

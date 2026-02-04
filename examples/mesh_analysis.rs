@@ -11,7 +11,7 @@
 //! - Validating build item placements (N_XXX_0421)
 //! - Computing spatial extents for manufacturing constraints
 
-use lib3mf::{mesh_ops, Model};
+use lib3mf::{Model, mesh_ops};
 use std::env;
 use std::fs::File;
 

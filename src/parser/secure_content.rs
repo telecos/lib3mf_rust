@@ -6,9 +6,9 @@
 
 use crate::error::{Error, Result};
 use crate::model::*;
-use crate::opc::{Package, ENCRYPTEDFILE_REL_TYPE};
-use quick_xml::events::Event;
+use crate::opc::{ENCRYPTEDFILE_REL_TYPE, Package};
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::collections::HashSet;
 use std::io::Read;
 
@@ -70,9 +70,9 @@ pub(super) fn validate_kekparams_attributes(
     // EPX-2603: Validate mgfalgorithm if present
     if !mgf_algorithm.is_empty() && !VALID_MGF_ALGORITHMS.contains(&mgf_algorithm) {
         return Err(Error::InvalidSecureContent(format!(
-                "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
-                mgf_algorithm
-            )));
+            "Invalid mgfalgorithm '{}'. Must be one of mgf1sha1, mgf1sha256, mgf1sha384, or mgf1sha512 (EPX-2603)",
+            mgf_algorithm
+        )));
     }
 
     // EPX-2603: Validate digestmethod if present
@@ -506,10 +506,10 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
 
                 match local_name {
                     "consumer" => {
-                        if let Some(consumer) = current_consumer.take() {
-                            if let Some(ref mut sc) = model.secure_content {
-                                sc.consumers.push(consumer);
-                            }
+                        if let Some(consumer) = current_consumer.take()
+                            && let Some(ref mut sc) = model.secure_content
+                        {
+                            sc.consumers.push(consumer);
                         }
                     }
                     "keyvalue" => {
@@ -518,24 +518,24 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                         }
                     }
                     "resourcedatagroup" => {
-                        if let Some(group) = current_resource_group.take() {
-                            if let Some(ref mut sc) = model.secure_content {
-                                sc.resource_data_groups.push(group);
-                            }
+                        if let Some(group) = current_resource_group.take()
+                            && let Some(ref mut sc) = model.secure_content
+                        {
+                            sc.resource_data_groups.push(group);
                         }
                     }
                     "accessright" => {
-                        if let Some(access_right) = current_access_right.take() {
-                            if let Some(ref mut group) = current_resource_group {
-                                group.access_rights.push(access_right);
-                            }
+                        if let Some(access_right) = current_access_right.take()
+                            && let Some(ref mut group) = current_resource_group
+                        {
+                            group.access_rights.push(access_right);
                         }
                     }
                     "kekparams" => {
-                        if let Some(kek_params) = current_kek_params.take() {
-                            if let Some(ref mut access_right) = current_access_right {
-                                access_right.kek_params = kek_params;
-                            }
+                        if let Some(kek_params) = current_kek_params.take()
+                            && let Some(ref mut access_right) = current_access_right
+                        {
+                            access_right.kek_params = kek_params;
                         }
                     }
                     "CipherValue" => {
@@ -544,17 +544,17 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                         }
                     }
                     "resourcedata" => {
-                        if let Some(resource_data) = current_resource_data.take() {
-                            if let Some(ref mut group) = current_resource_group {
-                                group.resource_data.push(resource_data);
-                            }
+                        if let Some(resource_data) = current_resource_data.take()
+                            && let Some(ref mut group) = current_resource_group
+                        {
+                            group.resource_data.push(resource_data);
                         }
                     }
                     "cekparams" => {
-                        if let Some(cek_params) = current_cek_params.take() {
-                            if let Some(ref mut resource_data) = current_resource_data {
-                                resource_data.cek_params = cek_params;
-                            }
+                        if let Some(cek_params) = current_cek_params.take()
+                            && let Some(ref mut resource_data) = current_resource_data
+                        {
+                            resource_data.cek_params = cek_params;
                         }
                     }
                     "iv" => {
@@ -580,7 +580,7 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                 return Err(Error::InvalidXml(format!(
                     "Error parsing keystore.xml: {}",
                     e
-                )))
+                )));
             }
             _ => {}
         }

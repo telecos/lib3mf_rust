@@ -186,10 +186,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Duplicate consumer ID"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate consumer ID")
+        );
     }
 
     #[test]
@@ -223,10 +225,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid consumer index"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid consumer index")
+        );
     }
 
     #[test]
@@ -246,10 +250,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("key UUID cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("key UUID cannot be empty")
+        );
     }
 
     #[test]
@@ -283,10 +289,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Wrapping algorithm cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Wrapping algorithm cannot be empty")
+        );
     }
 
     #[test]
@@ -320,10 +328,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Cipher value cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Cipher value cannot be empty")
+        );
     }
 
     #[test]
@@ -352,10 +362,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Resource data path cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Resource data path cannot be empty")
+        );
     }
 
     #[test]
@@ -384,10 +396,12 @@ mod tests {
 
         let result = handler.validate(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Encryption algorithm cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Encryption algorithm cannot be empty")
+        );
     }
 
     #[test]

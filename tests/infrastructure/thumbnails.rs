@@ -1,11 +1,11 @@
 //! Tests for thumbnail validation and extraction
 
-use lib3mf::parser::parse_3mf;
 use lib3mf::Model;
+use lib3mf::parser::parse_3mf;
 use std::fs::File;
 use std::io::{Cursor, Write};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Create a 3MF file with a thumbnail
 fn create_3mf_with_thumbnail() -> Vec<u8> {

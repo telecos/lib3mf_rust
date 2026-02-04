@@ -31,7 +31,11 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
                         "Object {}: Triangle {} vertex v1={} is out of bounds (mesh has {} vertices, valid indices: 0-{}). \
                          Vertex indices must reference valid vertices in the mesh. \
                          Check that all triangle vertex indices are less than the vertex count.",
-                        object.id, tri_idx, triangle.v1, num_vertices, num_vertices - 1
+                        object.id,
+                        tri_idx,
+                        triangle.v1,
+                        num_vertices,
+                        num_vertices - 1
                     )));
                 }
                 if triangle.v2 >= num_vertices {
@@ -39,7 +43,11 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
                         "Object {}: Triangle {} vertex v2={} is out of bounds (mesh has {} vertices, valid indices: 0-{}). \
                          Vertex indices must reference valid vertices in the mesh. \
                          Check that all triangle vertex indices are less than the vertex count.",
-                        object.id, tri_idx, triangle.v2, num_vertices, num_vertices - 1
+                        object.id,
+                        tri_idx,
+                        triangle.v2,
+                        num_vertices,
+                        num_vertices - 1
                     )));
                 }
                 if triangle.v3 >= num_vertices {
@@ -47,7 +55,11 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
                         "Object {}: Triangle {} vertex v3={} is out of bounds (mesh has {} vertices, valid indices: 0-{}). \
                          Vertex indices must reference valid vertices in the mesh. \
                          Check that all triangle vertex indices are less than the vertex count.",
-                        object.id, tri_idx, triangle.v3, num_vertices, num_vertices - 1
+                        object.id,
+                        tri_idx,
+                        triangle.v3,
+                        num_vertices,
+                        num_vertices - 1
                     )));
                 }
 

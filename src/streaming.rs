@@ -31,8 +31,8 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use crate::opc::Package;
 use crate::parser;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::{BufReader, Read, Seek};
 
 /// Streaming parser for 3MF files
@@ -381,8 +381,8 @@ mod tests {
 
     fn create_test_3mf() -> Vec<u8> {
         use std::io::Write;
-        use zip::write::SimpleFileOptions;
         use zip::ZipWriter;
+        use zip::write::SimpleFileOptions;
 
         let mut buf = Vec::new();
         let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buf));

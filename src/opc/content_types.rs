@@ -1,10 +1,10 @@
 //! Content types parsing and validation
 
 use super::reader::get_file;
-use super::{Package, CONTENT_TYPES_PATH};
+use super::{CONTENT_TYPES_PATH, Package};
 use crate::error::{Error, Result};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::Read;
 
 /// Normalize OPC path by removing leading slash
@@ -57,10 +57,10 @@ pub(super) fn validate_keystore_content_type<R: Read + std::io::Seek>(
                         let pn_normalized = normalize_path(&pn);
                         if pn_normalized == keystore_normalized {
                             // Check if it's the correct content type
-                            if let Some(ct) = content_type {
-                                if ct == "application/vnd.ms-package.3dmanufacturing-keystore+xml" {
-                                    has_override = true;
-                                }
+                            if let Some(ct) = content_type
+                                && ct == "application/vnd.ms-package.3dmanufacturing-keystore+xml"
+                            {
+                                has_override = true;
                             }
                         }
                     }
@@ -83,12 +83,11 @@ pub(super) fn validate_keystore_content_type<R: Read + std::io::Seek>(
                         }
                     }
 
-                    if let (Some(e), Some(ct)) = (ext, content_type) {
-                        if e == "xml"
-                            && ct == "application/vnd.ms-package.3dmanufacturing-keystore+xml"
-                        {
-                            has_xml_default = true;
-                        }
+                    if let (Some(e), Some(ct)) = (ext, content_type)
+                        && e == "xml"
+                        && ct == "application/vnd.ms-package.3dmanufacturing-keystore+xml"
+                    {
+                        has_xml_default = true;
                     }
                 }
             }

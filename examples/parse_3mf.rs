@@ -7,8 +7,8 @@
 
 use lib3mf::Model;
 use std::io::{Cursor, Write};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating a simple 3MF file...\n");

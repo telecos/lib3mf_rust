@@ -12,8 +12,8 @@ mod production;
 
 use crate::error::{Error, Result};
 use crate::model::*;
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use std::io::Write as IoWrite;
 
 /// Write a Model to XML format

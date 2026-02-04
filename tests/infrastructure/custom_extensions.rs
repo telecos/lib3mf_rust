@@ -3,8 +3,8 @@
 use lib3mf::{CustomElementResult, CustomExtensionContext, Error, Model, ParserConfig};
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Create a minimal 3MF file with custom extension in requiredextensions
 fn create_3mf_with_custom_extension(namespace: &str, prefix: &str) -> Vec<u8> {

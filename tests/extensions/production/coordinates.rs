@@ -5,8 +5,8 @@
 
 use lib3mf::{Error, Model, ParserConfig};
 use std::io::Write;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Helper function to create a minimal 3MF file with a transformed object
 fn create_3mf_with_transform(transform: [f64; 12]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {

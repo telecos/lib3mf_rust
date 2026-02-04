@@ -8,8 +8,8 @@
 use crate::error::{Error, Result};
 use crate::model::{Model, ParserConfig};
 use crate::opc::Package;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 

@@ -9,8 +9,8 @@
 //! Usage: cargo run --example mesh_slicing_demo [path/to/file.3mf] [z_height]
 
 use lib3mf::{
-    assemble_contours, collect_intersection_segments, triangle_plane_intersection, Mesh, Model,
-    Triangle, Vertex,
+    Mesh, Model, Triangle, Vertex, assemble_contours, collect_intersection_segments,
+    triangle_plane_intersection,
 };
 use std::env;
 use std::fs::File;

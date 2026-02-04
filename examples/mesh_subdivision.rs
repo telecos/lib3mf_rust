@@ -6,7 +6,7 @@
 //! 3. Compare the results
 
 use lib3mf::{
-    subdivide, subdivide_simple, Mesh, SubdivisionMethod, SubdivisionOptions, Triangle, Vertex,
+    Mesh, SubdivisionMethod, SubdivisionOptions, Triangle, Vertex, subdivide, subdivide_simple,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

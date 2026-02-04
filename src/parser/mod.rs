@@ -15,8 +15,8 @@ use crate::opc::Package;
 use crate::validator;
 use boolean_ops::validate_boolean_external_paths;
 use production::validate_production_external_paths;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use secure_content::{load_file_with_decryption, load_keystore};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
@@ -336,14 +336,13 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "unit" => {
                                     // Validate unit value - must be one of the allowed units
                                     match value {
-                                        "micron" | "millimeter" | "centimeter" | "inch" | "foot" | "meter" => {
-                                            model.unit = value.to_string()
-                                        }
+                                        "micron" | "millimeter" | "centimeter" | "inch"
+                                        | "foot" | "meter" => model.unit = value.to_string(),
                                         _ => {
                                             return Err(Error::InvalidXml(format!(
                                                 "Invalid unit '{}'. Must be one of: micron, millimeter, centimeter, inch, foot, meter",
                                                 value
-                                            )))
+                                            )));
                                         }
                                     }
                                 }
@@ -529,7 +528,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         current_displacement_mesh = Some(DisplacementMesh::new());
                         in_displacement_mesh = true;
                         has_displacement_triangles = false; // Reset for new displacementmesh
-                                                            // Mark object as having extension shapes
+                        // Mark object as having extension shapes
                         if let Some(ref mut obj) = current_object {
                             obj.has_extension_shapes = true;
                         }
@@ -620,14 +619,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
 
                             // Validate forward reference for did on triangle element (DPX 3312)
-                            if let Some(did) = triangle.did {
-                                if !declared_disp2dgroup_ids.contains(&did) {
-                                    return Err(Error::InvalidXml(format!(
-                                        "Triangle element references Disp2DGroup with ID {} which has not been declared yet. \
+                            if let Some(did) = triangle.did
+                                && !declared_disp2dgroup_ids.contains(&did)
+                            {
+                                return Err(Error::InvalidXml(format!(
+                                    "Triangle element references Disp2DGroup with ID {} which has not been declared yet. \
                                          Resources must be declared before they are referenced.",
-                                        did
-                                    )));
-                                }
+                                    did
+                                )));
                             }
 
                             // If did not specified on triangle, use the one from triangles element
@@ -952,12 +951,12 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "triangleset" if in_trianglesets => {
                         // Triangleset element - validate name attribute is not empty
                         let attrs = parse_attributes(&reader, e)?;
-                        if let Some(name) = attrs.get("name") {
-                            if name.trim().is_empty() {
-                                return Err(Error::InvalidXml(
-                                    "triangleset name attribute cannot be empty".to_string(),
-                                ));
-                            }
+                        if let Some(name) = attrs.get("name")
+                            && name.trim().is_empty()
+                        {
+                            return Err(Error::InvalidXml(
+                                "triangleset name attribute cannot be empty".to_string(),
+                            ));
                         }
                     }
                     "ref" if in_trianglesets => {
@@ -1048,20 +1047,20 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     "displacementmesh" => {
                         in_displacement_mesh = false;
                         // Per DPX spec 4.0: Object containing displacementmesh MUST be type="model"
-                        if let Some(ref obj) = current_object {
-                            if obj.object_type != ObjectType::Model {
-                                return Err(Error::InvalidXml(format!(
-                                    "Object {} with displacementmesh must have type=\"model\", found type=\"{}\"",
-                                    obj.id,
-                                    match obj.object_type {
-                                        ObjectType::Model => "model",
-                                        ObjectType::Support => "support",
-                                        ObjectType::SolidSupport => "solidsupport",
-                                        ObjectType::Surface => "surface",
-                                        ObjectType::Other => "other",
-                                    }
-                                )));
-                            }
+                        if let Some(ref obj) = current_object
+                            && obj.object_type != ObjectType::Model
+                        {
+                            return Err(Error::InvalidXml(format!(
+                                "Object {} with displacementmesh must have type=\"model\", found type=\"{}\"",
+                                obj.id,
+                                match obj.object_type {
+                                    ObjectType::Model => "model",
+                                    ObjectType::Support => "support",
+                                    ObjectType::SolidSupport => "solidsupport",
+                                    ObjectType::Surface => "surface",
+                                    ObjectType::Other => "other",
+                                }
+                            )));
                         }
                     }
                     "triangles" if in_displacement_triangles => {
@@ -1116,10 +1115,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_disp2dgroup = false;
                     }
                     "beamlattice" => {
-                        if let Some(beamset) = current_beamset.take() {
-                            if let Some(ref mut mesh) = current_mesh {
-                                mesh.beamset = Some(beamset);
-                            }
+                        if let Some(beamset) = current_beamset.take()
+                            && let Some(ref mut mesh) = current_mesh
+                        {
+                            mesh.beamset = Some(beamset);
                         }
                         in_beamset = false;
                         in_ballsets = false;
@@ -1131,10 +1130,10 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_slicestack = false;
                     }
                     "slice" => {
-                        if let Some(slice) = current_slice.take() {
-                            if let Some(ref mut slicestack) = current_slicestack {
-                                slicestack.slices.push(slice);
-                            }
+                        if let Some(slice) = current_slice.take()
+                            && let Some(ref mut slicestack) = current_slicestack
+                        {
+                            slicestack.slices.push(slice);
                         }
                         in_slice = false;
                     }
@@ -1142,18 +1141,18 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_slice_vertices = false;
                     }
                     "polygon" => {
-                        if let Some(polygon) = current_slice_polygon.take() {
-                            if let Some(ref mut slice) = current_slice {
-                                slice.polygons.push(polygon);
-                            }
+                        if let Some(polygon) = current_slice_polygon.take()
+                            && let Some(ref mut slice) = current_slice
+                        {
+                            slice.polygons.push(polygon);
                         }
                         in_slice_polygon = false;
                     }
                     "booleanshape" => {
-                        if let Some(shape) = current_boolean_shape.take() {
-                            if let Some(ref mut obj) = current_object {
-                                obj.boolean_shape = Some(shape);
-                            }
+                        if let Some(shape) = current_boolean_shape.take()
+                            && let Some(ref mut obj) = current_object
+                        {
+                            obj.boolean_shape = Some(shape);
                         }
                         in_boolean_shape = false;
                     }
@@ -1618,7 +1617,9 @@ mod tests {
         // Identity rotation/scale with translation (10, 20, 30)
         assert_eq!(
             transform,
-            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0]
+            [
+                1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0
+            ]
         );
     }
 

@@ -162,7 +162,7 @@ fn test_negative_case(
 
 // Helper macro to generate test functions for each suite
 macro_rules! suite_tests {
-    ($suite_name:ident, $suite_dir:expr, $pos_dir:expr, $neg_dir:expr) => {
+    ($suite_name:ident, $suite_dir:expr_2021, $pos_dir:expr_2021, $neg_dir:expr_2021) => {
         mod $suite_name {
             use super::*;
 

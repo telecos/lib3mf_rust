@@ -6,8 +6,8 @@
 //! - Contour assembly
 
 use lib3mf::{
-    assemble_contours, collect_intersection_segments, triangle_plane_intersection, Mesh, Triangle,
-    Vertex,
+    Mesh, Triangle, Vertex, assemble_contours, collect_intersection_segments,
+    triangle_plane_intersection,
 };
 
 #[test]

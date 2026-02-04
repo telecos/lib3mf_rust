@@ -156,7 +156,7 @@ pub(super) fn parse_displacement2d<R: std::io::BufRead>(
                 return Err(Error::InvalidXml(format!(
                     "Invalid channel value '{}'. Valid values are: R, G, B, A",
                     channel_str
-                )))
+                )));
             }
         };
     }
@@ -171,7 +171,7 @@ pub(super) fn parse_displacement2d<R: std::io::BufRead>(
                 return Err(Error::InvalidXml(format!(
                     "Invalid tilestyleu value '{}'. Valid values are: wrap, mirror, clamp, none",
                     tileu_str
-                )))
+                )));
             }
         };
     }
@@ -186,7 +186,7 @@ pub(super) fn parse_displacement2d<R: std::io::BufRead>(
                 return Err(Error::InvalidXml(format!(
                     "Invalid tilestylev value '{}'. Valid values are: wrap, mirror, clamp, none",
                     tilev_str
-                )))
+                )));
             }
         };
     }
@@ -200,7 +200,7 @@ pub(super) fn parse_displacement2d<R: std::io::BufRead>(
                 return Err(Error::InvalidXml(format!(
                     "Invalid filter value '{}'. Valid values are: auto, linear, nearest",
                     filter_str
-                )))
+                )));
             }
         };
     }

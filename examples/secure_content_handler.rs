@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use lib3mf::{
-    extensions::SecureContentExtensionHandler, AccessRight, CEKParams, Consumer, ExtensionRegistry,
-    KEKParams, Model, ResourceData, ResourceDataGroup, Result, SecureContentInfo,
+    AccessRight, CEKParams, Consumer, ExtensionRegistry, KEKParams, Model, ResourceData,
+    ResourceDataGroup, Result, SecureContentInfo, extensions::SecureContentExtensionHandler,
 };
 
 fn main() -> Result<()> {

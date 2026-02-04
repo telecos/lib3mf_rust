@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use lib3mf::{
-    extensions::SecureContentExtensionHandler, AccessRight, CEKParams, Consumer, Extension,
-    ExtensionHandler, ExtensionRegistry, KEKParams, Model, ResourceData, ResourceDataGroup,
-    SecureContentInfo,
+    AccessRight, CEKParams, Consumer, Extension, ExtensionHandler, ExtensionRegistry, KEKParams,
+    Model, ResourceData, ResourceDataGroup, SecureContentInfo,
+    extensions::SecureContentExtensionHandler,
 };
 
 #[test]
@@ -102,10 +102,12 @@ fn test_registry_validate_invalid_secure_content() {
     // Should fail validation
     let result = registry.validate_all(&model);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Duplicate consumer ID"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate consumer ID")
+    );
 }
 
 #[test]

@@ -4,8 +4,8 @@
 
 use crate::error::{Error, Result};
 use crate::model::*;
-use quick_xml::events::{BytesEnd, BytesStart, Event};
 use quick_xml::Writer;
+use quick_xml::events::{BytesEnd, BytesStart, Event};
 use std::io::Write as IoWrite;
 
 /// Write boolean shape (boolean operations extension)

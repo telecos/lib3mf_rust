@@ -143,8 +143,8 @@ mod tests {
     use super::*;
     use std::io::Cursor;
     use std::io::Write;
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     #[test]
     fn test_package_constants() {

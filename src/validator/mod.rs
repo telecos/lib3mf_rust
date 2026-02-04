@@ -134,10 +134,12 @@ mod tests {
 
         let result = validate_object_ids(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Duplicate object ID"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate object ID")
+        );
     }
 
     #[test]
@@ -203,10 +205,12 @@ mod tests {
 
         let result = validate_build_references(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("non-existent object"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent object")
+        );
     }
 
     #[test]
@@ -425,10 +429,12 @@ mod tests {
         // Should fail validation
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("non-existent base material group"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent base material group")
+        );
     }
 
     #[test]
@@ -454,10 +460,12 @@ mod tests {
         // Should fail validation
         let result = validate_component_references(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("non-existent object"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent object")
+        );
     }
 
     #[test]
@@ -495,10 +503,12 @@ mod tests {
         // Should fail validation
         let result = validate_component_references(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Circular component reference"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular component reference")
+        );
     }
 
     #[test]
@@ -524,10 +534,12 @@ mod tests {
         // Should fail validation (self-reference is a circular dependency)
         let result = validate_component_references(&model);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Circular component reference"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular component reference")
+        );
     }
 
     #[test]
@@ -788,10 +800,12 @@ mod tests {
             result.is_err(),
             "Non-sliced object should reject mirror transformation"
         );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("negative determinant"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("negative determinant")
+        );
     }
 
     #[test]
@@ -1005,9 +1019,9 @@ mod tests {
         // Should fail validation (N_XXM_0601_01)
         let result = validate_triangle_properties(&model);
         assert!(
-        result.is_err(),
-        "Should reject triangle with per-vertex properties when neither triangle nor object has pid"
-    );
+            result.is_err(),
+            "Should reject triangle with per-vertex properties when neither triangle nor object has pid"
+        );
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("per-vertex material properties"));
     }

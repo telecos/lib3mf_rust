@@ -24,14 +24,14 @@ pub fn validate_slices(model: &Model) -> Result<()> {
             }
 
             // Check ztop values are strictly increasing
-            if let Some(prev) = prev_ztop {
-                if slice.ztop <= prev {
-                    return Err(Error::InvalidModel(format!(
-                        "SliceStack {}: Slice {} has ztop={} which is not greater than the previous slice's ztop={}.\n\
+            if let Some(prev) = prev_ztop
+                && slice.ztop <= prev
+            {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: Slice {} has ztop={} which is not greater than the previous slice's ztop={}.\n\
                          Per 3MF Slice Extension spec, ztop values must be strictly increasing within a slicestack.",
-                        slice_stack.id, slice_idx, slice.ztop, prev
-                    )));
-                }
+                    slice_stack.id, slice_idx, slice.ztop, prev
+                )));
             }
             prev_ztop = Some(slice.ztop);
 
@@ -84,17 +84,17 @@ pub fn validate_slice_extension(model: &Model) -> Result<()> {
 
     // Validate that objects reference existing slicestacks
     for object in &model.resources.objects {
-        if let Some(slicestackid) = object.slicestackid {
-            if !valid_slicestack_ids.contains(&slicestackid) {
-                let available_ids = sorted_ids_from_set(&valid_slicestack_ids);
-                return Err(Error::InvalidModel(format!(
-                    "Object {}: References non-existent slicestackid {}.\n\
+        if let Some(slicestackid) = object.slicestackid
+            && !valid_slicestack_ids.contains(&slicestackid)
+        {
+            let available_ids = sorted_ids_from_set(&valid_slicestack_ids);
+            return Err(Error::InvalidModel(format!(
+                "Object {}: References non-existent slicestackid {}.\n\
                      Per 3MF Slice Extension spec, the slicestackid attribute must reference \
                      a valid <slicestack> resource defined in the model.\n\
                      Available slicestack IDs: {:?}",
-                    object.id, slicestackid, available_ids
-                )));
-            }
+                object.id, slicestackid, available_ids
+            )));
         }
     }
 
@@ -242,39 +242,34 @@ pub fn validate_slice(
             }
 
             // N_SPX_1608_01: Check for duplicate v2 in consecutive segments
-            if let Some(prev) = prev_v2 {
-                if segment.v2 == prev {
-                    return Err(Error::InvalidModel(format!(
-                        "SliceStack {}: Slice {} (ztop={}), Polygon {}, Segments {} and {} have the same v2={}.\n\
+            if let Some(prev) = prev_v2
+                && segment.v2 == prev
+            {
+                return Err(Error::InvalidModel(format!(
+                    "SliceStack {}: Slice {} (ztop={}), Polygon {}, Segments {} and {} have the same v2={}.\n\
                          Per 3MF Slice Extension spec, consecutive segments cannot reference the same vertex.",
-                        slice_stack_id,
-                        slice_idx,
-                        slice.ztop,
-                        poly_idx,
-                        seg_idx - 1,
-                        seg_idx,
-                        segment.v2
-                    )));
-                }
+                    slice_stack_id,
+                    slice_idx,
+                    slice.ztop,
+                    poly_idx,
+                    seg_idx - 1,
+                    seg_idx,
+                    segment.v2
+                )));
             }
             prev_v2 = Some(segment.v2);
         }
 
         // N_SPX_1609_02: Validate polygon is closed (last segment v2 == startv)
-        if let Some(last_segment) = polygon.segments.last() {
-            if last_segment.v2 != polygon.startv {
-                return Err(Error::InvalidModel(format!(
-                    "SliceStack {}: Slice {} (ztop={}), Polygon {} is not closed.\n\
+        if let Some(last_segment) = polygon.segments.last()
+            && last_segment.v2 != polygon.startv
+        {
+            return Err(Error::InvalidModel(format!(
+                "SliceStack {}: Slice {} (ztop={}), Polygon {} is not closed.\n\
                      Last segment v2={} does not equal startv={}.\n\
                      Per 3MF Slice Extension spec, polygons must be closed (last segment must connect back to start vertex).",
-                    slice_stack_id,
-                    slice_idx,
-                    slice.ztop,
-                    poly_idx,
-                    last_segment.v2,
-                    polygon.startv
-                )));
-            }
+                slice_stack_id, slice_idx, slice.ztop, poly_idx, last_segment.v2, polygon.startv
+            )));
         }
     }
 
