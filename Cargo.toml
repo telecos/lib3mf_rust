@@ -9,7 +9,7 @@ repository = "https://github.com/telecos/lib3mf_rust"
 homepage = "https://github.com/telecos/lib3mf_rust"
 documentation = "https://docs.rs/lib3mf"
 readme = "README.md"
-keywords = ["3mf", "3d", "parsing", "manufacturing", "3dprinting"]
+keywords = ["3mf", "3d", "parsing", "manufacturing", "3dprinting", "opc"]
 categories = ["parser-implementations", "encoding"]
 exclude = [
     "tools/",
@@ -17,6 +17,7 @@ exclude = [
     "*.sh",
     "*.py",
     "test_suites/",
+    "test_files/",
 ]
 
 [features]
