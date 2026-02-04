@@ -2,8 +2,8 @@
 
 use lib3mf::Model;
 use std::io::{Cursor, Write};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Helper function to create a 3MF file with custom metadata
 fn create_3mf_with_metadata(metadata_xml: &str) -> Vec<u8> {
@@ -78,10 +78,12 @@ fn test_metadata_missing_name_attribute() {
 
     let result = Model::from_reader(cursor);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Metadata element must have a 'name' attribute"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Metadata element must have a 'name' attribute")
+    );
 }
 
 #[test]
@@ -159,10 +161,12 @@ fn test_metadata_with_invalid_preserve() {
 
     let result = Model::from_reader(cursor);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Invalid preserve attribute value"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid preserve attribute value")
+    );
 }
 
 #[test]
@@ -177,10 +181,12 @@ fn test_metadata_duplicate_names() {
 
     let result = Model::from_reader(cursor);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Duplicate metadata name 'Title'"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate metadata name 'Title'")
+    );
 }
 
 #[test]

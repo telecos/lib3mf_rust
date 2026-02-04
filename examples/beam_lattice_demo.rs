@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Find highly connected vertices (hubs)
                 let hubs: Vec<_> = vertex_connections
                     .iter()
-                    .filter(|(_, &count)| count > 5)
+                    .filter(|&(_, &count)| count > 5)
                     .collect();
 
                 if !hubs.is_empty() {

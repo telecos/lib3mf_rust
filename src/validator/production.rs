@@ -36,13 +36,13 @@ pub fn validate_production_extension(model: &Model) -> Result<()> {
         }
 
         // Check for hidden files (filename starting with .)
-        if let Some(filename) = path.rsplit('/').next() {
-            if filename.starts_with('.') {
-                return Err(Error::InvalidModel(format!(
-                    "{}: Production path '{}' references a hidden file (filename cannot start with .)",
-                    context, path
-                )));
-            }
+        if let Some(filename) = path.rsplit('/').next()
+            && filename.starts_with('.')
+        {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' references a hidden file (filename cannot start with .)",
+                context, path
+            )));
         }
 
         // Path should reference a .model file
@@ -153,13 +153,13 @@ pub fn validate_production_extension_with_config(
         }
 
         // Check for hidden files (filename starting with .)
-        if let Some(filename) = path.rsplit('/').next() {
-            if filename.starts_with('.') {
-                return Err(Error::InvalidModel(format!(
-                    "{}: Production path '{}' references a hidden file (filename cannot start with .)",
-                    context, path
-                )));
-            }
+        if let Some(filename) = path.rsplit('/').next()
+            && filename.starts_with('.')
+        {
+            return Err(Error::InvalidModel(format!(
+                "{}: Production path '{}' references a hidden file (filename cannot start with .)",
+                context, path
+            )));
         }
 
         // Path should reference a .model file
@@ -292,21 +292,21 @@ pub fn validate_production_paths(model: &Model) -> Result<()> {
 
     // Check all objects
     for object in &model.resources.objects {
-        if let Some(ref prod_info) = object.production {
-            if let Some(ref path) = prod_info.path {
-                validate_not_opc_internal(path, &format!("Object {}", object.id))?;
-            }
+        if let Some(ref prod_info) = object.production
+            && let Some(ref path) = prod_info.path
+        {
+            validate_not_opc_internal(path, &format!("Object {}", object.id))?;
         }
 
         // Check components
         for (idx, component) in object.components.iter().enumerate() {
-            if let Some(ref prod_info) = component.production {
-                if let Some(ref path) = prod_info.path {
-                    validate_not_opc_internal(
-                        path,
-                        &format!("Object {}, Component {}", object.id, idx),
-                    )?;
-                }
+            if let Some(ref prod_info) = component.production
+                && let Some(ref path) = prod_info.path
+            {
+                validate_not_opc_internal(
+                    path,
+                    &format!("Object {}, Component {}", object.id, idx),
+                )?;
             }
         }
     }
@@ -441,18 +441,18 @@ pub fn validate_uuid_formats(model: &Model) -> Result<()> {
 
     // Validate object UUIDs
     for object in &model.resources.objects {
-        if let Some(ref prod_info) = object.production {
-            if let Some(ref uuid) = prod_info.uuid {
-                validate_uuid(uuid, &format!("Object {}", object.id))?;
-            }
+        if let Some(ref prod_info) = object.production
+            && let Some(ref uuid) = prod_info.uuid
+        {
+            validate_uuid(uuid, &format!("Object {}", object.id))?;
         }
 
         // Validate component UUIDs
         for (idx, component) in object.components.iter().enumerate() {
-            if let Some(ref prod_info) = component.production {
-                if let Some(ref uuid) = prod_info.uuid {
-                    validate_uuid(uuid, &format!("Object {}, Component {}", object.id, idx))?;
-                }
+            if let Some(ref prod_info) = component.production
+                && let Some(ref uuid) = prod_info.uuid
+            {
+                validate_uuid(uuid, &format!("Object {}, Component {}", object.id, idx))?;
             }
         }
     }
@@ -471,51 +471,49 @@ pub fn validate_duplicate_uuids(model: &Model) -> Result<()> {
     let mut uuids = HashSet::new();
 
     // Check build UUID
-    if let Some(ref uuid) = model.build.production_uuid {
-        if !uuids.insert(uuid.clone()) {
-            return Err(Error::InvalidModel(format!(
-                "Duplicate UUID '{}' found in build",
-                uuid
-            )));
-        }
+    if let Some(ref uuid) = model.build.production_uuid
+        && !uuids.insert(uuid.clone())
+    {
+        return Err(Error::InvalidModel(format!(
+            "Duplicate UUID '{}' found in build",
+            uuid
+        )));
     }
 
     // Check build item UUIDs
     for (idx, item) in model.build.items.iter().enumerate() {
-        if let Some(ref uuid) = item.production_uuid {
-            if !uuids.insert(uuid.clone()) {
-                return Err(Error::InvalidModel(format!(
-                    "Duplicate UUID '{}' found in build item {}",
-                    uuid, idx
-                )));
-            }
+        if let Some(ref uuid) = item.production_uuid
+            && !uuids.insert(uuid.clone())
+        {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate UUID '{}' found in build item {}",
+                uuid, idx
+            )));
         }
     }
 
     // Check object UUIDs
     for object in &model.resources.objects {
-        if let Some(ref production) = object.production {
-            if let Some(ref uuid) = production.uuid {
-                if !uuids.insert(uuid.clone()) {
-                    return Err(Error::InvalidModel(format!(
-                        "Duplicate UUID '{}' found on object {}",
-                        uuid, object.id
-                    )));
-                }
-            }
+        if let Some(ref production) = object.production
+            && let Some(ref uuid) = production.uuid
+            && !uuids.insert(uuid.clone())
+        {
+            return Err(Error::InvalidModel(format!(
+                "Duplicate UUID '{}' found on object {}",
+                uuid, object.id
+            )));
         }
 
         // Check component UUIDs within each object
         for (comp_idx, component) in object.components.iter().enumerate() {
-            if let Some(ref production) = component.production {
-                if let Some(ref uuid) = production.uuid {
-                    if !uuids.insert(uuid.clone()) {
-                        return Err(Error::InvalidModel(format!(
-                            "Duplicate UUID '{}' found in object {} component {}",
-                            uuid, object.id, comp_idx
-                        )));
-                    }
-                }
+            if let Some(ref production) = component.production
+                && let Some(ref uuid) = production.uuid
+                && !uuids.insert(uuid.clone())
+            {
+                return Err(Error::InvalidModel(format!(
+                    "Duplicate UUID '{}' found in object {} component {}",
+                    uuid, object.id, comp_idx
+                )));
             }
         }
     }

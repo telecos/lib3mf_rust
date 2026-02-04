@@ -1648,7 +1648,7 @@ mod subdivision_tests {
         mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0)); // 1
         mesh.vertices.push(Vertex::new(10.0, 10.0, 0.0)); // 2
         mesh.vertices.push(Vertex::new(0.0, 10.0, 0.0)); // 3
-                                                         // Apex (Z=10)
+        // Apex (Z=10)
         mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0)); // 4
 
         // Base triangles

@@ -111,14 +111,14 @@ pub mod key_provider;
 pub use error::{Error, Result};
 pub use extension::{ExtensionHandler, ExtensionRegistry};
 pub use extensions::{
-    create_default_registry, register_all_handlers, BeamLatticeExtensionHandler,
-    BooleanOperationsExtensionHandler, DisplacementExtensionHandler, MaterialExtensionHandler,
-    ProductionExtensionHandler, SecureContentExtensionHandler, SliceExtensionHandler,
+    BeamLatticeExtensionHandler, BooleanOperationsExtensionHandler, DisplacementExtensionHandler,
+    MaterialExtensionHandler, ProductionExtensionHandler, SecureContentExtensionHandler,
+    SliceExtensionHandler, create_default_registry, register_all_handlers,
 };
 pub use key_provider::KeyProvider;
 pub use mesh_ops::{
-    assemble_contours, collect_intersection_segments, subdivide, subdivide_simple,
-    triangle_plane_intersection, Point2D, SubdivisionMethod, SubdivisionOptions,
+    Point2D, SubdivisionMethod, SubdivisionOptions, assemble_contours,
+    collect_intersection_segments, subdivide, subdivide_simple, triangle_plane_intersection,
 };
 pub use model::{
     AccessRight, BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, BlendMethod,

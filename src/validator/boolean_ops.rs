@@ -89,15 +89,15 @@ pub fn validate_boolean_operations(model: &Model) -> Result<()> {
                 }
 
                 // Check forward reference: base object must be defined before this object
-                if let Some(&base_idx) = object_indices.get(&boolean_shape.objectid) {
-                    if base_idx >= current_idx {
-                        return Err(Error::InvalidModel(format!(
-                            "Object {}: Boolean shape references object {} which is defined after it.\n\
+                if let Some(&base_idx) = object_indices.get(&boolean_shape.objectid)
+                    && base_idx >= current_idx
+                {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}: Boolean shape references object {} which is defined after it.\n\
                              Per 3MF spec, objects must be defined before they are referenced.\n\
                              Move object {} definition before object {} in the file.",
-                            object.id, boolean_shape.objectid, boolean_shape.objectid, object.id
-                        )));
-                    }
+                        object.id, boolean_shape.objectid, boolean_shape.objectid, object.id
+                    )));
                 }
 
                 // Check that base object is of type "model"
@@ -144,15 +144,15 @@ pub fn validate_boolean_operations(model: &Model) -> Result<()> {
                     }
 
                     // Check forward reference: operand object must be defined before this object
-                    if let Some(&operand_idx) = object_indices.get(&operand.objectid) {
-                        if operand_idx >= current_idx {
-                            return Err(Error::InvalidModel(format!(
-                                "Object {}: Boolean operand references object {} which is defined after it.\n\
+                    if let Some(&operand_idx) = object_indices.get(&operand.objectid)
+                        && operand_idx >= current_idx
+                    {
+                        return Err(Error::InvalidModel(format!(
+                            "Object {}: Boolean operand references object {} which is defined after it.\n\
                                  Per 3MF spec, objects must be defined before they are referenced.\n\
                                  Move object {} definition before object {} in the file.",
-                                object.id, operand.objectid, operand.objectid, object.id
-                            )));
-                        }
+                            object.id, operand.objectid, operand.objectid, object.id
+                        )));
                     }
 
                     // Check that operand object is of type "model" and is a mesh

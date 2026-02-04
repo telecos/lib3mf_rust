@@ -8,8 +8,8 @@
 
 use lib3mf::{Model, ParserConfig};
 use std::io::Write;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Simulate the old behavior: a file is marked as expected failure
 /// but fails for the WRONG reason (InvalidFormat instead of OutsidePositiveOctant)

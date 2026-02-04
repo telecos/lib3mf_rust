@@ -155,8 +155,12 @@ pub fn validate_displacement_extension(model: &Model) -> Result<()> {
                         "Disp2DGroup {}: Displacement coordinate {} references normvector index {} \
                          but NormVectorGroup {} only contains {} normvectors.\n\
                          Hint: Normvector indices must be in range [0, {}].",
-                        disp2d_group.id, coord_idx, coord.n, disp2d_group.nid,
-                        norm_group.vectors.len(), max_index
+                        disp2d_group.id,
+                        coord_idx,
+                        coord.n,
+                        disp2d_group.nid,
+                        norm_group.vectors.len(),
+                        max_index
                     )));
                 }
             }
@@ -339,7 +343,10 @@ pub fn validate_displacement_extension(model: &Model) -> Result<()> {
                             "Object {}: Displacement mesh is non-manifold. \
                              Edge between vertices {} and {} is used by {} triangles (should be exactly 2).\n\
                              Hint: Ensure the mesh is a closed, watertight surface with no holes or dangling edges.",
-                            object.id, v1.min(v2), v1.max(v2), tris.len() + rev_tris.len()
+                            object.id,
+                            v1.min(v2),
+                            v1.max(v2),
+                            tris.len() + rev_tris.len()
                         )));
                     }
                     (count, _) if count > 1 => {
@@ -436,17 +443,7 @@ pub fn validate_displacement_extension(model: &Model) -> Result<()> {
                         "Object {}: Displacement triangle {} has zero or near-zero area (vertices are collinear).\n\
                          Vertices: v1=({:.6}, {:.6}, {:.6}), v2=({:.6}, {:.6}, {:.6}), v3=({:.6}, {:.6}, {:.6})\n\
                          Hint: Ensure triangle vertices form a non-degenerate triangle with non-zero area.",
-                        object.id,
-                        tri_idx,
-                        v1.x,
-                        v1.y,
-                        v1.z,
-                        v2.x,
-                        v2.y,
-                        v2.z,
-                        v3.x,
-                        v3.y,
-                        v3.z
+                        object.id, tri_idx, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z
                     )));
                 }
 
@@ -472,40 +469,52 @@ pub fn validate_displacement_extension(model: &Model) -> Result<()> {
                             0
                         };
 
-                        if let Some(d1) = triangle.d1 {
-                            if d1 >= disp_group.coords.len() {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Displacement triangle {} has invalid d1 index {} \
+                        if let Some(d1) = triangle.d1
+                            && d1 >= disp_group.coords.len()
+                        {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Displacement triangle {} has invalid d1 index {} \
                                      (Disp2DGroup {} only has {} coordinates).\n\
                                      Hint: Displacement coordinate indices must be in range [0, {}].",
-                                    object.id, tri_idx, d1, did, disp_group.coords.len(),
-                                    max_coord_index
-                                )));
-                            }
+                                object.id,
+                                tri_idx,
+                                d1,
+                                did,
+                                disp_group.coords.len(),
+                                max_coord_index
+                            )));
                         }
 
-                        if let Some(d2) = triangle.d2 {
-                            if d2 >= disp_group.coords.len() {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Displacement triangle {} has invalid d2 index {} \
+                        if let Some(d2) = triangle.d2
+                            && d2 >= disp_group.coords.len()
+                        {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Displacement triangle {} has invalid d2 index {} \
                                      (Disp2DGroup {} only has {} coordinates).\n\
                                      Hint: Displacement coordinate indices must be in range [0, {}].",
-                                    object.id, tri_idx, d2, did, disp_group.coords.len(),
-                                    max_coord_index
-                                )));
-                            }
+                                object.id,
+                                tri_idx,
+                                d2,
+                                did,
+                                disp_group.coords.len(),
+                                max_coord_index
+                            )));
                         }
 
-                        if let Some(d3) = triangle.d3 {
-                            if d3 >= disp_group.coords.len() {
-                                return Err(Error::InvalidModel(format!(
-                                    "Object {}: Displacement triangle {} has invalid d3 index {} \
+                        if let Some(d3) = triangle.d3
+                            && d3 >= disp_group.coords.len()
+                        {
+                            return Err(Error::InvalidModel(format!(
+                                "Object {}: Displacement triangle {} has invalid d3 index {} \
                                      (Disp2DGroup {} only has {} coordinates).\n\
                                      Hint: Displacement coordinate indices must be in range [0, {}].",
-                                    object.id, tri_idx, d3, did, disp_group.coords.len(),
-                                    max_coord_index
-                                )));
-                            }
+                                object.id,
+                                tri_idx,
+                                d3,
+                                did,
+                                disp_group.coords.len(),
+                                max_coord_index
+                            )));
                         }
 
                         // Validate that normvectors point outward relative to triangle normal (DPX 3302)
@@ -537,29 +546,33 @@ pub fn validate_displacement_extension(model: &Model) -> Result<()> {
                             for (_coord_idx, disp_coord_idx) in
                                 [(1, triangle.d1), (2, triangle.d2), (3, triangle.d3)].iter()
                             {
-                                if let Some(d_idx) = disp_coord_idx {
-                                    if *d_idx < disp_group.coords.len() {
-                                        let coord = &disp_group.coords[*d_idx];
-                                        if coord.n < norm_group.vectors.len() {
-                                            let norm_vec = &norm_group.vectors[coord.n];
+                                if let Some(d_idx) = disp_coord_idx
+                                    && *d_idx < disp_group.coords.len()
+                                {
+                                    let coord = &disp_group.coords[*d_idx];
+                                    if coord.n < norm_group.vectors.len() {
+                                        let norm_vec = &norm_group.vectors[coord.n];
 
-                                            // Calculate scalar (dot) product
-                                            let dot_product = normal_x * norm_vec.x
-                                                + normal_y * norm_vec.y
-                                                + normal_z * norm_vec.z;
+                                        // Calculate scalar (dot) product
+                                        let dot_product = normal_x * norm_vec.x
+                                            + normal_y * norm_vec.y
+                                            + normal_z * norm_vec.z;
 
-                                            // Per DPX spec: scalar product must be > 0
-                                            // Use epsilon for floating-point comparison
-                                            const DOT_PRODUCT_EPSILON: f64 = 1e-10;
-                                            if dot_product <= DOT_PRODUCT_EPSILON {
-                                                return Err(Error::InvalidModel(format!(
-                                                    "Object {}: Displacement triangle {} uses normvector {} from group {} \
+                                        // Per DPX spec: scalar product must be > 0
+                                        // Use epsilon for floating-point comparison
+                                        const DOT_PRODUCT_EPSILON: f64 = 1e-10;
+                                        if dot_product <= DOT_PRODUCT_EPSILON {
+                                            return Err(Error::InvalidModel(format!(
+                                                "Object {}: Displacement triangle {} uses normvector {} from group {} \
                                                      that points inward (scalar product with triangle normal = {:.6} <= 0).\n\
                                                      Per 3MF Displacement spec, normalized displacement vectors MUST point to the outer hemisphere.\n\
                                                      Hint: Reverse the normvector direction or fix the triangle vertex order.",
-                                                    object.id, tri_idx, coord.n, disp_group.nid, dot_product
-                                                )));
-                                            }
+                                                object.id,
+                                                tri_idx,
+                                                coord.n,
+                                                disp_group.nid,
+                                                dot_product
+                                            )));
                                         }
                                     }
                                 }

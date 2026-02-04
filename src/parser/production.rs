@@ -118,73 +118,73 @@ pub(super) fn validate_production_external_paths<R: Read + std::io::Seek>(
     // Validate component external references
     for object in &model.resources.objects {
         for (comp_idx, component) in object.components.iter().enumerate() {
-            if let Some(ref prod_info) = component.production {
-                if let Some(ref path) = prod_info.path {
-                    // Normalize path: remove leading slash if present
-                    let normalized_path = path.trim_start_matches('/');
+            if let Some(ref prod_info) = component.production
+                && let Some(ref path) = prod_info.path
+            {
+                // Normalize path: remove leading slash if present
+                let normalized_path = path.trim_start_matches('/');
 
-                    // Skip validation for encrypted files (Secure Content extension)
-                    // Encrypted files cannot be parsed, so we can't validate object IDs
-                    let is_encrypted = model
-                        .secure_content
-                        .as_ref()
-                        .map(|sc| {
-                            sc.encrypted_files.iter().any(|encrypted_path| {
-                                // Compare normalized paths (both without leading slash)
-                                let enc_normalized = encrypted_path.trim_start_matches('/');
-                                enc_normalized == normalized_path
-                            })
+                // Skip validation for encrypted files (Secure Content extension)
+                // Encrypted files cannot be parsed, so we can't validate object IDs
+                let is_encrypted = model
+                    .secure_content
+                    .as_ref()
+                    .map(|sc| {
+                        sc.encrypted_files.iter().any(|encrypted_path| {
+                            // Compare normalized paths (both without leading slash)
+                            let enc_normalized = encrypted_path.trim_start_matches('/');
+                            enc_normalized == normalized_path
                         })
-                        .unwrap_or(false);
+                    })
+                    .unwrap_or(false);
 
-                    if is_encrypted {
-                        // For encrypted files, attempt to validate that we can decrypt them
-                        // This ensures the keystore has valid consumers/keys
-                        validate_encrypted_file_can_be_loaded(
-                            package,
-                            normalized_path,
-                            path,
-                            model,
-                            config,
-                            &format!("Object {}, Component {}", object.id, comp_idx),
-                        )?;
-                        continue;
-                    }
+                if is_encrypted {
+                    // For encrypted files, attempt to validate that we can decrypt them
+                    // This ensures the keystore has valid consumers/keys
+                    validate_encrypted_file_can_be_loaded(
+                        package,
+                        normalized_path,
+                        path,
+                        model,
+                        config,
+                        &format!("Object {}, Component {}", object.id, comp_idx),
+                    )?;
+                    continue;
+                }
 
-                    // Check if file exists
-                    if !package.has_file(normalized_path) {
-                        return Err(Error::InvalidModel(format!(
-                            "Object {}, Component {}: References non-existent external file: {}\n\
+                // Check if file exists
+                if !package.has_file(normalized_path) {
+                    return Err(Error::InvalidModel(format!(
+                        "Object {}, Component {}: References non-existent external file: {}\n\
                              The p:path attribute must reference a valid model file in the 3MF package.\n\
                              Check that:\n\
                              - The file exists in the package\n\
                              - The path is correct (case-sensitive)\n\
                              - The path format follows 3MF conventions (e.g., /3D/filename.model)",
-                            object.id, comp_idx, path
-                        )));
-                    }
-
-                    // Validate that the referenced object ID exists in the external file
-                    validate_external_object_reference(
-                        package,
-                        normalized_path,
-                        component.objectid,
-                        &prod_info.uuid,
-                        &format!("Object {}, Component {}", object.id, comp_idx),
-                        &mut external_file_cache,
-                        model,
-                        config,
-                    )?;
-
-                    // N_XXM_0601_02: Validate triangle material properties in external model file
-                    validate_external_model_triangles(
-                        package,
-                        normalized_path,
-                        model,
-                        &mut validated_files,
-                        config,
-                    )?;
+                        object.id, comp_idx, path
+                    )));
                 }
+
+                // Validate that the referenced object ID exists in the external file
+                validate_external_object_reference(
+                    package,
+                    normalized_path,
+                    component.objectid,
+                    &prod_info.uuid,
+                    &format!("Object {}, Component {}", object.id, comp_idx),
+                    &mut external_file_cache,
+                    model,
+                    config,
+                )?;
+
+                // N_XXM_0601_02: Validate triangle material properties in external model file
+                validate_external_model_triangles(
+                    package,
+                    normalized_path,
+                    model,
+                    &mut validated_files,
+                    config,
+                )?;
             }
         }
     }

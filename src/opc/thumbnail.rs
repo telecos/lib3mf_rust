@@ -1,10 +1,10 @@
 //! Thumbnail handling functionality
 
 use super::reader::{get_file, get_file_binary, has_file};
-use super::{Package, CONTENT_TYPES_PATH, MODEL_RELS_PATH, RELS_PATH, THUMBNAIL_REL_TYPE};
+use super::{CONTENT_TYPES_PATH, MODEL_RELS_PATH, Package, RELS_PATH, THUMBNAIL_REL_TYPE};
 use crate::error::{Error, Result};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::Read;
 
 /// Normalize OPC path by removing leading slash
@@ -60,30 +60,30 @@ fn get_content_type<R: Read + std::io::Seek>(
                     }
                 }
                 // Check for Default elements (extension-based matches)
-                else if name_str.ends_with("Default") {
-                    if let Some(ext) = extension {
-                        let mut ext_attr = None;
-                        let mut content_type = None;
+                else if name_str.ends_with("Default")
+                    && let Some(ext) = extension
+                {
+                    let mut ext_attr = None;
+                    let mut content_type = None;
 
-                        for attr in e.attributes() {
-                            let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    for attr in e.attributes() {
+                        let attr = attr?;
+                        let key = std::str::from_utf8(attr.key.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        let value = std::str::from_utf8(&attr.value)
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
-                            match key {
-                                "Extension" => ext_attr = Some(value.to_string()),
-                                "ContentType" => content_type = Some(value.to_string()),
-                                _ => {}
-                            }
+                        match key {
+                            "Extension" => ext_attr = Some(value.to_string()),
+                            "ContentType" => content_type = Some(value.to_string()),
+                            _ => {}
                         }
+                    }
 
-                        if let (Some(e), Some(ct)) = (ext_attr, content_type) {
-                            if e.eq_ignore_ascii_case(ext) {
-                                return Ok(ct);
-                            }
-                        }
+                    if let (Some(e), Some(ct)) = (ext_attr, content_type)
+                        && e.eq_ignore_ascii_case(ext)
+                    {
+                        return Ok(ct);
                     }
                 }
             }
@@ -143,12 +143,12 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
                     }
 
                     // Check if this is a thumbnail relationship
-                    if let (Some(t), Some(rt)) = (target, rel_type) {
-                        if rt == THUMBNAIL_REL_TYPE {
-                            let path = normalize_path(&t).to_string();
-                            thumbnail_path = Some(path);
-                            break;
-                        }
+                    if let (Some(t), Some(rt)) = (target, rel_type)
+                        && rt == THUMBNAIL_REL_TYPE
+                    {
+                        let path = normalize_path(&t).to_string();
+                        thumbnail_path = Some(path);
+                        break;
                     }
                 }
             }

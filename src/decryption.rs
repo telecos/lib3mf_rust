@@ -9,12 +9,12 @@
 use crate::error::{Error, Result};
 use crate::model::{AccessRight, CEKParams, KEKParams, SecureContentInfo};
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use flate2::read::DeflateDecoder;
-use rsa::{pkcs1::DecodeRsaPrivateKey, RsaPrivateKey};
+use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey};
 use std::io::Read;
 
 /// Test consumer ID from Suite 8 test specification

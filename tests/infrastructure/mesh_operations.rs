@@ -7,7 +7,7 @@
 //!
 //! These capabilities help address the requirements in tests N_XXX_0418/0420/0421
 
-use lib3mf::{mesh_ops, BuildItem, Mesh, Model, Object, Triangle, Vertex};
+use lib3mf::{BuildItem, Mesh, Model, Object, Triangle, Vertex, mesh_ops};
 
 #[test]
 fn test_mesh_volume_computation() {
@@ -100,7 +100,7 @@ fn test_transformed_bounding_box() {
     mesh.vertices.push(Vertex::new(10.0, 0.0, 10.0)); // 5
     mesh.vertices.push(Vertex::new(10.0, 10.0, 10.0)); // 6
     mesh.vertices.push(Vertex::new(0.0, 10.0, 10.0)); // 7
-                                                      // Add at least two triangles to define the bounding box properly
+    // Add at least two triangles to define the bounding box properly
     mesh.triangles.push(Triangle::new(0, 1, 2));
     mesh.triangles.push(Triangle::new(4, 5, 6));
 

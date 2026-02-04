@@ -172,8 +172,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap_or((180, 180, 180, 255)); // Default gray
 
                     println!("    Triangle {}:", i);
-                    println!("      Vertices: [{:.2}, {:.2}, {:.2}], [{:.2}, {:.2}, {:.2}], [{:.2}, {:.2}, {:.2}]",
-                        v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z);
+                    println!(
+                        "      Vertices: [{:.2}, {:.2}, {:.2}], [{:.2}, {:.2}, {:.2}], [{:.2}, {:.2}, {:.2}]",
+                        v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z
+                    );
                     println!(
                         "      Color: RGB({}, {}, {}) Alpha: {}",
                         color.0, color.1, color.2, color.3

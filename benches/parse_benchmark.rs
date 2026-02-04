@@ -1,10 +1,10 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use lib3mf::Model;
 use std::fs::File;
 use std::io::Write;
 use tempfile::NamedTempFile;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Generate a 3MF file with a specified number of vertices and triangles
 fn generate_3mf(vertices: usize, triangles: usize) -> NamedTempFile {

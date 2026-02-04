@@ -3,10 +3,10 @@
 //! This module handles parsing of 3MF Material extension elements including
 //! base materials, color groups, textures, composites, and multi-properties.
 
+use crate::Model;
 use crate::error::{Error, Result};
 use crate::model::*;
 use crate::opc::Package;
-use crate::Model;
 use quick_xml::Reader;
 use std::io::Read;
 
@@ -52,10 +52,10 @@ pub(super) fn parse_base_material<R: std::io::BufRead>(
     material.name = attrs.get("name").cloned();
 
     // Parse displaycolor attribute (format: #RRGGBBAA or #RRGGBB)
-    if let Some(color_str) = attrs.get("displaycolor") {
-        if let Some(color) = parse_color(color_str) {
-            material.color = Some(color);
-        }
+    if let Some(color_str) = attrs.get("displaycolor")
+        && let Some(color) = parse_color(color_str)
+    {
+        material.color = Some(color);
     }
 
     Ok(material)

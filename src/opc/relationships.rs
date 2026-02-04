@@ -1,10 +1,10 @@
 //! Relationship discovery and validation
 
 use super::reader::{get_file, has_file};
-use super::{Package, KEYSTORE_REL_TYPE_2019_04, KEYSTORE_REL_TYPE_2019_07, RELS_PATH};
+use super::{KEYSTORE_REL_TYPE_2019_04, KEYSTORE_REL_TYPE_2019_07, Package, RELS_PATH};
 use crate::error::{Error, Result};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::Read;
 
 /// Discover keystore file path from package relationships
@@ -42,16 +42,16 @@ pub(super) fn discover_keystore_path<R: Read + std::io::Seek>(
                     }
 
                     // Check if this is a keystore relationship (support both 2019/04 and 2019/07)
-                    if let (Some(t), Some(rt)) = (target, rel_type) {
-                        if rt == KEYSTORE_REL_TYPE_2019_04 || rt == KEYSTORE_REL_TYPE_2019_07 {
-                            // Remove leading slash if present
-                            let path = if let Some(stripped) = t.strip_prefix('/') {
-                                stripped.to_string()
-                            } else {
-                                t
-                            };
-                            return Ok(Some(path));
-                        }
+                    if let (Some(t), Some(rt)) = (target, rel_type)
+                        && (rt == KEYSTORE_REL_TYPE_2019_04 || rt == KEYSTORE_REL_TYPE_2019_07)
+                    {
+                        // Remove leading slash if present
+                        let path = if let Some(stripped) = t.strip_prefix('/') {
+                            stripped.to_string()
+                        } else {
+                            t
+                        };
+                        return Ok(Some(path));
                     }
                 }
             }

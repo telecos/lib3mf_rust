@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Reader;
 
-use super::{get_attr_by_local_name, parse_attributes, validate_attributes, TRANSFORM_MATRIX_SIZE};
+use super::{TRANSFORM_MATRIX_SIZE, get_attr_by_local_name, parse_attributes, validate_attributes};
 
 /// Parse object element attributes
 pub fn parse_object<R: std::io::BufRead>(
@@ -57,7 +57,7 @@ pub fn parse_object<R: std::io::BufRead>(
                 return Err(Error::InvalidXml(format!(
                     "Invalid object type '{}'. Must be one of: model, support, solidsupport, surface, other",
                     type_str
-                )))
+                )));
             }
         };
     }

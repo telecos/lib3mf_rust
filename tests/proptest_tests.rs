@@ -10,8 +10,8 @@ use lib3mf::{
 };
 use proptest::prelude::*;
 use std::io::Cursor;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 // ============================================================================
 // Generators for basic data structures
@@ -156,7 +156,7 @@ fn builditem_strategy(object_ids: Vec<usize>) -> impl Strategy<Value = BuildItem
 }
 
 /// Generate valid Build
-fn build_strategy(resources: &Resources) -> impl Strategy<Value = Build> {
+fn build_strategy(resources: &Resources) -> impl Strategy<Value = Build> + use<> {
     if resources.objects.is_empty() {
         return Just(Build::new()).boxed();
     }

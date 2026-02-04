@@ -13,10 +13,12 @@ fn test_parse_core_box() {
 
     // Verify basic model properties
     assert_eq!(model.unit, "millimeter");
-    assert!(model
-        .get_metadata("Copyright")
-        .unwrap()
-        .contains("3MF Consortium"));
+    assert!(
+        model
+            .get_metadata("Copyright")
+            .unwrap()
+            .contains("3MF Consortium")
+    );
 
     // Should have one object
     assert_eq!(model.resources.objects.len(), 1);
@@ -248,9 +250,11 @@ fn test_parse_beam_lattice_pyramid() {
     );
 
     // Verify required extensions include beam lattice
-    assert!(model
-        .required_extensions
-        .contains(&lib3mf::Extension::BeamLattice));
+    assert!(
+        model
+            .required_extensions
+            .contains(&lib3mf::Extension::BeamLattice)
+    );
 }
 
 /// Test beam lattice parsing with different cap modes and properties

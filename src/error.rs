@@ -267,7 +267,9 @@ pub enum Error {
     ///
     /// **Details**:
     /// Object ID: {0}, Min coordinates: ({1:.2}, {2:.2}, {3:.2})
-    #[error("[E3003] Geometry outside positive octant - Object {0}: Min coordinates ({1:.2}, {2:.2}, {3:.2}), all coordinates must be >= 0")]
+    #[error(
+        "[E3003] Geometry outside positive octant - Object {0}: Min coordinates ({1:.2}, {2:.2}, {3:.2}), all coordinates must be >= 0"
+    )]
     OutsidePositiveOctant(usize, f64, f64, f64),
 
     /// Parse error for numeric values
@@ -519,9 +521,10 @@ mod tests {
     fn test_parse_float_error_conversion() {
         let parse_err: std::num::ParseFloatError = "not_a_number".parse::<f64>().unwrap_err();
         let err = Error::from(parse_err);
-        assert!(err
-            .to_string()
-            .contains("Failed to parse floating-point number"));
+        assert!(
+            err.to_string()
+                .contains("Failed to parse floating-point number")
+        );
         assert!(err.to_string().contains("[E3002]"));
     }
 

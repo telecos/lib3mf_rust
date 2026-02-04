@@ -10,8 +10,8 @@ use lib3mf::{CustomElementResult, CustomExtensionContext, Model, ParserConfig};
 use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Custom data structure to store custom extension data
 #[derive(Debug, Clone)]

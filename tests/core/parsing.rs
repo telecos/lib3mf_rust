@@ -4,8 +4,8 @@
 
 use lib3mf::{Model, Object, Vertex};
 use std::io::{Cursor, Write};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Create a minimal valid 3MF file for testing
 fn create_test_3mf() -> Vec<u8> {

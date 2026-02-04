@@ -1093,27 +1093,37 @@ mod tests {
 
         // Verify specific handlers are present
         assert!(config.registry().get_handler(Extension::Material).is_some());
-        assert!(config
-            .registry()
-            .get_handler(Extension::Production)
-            .is_some());
-        assert!(config
-            .registry()
-            .get_handler(Extension::BeamLattice)
-            .is_some());
+        assert!(
+            config
+                .registry()
+                .get_handler(Extension::Production)
+                .is_some()
+        );
+        assert!(
+            config
+                .registry()
+                .get_handler(Extension::BeamLattice)
+                .is_some()
+        );
         assert!(config.registry().get_handler(Extension::Slice).is_some());
-        assert!(config
-            .registry()
-            .get_handler(Extension::BooleanOperations)
-            .is_some());
-        assert!(config
-            .registry()
-            .get_handler(Extension::Displacement)
-            .is_some());
-        assert!(config
-            .registry()
-            .get_handler(Extension::SecureContent)
-            .is_some());
+        assert!(
+            config
+                .registry()
+                .get_handler(Extension::BooleanOperations)
+                .is_some()
+        );
+        assert!(
+            config
+                .registry()
+                .get_handler(Extension::Displacement)
+                .is_some()
+        );
+        assert!(
+            config
+                .registry()
+                .get_handler(Extension::SecureContent)
+                .is_some()
+        );
     }
 
     #[test]
@@ -1150,10 +1160,12 @@ mod tests {
             config2.registry().handlers().len()
         );
         assert_eq!(config1.registry().handlers().len(), 1);
-        assert!(config2
-            .registry()
-            .get_handler(Extension::Material)
-            .is_some());
+        assert!(
+            config2
+                .registry()
+                .get_handler(Extension::Material)
+                .is_some()
+        );
     }
 
     #[test]

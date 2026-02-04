@@ -5,8 +5,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use lib3mf::parser::parse_model_xml;
 use lib3mf::Model;
+use lib3mf::parser::parse_model_xml;
 use std::fs::File;
 
 #[test]
@@ -89,10 +89,12 @@ fn test_component_validation_invalid_reference() {
 
     let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("non-existent object"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("non-existent object")
+    );
 }
 
 #[test]
@@ -119,10 +121,12 @@ fn test_component_validation_circular_reference() {
 
     let result = common::parse_and_validate_components(xml);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Circular component reference"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Circular component reference")
+    );
 }
 
 #[test]

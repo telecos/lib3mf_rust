@@ -170,9 +170,11 @@ fn test_parse_without_secure_content() {
 
     let model = lib3mf::parser::parse_model_xml(xml).unwrap();
     assert!(model.secure_content.is_none());
-    assert!(!model
-        .required_extensions
-        .contains(&Extension::SecureContent));
+    assert!(
+        !model
+            .required_extensions
+            .contains(&Extension::SecureContent)
+    );
 }
 
 /// Test parsing keystore.xml from a 3MF package
@@ -224,9 +226,10 @@ fn test_keystore_parsing() {
         !sc.encrypted_files.is_empty(),
         "Should have at least one encrypted file"
     );
-    assert!(sc
-        .encrypted_files
-        .contains(&"/3D/Texture/photo_1_encrypted.jpg".to_string()));
+    assert!(
+        sc.encrypted_files
+            .contains(&"/3D/Texture/photo_1_encrypted.jpg".to_string())
+    );
 }
 
 /// Test that keystore parsing handles binary/encrypted data correctly

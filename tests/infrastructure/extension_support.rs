@@ -2,8 +2,8 @@
 
 use lib3mf::{Error, Extension, Model, ParserConfig};
 use std::io::{Cursor, Write};
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Create a minimal 3MF file with specified required extensions
 fn create_test_3mf(required_extensions: &str) -> Vec<u8> {

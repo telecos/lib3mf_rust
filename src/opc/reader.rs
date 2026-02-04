@@ -1,11 +1,11 @@
 //! Package reading and validation functionality
 
 use super::{
-    Package, CONTENT_TYPES_PATH, MODEL_REL_TYPE, RELS_PATH, TEXTURE_REL_TYPE, THUMBNAIL_REL_TYPE,
+    CONTENT_TYPES_PATH, MODEL_REL_TYPE, Package, RELS_PATH, TEXTURE_REL_TYPE, THUMBNAIL_REL_TYPE,
 };
 use crate::error::{Error, Result};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::Read;
 use urlencoding::decode;
 use zip::ZipArchive;
@@ -32,7 +32,7 @@ fn validate_opc_structure<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
                  This file defines content types for the package and is required by the OPC specification. \
                  The 3MF file may be corrupt or improperly formatted.",
                 CONTENT_TYPES_PATH
-            )
+            ),
         ));
     }
 
@@ -162,12 +162,13 @@ fn validate_content_types<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
                     }
 
                     // N_XPX_0207_01: Check for empty PartName
-                    if let Some(ref pn) = part_name {
-                        if pn.is_empty() {
-                            return Err(Error::InvalidFormat(
-                                "Content type Override element cannot have empty PartName attribute".to_string()
-                            ));
-                        }
+                    if let Some(ref pn) = part_name
+                        && pn.is_empty()
+                    {
+                        return Err(Error::InvalidFormat(
+                            "Content type Override element cannot have empty PartName attribute"
+                                .to_string(),
+                        ));
                     }
 
                     if let (Some(pn), Some(ct)) = (part_name, content_type) {
@@ -207,7 +208,7 @@ fn validate_content_types<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
             "Missing required model content type definition in [Content_Types].xml. \
              The file must define either a Default or Override element for the 3D model content type \
              ('application/vnd.ms-package.3dmanufacturing-3dmodel+xml'). \
-             Check that the model file has a proper content type declaration."
+             Check that the model file has a proper content type declaration.",
         ));
     }
 
@@ -361,15 +362,14 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                             }
 
                             // N_XPX_0405_04: Check if ID starts with a digit (only for root .rels)
-                            if rels_file == RELS_PATH {
-                                if let Some(first_char) = id.chars().next() {
-                                    if first_char.is_ascii_digit() {
-                                        return Err(Error::InvalidFormat(format!(
-                                            "Relationship ID '{}' in root .rels cannot start with a digit",
-                                            id
-                                        )));
-                                    }
-                                }
+                            if rels_file == RELS_PATH
+                                && let Some(first_char) = id.chars().next()
+                                && first_char.is_ascii_digit()
+                            {
+                                return Err(Error::InvalidFormat(format!(
+                                    "Relationship ID '{}' in root .rels cannot start with a digit",
+                                    id
+                                )));
                             }
                         } else {
                             return Err(Error::InvalidFormat(format!(
@@ -405,20 +405,20 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                             // N_XXM_0605_01: For 3dmodel.model.rels, check for incorrect texture relationship type
                             // If relationship target appears to be an image file (png/jpeg), it should use
                             // TEXTURE_REL_TYPE, not MODEL_REL_TYPE
-                            if rels_file.contains("3dmodel.model.rels") {
-                                if let Some(ref t) = target {
-                                    let target_lower = t.to_lowercase();
-                                    if (target_lower.ends_with(".png")
-                                        || target_lower.ends_with(".jpeg")
-                                        || target_lower.ends_with(".jpg"))
-                                        && rt == MODEL_REL_TYPE
-                                    {
-                                        return Err(Error::InvalidFormat(format!(
-                                            "Incorrect relationship Type '{}' for texture file '{}' in 3dmodel.model.rels.\n\
+                            if rels_file.contains("3dmodel.model.rels")
+                                && let Some(ref t) = target
+                            {
+                                let target_lower = t.to_lowercase();
+                                if (target_lower.ends_with(".png")
+                                    || target_lower.ends_with(".jpeg")
+                                    || target_lower.ends_with(".jpg"))
+                                    && rt == MODEL_REL_TYPE
+                                {
+                                    return Err(Error::InvalidFormat(format!(
+                                        "Incorrect relationship Type '{}' for texture file '{}' in 3dmodel.model.rels.\n\
                                              Per 3MF Material Extension spec, texture files must use relationship type '{}'.",
-                                            rt, t, TEXTURE_REL_TYPE
-                                        )));
-                                    }
+                                        rt, t, TEXTURE_REL_TYPE
+                                    )));
                                 }
                             }
 
@@ -632,19 +632,19 @@ fn discover_model_path<R: Read + std::io::Seek>(package: &mut Package<R>) -> Res
                     }
 
                     // Check if this is the 3D model relationship
-                    if let (Some(t), Some(rt)) = (target, rel_type) {
-                        if rt == MODEL_REL_TYPE {
-                            // Remove leading slash if present
-                            let path = if let Some(stripped) = t.strip_prefix('/') {
-                                stripped.to_string()
-                            } else {
-                                t
-                            };
+                    if let (Some(t), Some(rt)) = (target, rel_type)
+                        && rt == MODEL_REL_TYPE
+                    {
+                        // Remove leading slash if present
+                        let path = if let Some(stripped) = t.strip_prefix('/') {
+                            stripped.to_string()
+                        } else {
+                            t
+                        };
 
-                            // Return the path as-is. The caller will handle trying both
-                            // percent-encoded and decoded versions when accessing the file.
-                            return Ok(path);
-                        }
+                        // Return the path as-is. The caller will handle trying both
+                        // percent-encoded and decoded versions when accessing the file.
+                        return Ok(path);
                     }
                 }
             }
@@ -789,30 +789,30 @@ fn get_content_type<R: Read + std::io::Seek>(
                     }
                 }
                 // Check for Default elements (extension-based matches)
-                else if name_str.ends_with("Default") {
-                    if let Some(ext) = extension {
-                        let mut ext_attr = None;
-                        let mut content_type = None;
+                else if name_str.ends_with("Default")
+                    && let Some(ext) = extension
+                {
+                    let mut ext_attr = None;
+                    let mut content_type = None;
 
-                        for attr in e.attributes() {
-                            let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
-                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                    for attr in e.attributes() {
+                        let attr = attr?;
+                        let key = std::str::from_utf8(attr.key.as_ref())
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                        let value = std::str::from_utf8(&attr.value)
+                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
-                            match key {
-                                "Extension" => ext_attr = Some(value.to_string()),
-                                "ContentType" => content_type = Some(value.to_string()),
-                                _ => {}
-                            }
+                        match key {
+                            "Extension" => ext_attr = Some(value.to_string()),
+                            "ContentType" => content_type = Some(value.to_string()),
+                            _ => {}
                         }
+                    }
 
-                        if let (Some(e), Some(ct)) = (ext_attr, content_type) {
-                            if e.eq_ignore_ascii_case(ext) {
-                                return Ok(ct);
-                            }
-                        }
+                    if let (Some(e), Some(ct)) = (ext_attr, content_type)
+                        && e.eq_ignore_ascii_case(ext)
+                    {
+                        return Ok(ct);
                     }
                 }
             }

@@ -20,8 +20,8 @@ use crate::error::{Error, Result};
 /// Returns the writer after finishing the ZIP archive
 pub fn create_package<W: std::io::Write + std::io::Seek>(writer: W, model_xml: &str) -> Result<W> {
     use std::io::Write;
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     let mut zip = ZipWriter::new(writer);
     let options = SimpleFileOptions::default();
@@ -88,8 +88,8 @@ pub fn create_package_with_thumbnail<W: std::io::Write + std::io::Seek>(
     thumbnail_content_type: Option<&str>,
 ) -> Result<W> {
     use std::io::Write;
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     let mut zip = ZipWriter::new(writer);
     let options = SimpleFileOptions::default();
