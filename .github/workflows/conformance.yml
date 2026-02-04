@@ -10,9 +10,8 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 # Set permissions for GITHUB_TOKEN
-# Need write permissions to commit conformance report
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # Run standard library and integration tests first (fast, basic checks)
@@ -234,28 +233,6 @@ jobs:
           EOFMARKER
           sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/" CONFORMANCE_REPORT.md
           echo "✅ Basic conformance report generated"
-      
-      - name: Commit and push conformance report
-        # Only commit on push to main/develop, not on PRs
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add CONFORMANCE_REPORT.md
-          # Only commit if there are changes
-          if ! git diff --cached --quiet; then
-            git commit -m "Update conformance report [skip ci]"
-            # Push with error handling
-            if git push; then
-              echo "✅ Conformance report updated and committed"
-            else
-              echo "❌ Failed to push conformance report"
-              echo "This may be due to concurrent changes or permission issues"
-              exit 1
-            fi
-          else
-            echo "ℹ️ No changes to conformance report"
-          fi
       
       - name: Upload combined conformance report
         uses: actions/upload-artifact@v4
