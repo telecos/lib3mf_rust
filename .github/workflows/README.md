@@ -58,7 +58,6 @@ cargo audit
 - ✅ Distributes test suites as artifact to all parallel jobs
 - ✅ Runs 11 conformance suites in parallel (2,241 test cases)
 - ✅ Generates conformance report
-- ✅ Commits updated CONFORMANCE_REPORT.md (on push to main/develop)
 - ✅ Uploads report as artifact
 
 **Runtime**: ~10-15 minutes (first run), ~3-5 minutes (cached)
@@ -143,8 +142,6 @@ The conformance workflow uploads a detailed report:
 - conformance-summary.md (test run output)
 - CONFORMANCE_REPORT.md (formatted markdown report)
 - suite-reports/ (individual suite results)
-
-**Auto-commit**: On pushes to main/develop, the CONFORMANCE_REPORT.md is automatically committed back to the repository with the commit message "Update conformance report [skip ci]".
 
 To download:
 ```bash
