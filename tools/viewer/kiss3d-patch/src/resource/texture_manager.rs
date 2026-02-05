@@ -167,7 +167,31 @@ impl TextureManager {
     pub fn add_image(&mut self, dynamic_image: DynamicImage, name: &str) -> Rc<Texture> {
         self.textures
             .entry(name.to_string())
-            .or_insert_with(|| TextureManager::load_texture_into_context(dynamic_image).unwrap())
+            .or_insert_with(|| TextureManager::load_texture_into_context_with_wrap(
+                dynamic_image,
+                TextureWrapping::Repeat,
+                TextureWrapping::Repeat,
+            ).unwrap())
+            .0
+            .clone()
+    }
+
+    /// Allocates a new texture with specific wrap modes.
+    ///
+    /// If a texture with same name exists, nothing is created and the old texture is returned.
+    pub fn add_image_with_wrap(
+        &mut self,
+        dynamic_image: DynamicImage,
+        name: &str,
+        wrap_s: TextureWrapping,
+        wrap_t: TextureWrapping,
+    ) -> Rc<Texture> {
+        self.textures
+            .entry(name.to_string())
+            .or_insert_with(|| {
+                TextureManager::load_texture_into_context_with_wrap(dynamic_image, wrap_s, wrap_t)
+                    .unwrap()
+            })
             .0
             .clone()
     }
@@ -182,14 +206,37 @@ impl TextureManager {
         )
     }
 
-    /// Allocates a new texture read from a file.
-    fn load_texture_from_file(path: &Path) -> (Rc<Texture>, (u32, u32)) {
-        TextureManager::load_texture_into_context(image::open(path).unwrap())
-            .unwrap_or_else(|e| panic!("Unable to load texture from file {:?}: {:?}", path, e))
+    /// Allocates a new texture from bytes with specific wrap modes.
+    /// If a texture with same name exists, nothing is created and the old texture is returned.
+    pub fn add_image_from_memory_with_wrap(
+        &mut self,
+        image_data: &[u8],
+        name: &str,
+        wrap_s: TextureWrapping,
+        wrap_t: TextureWrapping,
+    ) -> Rc<Texture> {
+        self.add_image_with_wrap(
+            image::load_from_memory(image_data).expect("Invalid data"),
+            name,
+            wrap_s,
+            wrap_t,
+        )
     }
 
-    fn load_texture_into_context(
+    /// Allocates a new texture read from a file.
+    fn load_texture_from_file(path: &Path) -> (Rc<Texture>, (u32, u32)) {
+        TextureManager::load_texture_into_context_with_wrap(
+            image::open(path).unwrap(),
+            TextureWrapping::Repeat,
+            TextureWrapping::Repeat,
+        )
+        .unwrap_or_else(|e| panic!("Unable to load texture from file {:?}: {:?}", path, e))
+    }
+
+    fn load_texture_into_context_with_wrap(
         dynamic_image: DynamicImage,
+        wrap_s: TextureWrapping,
+        wrap_t: TextureWrapping,
     ) -> Result<(Rc<Texture>, (u32, u32)), &'static str> {
         let ctxt = Context::get();
         let tex = Texture::new();
@@ -239,12 +286,12 @@ impl TextureManager {
             verify!(ctxt.tex_parameteri(
                 Context::TEXTURE_2D,
                 Context::TEXTURE_WRAP_S,
-                Context::CLAMP_TO_EDGE as i32
+                u32::from(wrap_s) as i32
             ));
             verify!(ctxt.tex_parameteri(
                 Context::TEXTURE_2D,
                 Context::TEXTURE_WRAP_T,
-                Context::CLAMP_TO_EDGE as i32
+                u32::from(wrap_t) as i32
             ));
             verify!(ctxt.tex_parameteri(
                 Context::TEXTURE_2D,
