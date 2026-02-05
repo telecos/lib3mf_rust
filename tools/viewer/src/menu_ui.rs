@@ -330,23 +330,26 @@ impl MenuBar {
 
     /// Handle mouse click on menu items
     fn handle_click(&mut self) -> Option<MenuAction> {
-        const MENU_BAR_HEIGHT: f32 = 25.0;
-        const MENU_ITEM_HEIGHT: f32 = 20.0;
-        const MENU_ITEM_WIDTH: f32 = 200.0;
+        const MENU_BAR_HEIGHT: f32 = 85.0;
+        const MENU_ITEM_HEIGHT: f32 = 65.0;
+        const MENU_ITEM_WIDTH: f32 = 670.0;
+        const FONT_SIZE: f32 = 45.0;
+        // Character width is approximately 0.6 * font size for default font
+        const CHAR_WIDTH: f32 = FONT_SIZE * 0.6;
 
         // Check if click is in menu bar
         if self.mouse_y < MENU_BAR_HEIGHT {
             // Check which menu was clicked
-            let mut x_offset = 10.0;
+            let mut x_offset = 35.0;
             let mut clicked_menu_index: Option<usize> = None;
             
             for (i, menu) in self.menus.iter().enumerate() {
-                let menu_width = (menu.label.len() as f32 * 8.0) + 20.0;
+                let menu_width = (menu.label.len() as f32 * CHAR_WIDTH) + 20.0;
                 if self.mouse_x >= x_offset && self.mouse_x < x_offset + menu_width {
                     clicked_menu_index = Some(i);
                     break;
                 }
-                x_offset += menu_width + 5.0;
+                x_offset += menu_width + 15.0;
             }
             
             if let Some(i) = clicked_menu_index {
@@ -373,10 +376,11 @@ impl MenuBar {
         // Check if click is in a dropdown menu
         if let Some(menu_index) = self.active_menu {
             if menu_index < self.menus.len() {
-                // Calculate menu x offset
-                let mut x_offset = 10.0;
+                // Calculate menu x offset (must match render calculation)
+                const CHAR_WIDTH_DROPDOWN: f32 = 45.0 * 0.6;
+                let mut x_offset = 35.0;
                 for i in 0..menu_index {
-                    x_offset += (self.menus[i].label.len() as f32 * 8.0) + 25.0;
+                    x_offset += (self.menus[i].label.len() as f32 * CHAR_WIDTH_DROPDOWN) + 20.0 + 15.0;
                 }
 
                 let menu_x = x_offset;
@@ -444,25 +448,18 @@ impl MenuBar {
             return;
         }
 
-        const MENU_BAR_HEIGHT: f32 = 25.0;
-        const MENU_ITEM_HEIGHT: f32 = 20.0;
-        const MENU_ITEM_WIDTH: f32 = 200.0;
-        const FONT_SIZE: f32 = 14.0;
+        const MENU_BAR_HEIGHT: f32 = 85.0;
+        const MENU_ITEM_HEIGHT: f32 = 65.0;
+        const MENU_ITEM_WIDTH: f32 = 670.0;
+        const FONT_SIZE: f32 = 45.0;
 
-        // Draw menu bar background (semi-transparent dark)
-        window.draw_planar_line(
-            &kiss3d::nalgebra::Point2::new(0.0, 0.0),
-            &kiss3d::nalgebra::Point2::new(self.window_width as f32, 0.0),
-            &kiss3d::nalgebra::Point3::new(0.2, 0.2, 0.2),
-        );
-        window.draw_planar_line(
-            &kiss3d::nalgebra::Point2::new(0.0, MENU_BAR_HEIGHT),
-            &kiss3d::nalgebra::Point2::new(self.window_width as f32, MENU_BAR_HEIGHT),
-            &kiss3d::nalgebra::Point3::new(0.3, 0.3, 0.3),
-        );
+        // Note: Removed draw_planar_line calls for menu bar background
+        // as they were rendering incorrectly as 3D geometry instead of 2D overlay
 
         // Draw menu items
-        let mut x_offset = 10.0;
+        let mut x_offset = 35.0;
+        // Character width is approximately 0.6 * font size for default font
+        let char_width = FONT_SIZE * 0.6;
         for (i, menu) in self.menus.iter().enumerate() {
             // Draw menu label
             let color = if Some(i) == self.active_menu {
@@ -473,13 +470,13 @@ impl MenuBar {
 
             window.draw_text(
                 &menu.label,
-                &kiss3d::nalgebra::Point2::new(x_offset, 5.0),
+                &kiss3d::nalgebra::Point2::new(x_offset, 15.0),
                 FONT_SIZE,
                 &Font::default(),
                 &color,
             );
 
-            let menu_width = (menu.label.len() as f32 * 8.0) + 20.0;
+            let menu_width = (menu.label.len() as f32 * char_width) + 20.0;
 
             // Draw dropdown menu if open
             if menu.open {
@@ -510,7 +507,7 @@ impl MenuBar {
 
                     window.draw_text(
                         &text,
-                        &kiss3d::nalgebra::Point2::new(menu_x + 5.0, item_y + 2.0),
+                        &kiss3d::nalgebra::Point2::new(menu_x + 15.0, item_y + 7.0),
                         FONT_SIZE * 0.9,
                         &Font::default(),
                         &text_color,
@@ -518,10 +515,10 @@ impl MenuBar {
 
                     // Draw shortcut hint if present
                     if let Some(ref shortcut) = item.shortcut {
-                        let shortcut_x = menu_x + MENU_ITEM_WIDTH - (shortcut.len() as f32 * 7.0);
+                        let shortcut_x = menu_x + MENU_ITEM_WIDTH - (shortcut.len() as f32 * 23.0);
                         window.draw_text(
                             shortcut,
-                            &kiss3d::nalgebra::Point2::new(shortcut_x, item_y + 2.0),
+                            &kiss3d::nalgebra::Point2::new(shortcut_x, item_y + 7.0),
                             FONT_SIZE * 0.8,
                             &Font::default(),
                             &kiss3d::nalgebra::Point3::new(0.6, 0.6, 0.6),
@@ -530,7 +527,7 @@ impl MenuBar {
                 }
             }
 
-            x_offset += menu_width + 5.0;
+            x_offset += menu_width + 15.0;
         }
     }
 }

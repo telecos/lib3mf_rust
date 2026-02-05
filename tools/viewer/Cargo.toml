@@ -1,7 +1,7 @@
 [package]
 name = "lib3mf-viewer"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["lib3mf_rust contributors"]
 description = "3MF file viewer and analyzer using lib3mf_rust"
 license = "MIT OR Apache-2.0"

@@ -17,7 +17,9 @@ use kiss3d::nalgebra::{Point2, Point3, Vector3}; // Use nalgebra from kiss3d
 use kiss3d::ncollide3d::procedural::TriMesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
+use lib3mf::TileStyle;
 use lib3mf::Model;
+use kiss3d::resource::TextureWrapping;
 use rfd::FileDialog;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -38,6 +40,36 @@ const PAN_STEP: f32 = 0.05; // Pan amount as percentage of camera distance
 
 // Constants for object selection
 const SELECTION_HIGHLIGHT_INTENSITY: f32 = 0.5; // Blend intensity for selected objects (0.0-1.0)
+
+/// Texture data with tiling information
+struct TextureInfo {
+    /// Raw image bytes (PNG/JPEG encoded)
+    data: Vec<u8>,
+    /// Tile style for U axis
+    tile_style_u: TileStyle,
+    /// Tile style for V axis
+    tile_style_v: TileStyle,
+}
+
+impl TextureInfo {
+    /// Convert TileStyle to TextureWrapping for OpenGL
+    fn tile_style_to_wrap(style: TileStyle) -> TextureWrapping {
+        match style {
+            TileStyle::Wrap => TextureWrapping::Repeat,
+            TileStyle::Mirror => TextureWrapping::MirroredRepeat,
+            TileStyle::Clamp => TextureWrapping::ClampToEdge,
+            TileStyle::None => TextureWrapping::ClampToEdge,
+        }
+    }
+    
+    fn wrap_u(&self) -> TextureWrapping {
+        Self::tile_style_to_wrap(self.tile_style_u)
+    }
+    
+    fn wrap_v(&self) -> TextureWrapping {
+        Self::tile_style_to_wrap(self.tile_style_v)
+    }
+}
 
 /// Ray structure for ray casting
 #[derive(Debug, Clone, Copy)]
@@ -285,6 +317,8 @@ enum BooleanMode {
     ShowInputs,
     /// Hide non-boolean objects and highlight boolean operands
     HighlightOperands,
+    /// Show the result of boolean operations (the objects with boolean_shape that have meshes)
+    ShowResult,
 }
 
 impl BooleanMode {
@@ -293,7 +327,8 @@ impl BooleanMode {
         match self {
             BooleanMode::Normal => BooleanMode::ShowInputs,
             BooleanMode::ShowInputs => BooleanMode::HighlightOperands,
-            BooleanMode::HighlightOperands => BooleanMode::Normal,
+            BooleanMode::HighlightOperands => BooleanMode::ShowResult,
+            BooleanMode::ShowResult => BooleanMode::Normal,
         }
     }
 
@@ -303,6 +338,7 @@ impl BooleanMode {
             BooleanMode::Normal => "Normal",
             BooleanMode::ShowInputs => "Show Inputs",
             BooleanMode::HighlightOperands => "Highlight Operands",
+            BooleanMode::ShowResult => "Show Result",
         }
     }
 }
@@ -430,7 +466,7 @@ impl PrintArea {
             height: 200.0,
             unit: LengthUnit::Millimeters,
             origin: Origin::Corner,
-            visible: true,
+            visible: false,  // Default to hidden to avoid visual clutter
             show_ruler: false,
             show_scale_bar: false,
         }
@@ -1118,6 +1154,19 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
 
                                 // Create new mesh and beam nodes
                                 if let Some(ref model) = state.model {
+                                    // Auto-enable displacement mode if the model has displacement data
+                                    if has_displacement_data(model) {
+                                        state.show_displacement = true;
+                                        println!("  Auto-enabled displacement visualization");
+                                    }
+                                    
+                                    // Auto-enable boolean mode if the model has boolean operations
+                                    if count_boolean_operations(model) > 0 {
+                                        state.boolean_mode = BooleanMode::ShowResult;
+                                        println!("  Auto-enabled boolean operation visualization (ShowResult mode)");
+                                        println!("  Press 'V' to cycle through boolean visualization modes");
+                                    }
+                                    
                                     state.mesh_nodes = create_mesh_nodes_with_displacement(
                                         &mut window,
                                         model,
@@ -2103,7 +2152,65 @@ fn handle_menu_action(
             }
         }
         MenuAction::BrowseTests => {
-            println!("\nBrowse test suites feature requires restart with --browse-tests flag");
+            // Launch the test suite browser
+            println!("\n");
+            println!("Opening test suite browser...");
+            println!("(The 3D viewer window will remain open in the background)");
+            println!();
+
+            if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
+                match state.load_file(path) {
+                    Ok(()) => {
+                        // Hide existing mesh nodes by setting them invisible
+                        for node in &mut state.mesh_nodes {
+                            node.set_visible(false);
+                        }
+                        state.mesh_nodes.clear();
+
+                        // Hide existing beam nodes
+                        for node in &mut state.beam_nodes {
+                            node.set_visible(false);
+                        }
+                        state.beam_nodes.clear();
+
+                        // Create new mesh and beam nodes
+                        if let Some(ref model) = state.model {
+                            // Auto-enable displacement mode if the model has displacement data
+                            if has_displacement_data(model) {
+                                state.show_displacement = true;
+                                println!("  Auto-enabled displacement visualization");
+                            }
+                            
+                            // Auto-enable boolean mode if the model has boolean operations
+                            if count_boolean_operations(model) > 0 {
+                                state.boolean_mode = BooleanMode::ShowResult;
+                                println!("  Auto-enabled boolean operation visualization (ShowResult mode)");
+                                println!("  Press 'V' to cycle through boolean visualization modes");
+                            }
+                            
+                            state.mesh_nodes = create_mesh_nodes_with_displacement(
+                                window,
+                                model,
+                                state.boolean_mode,
+                                state.show_displacement,
+                                state.file_path.as_ref(),
+                            );
+                            // Apply current render mode
+                            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                            state.beam_nodes = create_beam_lattice_nodes(window, model);
+                            window.set_title(&state.window_title());
+                            println!("\n✓ File loaded successfully!");
+                            print_model_info(model);
+
+                            // Reset camera to fit new model
+                            *camera = create_camera_for_model(state.model.as_ref());
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("\n✗ Error loading file: {}", e);
+                    }
+                }
+            }
         }
         MenuAction::ExportScreenshot => {
             if let Err(e) = capture_screenshot(window) {
@@ -2744,11 +2851,12 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
 }
 
 /// Load textures from a 3MF package file
-/// Returns a HashMap mapping texture IDs to loaded texture data
+/// Returns a HashMap mapping texture IDs to TextureInfo (raw bytes + tile style)
+/// kiss3d's set_texture_from_memory expects encoded image data, not decoded pixels
 fn load_textures_from_package(
     file_path: &PathBuf,
     model: &Model,
-) -> HashMap<usize, Rc<image::DynamicImage>> {
+) -> HashMap<usize, TextureInfo> {
     let mut textures = HashMap::new();
     
     // Open the 3MF file as a ZIP archive
@@ -2806,17 +2914,24 @@ fn load_textures_from_package(
             buffer
         };
         
-        // Load the image from memory
+        // Validate the image can be loaded (but store raw bytes)
         match image::load_from_memory(&image_data) {
             Ok(img) => {
                 println!(
-                    "  ✓ Loaded texture ID {}: {} ({}x{})",
+                    "  ✓ Loaded texture ID {}: {} ({}x{}, tile U={:?}, V={:?})",
                     texture2d.id,
                     texture2d.path,
                     img.width(),
-                    img.height()
+                    img.height(),
+                    texture2d.tilestyleu,
+                    texture2d.tilestylev
                 );
-                textures.insert(texture2d.id, Rc::new(img));
+                // Store the raw bytes with tile style info
+                textures.insert(texture2d.id, TextureInfo {
+                    data: image_data,
+                    tile_style_u: texture2d.tilestyleu,
+                    tile_style_v: texture2d.tilestylev,
+                });
             }
             Err(e) => {
                 eprintln!(
@@ -3435,7 +3550,7 @@ fn draw_drop_zone_overlay(window: &mut Window, valid_file: bool, file_path: &Opt
     );
     
     // Draw file name if available
-    if let Some(ref path) = file_path {
+    if let Some(path) = file_path {
         let file_name = std::path::Path::new(path)
             .file_name()
             .and_then(|n| n.to_str())
@@ -3577,6 +3692,7 @@ fn create_mesh_nodes_with_boolean_mode(
         BooleanMode::Normal => create_mesh_nodes(window, model),
         BooleanMode::ShowInputs => create_mesh_nodes_show_inputs(window, model),
         BooleanMode::HighlightOperands => create_mesh_nodes_highlight_operands(window, model),
+        BooleanMode::ShowResult => create_mesh_nodes_show_boolean_result(window, model),
     }
 }
 
@@ -3637,7 +3753,7 @@ fn create_mesh_nodes_with_triangle_colors_and_textures(
     model: &Model,
     file_path: &PathBuf,
 ) -> Vec<SceneNode> {
-    // Load textures from the 3MF package
+    // Load textures from the 3MF package (as raw bytes)
     let textures = if !model.resources.texture2d_resources.is_empty() {
         println!("\n  Loading textures from 3MF package...");
         let loaded = load_textures_from_package(file_path, model);
@@ -3656,7 +3772,7 @@ fn create_mesh_nodes_with_triangle_colors_and_textures(
 fn create_mesh_nodes_with_triangle_colors_impl(
     window: &mut Window,
     model: &Model,
-    textures: Option<&HashMap<usize, Rc<image::DynamicImage>>>,
+    textures: Option<&HashMap<usize, TextureInfo>>,
 ) -> Vec<SceneNode> {
     let mut nodes = Vec::new();
 
@@ -3708,16 +3824,29 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                                 let triangle = &mesh_data.triangles[tri_idx];
                                 let base_idx = vertices.len() as u32;
                                 
+                                // Get UV indices for each vertex from p1, p2, p3
+                                // In 3MF, p1/p2/p3 are indices into the texture group's tex2coords array
+                                // If not specified, fall back to pindex for all vertices
+                                let uv_indices = [
+                                    triangle.p1.or(triangle.pindex),
+                                    triangle.p2.or(triangle.pindex),
+                                    triangle.p3.or(triangle.pindex),
+                                ];
+                                
                                 // Add vertices for this triangle
-                                for &v_idx in &[triangle.v1, triangle.v2, triangle.v3] {
+                                for (i, &v_idx) in [triangle.v1, triangle.v2, triangle.v3].iter().enumerate() {
                                     if v_idx < mesh_data.vertices.len() {
                                         let v = &mesh_data.vertices[v_idx];
                                         vertices.push(Point3::new(v.x as f32, v.y as f32, v.z as f32));
                                         
-                                        // Add corresponding UV coordinate
-                                        if v_idx < tex_group.tex2coords.len() {
-                                            let uv = &tex_group.tex2coords[v_idx];
-                                            uvs.push(Point2::new(uv.u, uv.v));
+                                        // Add corresponding UV coordinate using p1/p2/p3 indices
+                                        if let Some(uv_idx) = uv_indices[i] {
+                                            if uv_idx < tex_group.tex2coords.len() {
+                                                let uv = &tex_group.tex2coords[uv_idx];
+                                                uvs.push(Point2::new(uv.u, uv.v));
+                                            } else {
+                                                uvs.push(Point2::new(0.0, 0.0));
+                                            }
                                         } else {
                                             uvs.push(Point2::new(0.0, 0.0));
                                         }
@@ -3741,16 +3870,17 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                                 
                                 // Try to apply texture if available
                                 if let Some(texture_map) = textures {
-                                    if let Some(texture_img) = texture_map.get(&tex_id) {
-                                        // Convert image to RGBA8 format
-                                        let rgba_img = texture_img.to_rgba8();
-                                        let raw_data = rgba_img.into_raw();
-                                        
+                                    if let Some(tex_info) = texture_map.get(&tex_id) {
                                         // Create a unique texture name
                                         let texture_name = format!("texture_{}", tex_id);
                                         
-                                        // Apply texture from memory
-                                        mesh_node.set_texture_from_memory(&raw_data, &texture_name);
+                                        // Apply texture from memory with proper wrap modes
+                                        mesh_node.set_texture_from_memory_with_wrap(
+                                            &tex_info.data,
+                                            &texture_name,
+                                            tex_info.wrap_u(),
+                                            tex_info.wrap_v(),
+                                        );
                                     } else {
                                         // Texture not loaded, use teal indicator color
                                         mesh_node.set_color(0.0, 0.8, 0.8);
@@ -3988,8 +4118,15 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
             HashMap::new()
         }
     } else {
+        println!("  Note: No file path available for loading displacement textures");
         HashMap::new()
     };
+
+    // Print diagnostic info about displacement data
+    println!("  Displacement maps loaded: {}", displacement_maps.len());
+    println!("  Displacement map resources in model: {}", model.resources.displacement_maps.len());
+    println!("  Norm vector groups in model: {}", model.resources.norm_vector_groups.len());
+    println!("  Disp2D groups in model: {}", model.resources.disp2d_groups.len());
 
     // Collect objects with displacement meshes
     let displacement_object_ids: HashSet<usize> = model
@@ -4000,6 +4137,8 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
         .map(|obj| obj.id)
         .collect();
 
+    println!("  Objects with displacement_mesh: {}", displacement_object_ids.len());
+
     for item in &model.build.items {
         if let Some(obj) = model
             .resources
@@ -4009,6 +4148,8 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
         {
             // Handle objects with displacement meshes
             if let Some(ref disp_mesh) = obj.displacement_mesh {
+                println!("  Processing displacement mesh for object {}: {} vertices, {} triangles",
+                         obj.id, disp_mesh.vertices.len(), disp_mesh.triangles.len());
                 // Render displacement mesh with actual displacement applied
                 if let Some(node) = create_displaced_mesh_node(
                     window,
@@ -4018,6 +4159,9 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
                     &displacement_maps,
                 ) {
                     nodes.push(node);
+                    println!("    Successfully created displaced mesh node");
+                } else {
+                    println!("    Warning: Failed to create displaced mesh node");
                 }
             }
             // Handle regular meshes (highlight if they have displacement data)
@@ -4272,6 +4416,18 @@ fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<Scen
         }
     }
 
+    // Also render the boolean RESULT objects (objects with boolean_shape that have meshes)
+    for obj in &model.resources.objects {
+        if obj.boolean_shape.is_some() {
+            if let Some(ref mesh_data) = obj.mesh {
+                // Result object: Green with transparency effect
+                let color = (0.2, 0.9, 0.3);
+                let mesh_node = create_trimesh_node(window, mesh_data, color);
+                nodes.push(mesh_node);
+            }
+        }
+    }
+
     // Render all objects with appropriate colors
     for item in &model.build.items {
         if let Some(obj) = model
@@ -4280,7 +4436,7 @@ fn create_mesh_nodes_show_inputs(window: &mut Window, model: &Model) -> Vec<Scen
             .iter()
             .find(|o| o.id == item.objectid)
         {
-            // Skip objects with boolean_shape (they're the result objects)
+            // Skip objects with boolean_shape (already rendered above)
             if obj.boolean_shape.is_some() {
                 continue;
             }
@@ -4360,6 +4516,80 @@ fn create_mesh_nodes_highlight_operands(window: &mut Window, model: &Model) -> V
                 nodes.push(mesh_node);
             }
         }
+    }
+
+    nodes
+}
+
+/// Create mesh nodes showing the boolean operation result
+/// This renders objects that have boolean_shape defined - these are the result objects
+fn create_mesh_nodes_show_boolean_result(window: &mut Window, model: &Model) -> Vec<SceneNode> {
+    let mut nodes = Vec::new();
+    let mut result_count = 0;
+    let mut non_result_count = 0;
+
+    // Collect all object IDs that are used as inputs to boolean operations
+    let mut boolean_input_ids = std::collections::HashSet::new();
+    for obj in &model.resources.objects {
+        if let Some(ref shape) = obj.boolean_shape {
+            boolean_input_ids.insert(shape.objectid);
+            for operand in &shape.operands {
+                boolean_input_ids.insert(operand.objectid);
+            }
+        }
+    }
+
+    // First, render objects that have boolean_shape (these are the results)
+    for obj in &model.resources.objects {
+        if obj.boolean_shape.is_some() {
+            if let Some(ref mesh_data) = obj.mesh {
+                // This object has a boolean_shape and a mesh - render the mesh as the result
+                let color = (0.2, 0.9, 0.3); // Bright green for result
+                let mesh_node = create_trimesh_node(window, mesh_data, color);
+                nodes.push(mesh_node);
+                result_count += 1;
+                
+                if let Some(ref shape) = obj.boolean_shape {
+                    println!("  Boolean result object ID {}: {} operation with {} operands", 
+                             obj.id, shape.operation.as_str(), shape.operands.len());
+                }
+            } else {
+                // Object has boolean_shape but no mesh - this means the result needs to be computed
+                // For now, we can't compute CSG operations, so show a warning
+                if let Some(ref shape) = obj.boolean_shape {
+                    println!("  Warning: Boolean object ID {} has no pre-computed mesh", obj.id);
+                    println!("    Operation: {}, Base: {}, Operands: {:?}", 
+                             shape.operation.as_str(), 
+                             shape.objectid,
+                             shape.operands.iter().map(|o| o.objectid).collect::<Vec<_>>());
+                }
+            }
+        }
+    }
+
+    // Also render regular objects from build items that are NOT boolean inputs
+    for item in &model.build.items {
+        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+            // Skip if this is a boolean input or a boolean result object
+            if boolean_input_ids.contains(&obj.id) || obj.boolean_shape.is_some() {
+                continue;
+            }
+            
+            if let Some(ref mesh_data) = obj.mesh {
+                let color = get_object_color(model, obj);
+                let mesh_node = create_trimesh_node(window, mesh_data, color);
+                nodes.push(mesh_node);
+                non_result_count += 1;
+            }
+        }
+    }
+
+    if result_count > 0 {
+        println!("  Rendered {} boolean result(s) and {} regular object(s)", result_count, non_result_count);
+    } else {
+        println!("  No boolean result meshes found - showing all build items");
+        // Fall back to normal rendering if no boolean results
+        return create_mesh_nodes(window, model);
     }
 
     nodes

@@ -1,6 +1,6 @@
 use crate::camera::Camera;
 use crate::light::Light;
-use crate::resource::{Material, MaterialManager, Mesh, MeshManager, Texture, TextureManager};
+use crate::resource::{Material, MaterialManager, Mesh, MeshManager, Texture, TextureManager, TextureWrapping};
 use crate::scene::Object;
 use na;
 use na::{Isometry3, Point2, Point3, Translation3, UnitQuaternion, Vector3};
@@ -339,6 +339,30 @@ impl SceneNodeData {
     pub fn set_texture_from_memory(&mut self, image_data: &[u8], name: &str) {
         let texture =
             TextureManager::get_global_manager(|tm| tm.add_image_from_memory(image_data, name));
+
+        self.set_texture(texture)
+    }
+
+    /// Sets the texture of the objects contained by this node and its children with specific wrap modes.
+    ///
+    /// The texture is loaded from a byte slice and registered by the global `TextureManager`.
+    ///
+    /// # Arguments
+    ///   * `image_data` - slice of bytes containing encoded image
+    ///   * `name` - &str identifier to store this texture under
+    ///   * `wrap_s` - texture wrapping mode for S (U) coordinate
+    ///   * `wrap_t` - texture wrapping mode for T (V) coordinate
+    #[inline]
+    pub fn set_texture_from_memory_with_wrap(
+        &mut self,
+        image_data: &[u8],
+        name: &str,
+        wrap_s: TextureWrapping,
+        wrap_t: TextureWrapping,
+    ) {
+        let texture = TextureManager::get_global_manager(|tm| {
+            tm.add_image_from_memory_with_wrap(image_data, name, wrap_s, wrap_t)
+        });
 
         self.set_texture(texture)
     }
@@ -1050,6 +1074,25 @@ impl SceneNode {
 
     pub fn set_texture_from_memory(&mut self, image_data: &[u8], name: &str) {
         self.data_mut().set_texture_from_memory(image_data, name)
+    }
+
+    /// Sets the texture of the objects contained by this node and its children from encoded image data
+    /// with specified wrap modes.
+    ///
+    /// # Arguments
+    ///   * `image_data` - slice of bytes containing encoded image
+    ///   * `name` - &str to identify this texture in `TextureManager`
+    ///   * `wrap_s` - horizontal (U) wrapping mode
+    ///   * `wrap_t` - vertical (V) wrapping mode
+    pub fn set_texture_from_memory_with_wrap(
+        &mut self,
+        image_data: &[u8],
+        name: &str,
+        wrap_s: TextureWrapping,
+        wrap_t: TextureWrapping,
+    ) {
+        self.data_mut()
+            .set_texture_from_memory_with_wrap(image_data, name, wrap_s, wrap_t)
     }
 
     /// Sets the texture of the objects contained by this node and its children.
