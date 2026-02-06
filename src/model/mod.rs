@@ -9,6 +9,7 @@ mod material;
 mod production;
 mod secure_content;
 mod slice;
+mod volumetric;
 
 // Re-export all public types from core module
 pub use core::{
@@ -45,4 +46,10 @@ pub use boolean_ops::{BooleanOpType, BooleanRef, BooleanShape};
 pub use displacement::{
     Channel, Disp2DCoords, Disp2DGroup, Displacement2D, FilterMode, NormVector, NormVectorGroup,
     TileStyle,
+};
+
+// Re-export all public types from volumetric module
+pub use volumetric::{
+    ImplicitVolume, Voxel, VoxelGrid, VolumetricBoundary, VolumetricData, VolumetricProperty,
+    VolumetricPropertyGroup,
 };

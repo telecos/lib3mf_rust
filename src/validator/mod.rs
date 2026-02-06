@@ -15,6 +15,7 @@ mod displacement;
 mod material;
 mod production;
 mod slice;
+mod volumetric;
 
 // Re-export public API functions
 pub use beam_lattice::validate_beam_lattice;
@@ -38,6 +39,7 @@ pub use production::{
 pub use slice::{
     validate_planar_transform, validate_slice, validate_slice_extension, validate_slices,
 };
+pub use volumetric::validate_volumetric_extension;
 
 // Re-import internal functions from submodules for use within this module
 use core::{

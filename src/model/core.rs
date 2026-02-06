@@ -31,6 +31,8 @@ pub enum Extension {
     BooleanOperations,
     /// Displacement Extension
     Displacement,
+    /// Volumetric Extension
+    Volumetric,
 }
 
 impl Extension {
@@ -55,6 +57,7 @@ impl Extension {
             Extension::Displacement => {
                 "http://schemas.microsoft.com/3dmanufacturing/displacement/2022/07"
             }
+            Extension::Volumetric => "http://schemas.3mf.io/volumetric/2023/02",
         }
     }
 
@@ -93,6 +96,7 @@ impl Extension {
             "http://schemas.3mf.io/3dmanufacturing/displacement/2023/10" => {
                 Some(Extension::Displacement)
             }
+            "http://schemas.3mf.io/volumetric/2023/02" => Some(Extension::Volumetric),
             _ => None,
         }
     }
@@ -108,6 +112,7 @@ impl Extension {
             Extension::SecureContent => "SecureContent",
             Extension::BooleanOperations => "BooleanOperations",
             Extension::Displacement => "Displacement",
+            Extension::Volumetric => "Volumetric",
         }
     }
 }
@@ -158,6 +163,7 @@ impl ParserConfig {
         supported.insert(Extension::SecureContent);
         supported.insert(Extension::BooleanOperations);
         supported.insert(Extension::Displacement);
+        supported.insert(Extension::Volumetric);
         Self {
             supported_extensions: supported,
             custom_extensions: HashMap::new(),
@@ -202,6 +208,10 @@ impl ParserConfig {
             Extension::Displacement => {
                 self.registry
                     .register(Arc::new(crate::extensions::DisplacementExtensionHandler));
+            }
+            Extension::Volumetric => {
+                self.registry
+                    .register(Arc::new(crate::extensions::VolumetricExtensionHandler));
             }
             Extension::Core => {
                 // Core doesn't have a handler
@@ -880,6 +890,10 @@ pub struct Resources {
     pub composite_materials: Vec<super::CompositeMaterials>,
     /// List of multi-properties groups (materials extension)
     pub multi_properties: Vec<super::MultiProperties>,
+    /// List of volumetric data resources (volumetric extension)
+    pub volumetric_data: Vec<super::VolumetricData>,
+    /// List of volumetric property groups (volumetric extension)
+    pub volumetric_property_groups: Vec<super::VolumetricPropertyGroup>,
 }
 
 impl Resources {
@@ -898,6 +912,8 @@ impl Resources {
             texture2d_groups: Vec::new(),
             composite_materials: Vec::new(),
             multi_properties: Vec::new(),
+            volumetric_data: Vec::new(),
+            volumetric_property_groups: Vec::new(),
         }
     }
 }
@@ -1088,8 +1104,8 @@ mod tests {
     #[test]
     fn test_parser_config_with_all_extensions_has_default_registry() {
         let config = ParserConfig::with_all_extensions();
-        // Should have all 7 standard extension handlers
-        assert_eq!(config.registry().handlers().len(), 7);
+        // Should have all 8 standard extension handlers
+        assert_eq!(config.registry().handlers().len(), 8);
 
         // Verify specific handlers are present
         assert!(config.registry().get_handler(Extension::Material).is_some());
