@@ -12,7 +12,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{Mesh, Model, Triangle, Vertex};
-use nalgebra::Point3;
+use parry3d::math::Vector as ParryVector;
 use parry3d::shape::{Shape, TriMesh as ParryTriMesh};
 use std::collections::HashMap;
 
@@ -86,10 +86,10 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
     }
 
     // Convert mesh to parry3d format
-    let vertices: Vec<Point3<f32>> = mesh
+    let vertices: Vec<ParryVector> = mesh
         .vertices
         .iter()
-        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+        .map(|v| ParryVector::new(v.x as f32, v.y as f32, v.z as f32))
         .collect();
 
     let indices: Vec<[u32; 3]> = mesh
@@ -99,7 +99,8 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
         .collect();
 
     // Create parry3d TriMesh
-    let trimesh = ParryTriMesh::new(vertices, indices);
+    let trimesh = ParryTriMesh::new(vertices, indices)
+        .map_err(|e| Error::InvalidFormat(format!("Failed to create TriMesh: {}", e)))?;
 
     // Compute mass properties with density 1.0
     let mass_props = trimesh.mass_properties(1.0);
@@ -132,10 +133,10 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
     }
 
     // Convert mesh to parry3d format
-    let vertices: Vec<Point3<f32>> = mesh
+    let vertices: Vec<ParryVector> = mesh
         .vertices
         .iter()
-        .map(|v| Point3::new(v.x as f32, v.y as f32, v.z as f32))
+        .map(|v| ParryVector::new(v.x as f32, v.y as f32, v.z as f32))
         .collect();
 
     let indices: Vec<[u32; 3]> = mesh
@@ -145,7 +146,8 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         .collect();
 
     // Create parry3d TriMesh
-    let trimesh = ParryTriMesh::new(vertices, indices);
+    let trimesh = ParryTriMesh::new(vertices, indices)
+        .map_err(|e| Error::InvalidFormat(format!("Failed to create TriMesh: {}", e)))?;
 
     // Get the local AABB
     let aabb = trimesh.local_aabb();
