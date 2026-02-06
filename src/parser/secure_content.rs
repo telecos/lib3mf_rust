@@ -495,7 +495,7 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                 }
             }
             Ok(Event::Text(ref e)) => {
-                let text = e.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                let text = e.decode().map_err(|e| Error::InvalidXml(e.to_string()))?;
                 text_buffer.push_str(&text);
             }
             Ok(Event::End(ref e)) => {

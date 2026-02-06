@@ -28,7 +28,7 @@ ci = []
 
 [dependencies]
 zip = "7.2"
-quick-xml = "0.37"
+quick-xml = "0.39"
 thiserror = "2.0"
 # Cryptographic dependencies for SecureContent decryption
 rsa = "0.9"

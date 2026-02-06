@@ -461,8 +461,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
                         // Read the text content
                         if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                            let value =
-                                t.unescape().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = t.decode().map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             // Check for duplicate metadata names
                             // Per 3MF Core spec: metadata element names must be unique
