@@ -1,0 +1,65 @@
+version: 2
+updates:
+  # Main Rust project dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      # Group cryptographic dependencies together
+      crypto:
+        patterns:
+          - "rsa"
+          - "aes-gcm"
+          - "sha1"
+          - "sha2"
+      # Group math and geometry dependencies together
+      math:
+        patterns:
+          - "parry3d"
+          - "nalgebra"
+          - "clipper2"
+          - "earcutr"
+      # Group development dependencies together
+      dev-dependencies:
+        dependency-type: "development"
+    labels:
+      - "dependencies"
+      - "rust"
+
+  # Viewer tool dependencies
+  - package-ecosystem: "cargo"
+    directory: "/tools/viewer"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "rust"
+      - "viewer"
+
+  # Fuzzing dependencies
+  - package-ecosystem: "cargo"
+    directory: "/fuzz"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "rust"
+      - "fuzzing"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
