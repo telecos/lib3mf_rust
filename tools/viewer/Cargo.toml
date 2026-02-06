@@ -17,7 +17,7 @@ image = "0.25"
 kiss3d = { path = "kiss3d-patch" }
 rfd = { version = "0.12", default-features = false, features = ["xdg-portal"] }
 chrono = "0.4"
-zip = "2.4"
+zip = "7.2"
 # GitHub test suite browser dependencies
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
