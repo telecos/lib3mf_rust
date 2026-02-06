@@ -1,7 +1,7 @@
 //! 3MF extension tests
 //!
 //! Tests for all 3MF extensions including Material, Production, Slice,
-//! Beam Lattice, Boolean Operations, Displacement, and Secure Content
+//! Beam Lattice, Boolean Operations, Displacement, Secure Content, and Volumetric
 
 mod extensions {
     pub mod material {
@@ -35,5 +35,9 @@ mod extensions {
         pub mod handler;
         pub mod integration;
         pub mod key_provider;
+    }
+
+    pub mod volumetric {
+        pub mod real_files;
     }
 }
