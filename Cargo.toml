@@ -41,7 +41,7 @@ urlencoding = "2.1"
 parry3d = "0.26"
 nalgebra = "0.34"
 clipper2 = "0.5"
-regex = "1.10"
+regex = "1.12"
 earcutr = "0.5"
 
 [dev-dependencies]
