@@ -1,0 +1,43 @@
+[package]
+name = "lib3mf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+quick-xml = "0.37"
+
+[dependencies.lib3mf]
+path = ".."
+
+[[bin]]
+name = "fuzz_parse_3mf"
+path = "fuzz_targets/fuzz_parse_3mf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_parse_with_extensions"
+path = "fuzz_targets/fuzz_parse_with_extensions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_xml_parser"
+path = "fuzz_targets/fuzz_xml_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_mesh_validation"
+path = "fuzz_targets/fuzz_mesh_validation.rs"
+test = false
+doc = false
+bench = false
