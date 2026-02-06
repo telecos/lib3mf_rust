@@ -27,7 +27,7 @@ default = []
 ci = []
 
 [dependencies]
-zip = "2.3"
+zip = "7.2"
 quick-xml = "0.37"
 thiserror = "2.0"
 # Cryptographic dependencies for SecureContent decryption
@@ -46,7 +46,7 @@ earcutr = "0.5"
 
 [dev-dependencies]
 tempfile = "3.14"
-zip = "2.3"
+zip = "7.2"
 walkdir = "2.5"
 libtest-mimic = "0.8"
 criterion = "0.5"
