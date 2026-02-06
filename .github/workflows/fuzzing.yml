@@ -115,7 +115,7 @@ jobs:
       
       - name: Upload artifacts if crashes found
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
@@ -205,7 +205,7 @@ jobs:
       
       - name: Upload artifacts if crashes found
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fuzz-artifacts-long-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/

@@ -54,7 +54,7 @@ jobs:
           fi
       
       - name: Upload test suites artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-suites
           path: test_suites/
@@ -145,7 +145,7 @@ jobs:
       
       - name: Upload suite report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: conformance-report-${{ matrix.suite.name }}
           path: ${{ matrix.suite.name }}-results.md
@@ -235,7 +235,7 @@ jobs:
           echo "✅ Basic conformance report generated"
       
       - name: Upload combined conformance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: conformance-report-combined
           path: |
