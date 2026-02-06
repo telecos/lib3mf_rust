@@ -405,8 +405,8 @@ fn test_default_registry_handlers_are_called() {
     // Verify the registry has the expected handlers
     assert_eq!(
         config.registry().handlers().len(),
-        7,
-        "Default registry should have 7 handlers"
+        8,
+        "Default registry should have 8 handlers"
     );
 }
 

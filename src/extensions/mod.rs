@@ -38,6 +38,7 @@ pub mod material;
 pub mod production;
 pub mod secure_content;
 pub mod slice;
+pub mod volumetric;
 
 pub use beam_lattice::BeamLatticeExtensionHandler;
 pub use boolean_ops::BooleanOperationsExtensionHandler;
@@ -46,6 +47,7 @@ pub use material::MaterialExtensionHandler;
 pub use production::ProductionExtensionHandler;
 pub use secure_content::SecureContentExtensionHandler;
 pub use slice::SliceExtensionHandler;
+pub use volumetric::VolumetricExtensionHandler;
 
 use std::sync::Arc;
 
@@ -62,6 +64,7 @@ use crate::extension::ExtensionRegistry;
 /// - BooleanOperations
 /// - Displacement
 /// - SecureContent
+/// - Volumetric
 ///
 /// # Example
 ///
@@ -102,6 +105,7 @@ pub fn create_default_registry() -> ExtensionRegistry {
 /// - BooleanOperations
 /// - Displacement
 /// - SecureContent
+/// - Volumetric
 ///
 /// # Arguments
 ///
@@ -116,7 +120,7 @@ pub fn create_default_registry() -> ExtensionRegistry {
 /// let mut registry = ExtensionRegistry::new();
 /// register_all_handlers(&mut registry);
 ///
-/// assert_eq!(registry.handlers().len(), 7);
+/// assert_eq!(registry.handlers().len(), 8);
 /// ```
 pub fn register_all_handlers(registry: &mut ExtensionRegistry) {
     registry.register(Arc::new(MaterialExtensionHandler));
@@ -126,4 +130,5 @@ pub fn register_all_handlers(registry: &mut ExtensionRegistry) {
     registry.register(Arc::new(BooleanOperationsExtensionHandler));
     registry.register(Arc::new(DisplacementExtensionHandler));
     registry.register(Arc::new(SecureContentExtensionHandler));
+    registry.register(Arc::new(VolumetricExtensionHandler));
 }

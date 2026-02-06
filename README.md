@@ -384,6 +384,7 @@ The parser supports the following extensions:
 - `Extension::SecureContent` - Digital signatures and encryption
 - `Extension::BooleanOperations` - Volumetric design
 - `Extension::Displacement` - Surface displacement maps
+- `Extension::Volumetric` - Volumetric data (voxel grids and implicit volumes)
 
 ### Polygon Clipping for Slice Self-Intersection Resolution
 

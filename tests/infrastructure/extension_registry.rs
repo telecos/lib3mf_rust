@@ -12,11 +12,11 @@ fn test_create_default_registry() {
     // Create a default registry
     let registry = create_default_registry();
 
-    // Verify all 7 standard handlers are registered
+    // Verify all 8 standard handlers are registered
     assert_eq!(
         registry.handlers().len(),
-        7,
-        "Default registry should have 7 handlers"
+        8,
+        "Default registry should have 8 handlers"
     );
 
     // Verify each expected handler is present
@@ -48,6 +48,10 @@ fn test_create_default_registry() {
         registry.get_handler(Extension::SecureContent).is_some(),
         "SecureContent handler should be registered"
     );
+    assert!(
+        registry.get_handler(Extension::Volumetric).is_some(),
+        "Volumetric handler should be registered"
+    );
 }
 
 #[test]
@@ -59,11 +63,11 @@ fn test_register_all_handlers() {
     // Register all handlers
     register_all_handlers(&mut registry);
 
-    // Verify all 7 handlers are registered
+    // Verify all 8 handlers are registered
     assert_eq!(
         registry.handlers().len(),
-        7,
-        "Registry should have 7 handlers after registration"
+        8,
+        "Registry should have 8 handlers after registration"
     );
 
     // Verify each handler is present
@@ -74,6 +78,7 @@ fn test_register_all_handlers() {
     assert!(registry.get_handler(Extension::BooleanOperations).is_some());
     assert!(registry.get_handler(Extension::Displacement).is_some());
     assert!(registry.get_handler(Extension::SecureContent).is_some());
+    assert!(registry.get_handler(Extension::Volumetric).is_some());
 }
 
 #[test]

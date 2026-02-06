@@ -49,6 +49,7 @@ pub fn write_model_xml<W: IoWrite>(model: &Model, writer: W) -> Result<()> {
             Extension::SecureContent => ("sc", ext.namespace()),
             Extension::BooleanOperations => ("bool", ext.namespace()),
             Extension::Displacement => ("d", ext.namespace()),
+            Extension::Volumetric => ("v", ext.namespace()),
             Extension::Core => continue,
         };
 
@@ -73,6 +74,7 @@ pub fn write_model_xml<W: IoWrite>(model: &Model, writer: W) -> Result<()> {
                 Extension::SecureContent => "sc",
                 Extension::BooleanOperations => "bool",
                 Extension::Displacement => "d",
+                Extension::Volumetric => "v",
                 Extension::Core => "",
             })
             .filter(|s| !s.is_empty())
