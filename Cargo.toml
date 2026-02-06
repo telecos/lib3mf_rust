@@ -27,26 +27,26 @@ default = []
 ci = []
 
 [dependencies]
-zip = "2.3"
+zip = "7.2"
 quick-xml = "0.39"
 thiserror = "2.0"
 # Cryptographic dependencies for SecureContent decryption
 rsa = "0.9"
 aes-gcm = "0.10"
 base64 = "0.22"
-flate2 = "1.0"
+flate2 = "1.1"
 sha1 = "0.10"
 sha2 = "0.10"
 urlencoding = "2.1"
-parry3d = "0.17"
-nalgebra = "0.33"
-clipper2 = "0.2"
+parry3d = "0.26"
+nalgebra = "0.34"
+clipper2 = "0.5"
 regex = "1.10"
 earcutr = "0.5"
 
 [dev-dependencies]
 tempfile = "3.14"
-zip = "2.3"
+zip = "7.2"
 walkdir = "2.5"
 libtest-mimic = "0.8"
 criterion = "0.5"
