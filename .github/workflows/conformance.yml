@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Cache test suites
         id: cache-test-suites
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: test_suites
           key: ${{ runner.os }}-test-suites-${{ hashFiles('.github/workflows/conformance.yml') }}
