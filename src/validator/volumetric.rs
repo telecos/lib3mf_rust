@@ -53,8 +53,12 @@ pub fn validate_volumetric_extension(model: &Model) -> Result<()> {
                     "VolumetricData resource {}: Invalid boundary - min coordinates must be less than max coordinates.\n\
                      Found min: ({}, {}, {}), max: ({}, {}, {}).",
                     vol_data.id,
-                    boundary.min.0, boundary.min.1, boundary.min.2,
-                    boundary.max.0, boundary.max.1, boundary.max.2
+                    boundary.min.0,
+                    boundary.min.1,
+                    boundary.min.2,
+                    boundary.max.0,
+                    boundary.max.1,
+                    boundary.max.2
                 )));
             }
         }
@@ -79,8 +83,12 @@ pub fn validate_volumetric_extension(model: &Model) -> Result<()> {
                     return Err(Error::InvalidModel(format!(
                         "VolumetricData resource {}: Voxel at position ({}, {}, {}) is outside grid dimensions ({}, {}, {}).",
                         vol_data.id,
-                        voxel.position.0, voxel.position.1, voxel.position.2,
-                        voxels.dimensions.0, voxels.dimensions.1, voxels.dimensions.2
+                        voxel.position.0,
+                        voxel.position.1,
+                        voxel.position.2,
+                        voxels.dimensions.0,
+                        voxels.dimensions.1,
+                        voxels.dimensions.2
                     )));
                 }
 
@@ -125,7 +133,9 @@ pub fn validate_volumetric_extension(model: &Model) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Voxel, VoxelGrid, VolumetricBoundary, VolumetricData, VolumetricPropertyGroup};
+    use crate::model::{
+        VolumetricBoundary, VolumetricData, VolumetricPropertyGroup, Voxel, VoxelGrid,
+    };
 
     #[test]
     fn test_validate_empty_model() {
@@ -136,10 +146,7 @@ mod tests {
     #[test]
     fn test_validate_missing_extension_declaration() {
         let mut model = Model::new();
-        model
-            .resources
-            .volumetric_data
-            .push(VolumetricData::new(1));
+        model.resources.volumetric_data.push(VolumetricData::new(1));
 
         let result = validate_volumetric_extension(&model);
         assert!(result.is_err());
@@ -151,10 +158,7 @@ mod tests {
     fn test_validate_with_extension_declared() {
         let mut model = Model::new();
         model.required_extensions.push(Extension::Volumetric);
-        model
-            .resources
-            .volumetric_data
-            .push(VolumetricData::new(1));
+        model.resources.volumetric_data.push(VolumetricData::new(1));
 
         assert!(validate_volumetric_extension(&model).is_ok());
     }
@@ -166,10 +170,7 @@ mod tests {
 
         let mut vol_data = VolumetricData::new(1);
         // Invalid boundary: min >= max
-        vol_data.boundary = Some(VolumetricBoundary::new(
-            (10.0, 10.0, 10.0),
-            (5.0, 5.0, 5.0),
-        ));
+        vol_data.boundary = Some(VolumetricBoundary::new((10.0, 10.0, 10.0), (5.0, 5.0, 5.0)));
         model.resources.volumetric_data.push(vol_data);
 
         let result = validate_volumetric_extension(&model);

@@ -50,6 +50,6 @@ pub use displacement::{
 
 // Re-export all public types from volumetric module
 pub use volumetric::{
-    ImplicitVolume, Voxel, VoxelGrid, VolumetricBoundary, VolumetricData, VolumetricProperty,
-    VolumetricPropertyGroup,
+    ImplicitVolume, VolumetricBoundary, VolumetricData, VolumetricProperty,
+    VolumetricPropertyGroup, Voxel, VoxelGrid,
 };

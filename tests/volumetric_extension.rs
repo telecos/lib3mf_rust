@@ -1,8 +1,7 @@
 //! Integration tests for the Volumetric extension
 
 use lib3mf::{
-    Extension, Model, VolumetricBoundary, VolumetricData, VolumetricPropertyGroup, Voxel,
-    VoxelGrid,
+    Extension, Model, VolumetricBoundary, VolumetricData, VolumetricPropertyGroup, Voxel, VoxelGrid,
 };
 
 #[test]
@@ -41,10 +40,7 @@ fn test_volumetric_extension_with_properties() {
 
     // Add property group
     let prop_group = VolumetricPropertyGroup::new(1);
-    model
-        .resources
-        .volumetric_property_groups
-        .push(prop_group);
+    model.resources.volumetric_property_groups.push(prop_group);
 
     // Add volumetric data with voxels referencing properties
     let mut vol_data = VolumetricData::new(2);
@@ -85,10 +81,7 @@ fn test_volumetric_extension_handler() {
     let mut model = Model::new();
     assert!(!handler.is_used_in_model(&model));
 
-    model
-        .resources
-        .volumetric_data
-        .push(VolumetricData::new(1));
+    model.resources.volumetric_data.push(VolumetricData::new(1));
     assert!(handler.is_used_in_model(&model));
 
     // Test registration
@@ -114,11 +107,21 @@ fn test_volumetric_parser_config() {
 
     // Test with_all_extensions includes volumetric
     let config = ParserConfig::with_all_extensions();
-    assert!(config.registry().get_handler(Extension::Volumetric).is_some());
+    assert!(
+        config
+            .registry()
+            .get_handler(Extension::Volumetric)
+            .is_some()
+    );
 
     // Test with_extension for volumetric
     let config = ParserConfig::new().with_extension(Extension::Volumetric);
-    assert!(config.registry().get_handler(Extension::Volumetric).is_some());
+    assert!(
+        config
+            .registry()
+            .get_handler(Extension::Volumetric)
+            .is_some()
+    );
 }
 
 #[test]

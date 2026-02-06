@@ -129,8 +129,8 @@ pub use model::{
     ImplicitVolume, KEKParams, Material, Mesh, MetadataEntry, Model, Multi, MultiProperties,
     NormVector, NormVectorGroup, Object, ObjectType, ParserConfig, ProductionInfo, ResourceData,
     ResourceDataGroup, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup,
-    Thumbnail, TileStyle, Triangle, Vertex, Voxel, VoxelGrid, VolumetricBoundary, VolumetricData,
-    VolumetricProperty, VolumetricPropertyGroup,
+    Thumbnail, TileStyle, Triangle, Vertex, VolumetricBoundary, VolumetricData, VolumetricProperty,
+    VolumetricPropertyGroup, Voxel, VoxelGrid,
 };
 
 use std::io::Read;

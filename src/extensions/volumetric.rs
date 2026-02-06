@@ -81,10 +81,7 @@ mod tests {
         let mut model = Model::new();
 
         // Add volumetric data
-        model
-            .resources
-            .volumetric_data
-            .push(VolumetricData::new(1));
+        model.resources.volumetric_data.push(VolumetricData::new(1));
 
         assert!(handler.is_used_in_model(&model));
     }
