@@ -1,0 +1,212 @@
+name: Fuzzing
+
+on:
+  # Run fuzzing on a schedule (nightly)
+  schedule:
+    - cron: '0 2 * * *'  # Run at 2 AM UTC every day
+  
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      fuzz_time:
+        description: 'Fuzzing time in seconds per target'
+        required: false
+        default: '300'
+        type: string
+  
+  # Run on PRs that modify fuzzing infrastructure
+  pull_request:
+    paths:
+      - 'fuzz/**'
+      - '.github/workflows/fuzzing.yml'
+
+env:
+  FUZZ_TIME: ${{ github.event.inputs.fuzz_time || '300' }}
+
+jobs:
+  fuzzing:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_parse_3mf
+          - fuzz_parse_with_extensions
+          - fuzz_xml_parser
+          - fuzz_mesh_validation
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+      
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-fuzz-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-fuzz-
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-fuzz-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-fuzz-
+      
+      - name: Cache fuzz build
+        uses: actions/cache@v4
+        with:
+          path: fuzz/target
+          key: ${{ runner.os }}-fuzz-build-${{ matrix.target }}-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-fuzz-build-${{ matrix.target }}-
+      
+      - name: Setup fuzzing corpus
+        run: |
+          # Create corpus directories
+          mkdir -p fuzz/corpus/fuzz_parse_3mf
+          mkdir -p fuzz/corpus/fuzz_parse_with_extensions
+          
+          # Copy test files to corpus
+          cp test_files/core/*.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          cp test_files/material/*.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          cp test_files/components/*.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          cp test_files/test_thumbnail.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          
+          # Copy all test files to extensions corpus
+          find test_files -name "*.3mf" -type f -exec cp {} fuzz/corpus/fuzz_parse_with_extensions/ \; 2>/dev/null || true
+      
+      - name: Build fuzzer
+        run: cargo fuzz build ${{ matrix.target }}
+      
+      - name: Run fuzzer
+        run: |
+          # Run fuzzer for specified time
+          cargo fuzz run ${{ matrix.target }} -- \
+            -max_total_time=${{ env.FUZZ_TIME }} \
+            -print_final_stats=1 \
+            || true
+        continue-on-error: true
+      
+      - name: Check for crashes
+        run: |
+          if [ -d "fuzz/artifacts/${{ matrix.target }}" ]; then
+            crash_count=$(find fuzz/artifacts/${{ matrix.target }} -type f | wc -l)
+            if [ $crash_count -gt 0 ]; then
+              echo "::error::Found $crash_count crash(es) in ${{ matrix.target }}"
+              echo "Crashes:"
+              ls -lh fuzz/artifacts/${{ matrix.target }}
+              exit 1
+            fi
+          fi
+      
+      - name: Upload artifacts if crashes found
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 30
+
+  continuous-fuzzing:
+    name: Continuous Fuzzing (Long Run)
+    runs-on: ubuntu-latest
+    # Only run on schedule, not on PRs
+    if: github.event_name == 'schedule'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_parse_3mf
+          - fuzz_parse_with_extensions
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+      
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-fuzz-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-fuzz-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache fuzz build
+        uses: actions/cache@v4
+        with:
+          path: fuzz/target
+          key: ${{ runner.os }}-fuzz-build-long-${{ matrix.target }}-${{ hashFiles('fuzz/Cargo.lock') }}
+      
+      - name: Setup fuzzing corpus
+        run: |
+          # Create corpus directories
+          mkdir -p fuzz/corpus/fuzz_parse_3mf
+          mkdir -p fuzz/corpus/fuzz_parse_with_extensions
+          
+          # Copy test files to corpus
+          cp test_files/core/*.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          cp test_files/material/*.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          cp test_files/components/*.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          cp test_files/test_thumbnail.3mf fuzz/corpus/fuzz_parse_3mf/ 2>/dev/null || true
+          
+          # Copy all test files to extensions corpus
+          find test_files -name "*.3mf" -type f -exec cp {} fuzz/corpus/fuzz_parse_with_extensions/ \; 2>/dev/null || true
+      
+      - name: Build fuzzer
+        run: cargo fuzz build ${{ matrix.target }}
+      
+      - name: Run long fuzzing session
+        run: |
+          # Run fuzzer for 1 hour (3600 seconds)
+          cargo fuzz run ${{ matrix.target }} -- \
+            -max_total_time=3600 \
+            -print_final_stats=1 \
+            || true
+        continue-on-error: true
+      
+      - name: Check for crashes
+        run: |
+          if [ -d "fuzz/artifacts/${{ matrix.target }}" ]; then
+            crash_count=$(find fuzz/artifacts/${{ matrix.target }} -type f | wc -l)
+            if [ $crash_count -gt 0 ]; then
+              echo "::error::Found $crash_count crash(es) in ${{ matrix.target }}"
+              echo "Crashes:"
+              ls -lh fuzz/artifacts/${{ matrix.target }}
+              exit 1
+            fi
+          fi
+      
+      - name: Upload artifacts if crashes found
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-long-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 90

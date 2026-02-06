@@ -838,6 +838,45 @@ Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automaticall
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 
+## Fuzzing
+
+The library includes comprehensive fuzzing infrastructure using cargo-fuzz and libFuzzer to discover bugs, crashes, and security vulnerabilities.
+
+### Fuzzing Targets
+
+- **fuzz_parse_3mf**: Tests complete 3MF parsing pipeline (ZIP + XML + model construction)
+- **fuzz_parse_with_extensions**: Tests parsing with all 7 extensions enabled
+- **fuzz_xml_parser**: Tests XML parser robustness with malformed inputs
+- **fuzz_mesh_validation**: Tests mesh operations (volume, AABB, slicing)
+
+### Running Fuzzers Locally
+
+Fuzzing requires Rust nightly:
+
+```bash
+# Install nightly and cargo-fuzz
+rustup install nightly
+rustup default nightly
+cargo install cargo-fuzz
+
+# Run a fuzzer for 5 minutes
+cargo fuzz run fuzz_parse_3mf -- -max_total_time=300
+
+# Run all fuzzers
+for target in fuzz_parse_3mf fuzz_parse_with_extensions fuzz_xml_parser fuzz_mesh_validation; do
+    cargo fuzz run $target -- -max_total_time=60
+done
+```
+
+### Continuous Fuzzing
+
+Fuzzing runs automatically via GitHub Actions:
+- **Nightly**: Every day at 2 AM UTC (5 minutes per target)
+- **Extended**: 1-hour sessions for main parsers
+- **PR checks**: On fuzzing infrastructure changes
+
+See [fuzz/README.md](fuzz/README.md) for detailed fuzzing documentation.
+
 ## Performance
 
 The library is optimized for parsing large 3MF files efficiently:
