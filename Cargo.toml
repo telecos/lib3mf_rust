@@ -18,6 +18,7 @@ exclude = [
     "*.py",
     "test_suites/",
     "test_files/",
+    "fuzz/",
 ]
 
 [features]
