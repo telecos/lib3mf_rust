@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleaned up non-standard implementation documentation
   - Reorganized viewer documentation
 
+## [1.1.1] - 2026-02-08
+
+### Added
+
+- **Volumetric Extension** - Full support for volumetric data in 3MF files:
+  - Parsing of `<v:volumetricdata>`, `<v:boundary>`, `<v:voxels>`, `<v:voxel>`,
+    `<v:volumetricpropertygroup>`, `<v:property>`, and `<v:implicit>` elements
+  - Writing/serialization of all volumetric extension elements
+  - Complete round-trip (parse → modify → write) support
+  - Data types: `VolumetricData`, `VoxelGrid`, `Voxel`, `VolumetricBoundary`,
+    `ImplicitVolume`, `VolumetricPropertyGroup`, `VolumetricProperty`
+  - Extension handler (`VolumetricExtensionHandler`) registered in default registry
+  - Validation: boundary checks, voxel bounds, spacing, dimension, duplicate-ID,
+    and required-extension declaration
+  - `volumetric_demo` example for creating, reading, and round-tripping volumetric data
+  - Integration tests including file parsing and round-trip verification
+
 ## [0.1.0] - 2024-01-01
 
 ### Added

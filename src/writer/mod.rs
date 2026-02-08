@@ -9,6 +9,7 @@ mod core;
 mod displacement;
 mod material;
 mod production;
+mod volumetric;
 
 use crate::error::{Error, Result};
 use crate::model::*;
@@ -177,6 +178,16 @@ fn write_resources<W: IoWrite>(writer: &mut Writer<W>, resources: &Resources) ->
     // Write disp2dgroup resources (displacement extension)
     for group in &resources.disp2d_groups {
         displacement::write_disp2d_group(writer, group)?;
+    }
+
+    // Write volumetric property groups (volumetric extension)
+    for group in &resources.volumetric_property_groups {
+        volumetric::write_volumetric_property_group(writer, group)?;
+    }
+
+    // Write volumetric data resources (volumetric extension)
+    for vol_data in &resources.volumetric_data {
+        volumetric::write_volumetric_data(writer, vol_data)?;
     }
 
     // Write objects
