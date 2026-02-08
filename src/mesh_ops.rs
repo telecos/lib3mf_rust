@@ -85,6 +85,17 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
         return Ok(0.0);
     }
 
+    // Validate triangle indices
+    let vertex_count = mesh.vertices.len();
+    for (i, triangle) in mesh.triangles.iter().enumerate() {
+        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count {
+            return Err(Error::InvalidFormat(format!(
+                "Triangle {} has invalid vertex indices: ({}, {}, {}) but only {} vertices exist",
+                i, triangle.v1, triangle.v2, triangle.v3, vertex_count
+            )));
+        }
+    }
+
     // Convert mesh to parry3d format
     let vertices: Vec<ParryVector> = mesh
         .vertices
@@ -130,6 +141,17 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         return Err(Error::InvalidFormat(
             "Cannot compute bounding box of mesh with no triangles".to_string(),
         ));
+    }
+
+    // Validate triangle indices
+    let vertex_count = mesh.vertices.len();
+    for (i, triangle) in mesh.triangles.iter().enumerate() {
+        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count {
+            return Err(Error::InvalidFormat(format!(
+                "Triangle {} has invalid vertex indices: ({}, {}, {}) but only {} vertices exist",
+                i, triangle.v1, triangle.v2, triangle.v3, vertex_count
+            )));
+        }
     }
 
     // Convert mesh to parry3d format
