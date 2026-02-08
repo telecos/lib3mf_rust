@@ -129,12 +129,38 @@ Fuzzing runs automatically via GitHub Actions in `.github/workflows/fuzzing.yml`
   - Quick fuzzing (5 minutes per target)
   - Extended fuzzing (1 hour for main parsers)
 
+### Automatic Bug Reporting
+
+**New Feature:** When fuzzing discovers a crash, the CI workflow automatically:
+
+1. **Analyzes the crash** using `.github/scripts/analyze_fuzz_crash.py`:
+   - Reproduces the crash to capture stack traces
+   - Classifies the crash type (panic, overflow, timeout, etc.)
+   - Assesses severity (low, medium, high, critical)
+   - Provides initial investigation guidance
+
+2. **Creates a GitHub issue** with:
+   - Descriptive title including crash type and hash
+   - Priority badge based on severity
+   - Stack trace and error details
+   - Step-by-step reproduction instructions
+   - Initial investigation checklist
+   - Automatic labels: `bug`, `fuzzing`, and priority (`P0`-`P3`)
+   - Link to the workflow run with the crash artifact
+
+3. **Avoids duplicates** by:
+   - Checking for existing open issues with the same crash hash
+   - Adding a comment to existing issues if the crash reproduces
+   - Only creating new issues for unique crashes
+
 ### Manual Trigger
 You can manually trigger fuzzing from GitHub Actions with custom duration:
 1. Go to Actions tab
 2. Select "Fuzzing" workflow
 3. Click "Run workflow"
 4. Specify fuzzing time in seconds
+
+**Note:** Manual triggers and PR checks do NOT create issues automatically - only scheduled nightly runs create issues. This prevents noise from intentional testing.
 
 ### PR Checks
 Fuzzing runs on PRs that modify:
@@ -215,6 +241,36 @@ Fuzzing is a critical security testing tool. All crashes found should be:
 3. Added to regression tests
 
 Report security issues privately to the maintainers.
+
+### Crash Analysis Script
+
+The `.github/scripts/analyze_fuzz_crash.py` script provides automated crash analysis:
+
+```bash
+# Analyze a crash artifact
+python3 .github/scripts/analyze_fuzz_crash.py <target> <artifact_path>
+
+# Example
+python3 .github/scripts/analyze_fuzz_crash.py fuzz_parse_3mf fuzz/artifacts/fuzz_parse_3mf/crash-abc123
+```
+
+**Features:**
+- Reproduces the crash to capture full error output
+- Classifies crash type (panic, overflow, stack overflow, timeout, etc.)
+- Assesses severity (low, medium, high, critical)
+- Extracts stack traces automatically
+- Provides investigation guidance specific to crash type
+- Outputs JSON for CI integration
+
+**Crash Types Detected:**
+- Panic (index out of bounds, unwrap, overflow, etc.)
+- Stack overflow (deep recursion)
+- Out of memory (excessive allocation)
+- Timeout/hang (infinite loops)
+- Assertion failures
+- Critical issues (segfaults, undefined behavior)
+
+The script is automatically used by the CI workflow to generate detailed issue reports.
 
 ## Resources
 

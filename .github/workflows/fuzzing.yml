@@ -102,6 +102,7 @@ jobs:
         continue-on-error: true
       
       - name: Check for crashes
+        id: check_crashes
         run: |
           if [ -d "fuzz/artifacts/${{ matrix.target }}" ]; then
             crash_count=$(find fuzz/artifacts/${{ matrix.target }} -type f | wc -l)
@@ -109,9 +110,29 @@ jobs:
               echo "::error::Found $crash_count crash(es) in ${{ matrix.target }}"
               echo "Crashes:"
               ls -lh fuzz/artifacts/${{ matrix.target }}
+              
+              # Store crash info for issue creation
+              echo "crash_count=$crash_count" >> $GITHUB_OUTPUT
+              
+              # Get the first crash file for analysis
+              first_crash=$(find fuzz/artifacts/${{ matrix.target }} -type f | head -n 1)
+              echo "first_crash=$first_crash" >> $GITHUB_OUTPUT
+              
               exit 1
             fi
           fi
+      
+      - name: Analyze crash and prepare issue
+        if: failure() && steps.check_crashes.outputs.crash_count
+        id: analyze_crash
+        run: |
+          # Install Python dependencies if needed
+          python3 --version
+          
+          # Run crash analysis
+          python3 .github/scripts/analyze_fuzz_crash.py \
+            "${{ matrix.target }}" \
+            "${{ steps.check_crashes.outputs.first_crash }}"
       
       - name: Upload artifacts if crashes found
         if: failure()
@@ -120,6 +141,56 @@ jobs:
           name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
           retention-days: 30
+      
+      - name: Create issue for crash
+        if: failure() && steps.check_crashes.outputs.crash_count && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const issueData = JSON.parse(fs.readFileSync('/tmp/issue_output.json', 'utf8'));
+            
+            // Check if similar issue already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'fuzzing',
+              per_page: 100
+            });
+            
+            // Extract hash from title for deduplication
+            const titleMatch = issueData.title.match(/\(([a-f0-9]{8})\)/);
+            const crashHash = titleMatch ? titleMatch[1] : null;
+            
+            // Check if we already have an issue for this crash
+            const duplicateIssue = existingIssues.data.find(issue => 
+              issue.title.includes(crashHash) && issue.title.includes('${{ matrix.target }}')
+            );
+            
+            if (duplicateIssue) {
+              console.log(`Similar issue already exists: #${duplicateIssue.number}`);
+              console.log(`Skipping issue creation to avoid duplicates`);
+              
+              // Add a comment to the existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: duplicateIssue.number,
+                body: `🔄 This crash was reproduced again in fuzzing run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              });
+            } else {
+              // Create new issue
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueData.title,
+                body: issueData.body + `\n\n**Workflow Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                labels: issueData.labels
+              });
+              
+              console.log(`Created issue #${issue.data.number}: ${issue.data.title}`);
+            }
 
   continuous-fuzzing:
     name: Continuous Fuzzing (Long Run)
@@ -192,6 +263,7 @@ jobs:
         continue-on-error: true
       
       - name: Check for crashes
+        id: check_crashes
         run: |
           if [ -d "fuzz/artifacts/${{ matrix.target }}" ]; then
             crash_count=$(find fuzz/artifacts/${{ matrix.target }} -type f | wc -l)
@@ -199,9 +271,29 @@ jobs:
               echo "::error::Found $crash_count crash(es) in ${{ matrix.target }}"
               echo "Crashes:"
               ls -lh fuzz/artifacts/${{ matrix.target }}
+              
+              # Store crash info for issue creation
+              echo "crash_count=$crash_count" >> $GITHUB_OUTPUT
+              
+              # Get the first crash file for analysis
+              first_crash=$(find fuzz/artifacts/${{ matrix.target }} -type f | head -n 1)
+              echo "first_crash=$first_crash" >> $GITHUB_OUTPUT
+              
               exit 1
             fi
           fi
+      
+      - name: Analyze crash and prepare issue
+        if: failure() && steps.check_crashes.outputs.crash_count
+        id: analyze_crash
+        run: |
+          # Install Python dependencies if needed
+          python3 --version
+          
+          # Run crash analysis
+          python3 .github/scripts/analyze_fuzz_crash.py \
+            "${{ matrix.target }}" \
+            "${{ steps.check_crashes.outputs.first_crash }}"
       
       - name: Upload artifacts if crashes found
         if: failure()
@@ -210,3 +302,53 @@ jobs:
           name: fuzz-artifacts-long-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
           retention-days: 90
+      
+      - name: Create issue for crash
+        if: failure() && steps.check_crashes.outputs.crash_count
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const issueData = JSON.parse(fs.readFileSync('/tmp/issue_output.json', 'utf8'));
+            
+            // Check if similar issue already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'fuzzing',
+              per_page: 100
+            });
+            
+            // Extract hash from title for deduplication
+            const titleMatch = issueData.title.match(/\(([a-f0-9]{8})\)/);
+            const crashHash = titleMatch ? titleMatch[1] : null;
+            
+            // Check if we already have an issue for this crash
+            const duplicateIssue = existingIssues.data.find(issue => 
+              issue.title.includes(crashHash) && issue.title.includes('${{ matrix.target }}')
+            );
+            
+            if (duplicateIssue) {
+              console.log(`Similar issue already exists: #${duplicateIssue.number}`);
+              console.log(`Skipping issue creation to avoid duplicates`);
+              
+              // Add a comment to the existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: duplicateIssue.number,
+                body: `🔄 This crash was reproduced again in long fuzzing run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              });
+            } else {
+              // Create new issue
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueData.title,
+                body: issueData.body + `\n\n**Workflow Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                labels: issueData.labels
+              });
+              
+              console.log(`Created issue #${issue.data.number}: ${issue.data.title}`);
+            }
