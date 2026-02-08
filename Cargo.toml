@@ -1,6 +1,6 @@
 [package]
 name = "lib3mf"
-version = "1.1.1"
+version = "0.1.1"
 edition = "2024"
 authors = ["lib3mf_rust contributors"]
 description = "Pure Rust implementation for 3MF (3D Manufacturing Format) parsing and writing"
