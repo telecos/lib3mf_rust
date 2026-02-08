@@ -70,23 +70,22 @@ pub fn compute_mesh_signed_volume(mesh: &Mesh) -> Result<f64> {
     Ok(volume)
 }
 
-/// Compute the unsigned volume of a mesh using parry3d
+/// Validate that mesh triangles have valid indices for parry3d
 ///
-/// Returns the absolute volume in cubic units. This is useful for computing
-/// the actual volume of a mesh without regard to orientation.
+/// This validates:
+/// 1. Vertex count fits in u32 (parry3d uses u32 for indices)
+/// 2. All triangle indices are valid (< vertex_count)
+/// 3. All triangle indices fit in u32 (prevents overflow when casting)
 ///
 /// # Arguments
-/// * `mesh` - The mesh to compute volume for
+/// * `mesh` - The mesh to validate
 ///
 /// # Returns
-/// The absolute volume of the mesh, or an error if the mesh is invalid
-pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
-    if mesh.vertices.is_empty() || mesh.triangles.is_empty() {
-        return Ok(0.0);
-    }
-
-    // Validate triangle indices and check they fit in u32
+/// Ok(()) if valid, or an error describing the validation failure
+fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
     let vertex_count = mesh.vertices.len();
+
+    // Check vertex count fits in u32
     if vertex_count > u32::MAX as usize {
         return Err(Error::InvalidFormat(format!(
             "Mesh has {} vertices, which exceeds u32::MAX ({})",
@@ -95,7 +94,9 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
         )));
     }
 
+    // Validate each triangle
     for (i, triangle) in mesh.triangles.iter().enumerate() {
+        // Check indices are valid
         if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count
         {
             return Err(Error::InvalidFormat(format!(
@@ -114,6 +115,27 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
             )));
         }
     }
+
+    Ok(())
+}
+
+/// Compute the unsigned volume of a mesh using parry3d
+///
+/// Returns the absolute volume in cubic units. This is useful for computing
+/// the actual volume of a mesh without regard to orientation.
+///
+/// # Arguments
+/// * `mesh` - The mesh to compute volume for
+///
+/// # Returns
+/// The absolute volume of the mesh, or an error if the mesh is invalid
+pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
+    if mesh.vertices.is_empty() || mesh.triangles.is_empty() {
+        return Ok(0.0);
+    }
+
+    // Validate mesh for parry3d
+    validate_mesh_for_parry3d(mesh)?;
 
     // Convert mesh to parry3d format
     let vertices: Vec<ParryVector> = mesh
@@ -162,35 +184,8 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         ));
     }
 
-    // Validate triangle indices and check they fit in u32
-    let vertex_count = mesh.vertices.len();
-    if vertex_count > u32::MAX as usize {
-        return Err(Error::InvalidFormat(format!(
-            "Mesh has {} vertices, which exceeds u32::MAX ({})",
-            vertex_count,
-            u32::MAX
-        )));
-    }
-
-    for (i, triangle) in mesh.triangles.iter().enumerate() {
-        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count
-        {
-            return Err(Error::InvalidFormat(format!(
-                "Triangle {} has invalid vertex indices: ({}, {}, {}) but only {} vertices exist",
-                i, triangle.v1, triangle.v2, triangle.v3, vertex_count
-            )));
-        }
-        // Check that indices fit in u32 (parry3d uses u32 for indices)
-        if triangle.v1 > u32::MAX as usize
-            || triangle.v2 > u32::MAX as usize
-            || triangle.v3 > u32::MAX as usize
-        {
-            return Err(Error::InvalidFormat(format!(
-                "Triangle {} has indices that exceed u32::MAX: ({}, {}, {})",
-                i, triangle.v1, triangle.v2, triangle.v3
-            )));
-        }
-    }
+    // Validate mesh for parry3d
+    validate_mesh_for_parry3d(mesh)?;
 
     // Convert mesh to parry3d format
     let vertices: Vec<ParryVector> = mesh
