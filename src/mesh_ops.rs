@@ -103,6 +103,16 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
                 i, triangle.v1, triangle.v2, triangle.v3, vertex_count
             )));
         }
+        // Check that indices fit in u32 (parry3d uses u32 for indices)
+        if triangle.v1 > u32::MAX as usize
+            || triangle.v2 > u32::MAX as usize
+            || triangle.v3 > u32::MAX as usize
+        {
+            return Err(Error::InvalidFormat(format!(
+                "Triangle {} has indices that exceed u32::MAX: ({}, {}, {})",
+                i, triangle.v1, triangle.v2, triangle.v3
+            )));
+        }
     }
 
     // Convert mesh to parry3d format
@@ -168,6 +178,16 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
             return Err(Error::InvalidFormat(format!(
                 "Triangle {} has invalid vertex indices: ({}, {}, {}) but only {} vertices exist",
                 i, triangle.v1, triangle.v2, triangle.v3, vertex_count
+            )));
+        }
+        // Check that indices fit in u32 (parry3d uses u32 for indices)
+        if triangle.v1 > u32::MAX as usize
+            || triangle.v2 > u32::MAX as usize
+            || triangle.v3 > u32::MAX as usize
+        {
+            return Err(Error::InvalidFormat(format!(
+                "Triangle {} has indices that exceed u32::MAX: ({}, {}, {})",
+                i, triangle.v1, triangle.v2, triangle.v3
             )));
         }
     }
@@ -1192,6 +1212,42 @@ mod tests {
             + normals[0].2 * normals[0].2)
             .sqrt();
         assert!((magnitude - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_triangle_indices_exceed_u32_max() {
+        // Test that triangle indices larger than u32::MAX are properly rejected
+        let mut mesh = Mesh::new();
+
+        // Add a few vertices
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.5, 1.0, 0.0));
+
+        // Create a triangle with an index that exceeds u32::MAX
+        // This simulates a corrupted or fuzzed input
+        let mut triangle = Triangle::new(0, 1, 2);
+        triangle.v1 = (u32::MAX as usize) + 1;
+        mesh.triangles.push(triangle);
+
+        // Both compute_mesh_volume and compute_mesh_aabb should reject this
+        let volume_result = compute_mesh_volume(&mesh);
+        assert!(volume_result.is_err());
+        let err_msg = volume_result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceed") || err_msg.contains("invalid"),
+            "Error message was: {}",
+            err_msg
+        );
+
+        let aabb_result = compute_mesh_aabb(&mesh);
+        assert!(aabb_result.is_err());
+        let err_msg = aabb_result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceed") || err_msg.contains("invalid"),
+            "Error message was: {}",
+            err_msg
+        );
     }
 }
 
