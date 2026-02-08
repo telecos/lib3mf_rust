@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleaned up non-standard implementation documentation
   - Reorganized viewer documentation
 
-## [1.1.1] - 2026-02-08
+## [0.1.1] - 2026-02-08
 
 ### Added
 
@@ -157,5 +157,6 @@ Key highlights:
 
 ---
 
-[Unreleased]: https://github.com/telecos/lib3mf_rust/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/telecos/lib3mf_rust/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/telecos/lib3mf_rust/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/telecos/lib3mf_rust/releases/tag/v0.1.0
