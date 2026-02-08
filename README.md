@@ -876,7 +876,13 @@ Fuzzing runs automatically via GitHub Actions:
 - **Extended**: 1-hour sessions for main parsers
 - **PR checks**: On fuzzing infrastructure changes
 
-See [fuzz/README.md](fuzz/README.md) for detailed fuzzing documentation.
+**Automatic Bug Reporting**: When crashes are discovered during nightly fuzzing, the CI automatically:
+- Analyzes the crash (type, severity, stack trace)
+- Creates a detailed GitHub issue with reproduction steps
+- Provides initial investigation guidance
+- Prevents duplicate issues for the same crash
+
+See [fuzz/README.md](fuzz/README.md) for detailed fuzzing documentation and [docs/FUZZING_AUTOMATION.md](docs/FUZZING_AUTOMATION.md) for details on the automated bug reporting system.
 
 ## Performance
 
