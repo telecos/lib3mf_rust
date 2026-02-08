@@ -88,7 +88,8 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
     // Validate triangle indices
     let vertex_count = mesh.vertices.len();
     for (i, triangle) in mesh.triangles.iter().enumerate() {
-        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count {
+        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count
+        {
             return Err(Error::InvalidFormat(format!(
                 "Triangle {} has invalid vertex indices: ({}, {}, {}) but only {} vertices exist",
                 i, triangle.v1, triangle.v2, triangle.v3, vertex_count
@@ -146,7 +147,8 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
     // Validate triangle indices
     let vertex_count = mesh.vertices.len();
     for (i, triangle) in mesh.triangles.iter().enumerate() {
-        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count {
+        if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count
+        {
             return Err(Error::InvalidFormat(format!(
                 "Triangle {} has invalid vertex indices: ({}, {}, {}) but only {} vertices exist",
                 i, triangle.v1, triangle.v2, triangle.v3, vertex_count
