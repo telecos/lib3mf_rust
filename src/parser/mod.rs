@@ -8,6 +8,7 @@ mod material;
 mod production;
 mod secure_content;
 mod slice;
+mod volumetric;
 
 use crate::error::{Error, Result};
 use crate::model::*;
@@ -37,6 +38,10 @@ use material::{
 use slice::{
     load_slice_references, parse_slice_polygon_start, parse_slice_segment, parse_slice_start,
     parse_slice_vertex, parse_sliceref, parse_slicestack_start,
+};
+use volumetric::{
+    parse_boundary, parse_implicit_start, parse_volumetric_property, parse_volumetricdata_start,
+    parse_volumetricpropertygroup_start, parse_voxel, parse_voxels_start,
 };
 
 // Re-export public functions to maintain API compatibility
@@ -265,6 +270,14 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut declared_displacement2d_ids = std::collections::HashSet::<usize>::new();
     let mut declared_normvectorgroup_ids = std::collections::HashSet::<usize>::new();
     let mut declared_disp2dgroup_ids = std::collections::HashSet::<usize>::new();
+
+    // Volumetric extension state
+    let mut current_volumetricdata: Option<VolumetricData> = None;
+    let mut in_volumetricdata = false;
+    let mut current_voxelgrid: Option<VoxelGrid> = None;
+    let mut in_voxels = false;
+    let mut current_volumetric_propgroup: Option<VolumetricPropertyGroup> = None;
+    let mut in_volumetric_propgroup = false;
 
     // Materials extension state for advanced features
     let mut current_texture2dgroup: Option<Texture2DGroup> = None;
@@ -1005,6 +1018,46 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             }
                         }
                     }
+                    // Volumetric extension elements
+                    "volumetricdata" if in_resources => {
+                        in_volumetricdata = true;
+                        let vol_data = parse_volumetricdata_start(&reader, e)?;
+                        current_volumetricdata = Some(vol_data);
+                    }
+                    "boundary" if in_volumetricdata => {
+                        let boundary = parse_boundary(&reader, e)?;
+                        if let Some(ref mut vol_data) = current_volumetricdata {
+                            vol_data.boundary = Some(boundary);
+                        }
+                    }
+                    "voxels" if in_volumetricdata => {
+                        in_voxels = true;
+                        let grid = parse_voxels_start(&reader, e)?;
+                        current_voxelgrid = Some(grid);
+                    }
+                    "voxel" if in_voxels => {
+                        if let Some(ref mut grid) = current_voxelgrid {
+                            let voxel = parse_voxel(&reader, e)?;
+                            grid.voxels.push(voxel);
+                        }
+                    }
+                    "implicit" if in_volumetricdata => {
+                        let implicit = parse_implicit_start(&reader, e)?;
+                        if let Some(ref mut vol_data) = current_volumetricdata {
+                            vol_data.implicit = Some(implicit);
+                        }
+                    }
+                    "volumetricpropertygroup" if in_resources => {
+                        in_volumetric_propgroup = true;
+                        let group = parse_volumetricpropertygroup_start(&reader, e)?;
+                        current_volumetric_propgroup = Some(group);
+                    }
+                    "property" if in_volumetric_propgroup => {
+                        if let Some(ref mut group) = current_volumetric_propgroup {
+                            let prop = parse_volumetric_property(&reader, e)?;
+                            group.properties.push(prop);
+                        }
+                    }
                     _ => {
                         // Unknown/custom extension element - validate that attribute values don't use namespace prefixes
                         let attrs = parse_attributes(&reader, e)?;
@@ -1160,6 +1213,26 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ballsets" => {
                         in_ballsets = false;
+                    }
+                    "volumetricdata" => {
+                        if let Some(mut vol_data) = current_volumetricdata.take() {
+                            if let Some(grid) = current_voxelgrid.take() {
+                                vol_data.voxels = Some(grid);
+                            }
+                            model.resources.volumetric_data.push(vol_data);
+                        }
+                        in_volumetricdata = false;
+                        in_voxels = false;
+                    }
+                    "voxels" => {
+                        // Voxel grid is finalized when volumetricdata closes
+                        in_voxels = false;
+                    }
+                    "volumetricpropertygroup" => {
+                        if let Some(group) = current_volumetric_propgroup.take() {
+                            model.resources.volumetric_property_groups.push(group);
+                        }
+                        in_volumetric_propgroup = false;
                     }
                     _ => {}
                 }
