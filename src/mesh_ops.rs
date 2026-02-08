@@ -331,6 +331,21 @@ pub fn triangle_plane_intersection(
     v2: &Vertex,
     z: f64,
 ) -> Option<(Point2D, Point2D)> {
+    // Validate input vertices - reject if any coordinate is NaN or infinite
+    if !v0.x.is_finite()
+        || !v0.y.is_finite()
+        || !v0.z.is_finite()
+        || !v1.x.is_finite()
+        || !v1.y.is_finite()
+        || !v1.z.is_finite()
+        || !v2.x.is_finite()
+        || !v2.y.is_finite()
+        || !v2.z.is_finite()
+        || !z.is_finite()
+    {
+        return None;
+    }
+
     let vertices = [v0, v1, v2];
     let mut intersections = Vec::with_capacity(2);
 
@@ -371,19 +386,30 @@ pub fn triangle_plane_intersection(
         let t = (z - za) / (zb - za);
         let x = va.x + t * (vb.x - va.x);
         let y = va.y + t * (vb.y - va.y);
-        intersections.push((x, y));
+
+        // Verify computed intersection point is valid
+        if x.is_finite() && y.is_finite() {
+            intersections.push((x, y));
+        }
     }
 
     // We need exactly 2 intersection points to form a line segment
     if intersections.len() >= 2 {
         // Remove duplicates (vertices on the plane might be counted multiple times)
         if intersections.len() > 2 {
-            intersections.sort_by(|a, b| {
-                a.0.partial_cmp(&b.0)
-                    .unwrap()
-                    .then(a.1.partial_cmp(&b.1).unwrap())
-            });
-            intersections.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10);
+            // Filter out any NaN values that might have slipped through
+            intersections.retain(|(x, y)| x.is_finite() && y.is_finite());
+
+            if intersections.len() >= 2 {
+                // Safe comparison that handles potential edge cases
+                intersections.sort_by(|a, b| {
+                    a.0.partial_cmp(&b.0)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                });
+                intersections
+                    .dedup_by(|a, b| (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10);
+            }
         }
 
         if intersections.len() >= 2 {
@@ -1638,6 +1664,47 @@ mod subdivision_tests {
 
         let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
         assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_triangle_plane_intersection_nan_handling() {
+        // Test that NaN values are handled gracefully without panicking
+        // This is a regression test for the fuzzing crash
+
+        // Triangle with NaN in x coordinate
+        let v0 = Vertex::new(f64::NAN, 0.0, 0.0);
+        let v1 = Vertex::new(10.0, 0.0, 10.0);
+        let v2 = Vertex::new(5.0, 10.0, 0.0);
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_none()); // Should return None, not panic
+
+        // Triangle with NaN in y coordinate
+        let v0 = Vertex::new(0.0, f64::NAN, 0.0);
+        let v1 = Vertex::new(10.0, 0.0, 10.0);
+        let v2 = Vertex::new(5.0, 10.0, 0.0);
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_none());
+
+        // Triangle with NaN in z coordinate
+        let v0 = Vertex::new(0.0, 0.0, f64::NAN);
+        let v1 = Vertex::new(10.0, 0.0, 10.0);
+        let v2 = Vertex::new(5.0, 10.0, 0.0);
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_none());
+
+        // Triangle with infinity values
+        let v0 = Vertex::new(f64::INFINITY, 0.0, 0.0);
+        let v1 = Vertex::new(10.0, 0.0, 10.0);
+        let v2 = Vertex::new(5.0, 10.0, 0.0);
+        let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
+        assert!(result.is_none());
+
+        // NaN z plane value
+        let v0 = Vertex::new(0.0, 0.0, 0.0);
+        let v1 = Vertex::new(10.0, 0.0, 10.0);
+        let v2 = Vertex::new(5.0, 10.0, 0.0);
+        let result = triangle_plane_intersection(&v0, &v1, &v2, f64::NAN);
+        assert!(result.is_none());
     }
 
     #[test]
