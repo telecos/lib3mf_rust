@@ -85,8 +85,16 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
         return Ok(0.0);
     }
 
-    // Validate triangle indices
+    // Validate triangle indices and check they fit in u32
     let vertex_count = mesh.vertices.len();
+    if vertex_count > u32::MAX as usize {
+        return Err(Error::InvalidFormat(format!(
+            "Mesh has {} vertices, which exceeds u32::MAX ({})",
+            vertex_count,
+            u32::MAX
+        )));
+    }
+
     for (i, triangle) in mesh.triangles.iter().enumerate() {
         if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count
         {
@@ -144,8 +152,16 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         ));
     }
 
-    // Validate triangle indices
+    // Validate triangle indices and check they fit in u32
     let vertex_count = mesh.vertices.len();
+    if vertex_count > u32::MAX as usize {
+        return Err(Error::InvalidFormat(format!(
+            "Mesh has {} vertices, which exceeds u32::MAX ({})",
+            vertex_count,
+            u32::MAX
+        )));
+    }
+
     for (i, triangle) in mesh.triangles.iter().enumerate() {
         if triangle.v1 >= vertex_count || triangle.v2 >= vertex_count || triangle.v3 >= vertex_count
         {
