@@ -332,9 +332,15 @@ pub fn triangle_plane_intersection(
     z: f64,
 ) -> Option<(Point2D, Point2D)> {
     // Validate input vertices - reject if any coordinate is NaN or infinite
-    if !v0.x.is_finite() || !v0.y.is_finite() || !v0.z.is_finite()
-        || !v1.x.is_finite() || !v1.y.is_finite() || !v1.z.is_finite()
-        || !v2.x.is_finite() || !v2.y.is_finite() || !v2.z.is_finite()
+    if !v0.x.is_finite()
+        || !v0.y.is_finite()
+        || !v0.z.is_finite()
+        || !v1.x.is_finite()
+        || !v1.y.is_finite()
+        || !v1.z.is_finite()
+        || !v2.x.is_finite()
+        || !v2.y.is_finite()
+        || !v2.z.is_finite()
         || !z.is_finite()
     {
         return None;
@@ -401,7 +407,8 @@ pub fn triangle_plane_intersection(
                         .unwrap_or(std::cmp::Ordering::Equal)
                         .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
                 });
-                intersections.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10);
+                intersections
+                    .dedup_by(|a, b| (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10);
             }
         }
 
@@ -1663,35 +1670,35 @@ mod subdivision_tests {
     fn test_triangle_plane_intersection_nan_handling() {
         // Test that NaN values are handled gracefully without panicking
         // This is a regression test for the fuzzing crash
-        
+
         // Triangle with NaN in x coordinate
         let v0 = Vertex::new(f64::NAN, 0.0, 0.0);
         let v1 = Vertex::new(10.0, 0.0, 10.0);
         let v2 = Vertex::new(5.0, 10.0, 0.0);
         let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
         assert!(result.is_none()); // Should return None, not panic
-        
+
         // Triangle with NaN in y coordinate
         let v0 = Vertex::new(0.0, f64::NAN, 0.0);
         let v1 = Vertex::new(10.0, 0.0, 10.0);
         let v2 = Vertex::new(5.0, 10.0, 0.0);
         let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
         assert!(result.is_none());
-        
+
         // Triangle with NaN in z coordinate
         let v0 = Vertex::new(0.0, 0.0, f64::NAN);
         let v1 = Vertex::new(10.0, 0.0, 10.0);
         let v2 = Vertex::new(5.0, 10.0, 0.0);
         let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
         assert!(result.is_none());
-        
+
         // Triangle with infinity values
         let v0 = Vertex::new(f64::INFINITY, 0.0, 0.0);
         let v1 = Vertex::new(10.0, 0.0, 10.0);
         let v2 = Vertex::new(5.0, 10.0, 0.0);
         let result = triangle_plane_intersection(&v0, &v1, &v2, 5.0);
         assert!(result.is_none());
-        
+
         // NaN z plane value
         let v0 = Vertex::new(0.0, 0.0, 0.0);
         let v1 = Vertex::new(10.0, 0.0, 10.0);
