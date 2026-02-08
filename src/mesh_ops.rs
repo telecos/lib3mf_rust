@@ -380,7 +380,7 @@ pub fn triangle_plane_intersection(
         let t = (z - za) / (zb - za);
         let x = va.x + t * (vb.x - va.x);
         let y = va.y + t * (vb.y - va.y);
-        
+
         // Verify computed intersection point is valid
         if x.is_finite() && y.is_finite() {
             intersections.push((x, y));
@@ -393,7 +393,7 @@ pub fn triangle_plane_intersection(
         if intersections.len() > 2 {
             // Filter out any NaN values that might have slipped through
             intersections.retain(|(x, y)| x.is_finite() && y.is_finite());
-            
+
             if intersections.len() >= 2 {
                 // Safe comparison that handles potential edge cases
                 intersections.sort_by(|a, b| {
