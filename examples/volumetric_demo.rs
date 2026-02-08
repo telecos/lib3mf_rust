@@ -133,10 +133,7 @@ fn create_and_roundtrip() {
 
     // 2. Create volumetric data with a voxel grid
     let mut vol_data = VolumetricData::new(2);
-    vol_data.boundary = Some(VolumetricBoundary::new(
-        (0.0, 0.0, 0.0),
-        (20.0, 20.0, 20.0),
-    ));
+    vol_data.boundary = Some(VolumetricBoundary::new((0.0, 0.0, 0.0), (20.0, 20.0, 20.0)));
 
     let mut grid = VoxelGrid::new((4, 4, 4));
     grid.spacing = Some((5.0, 5.0, 5.0));

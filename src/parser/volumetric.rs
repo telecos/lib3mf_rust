@@ -20,9 +20,15 @@ pub(super) fn parse_volumetricdata_start<R: std::io::BufRead>(
 
     let id = attrs
         .get("id")
-        .ok_or_else(|| Error::InvalidXml("volumetricdata missing required 'id' attribute".to_string()))?
+        .ok_or_else(|| {
+            Error::InvalidXml("volumetricdata missing required 'id' attribute".to_string())
+        })?
         .parse::<usize>()
-        .map_err(|_| Error::InvalidXml("volumetricdata 'id' must be a valid non-negative integer".to_string()))?;
+        .map_err(|_| {
+            Error::InvalidXml(
+                "volumetricdata 'id' must be a valid non-negative integer".to_string(),
+            )
+        })?;
 
     Ok(VolumetricData::new(id))
 }
@@ -86,19 +92,25 @@ pub(super) fn parse_voxel<R: std::io::BufRead>(
         .get("x")
         .ok_or_else(|| Error::InvalidXml("voxel missing required 'x' attribute".to_string()))?
         .parse::<usize>()
-        .map_err(|_| Error::InvalidXml("voxel 'x' must be a valid non-negative integer".to_string()))?;
+        .map_err(|_| {
+            Error::InvalidXml("voxel 'x' must be a valid non-negative integer".to_string())
+        })?;
 
     let y = attrs
         .get("y")
         .ok_or_else(|| Error::InvalidXml("voxel missing required 'y' attribute".to_string()))?
         .parse::<usize>()
-        .map_err(|_| Error::InvalidXml("voxel 'y' must be a valid non-negative integer".to_string()))?;
+        .map_err(|_| {
+            Error::InvalidXml("voxel 'y' must be a valid non-negative integer".to_string())
+        })?;
 
     let z = attrs
         .get("z")
         .ok_or_else(|| Error::InvalidXml("voxel missing required 'z' attribute".to_string()))?
         .parse::<usize>()
-        .map_err(|_| Error::InvalidXml("voxel 'z' must be a valid non-negative integer".to_string()))?;
+        .map_err(|_| {
+            Error::InvalidXml("voxel 'z' must be a valid non-negative integer".to_string())
+        })?;
 
     let mut voxel = Voxel::new((x, y, z));
 
@@ -127,9 +139,7 @@ pub(super) fn parse_volumetricpropertygroup_start<R: std::io::BufRead>(
     let id = attrs
         .get("id")
         .ok_or_else(|| {
-            Error::InvalidXml(
-                "volumetricpropertygroup missing required 'id' attribute".to_string(),
-            )
+            Error::InvalidXml("volumetricpropertygroup missing required 'id' attribute".to_string())
         })?
         .parse::<usize>()
         .map_err(|_| {
@@ -150,7 +160,9 @@ pub(super) fn parse_volumetric_property<R: std::io::BufRead>(
 
     let index = attrs
         .get("index")
-        .ok_or_else(|| Error::InvalidXml("property missing required 'index' attribute".to_string()))?
+        .ok_or_else(|| {
+            Error::InvalidXml("property missing required 'index' attribute".to_string())
+        })?
         .parse::<usize>()
         .map_err(|_| {
             Error::InvalidXml("property 'index' must be a valid non-negative integer".to_string())
@@ -158,7 +170,9 @@ pub(super) fn parse_volumetric_property<R: std::io::BufRead>(
 
     let value = attrs
         .get("value")
-        .ok_or_else(|| Error::InvalidXml("property missing required 'value' attribute".to_string()))?
+        .ok_or_else(|| {
+            Error::InvalidXml("property missing required 'value' attribute".to_string())
+        })?
         .clone();
 
     Ok(VolumetricProperty::new(index, value))
@@ -203,15 +217,15 @@ fn parse_f64_triple(s: &str, context: &str) -> Result<(f64, f64, f64)> {
         )));
     }
 
-    let a = parts[0]
-        .parse::<f64>()
-        .map_err(|_| Error::InvalidXml(format!("{}: invalid float value '{}'", context, parts[0])))?;
-    let b = parts[1]
-        .parse::<f64>()
-        .map_err(|_| Error::InvalidXml(format!("{}: invalid float value '{}'", context, parts[1])))?;
-    let c = parts[2]
-        .parse::<f64>()
-        .map_err(|_| Error::InvalidXml(format!("{}: invalid float value '{}'", context, parts[2])))?;
+    let a = parts[0].parse::<f64>().map_err(|_| {
+        Error::InvalidXml(format!("{}: invalid float value '{}'", context, parts[0]))
+    })?;
+    let b = parts[1].parse::<f64>().map_err(|_| {
+        Error::InvalidXml(format!("{}: invalid float value '{}'", context, parts[1]))
+    })?;
+    let c = parts[2].parse::<f64>().map_err(|_| {
+        Error::InvalidXml(format!("{}: invalid float value '{}'", context, parts[2]))
+    })?;
 
     Ok((a, b, c))
 }

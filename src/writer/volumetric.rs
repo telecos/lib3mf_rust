@@ -18,9 +18,12 @@ pub(super) fn write_volumetric_property_group<W: IoWrite>(
     let mut elem = BytesStart::new("v:volumetricpropertygroup");
     elem.push_attribute(("id", group.id.to_string().as_str()));
 
-    writer
-        .write_event(Event::Start(elem))
-        .map_err(|e| Error::xml_write(format!("Failed to write volumetricpropertygroup element: {}", e)))?;
+    writer.write_event(Event::Start(elem)).map_err(|e| {
+        Error::xml_write(format!(
+            "Failed to write volumetricpropertygroup element: {}",
+            e
+        ))
+    })?;
 
     for prop in &group.properties {
         let mut prop_elem = BytesStart::new("v:property");
@@ -34,7 +37,12 @@ pub(super) fn write_volumetric_property_group<W: IoWrite>(
 
     writer
         .write_event(Event::End(BytesEnd::new("v:volumetricpropertygroup")))
-        .map_err(|e| Error::xml_write(format!("Failed to close volumetricpropertygroup element: {}", e)))?;
+        .map_err(|e| {
+            Error::xml_write(format!(
+                "Failed to close volumetricpropertygroup element: {}",
+                e
+            ))
+        })?;
 
     Ok(())
 }
@@ -74,10 +82,7 @@ pub(super) fn write_volumetric_data<W: IoWrite>(
 }
 
 /// Write a `<v:boundary>` element
-fn write_boundary<W: IoWrite>(
-    writer: &mut Writer<W>,
-    boundary: &VolumetricBoundary,
-) -> Result<()> {
+fn write_boundary<W: IoWrite>(writer: &mut Writer<W>, boundary: &VolumetricBoundary) -> Result<()> {
     let mut elem = BytesStart::new("v:boundary");
 
     let min_str = format!("{} {} {}", boundary.min.0, boundary.min.1, boundary.min.2);
@@ -97,7 +102,10 @@ fn write_boundary<W: IoWrite>(
 fn write_voxels<W: IoWrite>(writer: &mut Writer<W>, grid: &VoxelGrid) -> Result<()> {
     let mut elem = BytesStart::new("v:voxels");
 
-    let dims_str = format!("{} {} {}", grid.dimensions.0, grid.dimensions.1, grid.dimensions.2);
+    let dims_str = format!(
+        "{} {} {}",
+        grid.dimensions.0, grid.dimensions.1, grid.dimensions.2
+    );
     elem.push_attribute(("dimensions", dims_str.as_str()));
 
     if let Some(spacing) = grid.spacing {
@@ -141,10 +149,7 @@ fn write_voxels<W: IoWrite>(writer: &mut Writer<W>, grid: &VoxelGrid) -> Result<
 }
 
 /// Write a `<v:implicit>` element
-fn write_implicit<W: IoWrite>(
-    writer: &mut Writer<W>,
-    implicit: &ImplicitVolume,
-) -> Result<()> {
+fn write_implicit<W: IoWrite>(writer: &mut Writer<W>, implicit: &ImplicitVolume) -> Result<()> {
     let mut elem = BytesStart::new("v:implicit");
     elem.push_attribute(("type", implicit.implicit_type.as_str()));
 
@@ -184,10 +189,7 @@ mod tests {
     #[test]
     fn test_write_volumetric_data_with_boundary_and_voxels() {
         let mut vol_data = VolumetricData::new(1);
-        vol_data.boundary = Some(VolumetricBoundary::new(
-            (0.0, 0.0, 0.0),
-            (10.0, 10.0, 10.0),
-        ));
+        vol_data.boundary = Some(VolumetricBoundary::new((0.0, 0.0, 0.0), (10.0, 10.0, 10.0)));
 
         let mut grid = VoxelGrid::new((10, 10, 10));
         grid.spacing = Some((1.0, 1.0, 1.0));

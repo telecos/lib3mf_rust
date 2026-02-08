@@ -206,10 +206,7 @@ fn test_write_volumetric_model() {
 
     // Add volumetric data
     let mut vol_data = VolumetricData::new(2);
-    vol_data.boundary = Some(VolumetricBoundary::new(
-        (0.0, 0.0, 0.0),
-        (50.0, 50.0, 50.0),
-    ));
+    vol_data.boundary = Some(VolumetricBoundary::new((0.0, 0.0, 0.0), (50.0, 50.0, 50.0)));
     let mut grid = VoxelGrid::new((5, 5, 5));
     grid.spacing = Some((10.0, 10.0, 10.0));
     let mut voxel = Voxel::new((1, 2, 3));
@@ -235,7 +232,8 @@ fn test_write_volumetric_model() {
     model.to_writer(cursor).expect("write should succeed");
 
     // Re-parse and verify volumetric data survived round-trip
-    let model2 = Model::from_reader(std::io::Cursor::new(&out_buf)).expect("re-parse should succeed");
+    let model2 =
+        Model::from_reader(std::io::Cursor::new(&out_buf)).expect("re-parse should succeed");
 
     // Verify key data is present
     assert_eq!(model2.resources.volumetric_property_groups.len(), 1);
@@ -352,14 +350,22 @@ fn test_write_volumetric_with_implicit() {
 
     // Write to 3MF and re-parse
     let mut out_buf = Vec::new();
-    model.to_writer(std::io::Cursor::new(&mut out_buf)).expect("write should succeed");
+    model
+        .to_writer(std::io::Cursor::new(&mut out_buf))
+        .expect("write should succeed");
 
-    let model2 = Model::from_reader(std::io::Cursor::new(&out_buf)).expect("re-parse should succeed");
+    let model2 =
+        Model::from_reader(std::io::Cursor::new(&out_buf)).expect("re-parse should succeed");
 
     // Verify implicit volume survived
     assert_eq!(model2.resources.volumetric_data.len(), 1);
     let vol = &model2.resources.volumetric_data[0];
     let implicit2 = vol.implicit.as_ref().expect("implicit should be present");
     assert_eq!(implicit2.implicit_type, "sdf");
-    assert!(implicit2.parameters.iter().any(|(k, v)| k == "radius" && v == "5.0"));
+    assert!(
+        implicit2
+            .parameters
+            .iter()
+            .any(|(k, v)| k == "radius" && v == "5.0")
+    );
 }

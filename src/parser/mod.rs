@@ -40,9 +40,8 @@ use slice::{
     parse_slice_vertex, parse_sliceref, parse_slicestack_start,
 };
 use volumetric::{
-    parse_boundary, parse_implicit_start, parse_volumetric_property,
-    parse_volumetricdata_start, parse_volumetricpropertygroup_start, parse_voxel,
-    parse_voxels_start,
+    parse_boundary, parse_implicit_start, parse_volumetric_property, parse_volumetricdata_start,
+    parse_volumetricpropertygroup_start, parse_voxel, parse_voxels_start,
 };
 
 // Re-export public functions to maintain API compatibility
