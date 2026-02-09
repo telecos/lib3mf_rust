@@ -38,3 +38,4 @@ extracted_thumbnail.png
 
 # Generated 3MF files from examples
 *.3mf
+/test_oob

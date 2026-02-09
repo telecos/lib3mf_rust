@@ -4,6 +4,7 @@
 
 mod regression {
     pub mod error_type_validation;
+    pub mod fuzz_mesh_validation_oob;
     pub mod issue_1605;
     pub mod jpeg_cmyk;
     pub mod suite1_debug;
