@@ -155,8 +155,16 @@ impl SlicePreviewWindow {
 
         // Handle degenerate cases where model has zero or very small dimensions
         const MIN_DIMENSION: f32 = 0.001;
-        let width = if model_width < MIN_DIMENSION { 1.0 } else { model_width };
-        let height = if model_height < MIN_DIMENSION { 1.0 } else { model_height };
+        let width = if model_width < MIN_DIMENSION {
+            1.0
+        } else {
+            model_width
+        };
+        let height = if model_height < MIN_DIMENSION {
+            1.0
+        } else {
+            model_height
+        };
 
         // Add some margin
         let margin = 50.0;
@@ -299,7 +307,7 @@ impl SlicePreviewWindow {
         }
 
         let grid_spacing = 10.0; // Grid every 10 units in model space
-        
+
         // Calculate grid line positions in model space
         let min_x = (self.model_min.0 / grid_spacing).floor() * grid_spacing;
         let max_x = (self.model_max.0 / grid_spacing).ceil() * grid_spacing;
@@ -329,21 +337,19 @@ impl SlicePreviewWindow {
     fn draw_contours(&mut self) {
         // Clone contours to avoid borrow issues
         let contours = self.config.contours.clone();
-        
+
         if self.config.filled_mode {
             // Build polygons from line segments and fill them
             let polygons = self.build_polygons_from_segments(&contours);
-            
+
             for polygon in &polygons {
                 // Convert model coordinates to screen coordinates
-                let screen_points: Vec<(i32, i32)> = polygon
-                    .iter()
-                    .map(|&(x, y)| self.to_screen(x, y))
-                    .collect();
-                
+                let screen_points: Vec<(i32, i32)> =
+                    polygon.iter().map(|&(x, y)| self.to_screen(x, y)).collect();
+
                 // Fill the polygon
                 self.fill_polygon(&screen_points, FILL_COLOR);
-                
+
                 // Also draw outline for better visibility
                 for i in 0..screen_points.len() {
                     let j = (i + 1) % screen_points.len();
@@ -390,22 +396,22 @@ impl SlicePreviewWindow {
 
             let mut polygon = Vec::new();
             used[start_idx] = true;
-            
+
             // Start with the first segment
             let start_seg = &segments[start_idx];
             let start_point = start_seg.start;
             let mut current_point = start_seg.end;
-            
+
             polygon.push((start_seg.start.x, start_seg.start.y));
             polygon.push((start_seg.end.x, start_seg.end.y));
 
             // Keep finding connected segments until we close the loop or run out
             let mut iterations = 0;
             const MAX_ITERATIONS: usize = 10000; // Prevent infinite loops
-            
+
             while iterations < MAX_ITERATIONS {
                 iterations += 1;
-                
+
                 // Check if we've closed the loop
                 if points_equal(current_point, start_point) {
                     polygon.pop(); // Remove duplicate closing point
@@ -457,7 +463,13 @@ impl SlicePreviewWindow {
         let panel_y = WINDOW_HEIGHT as i32 - panel_height;
 
         // Draw panel background
-        self.draw_rect(0, panel_y, WINDOW_WIDTH as i32, panel_height, PANEL_BG_COLOR);
+        self.draw_rect(
+            0,
+            panel_y,
+            WINDOW_WIDTH as i32,
+            panel_height,
+            PANEL_BG_COLOR,
+        );
 
         // Draw separator line
         self.draw_line(0, panel_y, WINDOW_WIDTH as i32, panel_y, TEXT_COLOR);
@@ -580,7 +592,7 @@ impl SlicePreviewWindow {
     }
 
     /// Export current slice to high-quality PNG using the slice renderer
-    /// 
+    ///
     /// This method uses the slice_renderer module to create a high-quality
     /// raster image with proper polygon triangulation and filling.
     #[allow(dead_code)]
@@ -600,7 +612,7 @@ impl SlicePreviewWindow {
                 .iter()
                 .map(|&(x, y)| slice_renderer::Point2D::new(x as f64, y as f64))
                 .collect();
-            
+
             if !points.is_empty() {
                 contours.push(slice_renderer::SliceContour::new(points));
             }
@@ -616,7 +628,7 @@ impl SlicePreviewWindow {
 
         // Create renderer and render
         let renderer = slice_renderer::SliceRenderer::new(width, height);
-        
+
         // TODO: Outline mode is not yet implemented in the slice_renderer.
         // For now, always render filled polygons regardless of mode.
         // To implement outline mode, we would need to add a separate method
@@ -703,7 +715,7 @@ mod tests {
     fn test_build_simple_triangle_polygon() {
         // Create a mock window to test the build_polygons_from_segments method
         // Since we can't create a real window in tests, we'll test the logic separately
-        
+
         // Triangle segments in correct order
         let segments = vec![
             LineSegment2D {

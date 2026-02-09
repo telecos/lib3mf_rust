@@ -242,12 +242,6 @@ impl GitHubClient {
     }
 }
 
-impl Default for GitHubClient {
-    fn default() -> Self {
-        Self::new().expect("Failed to create GitHub client")
-    }
-}
-
 /// Filter test files by category
 #[allow(dead_code)] // Reserved for future filtering feature
 pub fn filter_by_category(items: &[GitHubContent], category: &TestCategory) -> Vec<GitHubContent> {

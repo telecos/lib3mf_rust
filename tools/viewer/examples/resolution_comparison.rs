@@ -5,8 +5,8 @@
 
 #![forbid(unsafe_code)]
 
-use std::path::Path;
 use image::Rgb;
+use std::path::Path;
 
 #[path = "../src/slice_renderer.rs"]
 mod slice_renderer;
@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a complex shape - a star
     let star_points = create_star(50.0, 50.0, 40.0, 15.0, 5);
     let star_contour = SliceContour::new(star_points);
-    
+
     let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
 
     // Render at different resolutions
@@ -33,13 +33,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (size, label) in resolutions {
         println!("Rendering at {}x{} ({})...", size, size, label);
-        
+
         let renderer = SliceRenderer::new(size, size);
         let image = renderer.render_slice(&[star_contour.clone()], &bounds);
-        
+
         let filename = format!("/tmp/star_{}.png", label);
         renderer.save_png(&image, Path::new(&filename))?;
-        
+
         println!("  ✓ Saved to {}", filename);
     }
 
@@ -53,18 +53,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Create a star polygon
-fn create_star(cx: f64, cy: f64, outer_radius: f64, inner_radius: f64, points: usize) -> Vec<Point2D> {
+fn create_star(
+    cx: f64,
+    cy: f64,
+    outer_radius: f64,
+    inner_radius: f64,
+    points: usize,
+) -> Vec<Point2D> {
     let mut vertices = Vec::new();
     let angle_step = std::f64::consts::PI / points as f64;
-    
+
     for i in 0..(points * 2) {
         let angle = i as f64 * angle_step - std::f64::consts::PI / 2.0;
-        let radius = if i % 2 == 0 { outer_radius } else { inner_radius };
+        let radius = if i % 2 == 0 {
+            outer_radius
+        } else {
+            inner_radius
+        };
         let x = cx + radius * angle.cos();
         let y = cy + radius * angle.sin();
         vertices.push(Point2D::new(x, y));
     }
-    
+
     vertices
 }
 
@@ -79,16 +89,16 @@ fn render_complex_scene() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a hexagon
     let hexagon = create_regular_polygon(50.0, 180.0, 25.0, 6);
-    
+
     // Create a pentagon
     let pentagon = create_regular_polygon(150.0, 180.0, 25.0, 5);
 
     let objects = vec![
-        (SliceContour::new(star1), Rgb([255, 100, 100])),      // Red star
-        (SliceContour::new(star2), Rgb([100, 100, 255])),      // Blue star
-        (SliceContour::new(star3), Rgb([100, 255, 100])),      // Green star
-        (SliceContour::new(hexagon), Rgb([255, 200, 100])),    // Orange hexagon
-        (SliceContour::new(pentagon), Rgb([200, 100, 255])),   // Purple pentagon
+        (SliceContour::new(star1), Rgb([255, 100, 100])), // Red star
+        (SliceContour::new(star2), Rgb([100, 100, 255])), // Blue star
+        (SliceContour::new(star3), Rgb([100, 255, 100])), // Green star
+        (SliceContour::new(hexagon), Rgb([255, 200, 100])), // Orange hexagon
+        (SliceContour::new(pentagon), Rgb([200, 100, 255])), // Purple pentagon
     ];
 
     let bounds = BoundingBox2D::new(0.0, 0.0, 200.0, 220.0);
@@ -103,13 +113,13 @@ fn render_complex_scene() -> Result<(), Box<dyn std::error::Error>> {
 fn create_regular_polygon(cx: f64, cy: f64, radius: f64, sides: usize) -> Vec<Point2D> {
     let mut vertices = Vec::new();
     let angle_step = 2.0 * std::f64::consts::PI / sides as f64;
-    
+
     for i in 0..sides {
         let angle = i as f64 * angle_step - std::f64::consts::PI / 2.0;
         let x = cx + radius * angle.cos();
         let y = cy + radius * angle.sin();
         vertices.push(Point2D::new(x, y));
     }
-    
+
     vertices
 }

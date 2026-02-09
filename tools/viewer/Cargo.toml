@@ -3,28 +3,52 @@ name = "lib3mf-viewer"
 version = "0.1.0"
 edition = "2024"
 authors = ["lib3mf_rust contributors"]
-description = "3MF file viewer and analyzer using lib3mf_rust"
-license = "MIT OR Apache-2.0"
+description = "Interactive 3MF file viewer and analyzer with 3D visualization, slice preview, and material rendering"
+license = "MIT"
+repository = "https://github.com/telecos/lib3mf_rust"
+homepage = "https://github.com/telecos/lib3mf_rust/tree/main/tools/viewer"
+documentation = "https://github.com/telecos/lib3mf_rust/tree/main/tools/viewer/README.md"
+readme = "README.md"
+keywords = ["3mf", "3d", "viewer", "3dprinting", "visualization"]
+categories = ["visualization", "graphics"]
+exclude = [
+    "kiss3d-patch/",
+    "*.sh",
+    "*.txt",
+    "test_files/",
+]
 
 [[bin]]
 name = "lib3mf-viewer"
 path = "src/main.rs"
 
 [dependencies]
-lib3mf = { path = "../.." }
+lib3mf = "0.1.1"
 clap = { version = "4.5", features = ["derive"] }
 image = "0.25"
-kiss3d = { path = "kiss3d-patch" }
+kiss3d = { version = "0.35.1", package = "kiss3d-filedrop" }
 rfd = { version = "0.12", default-features = false, features = ["xdg-portal"] }
 chrono = "0.4"
 zip = "7.2"
 # GitHub test suite browser dependencies
-reqwest = { version = "0.12", features = ["json", "blocking"] }
+reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "5.0"
 minifb = "0.28"
-earcutr = "0.4"  # For polygon triangulation
+earcutr = "0.4"
+
+[features]
+default = ["github-browser"]
+github-browser = ["reqwest"]
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[lints.clippy]
+collapsible_if = "allow"
+
+# For local development, use the vendored kiss3d-patch.
+# Remove this section before `cargo publish` (after publishing kiss3d-filedrop to crates.io).
+[patch.crates-io]
+kiss3d-filedrop = { path = "kiss3d-patch" }

@@ -127,7 +127,7 @@ impl SliceRenderer {
             height,
             margin: 20.0,
             background: Rgb([255, 255, 255]), // White
-            default_fill: Rgb([80, 80, 80]),   // Dark gray
+            default_fill: Rgb([80, 80, 80]),  // Dark gray
         }
     }
 
@@ -282,19 +282,13 @@ impl SliceRenderer {
 
         // Compute bounding box
         let min_x = p0.0.min(p1.0).min(p2.0).floor().max(0.0) as u32;
-        let max_x = p0
-            .0
-            .max(p1.0)
-            .max(p2.0)
-            .ceil()
-            .min(self.width as f64 - 1.0) as u32;
+        let max_x = p0.0.max(p1.0).max(p2.0).ceil().min(self.width as f64 - 1.0) as u32;
         let min_y = p0.1.min(p1.1).min(p2.1).floor().max(0.0) as u32;
-        let max_y = p0
-            .1
-            .max(p1.1)
-            .max(p2.1)
-            .ceil()
-            .min(self.height as f64 - 1.0) as u32;
+        let max_y =
+            p0.1.max(p1.1)
+                .max(p2.1)
+                .ceil()
+                .min(self.height as f64 - 1.0) as u32;
 
         // Scanline fill using point-in-triangle test
         for y in min_y..=max_y {
@@ -316,13 +310,7 @@ impl SliceRenderer {
 }
 
 /// Check if a point is inside a triangle using barycentric coordinates
-fn point_in_triangle(
-    px: f64,
-    py: f64,
-    p0: (f64, f64),
-    p1: (f64, f64),
-    p2: (f64, f64),
-) -> bool {
+fn point_in_triangle(px: f64, py: f64, p0: (f64, f64), p1: (f64, f64), p2: (f64, f64)) -> bool {
     // Barycentric coordinate method
     let v0x = p2.0 - p0.0;
     let v0y = p2.1 - p0.1;
@@ -494,8 +482,8 @@ mod tests {
         ]);
 
         let objects = vec![
-            (contour1, Rgb([255, 0, 0])),   // Red
-            (contour2, Rgb([0, 0, 255])),   // Blue
+            (contour1, Rgb([255, 0, 0])), // Red
+            (contour2, Rgb([0, 0, 255])), // Blue
         ];
 
         let bounds = BoundingBox2D::new(0.0, 0.0, 25.0, 10.0);
@@ -510,10 +498,10 @@ mod tests {
     fn test_empty_contour_list() {
         let renderer = SliceRenderer::new(100, 100);
         let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
-        
+
         // Should handle empty contour list gracefully
         let image = renderer.render_slice(&[], &bounds);
-        
+
         assert_eq!(image.width(), 100);
         assert_eq!(image.height(), 100);
         // All pixels should be background color
@@ -523,16 +511,16 @@ mod tests {
     #[test]
     fn test_large_resolution() {
         let renderer = SliceRenderer::new(2048, 2048);
-        
+
         let contour = SliceContour::new(vec![
             Point2D::new(10.0, 10.0),
             Point2D::new(90.0, 10.0),
             Point2D::new(50.0, 80.0),
         ]);
-        
+
         let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
         let image = renderer.render_slice(&[contour], &bounds);
-        
+
         assert_eq!(image.width(), 2048);
         assert_eq!(image.height(), 2048);
     }
@@ -543,16 +531,16 @@ mod tests {
             .with_margin(10.0)
             .with_background(Rgb([240, 240, 240]))
             .with_default_fill(Rgb([100, 100, 100]));
-        
+
         let contour = SliceContour::new(vec![
             Point2D::new(25.0, 25.0),
             Point2D::new(75.0, 25.0),
             Point2D::new(50.0, 75.0),
         ]);
-        
+
         let bounds = BoundingBox2D::new(0.0, 0.0, 100.0, 100.0);
         let image = renderer.render_slice(&[contour], &bounds);
-        
+
         // Check that corners have custom background color
         let corner_pixel = image.get_pixel(0, 0);
         assert_eq!(corner_pixel, &Rgb([240, 240, 240]));
@@ -561,7 +549,7 @@ mod tests {
     #[test]
     fn test_aspect_ratio_preservation() {
         let renderer = SliceRenderer::new(800, 600);
-        
+
         // Wide rectangle - should fit with vertical margins
         let contour = SliceContour::new(vec![
             Point2D::new(0.0, 0.0),
@@ -569,10 +557,10 @@ mod tests {
             Point2D::new(200.0, 50.0),
             Point2D::new(0.0, 50.0),
         ]);
-        
+
         let bounds = BoundingBox2D::new(0.0, 0.0, 200.0, 50.0);
         let image = renderer.render_slice(&[contour], &bounds);
-        
+
         assert_eq!(image.width(), 800);
         assert_eq!(image.height(), 600);
     }
@@ -580,17 +568,17 @@ mod tests {
     #[test]
     fn test_very_small_bounds() {
         let renderer = SliceRenderer::new(100, 100);
-        
+
         // Very small triangle
         let contour = SliceContour::new(vec![
             Point2D::new(0.0, 0.0),
             Point2D::new(0.001, 0.0),
             Point2D::new(0.0005, 0.001),
         ]);
-        
+
         let bounds = BoundingBox2D::new(0.0, 0.0, 0.001, 0.001);
         let image = renderer.render_slice(&[contour], &bounds);
-        
+
         // Should handle tiny coordinates without panicking
         assert_eq!(image.width(), 100);
         assert_eq!(image.height(), 100);

@@ -104,8 +104,8 @@ fn render_multi_color() -> Result<(), Box<dyn std::error::Error>> {
     let pentagon_contour = SliceContour::new(pentagon);
 
     let objects = vec![
-        (triangle, Rgb([220, 60, 60])),      // Red
-        (square, Rgb([60, 120, 220])),       // Blue
+        (triangle, Rgb([220, 60, 60])),         // Red
+        (square, Rgb([60, 120, 220])),          // Blue
         (pentagon_contour, Rgb([60, 200, 80])), // Green
     ];
 
