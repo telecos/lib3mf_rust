@@ -21,7 +21,9 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::path::PathBuf;
 
+#[cfg(feature = "github-browser")]
 mod browser_ui;
+#[cfg(feature = "github-browser")]
 mod github_api;
 mod keybindings;
 mod menu_ui;
@@ -51,7 +53,8 @@ struct Args {
     #[arg(short, long)]
     ui: bool,
 
-    /// Browse 3MF Consortium test suites from GitHub
+    /// Browse 3MF Consortium test suites from GitHub (requires 'github-browser' feature)
+    #[cfg(feature = "github-browser")]
     #[arg(short = 't', long)]
     browse_tests: bool,
 
@@ -89,6 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     // If browse-tests flag is set, launch the test suite browser
+    #[cfg(feature = "github-browser")]
     if args.browse_tests {
         if let Some(file_path) = browser_ui::launch_browser()? {
             // User selected a file from the browser, launch viewer with it

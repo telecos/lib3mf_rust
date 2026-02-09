@@ -471,7 +471,7 @@ mod tests {
     #[test]
     fn test_no_duplicate_keys() {
         let bindings = get_keybindings();
-        
+
         // Check for duplicate key+modifier combinations (excluding None keys like mouse)
         let mut seen = std::collections::HashSet::new();
         for binding in &bindings {
@@ -479,7 +479,11 @@ mod tests {
                 let combo = (format!("{:?}", key), format!("{:?}", binding.modifiers));
                 // Note: Some keys like Home, Escape, and F are used in different contexts
                 // This is acceptable as the context determines which handler is active
-                if !seen.insert(combo.clone()) && key != Key::Home && key != Key::Escape && key != Key::F {
+                if !seen.insert(combo.clone())
+                    && key != Key::Home
+                    && key != Key::Escape
+                    && key != Key::F
+                {
                     panic!("Duplicate keybinding found: {:?}", combo);
                 }
             }

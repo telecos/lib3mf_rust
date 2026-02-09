@@ -29,7 +29,7 @@ pub enum MenuAction {
     BrowseTests,
     ExportScreenshot,
     Exit,
-    
+
     // View menu
     ToggleAxes,
     TogglePrintBed,
@@ -41,32 +41,32 @@ pub enum MenuAction {
     TopView,
     FrontView,
     SideView,
-    
+
     // Render modes
     RenderModeSolid,
     RenderModeWireframe,
     RenderModeSolidWireframe,
     RenderModePoints,
     RenderModeXRay,
-    
+
     // Settings menu
     ThemeLight,
     ThemeDark,
     ThemeCustom,
     PrintBedSettings,
     Preferences,
-    
+
     // Extensions menu
     ToggleMaterials,
     ToggleBeamLattice,
     ToggleSliceStack,
     ToggleDisplacement,
     ToggleBooleanOps,
-    
+
     // Help menu
     KeyboardShortcuts,
     About,
-    
+
     // Internal
     None,
 }
@@ -342,7 +342,7 @@ impl MenuBar {
             // Check which menu was clicked
             let mut x_offset = 35.0;
             let mut clicked_menu_index: Option<usize> = None;
-            
+
             for (i, menu) in self.menus.iter().enumerate() {
                 let menu_width = (menu.label.len() as f32 * CHAR_WIDTH) + 20.0;
                 if self.mouse_x >= x_offset && self.mouse_x < x_offset + menu_width {
@@ -351,7 +351,7 @@ impl MenuBar {
                 }
                 x_offset += menu_width + 15.0;
             }
-            
+
             if let Some(i) = clicked_menu_index {
                 // Toggle menu open state
                 if self.active_menu == Some(i) {
@@ -367,7 +367,7 @@ impl MenuBar {
                 }
                 return None;
             }
-            
+
             // Click outside menus - close all
             self.close_all_menus();
             return None;
@@ -380,7 +380,8 @@ impl MenuBar {
                 const CHAR_WIDTH_DROPDOWN: f32 = 45.0 * 0.6;
                 let mut x_offset = 35.0;
                 for i in 0..menu_index {
-                    x_offset += (self.menus[i].label.len() as f32 * CHAR_WIDTH_DROPDOWN) + 20.0 + 15.0;
+                    x_offset +=
+                        (self.menus[i].label.len() as f32 * CHAR_WIDTH_DROPDOWN) + 20.0 + 15.0;
                 }
 
                 let menu_x = x_offset;
@@ -486,7 +487,7 @@ impl MenuBar {
                 // Draw menu background
                 for (j, item) in menu.items.iter().enumerate() {
                     let item_y = menu_y + (j as f32 * MENU_ITEM_HEIGHT);
-                    
+
                     // Draw item background (darker for hover)
                     let is_hovered = self.mouse_x >= menu_x
                         && self.mouse_x < menu_x + MENU_ITEM_WIDTH
@@ -496,7 +497,7 @@ impl MenuBar {
                     // Draw item text with checkbox indicator
                     let checkbox = if item.checked { "[✓] " } else { "    " };
                     let text = format!("{}{}", checkbox, item.label);
-                    
+
                     let text_color = if !item.enabled {
                         kiss3d::nalgebra::Point3::new(0.5, 0.5, 0.5) // Disabled
                     } else if is_hovered {

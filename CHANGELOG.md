@@ -14,6 +14,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleaned up non-standard implementation documentation
   - Reorganized viewer documentation
 
+## [0.1.2] - 2026-02-09
+
+### Fixed
+
+- **Critical: Index out-of-bounds in mesh subdivision** — Added bounds check for
+  triangle vertex indices in `subdivide_midpoint()` before indexing into the
+  original vertex array, preventing a panic on malformed meshes.
+- **Decompression bomb protection** — Added a 256 MB size limit to
+  `decompress_deflate()` in the SecureContent decryption module via
+  `Read::take()`, preventing denial-of-service from crafted compressed payloads.
+- **Unbounded subdivision levels** — Capped subdivision levels to a maximum of 10
+  to prevent exponential memory growth (each level multiplies triangle count by 4×).
+  Used saturating arithmetic for capacity estimation to prevent integer overflow.
+- **Non-finite vertex coordinates** — Added `is_finite()` and f32 range validation
+  in `validate_mesh_for_parry3d()` to reject vertices that would become infinity
+  after `f64 → f32` cast.
+- **Silent parse failures in material extension** — Replaced four instances of
+  `filter_map(|s| s.parse().ok())` in compositematerials/multiproperties parsing
+  with proper error propagation. Malformed numeric values now produce clear parse
+  errors instead of being silently dropped.
+- **Integer truncation in beam lattice validator** — Replaced all `id as u32`
+  truncation casts with safe `u32 as usize` widening casts when comparing beam
+  lattice property IDs against resource IDs. Changed `HashSet<u32>` to
+  `HashSet<usize>` to match the resource ID type.
+- **Latent underflow in validator error messages** — Replaced `num_vertices - 1`
+  with `saturating_sub(1)` in error format strings in core and slice validators.
+- **Integer overflow in polygon triangulation** — Used `saturating_mul` and
+  `saturating_add` for `Vec::with_capacity()` calculation.
+
 ## [0.1.1] - 2026-02-08
 
 ### Added

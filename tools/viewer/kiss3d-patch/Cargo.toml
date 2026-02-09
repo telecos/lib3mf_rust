@@ -1,15 +1,15 @@
 [package]
-authors = ["Sébastien Crozet <developer@crozet.re>"]
-name    = "kiss3d"
-version = "0.35.0"
+authors = ["Sébastien Crozet <developer@crozet.re>", "lib3mf_rust contributors"]
+name    = "kiss3d-filedrop"
+version = "0.35.1"
 
 autoexamples = true
-description  = "3D graphics engine for Rust."
+description  = "3D graphics engine for Rust (fork with file drag-and-drop support)"
 edition      = "2018"
 keywords     = ["3D", "graphics", "OpenGL", "KISS"]
 license      = "BSD-3-Clause"
 readme       = "README.md"
-repository   = "https://github.com/sebcrozet/kiss3d"
+repository   = "https://github.com/telecos/lib3mf_rust"
 
 include = [
     "src/**/*.rs",

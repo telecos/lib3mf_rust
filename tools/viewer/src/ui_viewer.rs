@@ -15,11 +15,11 @@ use kiss3d::event::{Action, Key, MouseButton, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point2, Point3, Vector3}; // Use nalgebra from kiss3d
 use kiss3d::ncollide3d::procedural::TriMesh;
+use kiss3d::resource::TextureWrapping;
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
-use lib3mf::TileStyle;
 use lib3mf::Model;
-use kiss3d::resource::TextureWrapping;
+use lib3mf::TileStyle;
 use rfd::FileDialog;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -61,11 +61,11 @@ impl TextureInfo {
             TileStyle::None => TextureWrapping::ClampToEdge,
         }
     }
-    
+
     fn wrap_u(&self) -> TextureWrapping {
         Self::tile_style_to_wrap(self.tile_style_u)
     }
-    
+
     fn wrap_v(&self) -> TextureWrapping {
         Self::tile_style_to_wrap(self.tile_style_v)
     }
@@ -98,37 +98,33 @@ fn ray_triangle_intersection(
 ) -> Option<f32> {
     let edge1 = v1 - v0;
     let edge2 = v2 - v0;
-    
+
     let h = ray.direction.cross(&edge2);
     let a = edge1.dot(&h);
-    
+
     // Ray is parallel to triangle
     if a.abs() < 1e-8 {
         return None;
     }
-    
+
     let f = 1.0 / a;
     let s = ray.origin - v0;
     let u = f * s.dot(&h);
-    
+
     if !(0.0..=1.0).contains(&u) {
         return None;
     }
-    
+
     let q = s.cross(&edge1);
     let v = f * ray.direction.dot(&q);
-    
+
     if v < 0.0 || u + v > 1.0 {
         return None;
     }
-    
+
     let t = f * edge2.dot(&q);
-    
-    if t > 1e-8 {
-        Some(t)
-    } else {
-        None
-    }
+
+    if t > 1e-8 { Some(t) } else { None }
 }
 
 /// Pick an object from the scene using ray casting
@@ -140,31 +136,31 @@ fn pick_object(
     model: &Model,
 ) -> Option<usize> {
     use kiss3d::camera::Camera;
-    
+
     // Get window dimensions
     let size = window.size();
     let width = size.x as f32;
     let height = size.y as f32;
-    
+
     // Normalize mouse coordinates to [-1, 1] range
     let x = (2.0 * mouse_pos.0) / width - 1.0;
     let y = 1.0 - (2.0 * mouse_pos.1) / height;
-    
+
     // Get camera view transformation matrix
     let view = camera.view_transform().to_homogeneous();
-    
+
     // Get projection matrix - need to manually compute it for ArcBall
     let fov = std::f32::consts::PI / 4.0; // 45 degrees default
     let aspect = width / height;
     let near = 0.1;
     let far = 10000.0;
-    
+
     let proj = kiss3d::nalgebra::Perspective3::new(aspect, fov, near, far).to_homogeneous();
-    
+
     // Compute inverse of view-projection matrix
     let view_proj = proj * view;
     let inv_view_proj = view_proj.try_inverse()?;
-    
+
     // Unproject mouse position to get ray in world space
     // Near plane point
     let near_point_ndc = kiss3d::nalgebra::Vector4::new(x, y, -1.0, 1.0);
@@ -174,7 +170,7 @@ fn pick_object(
         near_point_world.y / near_point_world.w,
         near_point_world.z / near_point_world.w,
     );
-    
+
     // Far plane point
     let far_point_ndc = kiss3d::nalgebra::Vector4::new(x, y, 1.0, 1.0);
     let far_point_world = inv_view_proj * far_point_ndc;
@@ -183,14 +179,14 @@ fn pick_object(
         far_point_world.y / far_point_world.w,
         far_point_world.z / far_point_world.w,
     );
-    
+
     // Create ray from near to far point
     let ray_direction = far_point_world - near_point_world;
     let ray = Ray::new(near_point_world, ray_direction);
-    
+
     // Test ray against all mesh triangles
     let mut closest_hit: Option<(usize, f32)> = None;
-    
+
     for (mesh_index, item) in model.build.items.iter().enumerate() {
         if let Some(obj) = model
             .resources
@@ -208,25 +204,34 @@ fn pick_object(
                     {
                         continue;
                     }
-                    
+
                     let v0_data = &mesh_data.vertices[triangle.v1];
                     let v1_data = &mesh_data.vertices[triangle.v2];
                     let v2_data = &mesh_data.vertices[triangle.v3];
-                    
+
                     // Apply transform if present
                     let (v0, v1, v2) = if let Some(ref transform) = item.transform {
                         let apply_transform_point = |v: &lib3mf::Vertex| {
                             let x = v.x as f32;
                             let y = v.y as f32;
                             let z = v.z as f32;
-                            
+
                             Point3::new(
-                                transform[0] as f32 * x + transform[1] as f32 * y + transform[2] as f32 * z + transform[3] as f32,
-                                transform[4] as f32 * x + transform[5] as f32 * y + transform[6] as f32 * z + transform[7] as f32,
-                                transform[8] as f32 * x + transform[9] as f32 * y + transform[10] as f32 * z + transform[11] as f32,
+                                transform[0] as f32 * x
+                                    + transform[1] as f32 * y
+                                    + transform[2] as f32 * z
+                                    + transform[3] as f32,
+                                transform[4] as f32 * x
+                                    + transform[5] as f32 * y
+                                    + transform[6] as f32 * z
+                                    + transform[7] as f32,
+                                transform[8] as f32 * x
+                                    + transform[9] as f32 * y
+                                    + transform[10] as f32 * z
+                                    + transform[11] as f32,
                             )
                         };
-                        
+
                         (
                             apply_transform_point(v0_data),
                             apply_transform_point(v1_data),
@@ -239,7 +244,7 @@ fn pick_object(
                             Point3::new(v2_data.x as f32, v2_data.y as f32, v2_data.z as f32),
                         )
                     };
-                    
+
                     // Test intersection
                     if let Some(distance) = ray_triangle_intersection(&ray, &v0, &v1, &v2) {
                         let should_update = match closest_hit {
@@ -254,7 +259,7 @@ fn pick_object(
             }
         }
     }
-    
+
     closest_hit.map(|(index, _)| index)
 }
 
@@ -397,7 +402,7 @@ impl LengthUnit {
             LengthUnit::Inches => "inch",
         }
     }
-    
+
     /// Convert from a string to LengthUnit
     fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
@@ -406,7 +411,7 @@ impl LengthUnit {
             _ => None,
         }
     }
-    
+
     /// Convert a value from this unit to millimeters
     fn to_mm(self, value: f32) -> f32 {
         match self {
@@ -414,7 +419,7 @@ impl LengthUnit {
             LengthUnit::Inches => value * 25.4,
         }
     }
-    
+
     /// Convert a value from millimeters to this unit
     #[allow(clippy::wrong_self_convention)]
     fn from_mm(self, value: f32) -> f32 {
@@ -447,9 +452,9 @@ impl Origin {
 /// Print area configuration for build volume visualization
 #[derive(Debug, Clone)]
 struct PrintArea {
-    width: f32,       // X dimension
-    depth: f32,       // Y dimension
-    height: f32,      // Z dimension
+    width: f32,  // X dimension
+    depth: f32,  // Y dimension
+    height: f32, // Z dimension
     unit: LengthUnit,
     origin: Origin,
     visible: bool,
@@ -466,7 +471,7 @@ impl PrintArea {
             height: 200.0,
             unit: LengthUnit::Millimeters,
             origin: Origin::Corner,
-            visible: false,  // Default to hidden to avoid visual clutter
+            visible: false, // Default to hidden to avoid visual clutter
             show_ruler: false,
             show_scale_bar: false,
         }
@@ -476,27 +481,27 @@ impl PrintArea {
     fn toggle_visibility(&mut self) {
         self.visible = !self.visible;
     }
-    
+
     /// Toggle visibility of the ruler
     fn toggle_ruler(&mut self) {
         self.show_ruler = !self.show_ruler;
     }
-    
+
     /// Toggle visibility of the scale bar
     fn toggle_scale_bar(&mut self) {
         self.show_scale_bar = !self.show_scale_bar;
     }
-    
+
     /// Get width in millimeters (for internal calculations)
     fn width_mm(&self) -> f32 {
         self.unit.to_mm(self.width)
     }
-    
+
     /// Get depth in millimeters (for internal calculations)
     fn depth_mm(&self) -> f32 {
         self.unit.to_mm(self.depth)
     }
-    
+
     /// Get height in millimeters (for internal calculations)
     fn height_mm(&self) -> f32 {
         self.unit.to_mm(self.height)
@@ -617,7 +622,7 @@ impl SliceView {
         self.max_z = max_bound.2;
         // Start at middle of the model
         self.z_height = (self.min_z + self.max_z) / 2.0;
-        
+
         // Check if model has slice stacks
         if !model.resources.slice_stacks.is_empty() {
             self.total_slices = model.resources.slice_stacks[0].slices.len();
@@ -641,50 +646,50 @@ impl SliceView {
     fn toggle_plane(&mut self) {
         self.show_plane = !self.show_plane;
     }
-    
+
     /// Navigate to next slice in stack
     fn next_slice(&mut self) {
         if self.total_slices > 0 {
             self.current_slice_index = (self.current_slice_index + 1).min(self.total_slices - 1);
         }
     }
-    
+
     /// Navigate to previous slice in stack
     fn prev_slice(&mut self) {
         if self.current_slice_index > 0 {
             self.current_slice_index -= 1;
         }
     }
-    
+
     /// Jump to first slice
     fn first_slice(&mut self) {
         self.current_slice_index = 0;
     }
-    
+
     /// Jump to last slice
     fn last_slice(&mut self) {
         if self.total_slices > 0 {
             self.current_slice_index = self.total_slices - 1;
         }
     }
-    
+
     /// Toggle animation
     fn toggle_animation(&mut self) {
         self.animation_playing = !self.animation_playing;
         self.animation_time = 0.0;
     }
-    
+
     /// Update animation state
     fn update_animation(&mut self, delta_time: f32) {
         if self.animation_playing && self.total_slices > 0 {
             self.animation_time += delta_time;
             let slices_elapsed = (self.animation_time * self.animation_speed) as usize;
-            
+
             if slices_elapsed > 0 {
                 // Preserve fractional part for more accurate timing
                 self.animation_time -= slices_elapsed as f32 / self.animation_speed;
                 self.current_slice_index += slices_elapsed;
-                
+
                 if self.current_slice_index >= self.total_slices {
                     if self.animation_loop {
                         self.current_slice_index %= self.total_slices;
@@ -696,37 +701,37 @@ impl SliceView {
             }
         }
     }
-    
+
     /// Increase animation speed
     fn increase_speed(&mut self) {
         self.animation_speed = (self.animation_speed * 1.5).min(20.0);
     }
-    
+
     /// Decrease animation speed
     fn decrease_speed(&mut self) {
         self.animation_speed = (self.animation_speed / 1.5).max(0.1);
     }
-    
+
     /// Increase spread factor
     fn increase_spread(&mut self) {
         self.spread_factor = (self.spread_factor + 0.2).min(5.0);
     }
-    
+
     /// Decrease spread factor
     fn decrease_spread(&mut self) {
         self.spread_factor = (self.spread_factor - 0.2).max(1.0);
     }
-    
+
     /// Toggle 3D stack visualization
     fn toggle_stack_3d(&mut self) {
         self.show_stack_3d = !self.show_stack_3d;
     }
-    
+
     /// Toggle filled/outline mode
     fn toggle_filled_mode(&mut self) {
         self.filled_mode = !self.filled_mode;
     }
-    
+
     /// Toggle slice stack mode
     fn toggle_slice_stack_mode(&mut self) {
         self.use_slice_stack = !self.use_slice_stack;
@@ -767,7 +772,7 @@ impl SelectionState {
             selection_color: (1.0, 1.0, 0.0), // Yellow highlight
         }
     }
-    
+
     /// Toggle selection of an object index
     fn toggle_selection(&mut self, index: usize, multi_select: bool) {
         if multi_select {
@@ -781,17 +786,17 @@ impl SelectionState {
             self.selected_indices.insert(index);
         }
     }
-    
+
     /// Clear all selections
     fn clear_selection(&mut self) {
         self.selected_indices.clear();
     }
-    
+
     /// Check if an index is selected
     fn is_selected(&self, index: usize) -> bool {
         self.selected_indices.contains(&index)
     }
-    
+
     /// Get the first selected index (for single selection operations)
     fn get_first_selected(&self) -> Option<usize> {
         self.selected_indices.iter().next().copied()
@@ -849,7 +854,7 @@ impl ViewerState {
     fn with_model(model: Model, file_path: PathBuf) -> Self {
         let mut slice_view = SliceView::new();
         slice_view.initialize_from_model(&model);
-        
+
         Self {
             model: Some(model),
             file_path: Some(file_path),
@@ -876,10 +881,10 @@ impl ViewerState {
     fn load_file(&mut self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::open(&path)?;
         let model = Model::from_reader(file)?;
-        
+
         // Reinitialize slice view for new model
         self.slice_view.initialize_from_model(&model);
-        
+
         self.model = Some(model);
         self.file_path = Some(path);
         Ok(())
@@ -915,8 +920,11 @@ impl ViewerState {
                     // Initialize with current model bounds if available
                     if let Some(ref model) = self.model {
                         let (min_bound, max_bound) = calculate_model_bounds(model);
-                        window.set_model_bounds((min_bound.0, min_bound.1), (max_bound.0, max_bound.1));
-                        
+                        window.set_model_bounds(
+                            (min_bound.0, min_bound.1),
+                            (max_bound.0, max_bound.1),
+                        );
+
                         // Sync initial configuration
                         self.sync_slice_preview_window(&mut window);
                     }
@@ -956,31 +964,31 @@ impl ViewerState {
             Some(w) => w,
             None => return true,
         };
-        
+
         // Check if Z height changed in the preview window
         let preview_z = window.get_z_height();
         if (preview_z - self.slice_view.z_height).abs() > 0.001 {
             // Update main slice view to match preview window
             self.slice_view.z_height = preview_z;
-            
+
             // Recompute contours
             if let Some(ref model) = self.model {
                 self.slice_view.contours = compute_slice_contours(model, self.slice_view.z_height);
             }
         }
-        
+
         // Sync grid state from window to view state
         self.slice_view.show_grid = window.get_show_grid();
-        
+
         // Sync current state to preview window
         self.sync_slice_preview_window(&mut window);
-        
+
         // Update the preview window
         let should_continue = window.update();
-        
+
         // Put window back
         self.slice_preview_window = Some(window);
-        
+
         should_continue
     }
 }
@@ -1012,19 +1020,19 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
     window.set_background_color(bg_color.0, bg_color.1, bg_color.2);
 
     // Create meshes from the model if one is loaded
-    if state.model.is_some() {
+    if let Some(ref model) = state.model {
         state.mesh_nodes = create_mesh_nodes_with_materials(
             &mut window,
-            state.model.as_ref().unwrap(),
+            model,
             state.show_materials,
             state.boolean_mode,
             state.show_displacement,
             state.file_path.as_ref(),
         );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
-        state.beam_nodes = create_beam_lattice_nodes(&mut window, state.model.as_ref().unwrap());
-        print_model_info(state.model.as_ref().unwrap());
+        // Apply current render mode
+        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+        state.beam_nodes = create_beam_lattice_nodes(&mut window, model);
+        print_model_info(model);
     } else {
         print_empty_scene_info();
     }
@@ -1055,7 +1063,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         // Update menu bar dimensions
         let size = window.size();
         menu_bar.update_dimensions(size.x, size.y);
-        
+
         // Handle window events
         for event in window.events().iter() {
             // Let menu bar handle event first
@@ -1070,7 +1078,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     &mut menu_bar,
                 );
             }
-            
+
             match event.value {
                 WindowEvent::Key(Key::O, Action::Press, modifiers)
                     if modifiers.contains(kiss3d::event::Modifiers::Control) =>
@@ -1132,64 +1140,76 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     if modifiers.contains(kiss3d::event::Modifiers::Control) =>
                 {
                     // Ctrl+T: Browse test suites
-                    println!("\n");
-                    println!("Opening test suite browser...");
-                    println!("(The 3D viewer window will remain open in the background)");
-                    println!();
+                    #[cfg(feature = "github-browser")]
+                    {
+                        println!("\n");
+                        println!("Opening test suite browser...");
+                        println!("(The 3D viewer window will remain open in the background)");
+                        println!();
 
-                    if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
-                        match state.load_file(path) {
-                            Ok(()) => {
-                                // Hide existing mesh nodes by setting them invisible
-                                for node in &mut state.mesh_nodes {
-                                    node.set_visible(false);
-                                }
-                                state.mesh_nodes.clear();
-
-                                // Hide existing beam nodes
-                                for node in &mut state.beam_nodes {
-                                    node.set_visible(false);
-                                }
-                                state.beam_nodes.clear();
-
-                                // Create new mesh and beam nodes
-                                if let Some(ref model) = state.model {
-                                    // Auto-enable displacement mode if the model has displacement data
-                                    if has_displacement_data(model) {
-                                        state.show_displacement = true;
-                                        println!("  Auto-enabled displacement visualization");
+                        if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
+                            match state.load_file(path) {
+                                Ok(()) => {
+                                    // Hide existing mesh nodes by setting them invisible
+                                    for node in &mut state.mesh_nodes {
+                                        node.set_visible(false);
                                     }
-                                    
-                                    // Auto-enable boolean mode if the model has boolean operations
-                                    if count_boolean_operations(model) > 0 {
-                                        state.boolean_mode = BooleanMode::ShowResult;
-                                        println!("  Auto-enabled boolean operation visualization (ShowResult mode)");
-                                        println!("  Press 'V' to cycle through boolean visualization modes");
+                                    state.mesh_nodes.clear();
+
+                                    // Hide existing beam nodes
+                                    for node in &mut state.beam_nodes {
+                                        node.set_visible(false);
                                     }
-                                    
-                                    state.mesh_nodes = create_mesh_nodes_with_displacement(
-                                        &mut window,
-                                        model,
-                                        state.boolean_mode,
-                                        state.show_displacement,
-                                        state.file_path.as_ref(),
-                                    );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
-                                    state.beam_nodes =
-                                        create_beam_lattice_nodes(&mut window, model);
-                                    window.set_title(&state.window_title());
-                                    println!("\n✓ File loaded successfully!");
-                                    print_model_info(model);
-                                    
-                                    // Reset camera to fit new model
-                                    camera = create_camera_for_model(state.model.as_ref());
+                                    state.beam_nodes.clear();
+
+                                    // Create new mesh and beam nodes
+                                    if let Some(ref model) = state.model {
+                                        // Auto-enable displacement mode if the model has displacement data
+                                        if has_displacement_data(model) {
+                                            state.show_displacement = true;
+                                            println!("  Auto-enabled displacement visualization");
+                                        }
+
+                                        // Auto-enable boolean mode if the model has boolean operations
+                                        if count_boolean_operations(model) > 0 {
+                                            state.boolean_mode = BooleanMode::ShowResult;
+                                            println!(
+                                                "  Auto-enabled boolean operation visualization (ShowResult mode)"
+                                            );
+                                            println!(
+                                                "  Press 'V' to cycle through boolean visualization modes"
+                                            );
+                                        }
+
+                                        state.mesh_nodes = create_mesh_nodes_with_displacement(
+                                            &mut window,
+                                            model,
+                                            state.boolean_mode,
+                                            state.show_displacement,
+                                            state.file_path.as_ref(),
+                                        );
+                                        // Apply current render mode
+                                        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                                        state.beam_nodes =
+                                            create_beam_lattice_nodes(&mut window, model);
+                                        window.set_title(&state.window_title());
+                                        println!("\n✓ File loaded successfully!");
+                                        print_model_info(model);
+
+                                        // Reset camera to fit new model
+                                        camera = create_camera_for_model(state.model.as_ref());
+                                    }
                                 }
-                            }
-                            Err(e) => {
-                                eprintln!("\n✗ Error loading file: {}", e);
+                                Err(e) => {
+                                    eprintln!("\n✗ Error loading file: {}", e);
+                                }
                             }
                         }
+                    } // #[cfg(feature = "github-browser")]
+                    #[cfg(not(feature = "github-browser"))]
+                    {
+                        println!("\nTest suite browser is not available.");
+                        println!("Rebuild with: cargo build --features github-browser");
                     }
                 }
                 WindowEvent::MouseButton(MouseButton::Button1, Action::Press, modifiers) => {
@@ -1199,31 +1219,45 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             let cursor_pos = window.cursor_pos();
                             if let Some((x, y)) = cursor_pos {
                                 // Perform ray casting to pick object
-                                if let Some(picked_index) = pick_object(&camera, &window, (x as f32, y as f32), model) {
+                                if let Some(picked_index) =
+                                    pick_object(&camera, &window, (x as f32, y as f32), model)
+                                {
                                     // Check for multi-select with Ctrl
-                                    let multi_select = modifiers.contains(kiss3d::event::Modifiers::Control);
-                                    
+                                    let multi_select =
+                                        modifiers.contains(kiss3d::event::Modifiers::Control);
+
                                     // Restore colors before applying new selection
                                     restore_mesh_colors(&mut state.mesh_nodes, model);
-                                    
+
                                     // Toggle selection
                                     state.selection.toggle_selection(picked_index, multi_select);
-                                    
+
                                     // Apply highlighting
                                     apply_selection_highlight(
                                         &mut state.mesh_nodes,
                                         &state.selection,
                                         model,
                                     );
-                                    
+
                                     // Print selection info
                                     if state.selection.is_selected(picked_index) {
                                         if let Some(item) = model.build.items.get(picked_index) {
-                                            println!("\nSelected object #{} (ID: {})", picked_index, item.objectid);
-                                            if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+                                            println!(
+                                                "\nSelected object #{} (ID: {})",
+                                                picked_index, item.objectid
+                                            );
+                                            if let Some(obj) = model
+                                                .resources
+                                                .objects
+                                                .iter()
+                                                .find(|o| o.id == item.objectid)
+                                            {
                                                 if let Some(ref mesh) = obj.mesh {
                                                     println!("  Vertices: {}", mesh.vertices.len());
-                                                    println!("  Triangles: {}", mesh.triangles.len());
+                                                    println!(
+                                                        "  Triangles: {}",
+                                                        mesh.triangles.len()
+                                                    );
                                                 }
                                                 if let Some(ref name) = obj.name {
                                                     println!("  Name: {}", name);
@@ -1292,8 +1326,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             state.show_displacement,
                             state.file_path.as_ref(),
                         );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                        // Apply current render mode
+                        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
 
                         // Print boolean operation information if in special mode
                         if state.boolean_mode != BooleanMode::Normal {
@@ -1317,7 +1351,11 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     menu_bar.set_checked(MenuAction::ToggleModelInfo, state.info_panel.visible);
                     println!(
                         "Model Information Panel: {}",
-                        if state.info_panel.visible { "ON" } else { "OFF" }
+                        if state.info_panel.visible {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
                     );
                 }
                 WindowEvent::Key(Key::S, Action::Release, _) => {
@@ -1353,19 +1391,20 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                 WindowEvent::Key(Key::M, Action::Release, _) => {
                     // M key: Toggle menu bar visibility
                     menu_bar.toggle_visibility();
-                    println!(
-                        "Menu Bar: {}",
-                        if menu_bar.visible { "ON" } else { "OFF" }
-                    );
+                    println!("Menu Bar: {}", if menu_bar.visible { "ON" } else { "OFF" });
                 }
                 WindowEvent::Key(Key::R, Action::Release, _) => {
                     // R key: Toggle material rendering
                     state.show_materials = !state.show_materials;
                     println!(
                         "\nMaterial Rendering: {}",
-                        if state.show_materials { "ON" } else { "OFF (default gray)" }
+                        if state.show_materials {
+                            "ON"
+                        } else {
+                            "OFF (default gray)"
+                        }
                     );
-                    
+
                     // Recreate mesh nodes with new coloring
                     if let Some(ref model) = state.model {
                         // Remove existing mesh nodes
@@ -1373,7 +1412,7 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             window.remove_node(node);
                         }
                         state.mesh_nodes.clear();
-                        
+
                         // Create new mesh nodes with appropriate coloring
                         state.mesh_nodes = create_mesh_nodes_with_materials(
                             &mut window,
@@ -1383,8 +1422,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             state.show_displacement,
                             state.file_path.as_ref(),
                         );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                        // Apply current render mode
+                        apply_render_mode(&mut state.mesh_nodes, state.render_mode);
                     }
                 }
                 WindowEvent::Key(Key::P, Action::Release, _) => {
@@ -1408,15 +1447,18 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     println!("Current settings:");
                     println!(
                         "  Width (X):  {} {}",
-                        state.print_area.width, state.print_area.unit.as_str()
+                        state.print_area.width,
+                        state.print_area.unit.as_str()
                     );
                     println!(
                         "  Depth (Y):  {} {}",
-                        state.print_area.depth, state.print_area.unit.as_str()
+                        state.print_area.depth,
+                        state.print_area.unit.as_str()
                     );
                     println!(
                         "  Height (Z): {} {}",
-                        state.print_area.height, state.print_area.unit.as_str()
+                        state.print_area.height,
+                        state.print_area.unit.as_str()
                     );
                     println!();
                     println!("To change settings, use the console:");
@@ -1431,15 +1473,18 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         println!("\n✓ Print area updated successfully!");
                         println!(
                             "  Width (X):  {} {}",
-                            state.print_area.width, state.print_area.unit.as_str()
+                            state.print_area.width,
+                            state.print_area.unit.as_str()
                         );
                         println!(
                             "  Depth (Y):  {} {}",
-                            state.print_area.depth, state.print_area.unit.as_str()
+                            state.print_area.depth,
+                            state.print_area.unit.as_str()
                         );
                         println!(
                             "  Height (Z): {} {}",
-                            state.print_area.height, state.print_area.unit.as_str()
+                            state.print_area.height,
+                            state.print_area.unit.as_str()
                         );
                     }
                 }
@@ -1474,26 +1519,23 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             state.show_displacement = !state.show_displacement;
                             println!(
                                 "\nDisplacement Visualization: {}",
-                                if state.show_displacement {
-                                    "ON"
-                                } else {
-                                    "OFF"
-                                }
+                                if state.show_displacement { "ON" } else { "OFF" }
                             );
-                            
+
                             // Print displacement info when enabling
                             if state.show_displacement {
-                                let (maps, norm_groups, disp_groups) = count_displacement_resources(model);
+                                let (maps, norm_groups, disp_groups) =
+                                    count_displacement_resources(model);
                                 let disp_objects = count_displacement_objects(model);
                                 println!("  Displacement Maps: {}", maps);
                                 println!("  Normal Vector Groups: {}", norm_groups);
                                 println!("  Displacement Groups: {}", disp_groups);
                                 println!("  Objects with Displacement: {}", disp_objects);
                             }
-                            
+
                             // Recreate mesh nodes with displacement highlighting
                             state.mesh_nodes.clear();
-                            
+
                             state.mesh_nodes = create_mesh_nodes_with_materials(
                                 &mut window,
                                 model,
@@ -1502,8 +1544,8 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 state.show_displacement,
                                 state.file_path.as_ref(),
                             );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                            // Apply current render mode
+                            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
                         } else {
                             println!("\nNo displacement data in this model");
                         }
@@ -1520,49 +1562,64 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 if !model.resources.slice_stacks.is_empty() {
                                     // Enable slice stack mode automatically
                                     state.slice_view.use_slice_stack = true;
-                                    
+
                                     let stack = &model.resources.slice_stacks[0];
                                     println!("\n✓ Slice Stack Detected!");
                                     println!("  Total Slices: {}", stack.slices.len());
                                     println!("  Z Bottom: {:.3} {}", stack.zbottom, model.unit);
-                                    if !stack.slices.is_empty() {
-                                        let z_range = stack.slices.last().unwrap().ztop - stack.zbottom;
+                                    if let Some(last_slice) = stack.slices.last() {
+                                        let z_range = last_slice.ztop - stack.zbottom;
                                         let avg_spacing = if stack.slices.len() > 1 {
                                             z_range / (stack.slices.len() - 1) as f64
                                         } else {
                                             0.0
                                         };
-                                        println!("  Z Top: {:.3} {}", stack.slices.last().unwrap().ztop, model.unit);
+                                        println!("  Z Top: {:.3} {}", last_slice.ztop, model.unit);
                                         println!("  Z Range: {:.3} {}", z_range, model.unit);
-                                        println!("  Average Layer Height: {:.3} {}", avg_spacing, model.unit);
+                                        println!(
+                                            "  Average Layer Height: {:.3} {}",
+                                            avg_spacing, model.unit
+                                        );
                                     }
                                     println!("\nSlice Stack Mode: ON");
-                                    println!("  Current Slice: {} / {}", state.slice_view.current_slice_index + 1, state.slice_view.total_slices);
+                                    println!(
+                                        "  Current Slice: {} / {}",
+                                        state.slice_view.current_slice_index + 1,
+                                        state.slice_view.total_slices
+                                    );
                                     println!("\nControls:");
                                     println!("  Up/Down arrows     - Navigate slices");
                                     println!("  Home/End           - Jump to first/last slice");
                                     println!("  Space              - Play/pause animation");
                                     println!("  [ / ]              - Adjust animation speed");
-                                    println!("  Shift+Up/Down      - Adjust spread factor (in 3D mode)");
+                                    println!(
+                                        "  Shift+Up/Down      - Adjust spread factor (in 3D mode)"
+                                    );
                                     println!("  S                  - Toggle slice stack mode");
-                                    println!("  K                  - Toggle 3D stack visualization");
+                                    println!(
+                                        "  K                  - Toggle 3D stack visualization"
+                                    );
                                     println!("  N                  - Toggle filled/outline mode");
-                                    println!("  L                  - Toggle slice plane visibility");
+                                    println!(
+                                        "  L                  - Toggle slice plane visibility"
+                                    );
                                     println!("  X                  - Export slice to PNG");
                                 } else {
-                                    state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                    state.slice_view.contours =
+                                        compute_slice_contours(model, state.slice_view.z_height);
                                     println!(
                                         "\nSlice View: ON at Z = {:.2} {} ({} segments)",
                                         state.slice_view.z_height,
                                         model.unit,
                                         state.slice_view.contours.len()
                                     );
-                                    println!("  Z range: {:.2} to {:.2} {}", 
-                                        state.slice_view.min_z, 
-                                        state.slice_view.max_z,
-                                        model.unit
+                                    println!(
+                                        "  Z range: {:.2} to {:.2} {}",
+                                        state.slice_view.min_z, state.slice_view.max_z, model.unit
                                     );
-                                    println!("  Use Up/Down arrows (with Shift) to adjust Z height");
+                                    println!(
+                                        "  Use Up/Down arrows (with Shift) to adjust Z height"
+                                    );
                                     println!("  Use X to export slice to PNG");
                                     println!("  Use L to toggle slice plane visibility");
                                 }
@@ -1581,12 +1638,14 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 println!("Spread factor: {:.1}x", state.slice_view.spread_factor);
                             } else {
                                 // Increase Z height
-                                let delta = (state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
+                                let delta =
+                                    (state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
                                 state.slice_view.adjust_z(delta);
-                                
+
                                 // Recompute contours
                                 if let Some(ref model) = state.model {
-                                    state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                    state.slice_view.contours =
+                                        compute_slice_contours(model, state.slice_view.z_height);
                                     println!(
                                         "Slice Z: {:.2} {} ({} segments)",
                                         state.slice_view.z_height,
@@ -1597,13 +1656,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             }
                         } else {
                             // Up without modifier: Navigate to next slice in stack
-                            if state.slice_view.use_slice_stack && state.slice_view.total_slices > 0 {
+                            if state.slice_view.use_slice_stack && state.slice_view.total_slices > 0
+                            {
                                 state.slice_view.next_slice();
                                 if let Some(ref model) = state.model {
                                     if !model.resources.slice_stacks.is_empty() {
                                         let stack = &model.resources.slice_stacks[0];
-                                        if state.slice_view.current_slice_index < stack.slices.len() {
-                                            let slice = &stack.slices[state.slice_view.current_slice_index];
+                                        if state.slice_view.current_slice_index < stack.slices.len()
+                                        {
+                                            let slice =
+                                                &stack.slices[state.slice_view.current_slice_index];
                                             println!(
                                                 "Slice {} / {} - Z: {:.3} {} ({} vertices, {} polygons)",
                                                 state.slice_view.current_slice_index + 1,
@@ -1635,12 +1697,14 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 println!("Spread factor: {:.1}x", state.slice_view.spread_factor);
                             } else {
                                 // Decrease Z height
-                                let delta = -(state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
+                                let delta =
+                                    -(state.slice_view.max_z - state.slice_view.min_z) * 0.02; // 2% of range
                                 state.slice_view.adjust_z(delta);
-                                
+
                                 // Recompute contours
                                 if let Some(ref model) = state.model {
-                                    state.slice_view.contours = compute_slice_contours(model, state.slice_view.z_height);
+                                    state.slice_view.contours =
+                                        compute_slice_contours(model, state.slice_view.z_height);
                                     println!(
                                         "Slice Z: {:.2} {} ({} segments)",
                                         state.slice_view.z_height,
@@ -1651,13 +1715,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             }
                         } else {
                             // Down without modifier: Navigate to previous slice in stack
-                            if state.slice_view.use_slice_stack && state.slice_view.total_slices > 0 {
+                            if state.slice_view.use_slice_stack && state.slice_view.total_slices > 0
+                            {
                                 state.slice_view.prev_slice();
                                 if let Some(ref model) = state.model {
                                     if !model.resources.slice_stacks.is_empty() {
                                         let stack = &model.resources.slice_stacks[0];
-                                        if state.slice_view.current_slice_index < stack.slices.len() {
-                                            let slice = &stack.slices[state.slice_view.current_slice_index];
+                                        if state.slice_view.current_slice_index < stack.slices.len()
+                                        {
+                                            let slice =
+                                                &stack.slices[state.slice_view.current_slice_index];
                                             println!(
                                                 "Slice {} / {} - Z: {:.3} {} ({} vertices, {} polygons)",
                                                 state.slice_view.current_slice_index + 1,
@@ -1700,7 +1767,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         if state.slice_view.visible && state.model.is_some() {
                             if let Some(ref model) = state.model {
                                 let bounds = calculate_model_bounds(model);
-                                if let Err(e) = export_slice_to_png(&state.slice_view, bounds, &model.unit) {
+                                if let Err(e) =
+                                    export_slice_to_png(&state.slice_view, bounds, &model.unit)
+                                {
                                     eprintln!("\n✗ Error exporting slice: {}", e);
                                 }
                             }
@@ -1749,12 +1818,24 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                             }
                         );
                         if state.slice_view.animation_playing {
-                            println!("  Speed: {:.1} slices/sec", state.slice_view.animation_speed);
-                            println!("  Loop: {}", if state.slice_view.animation_loop { "ON" } else { "OFF" });
+                            println!(
+                                "  Speed: {:.1} slices/sec",
+                                state.slice_view.animation_speed
+                            );
+                            println!(
+                                "  Loop: {}",
+                                if state.slice_view.animation_loop {
+                                    "ON"
+                                } else {
+                                    "OFF"
+                                }
+                            );
                         }
                     }
                 }
-                WindowEvent::Key(Key::Home, Action::Release, _) if state.slice_view.visible && state.slice_view.use_slice_stack => {
+                WindowEvent::Key(Key::Home, Action::Release, _)
+                    if state.slice_view.visible && state.slice_view.use_slice_stack =>
+                {
                     // Home key: Jump to first slice (when slice stack mode active)
                     state.slice_view.first_slice();
                     if let Some(ref model) = state.model {
@@ -1773,7 +1854,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         }
                     }
                 }
-                WindowEvent::Key(Key::End, Action::Release, _) if state.slice_view.visible && state.slice_view.use_slice_stack => {
+                WindowEvent::Key(Key::End, Action::Release, _)
+                    if state.slice_view.visible && state.slice_view.use_slice_stack =>
+                {
                     // End key: Jump to last slice (when slice stack mode active)
                     state.slice_view.last_slice();
                     if let Some(ref model) = state.model {
@@ -1796,14 +1879,20 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     // ]: Increase animation speed
                     if state.slice_view.visible && state.slice_view.use_slice_stack {
                         state.slice_view.increase_speed();
-                        println!("Animation speed: {:.1} slices/sec", state.slice_view.animation_speed);
+                        println!(
+                            "Animation speed: {:.1} slices/sec",
+                            state.slice_view.animation_speed
+                        );
                     }
                 }
                 WindowEvent::Key(Key::LBracket, Action::Release, _) => {
                     // [: Decrease animation speed
                     if state.slice_view.visible && state.slice_view.use_slice_stack {
                         state.slice_view.decrease_speed();
-                        println!("Animation speed: {:.1} slices/sec", state.slice_view.animation_speed);
+                        println!(
+                            "Animation speed: {:.1} slices/sec",
+                            state.slice_view.animation_speed
+                        );
                     }
                 }
                 WindowEvent::Key(Key::N, Action::Release, _) => {
@@ -1820,16 +1909,16 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                         );
                     }
                 }
-                WindowEvent::Key(Key::Equals, Action::Press, _) 
-                    | WindowEvent::Key(Key::Add, Action::Press, _) 
-                    | WindowEvent::Key(Key::PageUp, Action::Press, _) => {
+                WindowEvent::Key(Key::Equals, Action::Press, _)
+                | WindowEvent::Key(Key::Add, Action::Press, _)
+                | WindowEvent::Key(Key::PageUp, Action::Press, _) => {
                     // + key or PageUp: Zoom in
                     zoom_camera(&mut camera, ZOOM_STEP);
                     println!("Zoom in (distance: {:.1})", camera.dist());
                 }
-                WindowEvent::Key(Key::Minus, Action::Press, _) 
-                    | WindowEvent::Key(Key::Subtract, Action::Press, _)
-                    | WindowEvent::Key(Key::PageDown, Action::Press, _) => {
+                WindowEvent::Key(Key::Minus, Action::Press, _)
+                | WindowEvent::Key(Key::Subtract, Action::Press, _)
+                | WindowEvent::Key(Key::PageDown, Action::Press, _) => {
                     // - key or PageDown: Zoom out
                     zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
                     println!("Zoom out (distance: {:.1})", camera.dist());
@@ -1855,8 +1944,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                 node.set_visible(visible);
                             }
                         }
-                        println!("Toggled visibility of {} selected object(s)", 
-                                state.selection.selected_indices.len());
+                        println!(
+                            "Toggled visibility of {} selected object(s)",
+                            state.selection.selected_indices.len()
+                        );
                     }
                 }
                 WindowEvent::Key(Key::Y, Action::Release, _) => {
@@ -1871,8 +1962,10 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                                     node.set_visible(false);
                                 }
                             }
-                            println!("Isolated {} selected object(s)", 
-                                    state.selection.selected_indices.len());
+                            println!(
+                                "Isolated {} selected object(s)",
+                                state.selection.selected_indices.len()
+                            );
                         } else {
                             // Show all objects if no selection
                             for node in state.mesh_nodes.iter_mut() {
@@ -1950,9 +2043,9 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     state.show_drop_zone = false;
                     state.drop_file_valid = false;
                     state.hovered_file_path = None;
-                    
+
                     let path = PathBuf::from(path_str);
-                    
+
                     // Check if it's a .3mf file
                     if path.extension().is_some_and(|ext| ext == "3mf") {
                         println!("\nLoading dropped file: {}", path.display());
@@ -2028,12 +2121,12 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         // Draw print area if visible
         if state.print_area.visible {
             draw_print_area(&mut window, &state.print_area);
-            
+
             // Draw ruler if enabled
             if state.print_area.show_ruler {
                 draw_ruler(&mut window, &state.print_area);
             }
-            
+
             // Draw scale bar if enabled
             if state.print_area.show_scale_bar {
                 draw_scale_bar(&mut window, &state.print_area);
@@ -2044,22 +2137,32 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
         if state.slice_view.visible && state.model.is_some() {
             if let Some(ref model) = state.model {
                 let bounds = calculate_model_bounds(model);
-                
+
                 // Update animation if playing
                 if state.slice_view.animation_playing {
                     let delta_time = 1.0 / 60.0; // Assume ~60 FPS
                     state.slice_view.update_animation(delta_time);
                 }
-                
+
                 if state.slice_view.use_slice_stack && !model.resources.slice_stacks.is_empty() {
                     // Render slice stack data
                     if state.slice_view.show_stack_3d {
                         // Render all slices in 3D
-                        draw_slice_stack_3d(&mut window, &state.slice_view, &model.resources.slice_stacks[0]);
+                        draw_slice_stack_3d(
+                            &mut window,
+                            &state.slice_view,
+                            &model.resources.slice_stacks[0],
+                        );
                     } else {
                         // Render current slice only
-                        if state.slice_view.current_slice_index < model.resources.slice_stacks[0].slices.len() {
-                            draw_slice_stack_single(&mut window, &state.slice_view, &model.resources.slice_stacks[0]);
+                        if state.slice_view.current_slice_index
+                            < model.resources.slice_stacks[0].slices.len()
+                        {
+                            draw_slice_stack_single(
+                                &mut window,
+                                &state.slice_view,
+                                &model.resources.slice_stacks[0],
+                            );
                         }
                     }
                 } else {
@@ -2068,20 +2171,20 @@ pub fn launch_ui_viewer(file_path: Option<PathBuf>) -> Result<(), Box<dyn std::e
                     if state.slice_view.show_plane {
                         draw_slice_plane(&mut window, &state.slice_view, bounds);
                     }
-                    
+
                     // Draw slice contours
                     draw_slice_contours(&mut window, &state.slice_view);
                 }
             }
         }
-        
+
         // Draw drop zone overlay if file is being dragged
         if state.show_drop_zone {
             draw_drop_zone_overlay(&mut window, state.drop_file_valid, &state.hovered_file_path);
         }
         // Draw model information panel if visible
         render_model_info_panel(&mut window, &state);
-        
+
         // Draw menu bar (rendered last so it's on top)
         menu_bar.render(&mut window);
     }
@@ -2124,8 +2227,8 @@ fn handle_menu_action(
                                 state.show_displacement,
                                 state.file_path.as_ref(),
                             );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                            // Apply current render mode
+                            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
                             state.beam_nodes = create_beam_lattice_nodes(window, model);
                             window.set_title(&state.window_title());
                             println!("\n✓ File loaded successfully!");
@@ -2133,7 +2236,7 @@ fn handle_menu_action(
 
                             // Reset camera
                             *camera = create_camera_for_model(state.model.as_ref());
-                            
+
                             // Update axis length
                             let (min_bound, max_bound) = calculate_model_bounds(model);
                             let size = Vector3::new(
@@ -2153,63 +2256,75 @@ fn handle_menu_action(
         }
         MenuAction::BrowseTests => {
             // Launch the test suite browser
-            println!("\n");
-            println!("Opening test suite browser...");
-            println!("(The 3D viewer window will remain open in the background)");
-            println!();
+            #[cfg(feature = "github-browser")]
+            {
+                println!("\n");
+                println!("Opening test suite browser...");
+                println!("(The 3D viewer window will remain open in the background)");
+                println!();
 
-            if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
-                match state.load_file(path) {
-                    Ok(()) => {
-                        // Hide existing mesh nodes by setting them invisible
-                        for node in &mut state.mesh_nodes {
-                            node.set_visible(false);
-                        }
-                        state.mesh_nodes.clear();
-
-                        // Hide existing beam nodes
-                        for node in &mut state.beam_nodes {
-                            node.set_visible(false);
-                        }
-                        state.beam_nodes.clear();
-
-                        // Create new mesh and beam nodes
-                        if let Some(ref model) = state.model {
-                            // Auto-enable displacement mode if the model has displacement data
-                            if has_displacement_data(model) {
-                                state.show_displacement = true;
-                                println!("  Auto-enabled displacement visualization");
+                if let Ok(Some(path)) = crate::browser_ui::launch_browser() {
+                    match state.load_file(path) {
+                        Ok(()) => {
+                            // Hide existing mesh nodes by setting them invisible
+                            for node in &mut state.mesh_nodes {
+                                node.set_visible(false);
                             }
-                            
-                            // Auto-enable boolean mode if the model has boolean operations
-                            if count_boolean_operations(model) > 0 {
-                                state.boolean_mode = BooleanMode::ShowResult;
-                                println!("  Auto-enabled boolean operation visualization (ShowResult mode)");
-                                println!("  Press 'V' to cycle through boolean visualization modes");
-                            }
-                            
-                            state.mesh_nodes = create_mesh_nodes_with_displacement(
-                                window,
-                                model,
-                                state.boolean_mode,
-                                state.show_displacement,
-                                state.file_path.as_ref(),
-                            );
-                            // Apply current render mode
-                            apply_render_mode(&mut state.mesh_nodes, state.render_mode);
-                            state.beam_nodes = create_beam_lattice_nodes(window, model);
-                            window.set_title(&state.window_title());
-                            println!("\n✓ File loaded successfully!");
-                            print_model_info(model);
+                            state.mesh_nodes.clear();
 
-                            // Reset camera to fit new model
-                            *camera = create_camera_for_model(state.model.as_ref());
+                            // Hide existing beam nodes
+                            for node in &mut state.beam_nodes {
+                                node.set_visible(false);
+                            }
+                            state.beam_nodes.clear();
+
+                            // Create new mesh and beam nodes
+                            if let Some(ref model) = state.model {
+                                // Auto-enable displacement mode if the model has displacement data
+                                if has_displacement_data(model) {
+                                    state.show_displacement = true;
+                                    println!("  Auto-enabled displacement visualization");
+                                }
+
+                                // Auto-enable boolean mode if the model has boolean operations
+                                if count_boolean_operations(model) > 0 {
+                                    state.boolean_mode = BooleanMode::ShowResult;
+                                    println!(
+                                        "  Auto-enabled boolean operation visualization (ShowResult mode)"
+                                    );
+                                    println!(
+                                        "  Press 'V' to cycle through boolean visualization modes"
+                                    );
+                                }
+
+                                state.mesh_nodes = create_mesh_nodes_with_displacement(
+                                    window,
+                                    model,
+                                    state.boolean_mode,
+                                    state.show_displacement,
+                                    state.file_path.as_ref(),
+                                );
+                                // Apply current render mode
+                                apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                                state.beam_nodes = create_beam_lattice_nodes(window, model);
+                                window.set_title(&state.window_title());
+                                println!("\n✓ File loaded successfully!");
+                                print_model_info(model);
+
+                                // Reset camera to fit new model
+                                *camera = create_camera_for_model(state.model.as_ref());
+                            }
                         }
-                    }
-                    Err(e) => {
-                        eprintln!("\n✗ Error loading file: {}", e);
+                        Err(e) => {
+                            eprintln!("\n✗ Error loading file: {}", e);
+                        }
                     }
                 }
+            } // #[cfg(feature = "github-browser")]
+            #[cfg(not(feature = "github-browser"))]
+            {
+                println!("\nTest suite browser is not available.");
+                println!("Rebuild with: cargo build --features github-browser");
             }
         }
         MenuAction::ExportScreenshot => {
@@ -2228,7 +2343,14 @@ fn handle_menu_action(
         MenuAction::TogglePrintBed => {
             state.print_area.toggle_visibility();
             menu_bar.set_checked(MenuAction::TogglePrintBed, state.print_area.visible);
-            println!("Print Bed: {}", if state.print_area.visible { "ON" } else { "OFF" });
+            println!(
+                "Print Bed: {}",
+                if state.print_area.visible {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            );
         }
         MenuAction::ToggleGrid => {
             println!("Grid toggle not yet implemented");
@@ -2238,7 +2360,11 @@ fn handle_menu_action(
             menu_bar.set_checked(MenuAction::ToggleModelInfo, state.info_panel.visible);
             println!(
                 "Model Information Panel: {}",
-                if state.info_panel.visible { "ON" } else { "OFF" }
+                if state.info_panel.visible {
+                    "ON"
+                } else {
+                    "OFF"
+                }
             );
         }
         MenuAction::ToggleRulers => {
@@ -2287,23 +2413,33 @@ fn handle_menu_action(
                 node.set_visible(state.show_beams);
             }
             menu_bar.set_checked(MenuAction::ToggleBeamLattice, state.show_beams);
-            println!("Beam Lattice: {}", if state.show_beams { "ON" } else { "OFF" });
+            println!(
+                "Beam Lattice: {}",
+                if state.show_beams { "ON" } else { "OFF" }
+            );
         }
         MenuAction::ToggleSliceStack => {
             state.slice_view.toggle_visibility();
             menu_bar.set_checked(MenuAction::ToggleSliceStack, state.slice_view.visible);
-            println!("Slice View: {}", if state.slice_view.visible { "ON" } else { "OFF" });
+            println!(
+                "Slice View: {}",
+                if state.slice_view.visible {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            );
         }
         MenuAction::ToggleDisplacement => {
             state.show_displacement = !state.show_displacement;
             menu_bar.set_checked(MenuAction::ToggleDisplacement, state.show_displacement);
-            
+
             // Rebuild mesh nodes with/without displacement
             for node in &mut state.mesh_nodes {
                 node.set_visible(false);
             }
             state.mesh_nodes.clear();
-            
+
             if let Some(ref model) = state.model {
                 state.mesh_nodes = create_mesh_nodes_with_displacement(
                     window,
@@ -2312,22 +2448,25 @@ fn handle_menu_action(
                     state.show_displacement,
                     state.file_path.as_ref(),
                 );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                // Apply current render mode
+                apply_render_mode(&mut state.mesh_nodes, state.render_mode);
             }
-            
-            println!("Displacement: {}", if state.show_displacement { "ON" } else { "OFF" });
+
+            println!(
+                "Displacement: {}",
+                if state.show_displacement { "ON" } else { "OFF" }
+            );
         }
         MenuAction::ToggleBooleanOps => {
             state.boolean_mode = state.boolean_mode.next();
             println!("Boolean mode: {}", state.boolean_mode.name());
-            
+
             // Rebuild mesh nodes with new boolean mode
             for node in &mut state.mesh_nodes {
                 node.set_visible(false);
             }
             state.mesh_nodes.clear();
-            
+
             if let Some(ref model) = state.model {
                 state.mesh_nodes = create_mesh_nodes_with_displacement(
                     window,
@@ -2336,8 +2475,8 @@ fn handle_menu_action(
                     state.show_displacement,
                     state.file_path.as_ref(),
                 );
-                                    // Apply current render mode
-                                    apply_render_mode(&mut state.mesh_nodes, state.render_mode);
+                // Apply current render mode
+                apply_render_mode(&mut state.mesh_nodes, state.render_mode);
             }
         }
         MenuAction::KeyboardShortcuts => {
@@ -2448,8 +2587,14 @@ fn apply_render_mode_to_node(node: &mut SceneNode, mode: RenderMode) {
 fn update_render_mode_menu(menu_bar: &mut MenuBar, mode: RenderMode) {
     use crate::menu_ui::MenuAction;
     menu_bar.set_checked(MenuAction::RenderModeSolid, mode == RenderMode::Solid);
-    menu_bar.set_checked(MenuAction::RenderModeWireframe, mode == RenderMode::Wireframe);
-    menu_bar.set_checked(MenuAction::RenderModeSolidWireframe, mode == RenderMode::SolidWireframe);
+    menu_bar.set_checked(
+        MenuAction::RenderModeWireframe,
+        mode == RenderMode::Wireframe,
+    );
+    menu_bar.set_checked(
+        MenuAction::RenderModeSolidWireframe,
+        mode == RenderMode::SolidWireframe,
+    );
     menu_bar.set_checked(MenuAction::RenderModePoints, mode == RenderMode::Points);
     menu_bar.set_checked(MenuAction::RenderModeXRay, mode == RenderMode::XRay);
 }
@@ -2463,15 +2608,15 @@ fn generate_screenshot_filename() -> String {
 /// Capture screenshot of the current window view
 fn capture_screenshot(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
     let filename = generate_screenshot_filename();
-    
+
     // Capture the current frame
     let img = window.snap_image();
-    
+
     // Save as PNG
     img.save(&filename)?;
-    
+
     println!("\n✓ Screenshot saved: {}", filename);
-    
+
     Ok(())
 }
 
@@ -2506,11 +2651,12 @@ fn print_model_info(model: &Model) {
     println!("  - Triangles: {}", count_triangles(model));
     println!("  - Vertices: {}", count_vertices(model));
     println!("  - Unit: {}", model.unit);
-    
+
     // Display material information
-    if !model.resources.materials.is_empty() 
+    if !model.resources.materials.is_empty()
         || !model.resources.color_groups.is_empty()
-        || !model.resources.base_material_groups.is_empty() {
+        || !model.resources.base_material_groups.is_empty()
+    {
         println!("  - Materials:");
         if !model.resources.materials.is_empty() {
             println!("      Base Materials: {}", model.resources.materials.len());
@@ -2519,17 +2665,20 @@ fn print_model_info(model: &Model) {
             println!("      Color Groups: {}", model.resources.color_groups.len());
         }
         if !model.resources.base_material_groups.is_empty() {
-            println!("      Base Material Groups: {}", model.resources.base_material_groups.len());
+            println!(
+                "      Base Material Groups: {}",
+                model.resources.base_material_groups.len()
+            );
         }
     }
-    
+
     if beam_count > 0 {
         println!("  - Beam Lattice: {} beams", beam_count);
     }
     if boolean_count > 0 {
         println!("  - Boolean Operations: {} operations", boolean_count);
     }
-    
+
     // Display displacement information if present
     if has_displacement_data(model) {
         let (maps, norm_groups, disp_groups) = count_displacement_resources(model);
@@ -2548,7 +2697,7 @@ fn print_model_info(model: &Model) {
             println!("      Objects with Displacement: {}", disp_objects);
         }
     }
-    
+
     println!();
     println!("═══════════════════════════════════════════════════════════");
 }
@@ -2647,14 +2796,14 @@ fn calculate_model_bounds(model: &Model) -> ((f32, f32, f32), (f32, f32, f32)) {
 /// Calculate the center and optimal distance for viewing the model
 fn calculate_camera_params(model: &Model) -> (Point3<f32>, f32) {
     let (min_bound, max_bound) = calculate_model_bounds(model);
-    
+
     // Calculate the center point of the model
     let center = Point3::new(
         (min_bound.0 + max_bound.0) / 2.0,
         (min_bound.1 + max_bound.1) / 2.0,
         (min_bound.2 + max_bound.2) / 2.0,
     );
-    
+
     // Calculate the diagonal distance to determine camera distance
     let size = Vector3::new(
         max_bound.0 - min_bound.0,
@@ -2662,7 +2811,7 @@ fn calculate_camera_params(model: &Model) -> (Point3<f32>, f32) {
         max_bound.2 - min_bound.2,
     );
     let diagonal = size.magnitude();
-    
+
     // Return center and optimal viewing distance
     (center, diagonal * CAMERA_DISTANCE_MULTIPLIER)
 }
@@ -2671,14 +2820,14 @@ fn calculate_camera_params(model: &Model) -> (Point3<f32>, f32) {
 fn create_camera_for_model(model: Option<&Model>) -> ArcBall {
     if let Some(model) = model {
         let (center, distance) = calculate_camera_params(model);
-        
+
         // Camera eye position (looking from top-right-front)
         let eye = Point3::new(
             center.x + distance * 0.5,
             center.y + distance * 0.5,
             center.z + distance * 0.7,
         );
-        
+
         ArcBall::new(eye, center)
     } else {
         // Default camera for empty scene
@@ -2691,7 +2840,7 @@ fn create_camera_for_model(model: Option<&Model>) -> ArcBall {
 /// Fit the camera to show the entire model
 fn fit_camera_to_model(camera: &mut ArcBall, model: &Model) {
     let (center, distance) = calculate_camera_params(model);
-    
+
     // Set camera to look at center with appropriate distance
     camera.set_at(center);
     camera.set_dist(distance);
@@ -2700,20 +2849,25 @@ fn fit_camera_to_model(camera: &mut ArcBall, model: &Model) {
 /// Focus camera on a specific object (selected object)
 fn focus_camera_on_object(camera: &mut ArcBall, model: &Model, object_index: usize) {
     if let Some(item) = model.build.items.get(object_index) {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             if let Some(ref mesh) = obj.mesh {
                 // Calculate bounding box of this object
                 if mesh.vertices.is_empty() {
                     return;
                 }
-                
+
                 let mut min_x = f32::MAX;
                 let mut min_y = f32::MAX;
                 let mut min_z = f32::MAX;
                 let mut max_x = f32::MIN;
                 let mut max_y = f32::MIN;
                 let mut max_z = f32::MIN;
-                
+
                 for v in &mesh.vertices {
                     min_x = min_x.min(v.x as f32);
                     min_y = min_y.min(v.y as f32);
@@ -2722,23 +2876,19 @@ fn focus_camera_on_object(camera: &mut ArcBall, model: &Model, object_index: usi
                     max_y = max_y.max(v.y as f32);
                     max_z = max_z.max(v.z as f32);
                 }
-                
+
                 // Calculate center
                 let center = Point3::new(
                     (min_x + max_x) / 2.0,
                     (min_y + max_y) / 2.0,
                     (min_z + max_z) / 2.0,
                 );
-                
+
                 // Calculate diagonal distance for camera positioning
-                let size = Vector3::new(
-                    max_x - min_x,
-                    max_y - min_y,
-                    max_z - min_z,
-                );
+                let size = Vector3::new(max_x - min_x, max_y - min_y, max_z - min_z);
                 let diagonal = size.magnitude();
                 let distance = diagonal * CAMERA_DISTANCE_MULTIPLIER;
-                
+
                 // Set camera
                 camera.set_at(center);
                 camera.set_dist(distance);
@@ -2788,16 +2938,19 @@ fn apply_selection_highlight(
             } else {
                 (0.5, 0.5, 0.5)
             };
-            
+
             // Apply highlight by mixing with selection color
             let highlight = selection.selection_color;
-            let r = (original_color.0 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY) 
-                     + highlight.0 * SELECTION_HIGHLIGHT_INTENSITY).min(1.0);
-            let g = (original_color.1 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY) 
-                     + highlight.1 * SELECTION_HIGHLIGHT_INTENSITY).min(1.0);
-            let b = (original_color.2 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY) 
-                     + highlight.2 * SELECTION_HIGHLIGHT_INTENSITY).min(1.0);
-            
+            let r = (original_color.0 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY)
+                + highlight.0 * SELECTION_HIGHLIGHT_INTENSITY)
+                .min(1.0);
+            let g = (original_color.1 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY)
+                + highlight.1 * SELECTION_HIGHLIGHT_INTENSITY)
+                .min(1.0);
+            let b = (original_color.2 * (1.0 - SELECTION_HIGHLIGHT_INTENSITY)
+                + highlight.2 * SELECTION_HIGHLIGHT_INTENSITY)
+                .min(1.0);
+
             node.set_color(r, g, b);
         }
     }
@@ -2838,7 +2991,12 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
             }
         }
         // Try to find in base material groups (use first material)
-        if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+        if let Some(bmg) = model
+            .resources
+            .base_material_groups
+            .iter()
+            .find(|bg| bg.id == pid)
+        {
             if !bmg.materials.is_empty() {
                 let (r, g, b, _) = bmg.materials[0].displaycolor;
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
@@ -2853,12 +3011,9 @@ fn get_object_color(model: &Model, obj: &lib3mf::Object) -> (f32, f32, f32) {
 /// Load textures from a 3MF package file
 /// Returns a HashMap mapping texture IDs to TextureInfo (raw bytes + tile style)
 /// kiss3d's set_texture_from_memory expects encoded image data, not decoded pixels
-fn load_textures_from_package(
-    file_path: &PathBuf,
-    model: &Model,
-) -> HashMap<usize, TextureInfo> {
+fn load_textures_from_package(file_path: &PathBuf, model: &Model) -> HashMap<usize, TextureInfo> {
     let mut textures = HashMap::new();
-    
+
     // Open the 3MF file as a ZIP archive
     let file = match File::open(file_path) {
         Ok(f) => f,
@@ -2867,7 +3022,7 @@ fn load_textures_from_package(
             return textures;
         }
     };
-    
+
     let mut archive = match zip::ZipArchive::new(file) {
         Ok(a) => a,
         Err(e) => {
@@ -2875,24 +3030,24 @@ fn load_textures_from_package(
             return textures;
         }
     };
-    
+
     // Load each texture2d resource
     for texture2d in &model.resources.texture2d_resources {
         // Normalize path (remove leading slash if present)
         let normalized_path = texture2d.path.trim_start_matches('/');
-        
+
         // Try both path variants and read the file
         let image_data = {
             let mut buffer = Vec::new();
             let mut found = false;
-            
+
             // Try normalized path first
             if let Ok(mut file) = archive.by_name(normalized_path) {
                 if file.read_to_end(&mut buffer).is_ok() {
                     found = true;
                 }
             }
-            
+
             // Try original path if normalized didn't work
             if !found {
                 buffer.clear();
@@ -2902,18 +3057,15 @@ fn load_textures_from_package(
                     }
                 }
             }
-            
+
             if !found {
-                eprintln!(
-                    "Texture file '{}' not found in 3MF package",
-                    texture2d.path
-                );
+                eprintln!("Texture file '{}' not found in 3MF package", texture2d.path);
                 continue;
             }
-            
+
             buffer
         };
-        
+
         // Validate the image can be loaded (but store raw bytes)
         match image::load_from_memory(&image_data) {
             Ok(img) => {
@@ -2927,25 +3079,25 @@ fn load_textures_from_package(
                     texture2d.tilestylev
                 );
                 // Store the raw bytes with tile style info
-                textures.insert(texture2d.id, TextureInfo {
-                    data: image_data,
-                    tile_style_u: texture2d.tilestyleu,
-                    tile_style_v: texture2d.tilestylev,
-                });
+                textures.insert(
+                    texture2d.id,
+                    TextureInfo {
+                        data: image_data,
+                        tile_style_u: texture2d.tilestyleu,
+                        tile_style_v: texture2d.tilestylev,
+                    },
+                );
             }
             Err(e) => {
-                eprintln!(
-                    "Failed to decode texture image '{}': {}",
-                    texture2d.path, e
-                );
+                eprintln!("Failed to decode texture image '{}': {}", texture2d.path, e);
             }
         }
     }
-    
+
     if !textures.is_empty() {
         println!("  Loaded {} texture(s) from 3MF package", textures.len());
     }
-    
+
     textures
 }
 
@@ -2957,21 +3109,26 @@ fn resolve_composite_color(
 ) -> (f32, f32, f32) {
     // Get the composite definition
     let composite = &comp.composites[composite_idx];
-    
+
     // Find the base material group this composite references
-    if let Some(base_group) = model.resources.base_material_groups.iter().find(|bg| bg.id == comp.matid) {
+    if let Some(base_group) = model
+        .resources
+        .base_material_groups
+        .iter()
+        .find(|bg| bg.id == comp.matid)
+    {
         // Blend colors according to the composite values
         let mut r_total = 0.0_f32;
         let mut g_total = 0.0_f32;
         let mut b_total = 0.0_f32;
-        
+
         // Iterate up to the minimum of values and matindices length to prevent out-of-bounds
         let blend_count = composite.values.len().min(comp.matindices.len());
-        
+
         for i in 0..blend_count {
             let value = composite.values[i];
             let mat_idx = comp.matindices[i];
-            
+
             if mat_idx < base_group.materials.len() {
                 let (r, g, b, _) = base_group.materials[mat_idx].displaycolor;
                 r_total += (r as f32 / 255.0) * value;
@@ -2979,7 +3136,7 @@ fn resolve_composite_color(
                 b_total += (b as f32 / 255.0) * value;
             }
         }
-        
+
         // Normalize by sum of values to handle cases where values don't sum to 1.0
         // This ensures proper color intensity regardless of value distribution
         let sum: f32 = composite.values.iter().take(blend_count).sum();
@@ -2988,10 +3145,10 @@ fn resolve_composite_color(
             g_total /= sum;
             b_total /= sum;
         }
-        
+
         return (r_total, g_total, b_total);
     }
-    
+
     // Fallback to purple to indicate composite material that couldn't be resolved
     (0.8, 0.0, 0.8)
 }
@@ -3004,21 +3161,26 @@ fn resolve_multiproperty_color(
 ) -> (f32, f32, f32) {
     // Get the multi element
     let multi_elem = &multi.multis[multi_idx];
-    
+
     // Get colors from each referenced property group
     let mut colors = Vec::new();
-    
+
     for (i, &pid) in multi.pids.iter().enumerate() {
         if i < multi_elem.pindices.len() {
             let pindex = multi_elem.pindices[i];
-            
+
             // Try to get color from each property group type
             if let Some(cg) = model.resources.color_groups.iter().find(|c| c.id == pid) {
                 if pindex < cg.colors.len() {
                     let (r, g, b, _) = cg.colors[pindex];
                     colors.push((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0));
                 }
-            } else if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+            } else if let Some(bmg) = model
+                .resources
+                .base_material_groups
+                .iter()
+                .find(|bg| bg.id == pid)
+            {
                 if pindex < bmg.materials.len() {
                     let (r, g, b, _) = bmg.materials[pindex].displaycolor;
                     colors.push((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0));
@@ -3026,25 +3188,25 @@ fn resolve_multiproperty_color(
             }
         }
     }
-    
+
     if colors.is_empty() {
         // Fallback to magenta to indicate multi-property that couldn't be resolved
         return (1.0, 0.0, 1.0);
     }
-    
+
     // Blend colors based on blend methods
     // For simplicity, we average the colors (Mix blend method)
     // A more sophisticated implementation would handle Multiply and other blend modes
     let mut r_total = 0.0_f32;
     let mut g_total = 0.0_f32;
     let mut b_total = 0.0_f32;
-    
+
     for (r, g, b) in &colors {
         r_total += r;
         g_total += g;
         b_total += b;
     }
-    
+
     let count = colors.len() as f32;
     (r_total / count, g_total / count, b_total / count)
 }
@@ -3059,14 +3221,14 @@ fn get_triangle_color(
     if let Some(pid) = triangle.pid {
         // Determine which index to use for the color
         let pindex = triangle.pindex.or(triangle.p1);
-        
+
         // Try to find in base materials (single color material)
         if let Some(mat) = model.resources.materials.iter().find(|m| m.id == pid) {
             if let Some((r, g, b, _)) = mat.color {
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             }
         }
-        
+
         // Try to find in color groups
         if let Some(cg) = model.resources.color_groups.iter().find(|c| c.id == pid) {
             if let Some(idx) = pindex {
@@ -3080,9 +3242,14 @@ fn get_triangle_color(
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             }
         }
-        
+
         // Try to find in base material groups
-        if let Some(bmg) = model.resources.base_material_groups.iter().find(|bg| bg.id == pid) {
+        if let Some(bmg) = model
+            .resources
+            .base_material_groups
+            .iter()
+            .find(|bg| bg.id == pid)
+        {
             if let Some(idx) = pindex {
                 if idx < bmg.materials.len() {
                     let (r, g, b, _) = bmg.materials[idx].displaycolor;
@@ -3094,9 +3261,14 @@ fn get_triangle_color(
                 return (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             }
         }
-        
+
         // Try to find in composite materials
-        if let Some(comp) = model.resources.composite_materials.iter().find(|c| c.id == pid) {
+        if let Some(comp) = model
+            .resources
+            .composite_materials
+            .iter()
+            .find(|c| c.id == pid)
+        {
             if let Some(idx) = pindex {
                 if idx < comp.composites.len() {
                     return resolve_composite_color(model, comp, idx);
@@ -3106,9 +3278,14 @@ fn get_triangle_color(
                 return resolve_composite_color(model, comp, 0);
             }
         }
-        
+
         // Try to find in multi-properties
-        if let Some(multi) = model.resources.multi_properties.iter().find(|m| m.id == pid) {
+        if let Some(multi) = model
+            .resources
+            .multi_properties
+            .iter()
+            .find(|m| m.id == pid)
+        {
             if let Some(idx) = pindex {
                 if idx < multi.multis.len() {
                     return resolve_multiproperty_color(model, multi, idx);
@@ -3119,7 +3296,7 @@ fn get_triangle_color(
             }
         }
     }
-    
+
     // Fall back to object-level color
     get_object_color(model, obj)
 }
@@ -3407,16 +3584,18 @@ fn create_beam_lattice_nodes(window: &mut Window, model: &Model) -> Vec<SceneNod
                         if ball.vindex < mesh_data.vertices.len() {
                             let v = &mesh_data.vertices[ball.vindex];
                             let center = Point3::new(v.x as f32, v.y as f32, v.z as f32);
-                            
+
                             // Use ball's radius, or default from ball_radius, or beamset radius
-                            let radius = ball.radius
+                            let radius = ball
+                                .radius
                                 .or(beamset.ball_radius)
-                                .unwrap_or(beamset.radius) as f32;
-                            
+                                .unwrap_or(beamset.radius)
+                                as f32;
+
                             let sphere = create_sphere_mesh(center, radius, GEOMETRY_SEGMENTS);
                             let mut sphere_node = window.add_trimesh(sphere, IDENTITY_SCALE);
                             sphere_node.set_color(BEAM_COLOR.0, BEAM_COLOR.1, BEAM_COLOR.2);
-                            
+
                             nodes.push(sphere_node);
                         }
                     }
@@ -3501,22 +3680,22 @@ fn draw_axes(window: &mut Window, length: f32) {
 fn draw_drop_zone_overlay(window: &mut Window, valid_file: bool, file_path: &Option<String>) {
     use kiss3d::nalgebra::{Point2, Point3};
     use kiss3d::text::Font;
-    
+
     let size = window.size();
     let width = size.x as f32;
     let height = size.y as f32;
-    
+
     // Choose color based on file validity
     let (r, g, b) = if valid_file {
         (0.2, 0.6, 1.0) // Blue tint for valid .3mf files
     } else {
         (1.0, 0.3, 0.3) // Red tint for invalid files
     };
-    
+
     // Draw semi-transparent fullscreen overlay using horizontal lines
     let alpha = 0.3;
     let line_spacing = 10.0;
-    
+
     // Draw horizontal lines to create overlay effect
     let mut y = 0.0;
     while y < height {
@@ -3527,20 +3706,20 @@ fn draw_drop_zone_overlay(window: &mut Window, valid_file: bool, file_path: &Opt
         );
         y += line_spacing;
     }
-    
+
     // Display message text in the center
     let message = if valid_file {
         "Drop to open file"
     } else {
         "Only .3mf files supported"
     };
-    
+
     // Draw text in center
     let font = Font::default();
     let font_size = 48.0;
     let text_x = width / 2.0 - (message.len() as f32 * font_size * 0.3);
     let text_y = height / 2.0;
-    
+
     window.draw_text(
         message,
         &Point2::new(text_x, text_y),
@@ -3548,7 +3727,7 @@ fn draw_drop_zone_overlay(window: &mut Window, valid_file: bool, file_path: &Opt
         &font,
         &Point3::new(1.0, 1.0, 1.0), // White text
     );
-    
+
     // Draw file name if available
     if let Some(path) = file_path {
         let file_name = std::path::Path::new(path)
@@ -3558,7 +3737,7 @@ fn draw_drop_zone_overlay(window: &mut Window, valid_file: bool, file_path: &Opt
         let fname_size = 32.0;
         let fname_x = width / 2.0 - (file_name.len() as f32 * fname_size * 0.3);
         let fname_y = text_y + 60.0;
-        
+
         window.draw_text(
             file_name,
             &Point2::new(fname_x, fname_y),
@@ -3722,18 +3901,24 @@ fn create_mesh_nodes_with_materials(
 ) -> Vec<SceneNode> {
     // If materials are disabled, use default rendering
     if !show_materials {
-        return create_mesh_nodes_with_displacement(window, model, mode, show_displacement, file_path);
+        return create_mesh_nodes_with_displacement(
+            window,
+            model,
+            mode,
+            show_displacement,
+            file_path,
+        );
     }
-    
+
     // If displacement or boolean modes are active, use those instead
     if show_displacement && has_displacement_data(model) {
         return create_mesh_nodes_highlight_displacement(window, model, file_path);
     }
-    
+
     if mode != BooleanMode::Normal {
         return create_mesh_nodes_with_boolean_mode(window, model, mode);
     }
-    
+
     // Create nodes with per-triangle material colors and textures
     if let Some(path) = file_path {
         create_mesh_nodes_with_triangle_colors_and_textures(window, model, path)
@@ -3764,7 +3949,7 @@ fn create_mesh_nodes_with_triangle_colors_and_textures(
     } else {
         None
     };
-    
+
     create_mesh_nodes_with_triangle_colors_impl(window, model, textures.as_ref())
 }
 
@@ -3786,44 +3971,55 @@ fn create_mesh_nodes_with_triangle_colors_impl(
             if let Some(ref mesh_data) = obj.mesh {
                 // Check if mesh has per-triangle colors or textures
                 let has_triangle_properties = mesh_data.triangles.iter().any(|t| t.pid.is_some());
-                
+
                 if has_triangle_properties {
                     // Group triangles by their material property ID
-                    let mut property_groups: HashMap<(Option<usize>, Option<usize>), Vec<usize>> = 
+                    let mut property_groups: HashMap<(Option<usize>, Option<usize>), Vec<usize>> =
                         HashMap::new();
-                    
+
                     for (tri_idx, triangle) in mesh_data.triangles.iter().enumerate() {
                         // Group by (pid, pindex) to handle both colors and textures
                         let key = (triangle.pid, triangle.pindex.or(triangle.p1));
                         property_groups.entry(key).or_default().push(tri_idx);
                     }
-                    
+
                     // Create a mesh for each property group
                     for ((pid_opt, pindex_opt), tri_indices) in property_groups.iter() {
                         // Check if this group uses a texture
-                        let texture_info = if let (Some(pid), Some(pindex)) = (pid_opt, pindex_opt) {
+                        let texture_info = if let (Some(pid), Some(pindex)) = (pid_opt, pindex_opt)
+                        {
                             // Check if this pid refers to a texture2d group
-                            model.resources.texture2d_groups.iter()
+                            model
+                                .resources
+                                .texture2d_groups
+                                .iter()
                                 .find(|tg| tg.id == *pid)
                                 .map(|tg| (*pid, tg.texid, *pindex))
                         } else {
                             None
                         };
-                        
+
                         if let Some((tex_group_id, tex_id, _)) = texture_info {
                             // This group uses textures - create mesh with UV coordinates
-                            let tex_group = model.resources.texture2d_groups.iter()
-                                .find(|tg| tg.id == tex_group_id).unwrap();
-                            
+                            let Some(tex_group) = model
+                                .resources
+                                .texture2d_groups
+                                .iter()
+                                .find(|tg| tg.id == tex_group_id)
+                            else {
+                                // Texture group not found — skip this property group
+                                continue;
+                            };
+
                             // Create vertices and UV coordinates
                             let mut vertices = Vec::new();
                             let mut uvs = Vec::new();
                             let mut faces = Vec::new();
-                            
+
                             for &tri_idx in tri_indices.iter() {
                                 let triangle = &mesh_data.triangles[tri_idx];
                                 let base_idx = vertices.len() as u32;
-                                
+
                                 // Get UV indices for each vertex from p1, p2, p3
                                 // In 3MF, p1/p2/p3 are indices into the texture group's tex2coords array
                                 // If not specified, fall back to pindex for all vertices
@@ -3832,13 +4028,16 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                                     triangle.p2.or(triangle.pindex),
                                     triangle.p3.or(triangle.pindex),
                                 ];
-                                
+
                                 // Add vertices for this triangle
-                                for (i, &v_idx) in [triangle.v1, triangle.v2, triangle.v3].iter().enumerate() {
+                                for (i, &v_idx) in
+                                    [triangle.v1, triangle.v2, triangle.v3].iter().enumerate()
+                                {
                                     if v_idx < mesh_data.vertices.len() {
                                         let v = &mesh_data.vertices[v_idx];
-                                        vertices.push(Point3::new(v.x as f32, v.y as f32, v.z as f32));
-                                        
+                                        vertices
+                                            .push(Point3::new(v.x as f32, v.y as f32, v.z as f32));
+
                                         // Add corresponding UV coordinate using p1/p2/p3 indices
                                         if let Some(uv_idx) = uv_indices[i] {
                                             if uv_idx < tex_group.tex2coords.len() {
@@ -3852,28 +4051,30 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                                         }
                                     }
                                 }
-                                
+
                                 // Add face
                                 faces.push(Point3::new(base_idx, base_idx + 1, base_idx + 2));
                             }
-                            
+
                             if !faces.is_empty() {
                                 let tri_mesh = TriMesh::new(
                                     vertices,
                                     None,
                                     Some(uvs),
-                                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(
+                                        faces,
+                                    )),
                                 );
-                                
+
                                 let scale = Vector3::new(1.0, 1.0, 1.0);
                                 let mut mesh_node = window.add_trimesh(tri_mesh, scale);
-                                
+
                                 // Try to apply texture if available
                                 if let Some(texture_map) = textures {
                                     if let Some(tex_info) = texture_map.get(&tex_id) {
                                         // Create a unique texture name
                                         let texture_name = format!("texture_{}", tex_id);
-                                        
+
                                         // Apply texture from memory with proper wrap modes
                                         mesh_node.set_texture_from_memory_with_wrap(
                                             &tex_info.data,
@@ -3889,7 +4090,7 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                                     // No textures loaded, use teal indicator color
                                     mesh_node.set_color(0.0, 0.8, 0.8);
                                 }
-                                
+
                                 nodes.push(mesh_node);
                             }
                         } else {
@@ -3900,13 +4101,13 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                             } else {
                                 get_object_color(model, obj)
                             };
-                            
+
                             let color_key = (
                                 (color.0 * 255.0) as u8,
                                 (color.1 * 255.0) as u8,
                                 (color.2 * 255.0) as u8,
                             );
-                            
+
                             let vertices: Vec<Point3<f32>> = mesh_data
                                 .vertices
                                 .iter()
@@ -3926,7 +4127,9 @@ fn create_mesh_nodes_with_triangle_colors_impl(
                                     vertices,
                                     None,
                                     None,
-                                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(faces)),
+                                    Some(kiss3d::ncollide3d::procedural::IndexBuffer::Unified(
+                                        faces,
+                                    )),
                                 );
 
                                 let scale = Vector3::new(1.0, 1.0, 1.0);
@@ -3986,16 +4189,19 @@ fn load_displacement_maps_from_package(
     model: &Model,
 ) -> HashMap<usize, Rc<image::DynamicImage>> {
     let mut displacement_maps = HashMap::new();
-    
+
     // Open the 3MF file as a ZIP archive
     let file = match File::open(file_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("Failed to open 3MF file for displacement map loading: {}", e);
+            eprintln!(
+                "Failed to open 3MF file for displacement map loading: {}",
+                e
+            );
             return displacement_maps;
         }
     };
-    
+
     let mut archive = match zip::ZipArchive::new(file) {
         Ok(a) => a,
         Err(e) => {
@@ -4003,24 +4209,24 @@ fn load_displacement_maps_from_package(
             return displacement_maps;
         }
     };
-    
+
     // Load each displacement2d resource
     for displacement_map in &model.resources.displacement_maps {
         // Normalize path (remove leading slash if present)
         let normalized_path = displacement_map.path.trim_start_matches('/');
-        
+
         // Try both path variants and read the file
         let image_data = {
             let mut buffer = Vec::new();
             let mut found = false;
-            
+
             // Try normalized path first
             if let Ok(mut file) = archive.by_name(normalized_path) {
                 if file.read_to_end(&mut buffer).is_ok() {
                     found = true;
                 }
             }
-            
+
             // Try original path if normalized didn't work
             if !found {
                 buffer.clear();
@@ -4030,7 +4236,7 @@ fn load_displacement_maps_from_package(
                     }
                 }
             }
-            
+
             if !found {
                 eprintln!(
                     "Displacement map file '{}' not found in 3MF package",
@@ -4038,10 +4244,10 @@ fn load_displacement_maps_from_package(
                 );
                 continue;
             }
-            
+
             buffer
         };
-        
+
         // Load the image from memory
         match image::load_from_memory(&image_data) {
             Ok(img) => {
@@ -4062,11 +4268,14 @@ fn load_displacement_maps_from_package(
             }
         }
     }
-    
+
     if !displacement_maps.is_empty() {
-        println!("  Loaded {} displacement map(s) from 3MF package", displacement_maps.len());
+        println!(
+            "  Loaded {} displacement map(s) from 3MF package",
+            displacement_maps.len()
+        );
     }
-    
+
     displacement_maps
 }
 
@@ -4080,33 +4289,43 @@ fn sample_displacement_texture(
 ) -> f64 {
     let width = image.width() as f64;
     let height = image.height() as f64;
-    
+
     // Clamp UV to [0, 1] range
     let u = u.clamp(0.0, 1.0);
     let v = v.clamp(0.0, 1.0);
-    
+
     // Convert UV to pixel coordinates
     // Note: V coordinate is typically flipped in textures
     let x = ((u * width).floor() as u32).min(image.width() - 1);
     let y = (((1.0 - v) * height).floor() as u32).min(image.height() - 1);
-    
+
     // Sample the pixel
     let pixel = image.get_pixel(x, y);
-    
+
     // Extract the appropriate channel value
     let value = match channel {
         lib3mf::Channel::R => pixel[0],
         lib3mf::Channel::G => pixel[1],
         lib3mf::Channel::B => pixel[2],
-        lib3mf::Channel::A => if pixel.0.len() > 3 { pixel[3] } else { 255 },
+        lib3mf::Channel::A => {
+            if pixel.0.len() > 3 {
+                pixel[3]
+            } else {
+                255
+            }
+        }
     };
-    
+
     // Normalize to [0.0, 1.0]
     value as f64 / 255.0
 }
 
 /// Create mesh nodes with displacement highlighting and actual displacement rendering
-fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, file_path: Option<&PathBuf>) -> Vec<SceneNode> {
+fn create_mesh_nodes_highlight_displacement(
+    window: &mut Window,
+    model: &Model,
+    file_path: Option<&PathBuf>,
+) -> Vec<SceneNode> {
     let mut nodes = Vec::new();
 
     // Load displacement maps if file_path is available
@@ -4124,9 +4343,18 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
 
     // Print diagnostic info about displacement data
     println!("  Displacement maps loaded: {}", displacement_maps.len());
-    println!("  Displacement map resources in model: {}", model.resources.displacement_maps.len());
-    println!("  Norm vector groups in model: {}", model.resources.norm_vector_groups.len());
-    println!("  Disp2D groups in model: {}", model.resources.disp2d_groups.len());
+    println!(
+        "  Displacement map resources in model: {}",
+        model.resources.displacement_maps.len()
+    );
+    println!(
+        "  Norm vector groups in model: {}",
+        model.resources.norm_vector_groups.len()
+    );
+    println!(
+        "  Disp2D groups in model: {}",
+        model.resources.disp2d_groups.len()
+    );
 
     // Collect objects with displacement meshes
     let displacement_object_ids: HashSet<usize> = model
@@ -4137,7 +4365,10 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
         .map(|obj| obj.id)
         .collect();
 
-    println!("  Objects with displacement_mesh: {}", displacement_object_ids.len());
+    println!(
+        "  Objects with displacement_mesh: {}",
+        displacement_object_ids.len()
+    );
 
     for item in &model.build.items {
         if let Some(obj) = model
@@ -4148,16 +4379,16 @@ fn create_mesh_nodes_highlight_displacement(window: &mut Window, model: &Model, 
         {
             // Handle objects with displacement meshes
             if let Some(ref disp_mesh) = obj.displacement_mesh {
-                println!("  Processing displacement mesh for object {}: {} vertices, {} triangles",
-                         obj.id, disp_mesh.vertices.len(), disp_mesh.triangles.len());
+                println!(
+                    "  Processing displacement mesh for object {}: {} vertices, {} triangles",
+                    obj.id,
+                    disp_mesh.vertices.len(),
+                    disp_mesh.triangles.len()
+                );
                 // Render displacement mesh with actual displacement applied
-                if let Some(node) = create_displaced_mesh_node(
-                    window,
-                    model,
-                    obj,
-                    disp_mesh,
-                    &displacement_maps,
-                ) {
+                if let Some(node) =
+                    create_displaced_mesh_node(window, model, obj, disp_mesh, &displacement_maps)
+                {
                     nodes.push(node);
                     println!("    Successfully created displaced mesh node");
                 } else {
@@ -4221,7 +4452,7 @@ fn create_displaced_mesh_node(
     // Calculate vertex normals for the base mesh
     let mut temp_mesh = lib3mf::Mesh::new();
     temp_mesh.vertices = disp_mesh.vertices.clone();
-    
+
     // Convert displacement triangles to regular triangles for normal calculation
     for dt in &disp_mesh.triangles {
         temp_mesh.triangles.push(lib3mf::Triangle {
@@ -4235,12 +4466,12 @@ fn create_displaced_mesh_node(
             p3: None,
         });
     }
-    
+
     let vertex_normals = lib3mf::mesh_ops::calculate_vertex_normals(&temp_mesh);
-    
+
     // Create displaced vertices
     let mut displaced_vertices = disp_mesh.vertices.clone();
-    
+
     // Track which vertices have been displaced
     // NOTE: This implementation applies displacement only once per vertex.
     // If a vertex is shared by multiple triangles with different displacement
@@ -4250,19 +4481,31 @@ fn create_displaced_mesh_node(
     // 2. Average or blend multiple displacement values for shared vertices
     // For the initial implementation, we use the simpler approach.
     let mut vertex_displaced = vec![false; displaced_vertices.len()];
-    
+
     // Process each triangle to apply displacement
     for triangle in &disp_mesh.triangles {
         // Check if this triangle has displacement data
-        if let (Some(did), Some(d1), Some(d2), Some(d3)) = (triangle.did, triangle.d1, triangle.d2, triangle.d3) {
+        if let (Some(did), Some(d1), Some(d2), Some(d3)) =
+            (triangle.did, triangle.d1, triangle.d2, triangle.d3)
+        {
             // Find the displacement group
             if let Some(disp_group) = model.resources.disp2d_groups.iter().find(|g| g.id == did) {
                 // Find the normal vector group
-                if let Some(norm_group) = model.resources.norm_vector_groups.iter().find(|g| g.id == disp_group.nid) {
+                if let Some(norm_group) = model
+                    .resources
+                    .norm_vector_groups
+                    .iter()
+                    .find(|g| g.id == disp_group.nid)
+                {
                     // Find the displacement map
                     if let Some(disp_map_image) = displacement_maps.get(&disp_group.dispid) {
                         // Find the displacement map resource for channel info
-                        if let Some(disp_map) = model.resources.displacement_maps.iter().find(|m| m.id == disp_group.dispid) {
+                        if let Some(disp_map) = model
+                            .resources
+                            .displacement_maps
+                            .iter()
+                            .find(|m| m.id == disp_group.dispid)
+                        {
                             // Apply displacement to each vertex of the triangle if not already displaced
                             let displacement_info = DisplacementInfo {
                                 disp_group,
@@ -4270,7 +4513,7 @@ fn create_displaced_mesh_node(
                                 disp_map_image,
                                 disp_map,
                             };
-                            
+
                             apply_displacement_to_vertex(
                                 &mut displaced_vertices,
                                 &vertex_normals,
@@ -4279,7 +4522,7 @@ fn create_displaced_mesh_node(
                                 d1,
                                 &displacement_info,
                             );
-                            
+
                             apply_displacement_to_vertex(
                                 &mut displaced_vertices,
                                 &vertex_normals,
@@ -4288,7 +4531,7 @@ fn create_displaced_mesh_node(
                                 d2,
                                 &displacement_info,
                             );
-                            
+
                             apply_displacement_to_vertex(
                                 &mut displaced_vertices,
                                 &vertex_normals,
@@ -4303,7 +4546,7 @@ fn create_displaced_mesh_node(
             }
         }
     }
-    
+
     // Convert displaced vertices to nalgebra Point3
     let vertices: Vec<Point3<f32>> = displaced_vertices
         .iter()
@@ -4314,9 +4557,7 @@ fn create_displaced_mesh_node(
     let faces: Vec<Point3<u32>> = disp_mesh
         .triangles
         .iter()
-        .filter(|t| {
-            t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len()
-        })
+        .filter(|t| t.v1 < vertices.len() && t.v2 < vertices.len() && t.v3 < vertices.len())
         .map(|t| Point3::new(t.v1 as u32, t.v2 as u32, t.v3 as u32))
         .collect();
 
@@ -4356,22 +4597,18 @@ fn apply_displacement_to_vertex(
     if vertex_index >= vertices.len() || vertex_displaced[vertex_index] {
         return;
     }
-    
+
     // Skip if coordinate index is out of bounds
     if coord_index >= info.disp_group.coords.len() {
         return;
     }
-    
+
     let coord = &info.disp_group.coords[coord_index];
-    
+
     // Sample the displacement texture at UV coordinates
-    let displacement_value = sample_displacement_texture(
-        info.disp_map_image,
-        coord.u,
-        coord.v,
-        info.disp_map.channel,
-    );
-    
+    let displacement_value =
+        sample_displacement_texture(info.disp_map_image, coord.u, coord.v, info.disp_map.channel);
+
     // Get the normal vector from the norm vector group
     // The coord.n is an index into the norm vector group's vectors
     let normal = if coord.n < info.norm_group.vectors.len() {
@@ -4385,16 +4622,17 @@ fn apply_displacement_to_vertex(
             (0.0, 0.0, 1.0) // Default up vector
         }
     };
-    
+
     // Calculate displacement amount: (texture_value * height + offset) * factor
-    let displacement_amount = (displacement_value * info.disp_group.height + info.disp_group.offset) * coord.f;
-    
+    let displacement_amount =
+        (displacement_value * info.disp_group.height + info.disp_group.offset) * coord.f;
+
     // Displace the vertex along the normal
     let vertex = &mut vertices[vertex_index];
     vertex.x += normal.0 * displacement_amount;
     vertex.y += normal.1 * displacement_amount;
     vertex.z += normal.2 * displacement_amount;
-    
+
     // Mark as displaced
     vertex_displaced[vertex_index] = true;
 }
@@ -4548,20 +4786,33 @@ fn create_mesh_nodes_show_boolean_result(window: &mut Window, model: &Model) -> 
                 let mesh_node = create_trimesh_node(window, mesh_data, color);
                 nodes.push(mesh_node);
                 result_count += 1;
-                
+
                 if let Some(ref shape) = obj.boolean_shape {
-                    println!("  Boolean result object ID {}: {} operation with {} operands", 
-                             obj.id, shape.operation.as_str(), shape.operands.len());
+                    println!(
+                        "  Boolean result object ID {}: {} operation with {} operands",
+                        obj.id,
+                        shape.operation.as_str(),
+                        shape.operands.len()
+                    );
                 }
             } else {
                 // Object has boolean_shape but no mesh - this means the result needs to be computed
                 // For now, we can't compute CSG operations, so show a warning
                 if let Some(ref shape) = obj.boolean_shape {
-                    println!("  Warning: Boolean object ID {} has no pre-computed mesh", obj.id);
-                    println!("    Operation: {}, Base: {}, Operands: {:?}", 
-                             shape.operation.as_str(), 
-                             shape.objectid,
-                             shape.operands.iter().map(|o| o.objectid).collect::<Vec<_>>());
+                    println!(
+                        "  Warning: Boolean object ID {} has no pre-computed mesh",
+                        obj.id
+                    );
+                    println!(
+                        "    Operation: {}, Base: {}, Operands: {:?}",
+                        shape.operation.as_str(),
+                        shape.objectid,
+                        shape
+                            .operands
+                            .iter()
+                            .map(|o| o.objectid)
+                            .collect::<Vec<_>>()
+                    );
                 }
             }
         }
@@ -4569,12 +4820,17 @@ fn create_mesh_nodes_show_boolean_result(window: &mut Window, model: &Model) -> 
 
     // Also render regular objects from build items that are NOT boolean inputs
     for item in &model.build.items {
-        if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+        if let Some(obj) = model
+            .resources
+            .objects
+            .iter()
+            .find(|o| o.id == item.objectid)
+        {
             // Skip if this is a boolean input or a boolean result object
             if boolean_input_ids.contains(&obj.id) || obj.boolean_shape.is_some() {
                 continue;
             }
-            
+
             if let Some(ref mesh_data) = obj.mesh {
                 let color = get_object_color(model, obj);
                 let mesh_node = create_trimesh_node(window, mesh_data, color);
@@ -4585,7 +4841,10 @@ fn create_mesh_nodes_show_boolean_result(window: &mut Window, model: &Model) -> 
     }
 
     if result_count > 0 {
-        println!("  Rendered {} boolean result(s) and {} regular object(s)", result_count, non_result_count);
+        println!(
+            "  Rendered {} boolean result(s) and {} regular object(s)",
+            result_count, non_result_count
+        );
     } else {
         println!("  No boolean result meshes found - showing all build items");
         // Fall back to normal rendering if no boolean results
@@ -4601,7 +4860,7 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
     let width = area.width_mm();
     let height = area.height_mm();
     let depth = area.depth_mm();
-    
+
     // Calculate offset based on origin mode
     let (x_offset, y_offset) = match area.origin {
         Origin::Corner => (0.0, 0.0),
@@ -4610,14 +4869,14 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
 
     // Define 8 corners of the box
     let corners = [
-        Point3::new(x_offset, y_offset, 0.0),                     // 0: bottom front left
-        Point3::new(x_offset + width, y_offset, 0.0),             // 1: bottom front right
-        Point3::new(x_offset + width, y_offset + depth, 0.0),     // 2: bottom back right
-        Point3::new(x_offset, y_offset + depth, 0.0),             // 3: bottom back left
-        Point3::new(x_offset, y_offset, height),                  // 4: top front left
-        Point3::new(x_offset + width, y_offset, height),          // 5: top front right
-        Point3::new(x_offset + width, y_offset + depth, height),  // 6: top back right
-        Point3::new(x_offset, y_offset + depth, height),          // 7: top back left
+        Point3::new(x_offset, y_offset, 0.0), // 0: bottom front left
+        Point3::new(x_offset + width, y_offset, 0.0), // 1: bottom front right
+        Point3::new(x_offset + width, y_offset + depth, 0.0), // 2: bottom back right
+        Point3::new(x_offset, y_offset + depth, 0.0), // 3: bottom back left
+        Point3::new(x_offset, y_offset, height), // 4: top front left
+        Point3::new(x_offset + width, y_offset, height), // 5: top front right
+        Point3::new(x_offset + width, y_offset + depth, height), // 6: top back right
+        Point3::new(x_offset, y_offset + depth, height), // 7: top back left
     ];
 
     // Color for print area - light blue/gray
@@ -4640,10 +4899,10 @@ fn draw_print_area(window: &mut Window, area: &PrintArea) {
     window.draw_line(&corners[1], &corners[5], &color);
     window.draw_line(&corners[2], &corners[6], &color);
     window.draw_line(&corners[3], &corners[7], &color);
-    
+
     // Draw origin indicator - XYZ axes at origin
     let origin_size = (width.min(depth).min(height) * 0.05).max(1.0);
-    
+
     // Draw XYZ axes at origin
     window.draw_line(
         &Point3::new(0.0, 0.0, 0.0),
@@ -4683,56 +4942,68 @@ fn draw_ruler(window: &mut Window, area: &PrintArea) {
     let width = area.width_mm();
     let height = area.height_mm();
     let depth = area.depth_mm();
-    
+
     // Calculate offset based on origin mode
     let (x_offset, y_offset) = match area.origin {
         Origin::Corner => (0.0, 0.0),
         Origin::CenterBottom => (-width / 2.0, -depth / 2.0),
     };
-    
+
     let tick_color = Point3::new(0.7, 0.7, 0.7);
     let major_tick_size = 2.0;
     let minor_tick_size = 1.0;
-    
+
     // X-axis ruler
     let x_spacing = calculate_tick_spacing(width);
     let mut x = 0.0;
     while x <= width {
         let is_major = (x / x_spacing).round() % 5.0 < 0.1;
-        let tick_size = if is_major { major_tick_size } else { minor_tick_size };
-        
+        let tick_size = if is_major {
+            major_tick_size
+        } else {
+            minor_tick_size
+        };
+
         let pos = Point3::new(x_offset + x, y_offset, 0.0);
         let tick_end = Point3::new(x_offset + x, y_offset - tick_size, 0.0);
         window.draw_line(&pos, &tick_end, &tick_color);
-        
+
         x += x_spacing;
     }
-    
+
     // Y-axis ruler
     let y_spacing = calculate_tick_spacing(depth);
     let mut y = 0.0;
     while y <= depth {
         let is_major = (y / y_spacing).round() % 5.0 < 0.1;
-        let tick_size = if is_major { major_tick_size } else { minor_tick_size };
-        
+        let tick_size = if is_major {
+            major_tick_size
+        } else {
+            minor_tick_size
+        };
+
         let pos = Point3::new(x_offset, y_offset + y, 0.0);
         let tick_end = Point3::new(x_offset - tick_size, y_offset + y, 0.0);
         window.draw_line(&pos, &tick_end, &tick_color);
-        
+
         y += y_spacing;
     }
-    
+
     // Z-axis ruler
     let z_spacing = calculate_tick_spacing(height);
     let mut z = 0.0;
     while z <= height {
         let is_major = (z / z_spacing).round() % 5.0 < 0.1;
-        let tick_size = if is_major { major_tick_size } else { minor_tick_size };
-        
+        let tick_size = if is_major {
+            major_tick_size
+        } else {
+            minor_tick_size
+        };
+
         let pos = Point3::new(x_offset, y_offset, z);
         let tick_end = Point3::new(x_offset - tick_size, y_offset, z);
         window.draw_line(&pos, &tick_end, &tick_color);
-        
+
         z += z_spacing;
     }
 }
@@ -4741,7 +5012,7 @@ fn draw_ruler(window: &mut Window, area: &PrintArea) {
 fn round_to_nice_number(value: f32) -> f32 {
     let exponent = value.log10().floor();
     let fraction = value / 10f32.powf(exponent);
-    
+
     let nice_fraction = if fraction < 1.5 {
         1.0
     } else if fraction < 3.0 {
@@ -4751,7 +5022,7 @@ fn round_to_nice_number(value: f32) -> f32 {
     } else {
         10.0
     };
-    
+
     nice_fraction * 10f32.powf(exponent)
 }
 
@@ -4761,21 +5032,21 @@ fn round_to_nice_number(value: f32) -> f32 {
 fn draw_scale_bar(window: &mut Window, area: &PrintArea) {
     // Use a fixed reference size based on the print bed
     let reference_size = round_to_nice_number(area.width_mm() * 0.1);
-    
+
     // Draw the scale bar at a fixed position in the scene
     // In corner/bottom of print bed
     let (x_offset, y_offset) = match area.origin {
         Origin::Corner => (0.0, 0.0),
         Origin::CenterBottom => (-area.width_mm() / 2.0, -area.depth_mm() / 2.0),
     };
-    
+
     let bar_start = Point3::new(x_offset + 10.0, y_offset + 10.0, 0.0);
     let bar_end = Point3::new(x_offset + 10.0 + reference_size, y_offset + 10.0, 0.0);
     let bar_color = Point3::new(1.0, 1.0, 0.0); // Yellow
-    
+
     // Draw the main bar
     window.draw_line(&bar_start, &bar_end, &bar_color);
-    
+
     // Draw tick marks at ends
     let tick_height = 2.0;
     window.draw_line(
@@ -4788,7 +5059,7 @@ fn draw_scale_bar(window: &mut Window, area: &PrintArea) {
         &Point3::new(bar_end.x, bar_end.y, bar_end.z + tick_height),
         &bar_color,
     );
-    
+
     // Note: Text rendering would require additional text rendering capabilities
     // which kiss3d doesn't provide by default. This would show as just the bar.
 }
@@ -4799,20 +5070,20 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
         return;
     }
 
-    use kiss3d::text::Font;
     use kiss3d::nalgebra::Point2;
-    
+    use kiss3d::text::Font;
+
     const PANEL_X: f32 = 10.0;
     const PANEL_Y: f32 = 40.0; // Below menu bar
     const LINE_HEIGHT: f32 = 16.0;
     const FONT_SIZE: f32 = 13.0;
     const SECTION_SPACING: f32 = 8.0;
-    
+
     let text_color = kiss3d::nalgebra::Point3::new(0.9, 0.9, 0.9);
     let header_color = kiss3d::nalgebra::Point3::new(1.0, 1.0, 0.6);
-    
+
     let mut y = PANEL_Y;
-    
+
     // Title
     window.draw_text(
         "Model Information",
@@ -4822,7 +5093,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
         &header_color,
     );
     y += LINE_HEIGHT + SECTION_SPACING;
-    
+
     if let Some(ref model) = state.model {
         // File info
         if let Some(ref path) = state.file_path {
@@ -4835,7 +5106,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 &text_color,
             );
             y += LINE_HEIGHT;
-            
+
             // File size
             if let Ok(metadata) = std::fs::metadata(path) {
                 let size_mb = metadata.len() as f64 / 1_048_576.0;
@@ -4849,9 +5120,9 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 y += LINE_HEIGHT;
             }
         }
-        
+
         y += SECTION_SPACING;
-        
+
         // Geometry section
         window.draw_text(
             "Geometry",
@@ -4861,14 +5132,17 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
             &header_color,
         );
         y += LINE_HEIGHT;
-        
+
         let vertex_count = count_vertices(model);
         let triangle_count = count_triangles(model);
         let object_count = model.resources.objects.len();
-        let component_count: usize = model.resources.objects.iter()
+        let component_count: usize = model
+            .resources
+            .objects
+            .iter()
             .map(|obj| obj.components.len())
             .sum();
-        
+
         window.draw_text(
             &format!("  Vertices: {}", vertex_count),
             &Point2::new(PANEL_X, y),
@@ -4877,7 +5151,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
             &text_color,
         );
         y += LINE_HEIGHT;
-        
+
         window.draw_text(
             &format!("  Triangles: {}", triangle_count),
             &Point2::new(PANEL_X, y),
@@ -4886,7 +5160,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
             &text_color,
         );
         y += LINE_HEIGHT;
-        
+
         window.draw_text(
             &format!("  Objects: {}", object_count),
             &Point2::new(PANEL_X, y),
@@ -4895,7 +5169,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
             &text_color,
         );
         y += LINE_HEIGHT;
-        
+
         window.draw_text(
             &format!("  Components: {}", component_count),
             &Point2::new(PANEL_X, y),
@@ -4904,30 +5178,32 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
             &text_color,
         );
         y += LINE_HEIGHT;
-        
+
         // Bounding box
         let (_min_bound, max_bound) = calculate_model_bounds(model);
         let size_x = max_bound.0 - _min_bound.0;
         let size_y = max_bound.1 - _min_bound.1;
         let size_z = max_bound.2 - _min_bound.2;
-        
+
         window.draw_text(
-            &format!("  Bounds: {:.1} × {:.1} × {:.1} {}", 
-                size_x, size_y, size_z, model.unit),
+            &format!(
+                "  Bounds: {:.1} × {:.1} × {:.1} {}",
+                size_x, size_y, size_z, model.unit
+            ),
             &Point2::new(PANEL_X, y),
             FONT_SIZE,
             &Font::default(),
             &text_color,
         );
         y += LINE_HEIGHT + SECTION_SPACING;
-        
+
         // Extensions section
-        if !model.required_extensions.is_empty() || 
-           !model.resources.materials.is_empty() ||
-           !model.resources.color_groups.is_empty() ||
-           count_beams(model) > 0 ||
-           !model.resources.slice_stacks.is_empty() {
-            
+        if !model.required_extensions.is_empty()
+            || !model.resources.materials.is_empty()
+            || !model.resources.color_groups.is_empty()
+            || count_beams(model) > 0
+            || !model.resources.slice_stacks.is_empty()
+        {
             window.draw_text(
                 "Extensions",
                 &Point2::new(PANEL_X, y),
@@ -4936,14 +5212,16 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 &header_color,
             );
             y += LINE_HEIGHT;
-            
+
             // Materials
             let material_count = model.resources.materials.len();
             let color_group_count = model.resources.color_groups.len();
             if material_count > 0 || color_group_count > 0 {
                 window.draw_text(
-                    &format!("  ✓ Materials ({} mats, {} groups)", 
-                        material_count, color_group_count),
+                    &format!(
+                        "  ✓ Materials ({} mats, {} groups)",
+                        material_count, color_group_count
+                    ),
                     &Point2::new(PANEL_X, y),
                     FONT_SIZE,
                     &Font::default(),
@@ -4951,7 +5229,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 );
                 y += LINE_HEIGHT;
             }
-            
+
             // Beam Lattice
             let beam_count = count_beams(model);
             if beam_count > 0 {
@@ -4964,10 +5242,13 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 );
                 y += LINE_HEIGHT;
             }
-            
+
             // Slice Stacks
             if !model.resources.slice_stacks.is_empty() {
-                let slice_count: usize = model.resources.slice_stacks.iter()
+                let slice_count: usize = model
+                    .resources
+                    .slice_stacks
+                    .iter()
                     .map(|s| s.slices.len())
                     .sum();
                 window.draw_text(
@@ -4979,10 +5260,13 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 );
                 y += LINE_HEIGHT;
             }
-            
+
             // Production
             if !model.build.items.is_empty() {
-                let production_items: usize = model.build.items.iter()
+                let production_items: usize = model
+                    .build
+                    .items
+                    .iter()
                     .filter(|item| item.production_uuid.is_some())
                     .count();
                 if production_items > 0 {
@@ -4996,10 +5280,10 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                     y += LINE_HEIGHT;
                 }
             }
-            
+
             y += SECTION_SPACING;
         }
-        
+
         // Objects section (show first few)
         if !model.resources.objects.is_empty() {
             window.draw_text(
@@ -5010,14 +5294,14 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 &header_color,
             );
             y += LINE_HEIGHT;
-            
+
             for obj in model.resources.objects.iter().take(5) {
                 let obj_name = if let Some(ref name) = obj.name {
                     name.clone()
                 } else {
                     format!("Object {}", obj.id)
                 };
-                
+
                 let obj_type = if obj.mesh.is_some() {
                     "mesh"
                 } else if !obj.components.is_empty() {
@@ -5025,7 +5309,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 } else {
                     "other"
                 };
-                
+
                 window.draw_text(
                     &format!("  {} ({})", obj_name, obj_type),
                     &Point2::new(PANEL_X, y),
@@ -5035,7 +5319,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 );
                 y += LINE_HEIGHT;
             }
-            
+
             if model.resources.objects.len() > 5 {
                 window.draw_text(
                     &format!("  ... and {} more", model.resources.objects.len() - 5),
@@ -5046,10 +5330,10 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 );
                 y += LINE_HEIGHT;
             }
-            
+
             y += SECTION_SPACING;
         }
-        
+
         // Selection section - show info about selected objects
         if !state.selection.selected_indices.is_empty() {
             window.draw_text(
@@ -5060,20 +5344,28 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                 &header_color,
             );
             y += LINE_HEIGHT;
-            
+
             window.draw_text(
-                &format!("  Selected: {} object(s)", state.selection.selected_indices.len()),
+                &format!(
+                    "  Selected: {} object(s)",
+                    state.selection.selected_indices.len()
+                ),
                 &Point2::new(PANEL_X, y),
                 FONT_SIZE,
                 &Font::default(),
                 &text_color,
             );
             y += LINE_HEIGHT;
-            
+
             // Show details of first selected object
             if let Some(&first_index) = state.selection.selected_indices.iter().next() {
                 if let Some(item) = model.build.items.get(first_index) {
-                    if let Some(obj) = model.resources.objects.iter().find(|o| o.id == item.objectid) {
+                    if let Some(obj) = model
+                        .resources
+                        .objects
+                        .iter()
+                        .find(|o| o.id == item.objectid)
+                    {
                         // Object name/ID
                         let obj_label = if let Some(ref name) = obj.name {
                             format!("  {} (ID: {})", name, obj.id)
@@ -5088,7 +5380,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                             &text_color,
                         );
                         y += LINE_HEIGHT;
-                        
+
                         // Mesh details if available
                         if let Some(ref mesh) = obj.mesh {
                             window.draw_text(
@@ -5099,7 +5391,7 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                                 &text_color,
                             );
                             y += LINE_HEIGHT;
-                            
+
                             window.draw_text(
                                 &format!("  Triangles: {}", mesh.triangles.len()),
                                 &Point2::new(PANEL_X, y),
@@ -5109,11 +5401,13 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                             );
                             y += LINE_HEIGHT;
                         }
-                        
+
                         // Material/Color info
                         if let Some(pid) = obj.pid {
                             // Check material name
-                            if let Some(mat) = model.resources.materials.iter().find(|m| m.id == pid) {
+                            if let Some(mat) =
+                                model.resources.materials.iter().find(|m| m.id == pid)
+                            {
                                 let mat_name = mat.name.as_deref().unwrap_or("Unknown");
                                 window.draw_text(
                                     &format!("  Material: {}", mat_name),
@@ -5125,17 +5419,24 @@ fn render_model_info_panel(window: &mut Window, state: &ViewerState) {
                                 y += LINE_HEIGHT;
                             }
                         }
-                        
+
                         // Transform info if not identity
                         if let Some(ref transform) = item.transform {
                             // 4x3 affine matrix in row-major order: [m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23]
                             // Identity matrix has 1.0 at indices 0, 5, 10 (diagonal) and 0.0 elsewhere
-                            let has_transform = !(
-                                (transform[0] - 1.0).abs() < 1e-6 && transform[1].abs() < 1e-6 && transform[2].abs() < 1e-6 && transform[3].abs() < 1e-6 &&
-                                transform[4].abs() < 1e-6 && (transform[5] - 1.0).abs() < 1e-6 && transform[6].abs() < 1e-6 && transform[7].abs() < 1e-6 &&
-                                transform[8].abs() < 1e-6 && transform[9].abs() < 1e-6 && (transform[10] - 1.0).abs() < 1e-6 && transform[11].abs() < 1e-6
-                            );
-                            
+                            let has_transform = !((transform[0] - 1.0).abs() < 1e-6
+                                && transform[1].abs() < 1e-6
+                                && transform[2].abs() < 1e-6
+                                && transform[3].abs() < 1e-6
+                                && transform[4].abs() < 1e-6
+                                && (transform[5] - 1.0).abs() < 1e-6
+                                && transform[6].abs() < 1e-6
+                                && transform[7].abs() < 1e-6
+                                && transform[8].abs() < 1e-6
+                                && transform[9].abs() < 1e-6
+                                && (transform[10] - 1.0).abs() < 1e-6
+                                && transform[11].abs() < 1e-6);
+
                             if has_transform {
                                 window.draw_text(
                                     "  Transform: Yes",
@@ -5191,27 +5492,26 @@ fn print_menu(state: &ViewerState) {
     );
     println!(
         "    Width (X):     {} {}",
-        state.print_area.width, state.print_area.unit.as_str()
+        state.print_area.width,
+        state.print_area.unit.as_str()
     );
     println!(
         "    Depth (Y):     {} {}",
-        state.print_area.depth, state.print_area.unit.as_str()
+        state.print_area.depth,
+        state.print_area.unit.as_str()
     );
     println!(
         "    Height (Z):    {} {}",
-        state.print_area.height, state.print_area.unit.as_str()
+        state.print_area.height,
+        state.print_area.unit.as_str()
     );
-    
+
     // Show displacement status if data is present
     if let Some(ref model) = state.model {
         if has_displacement_data(model) {
             println!(
                 "  Displacement:    {}",
-                if state.show_displacement {
-                    "ON"
-                } else {
-                    "OFF"
-                }
+                if state.show_displacement { "ON" } else { "OFF" }
             );
             let (maps, _, disp_groups) = count_displacement_resources(model);
             let disp_objects = count_displacement_objects(model);
@@ -5220,13 +5520,17 @@ fn print_menu(state: &ViewerState) {
             println!("    Objects:       {}", disp_objects);
         }
     }
-    
+
     // Show material rendering status
     println!(
         "  Materials:       {}",
-        if state.show_materials { "ON" } else { "OFF (default gray)" }
+        if state.show_materials {
+            "ON"
+        } else {
+            "OFF (default gray)"
+        }
     );
-    
+
     if let Some(ref path) = state.file_path {
         println!(
             "  File:            {}",
@@ -5272,12 +5576,22 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
     println!("\nPrinter Presets:");
     let presets = printer_presets();
     for (i, preset) in presets.iter().enumerate() {
-        println!("  {}. {} ({}x{}x{} mm)", i + 1, preset.name, preset.width, preset.depth, preset.height);
+        println!(
+            "  {}. {} ({}x{}x{} mm)",
+            i + 1,
+            preset.name,
+            preset.width,
+            preset.depth,
+            preset.height
+        );
     }
-    print!("\nSelect preset (1-{}) or press Enter to customize [custom]: ", presets.len());
+    print!(
+        "\nSelect preset (1-{}) or press Enter to customize [custom]: ",
+        presets.len()
+    );
     io::stdout().flush()?;
     let preset_input = read_line()?;
-    
+
     if !preset_input.is_empty() {
         if let Ok(preset_idx) = preset_input.parse::<usize>() {
             if preset_idx > 0 && preset_idx <= presets.len() {
@@ -5287,7 +5601,7 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
                 new_area.depth = current.unit.from_mm(preset.depth);
                 new_area.height = current.unit.from_mm(preset.height);
                 println!("✓ Applied {} preset", preset.name);
-                
+
                 // If not "Custom", return early
                 if preset.name != "Custom" {
                     return Ok(new_area);
@@ -5312,44 +5626,62 @@ fn configure_print_area(current: &PrintArea) -> Result<PrintArea, Box<dyn std::e
                 let width_mm = current.unit.to_mm(new_area.width);
                 let depth_mm = current.unit.to_mm(new_area.depth);
                 let height_mm = current.unit.to_mm(new_area.height);
-                
+
                 new_area.width = unit.from_mm(width_mm);
                 new_area.depth = unit.from_mm(depth_mm);
                 new_area.height = unit.from_mm(height_mm);
                 new_area.unit = unit;
-                
+
                 println!("✓ Converted to {}", unit.as_str());
             }
         } else {
-            println!("Warning: Unknown unit '{}', keeping '{}'", input, current.unit.as_str());
+            println!(
+                "Warning: Unknown unit '{}', keeping '{}'",
+                input,
+                current.unit.as_str()
+            );
         }
     }
-    
+
     // Configure origin
-    print!("Origin mode (corner/center) [{}]: ", current.origin.as_str());
+    print!(
+        "Origin mode (corner/center) [{}]: ",
+        current.origin.as_str()
+    );
     io::stdout().flush()?;
     let input = read_line()?;
     if !input.is_empty() {
         match input.to_lowercase().as_str() {
             "corner" | "c" => new_area.origin = Origin::Corner,
             "center" | "centre" | "ctr" => new_area.origin = Origin::CenterBottom,
-            _ => println!("Warning: Unknown origin mode '{}', keeping '{}'", input, current.origin.as_str()),
+            _ => println!(
+                "Warning: Unknown origin mode '{}', keeping '{}'",
+                input,
+                current.origin.as_str()
+            ),
         }
     }
-    
+
     // Configure visibility options
-    print!("Show ruler (y/n) [{}]: ", if current.show_ruler { "y" } else { "n" });
+    print!(
+        "Show ruler (y/n) [{}]: ",
+        if current.show_ruler { "y" } else { "n" }
+    );
     io::stdout().flush()?;
     let input = read_line()?;
     if !input.is_empty() {
         new_area.show_ruler = matches!(input.to_lowercase().as_str(), "y" | "yes" | "true" | "1");
     }
-    
-    print!("Show scale bar (y/n) [{}]: ", if current.show_scale_bar { "y" } else { "n" });
+
+    print!(
+        "Show scale bar (y/n) [{}]: ",
+        if current.show_scale_bar { "y" } else { "n" }
+    );
     io::stdout().flush()?;
     let input = read_line()?;
     if !input.is_empty() {
-        new_area.show_scale_bar = matches!(input.to_lowercase().as_str(), "y" | "yes" | "true" | "1");
+        new_area.show_scale_bar =
+            matches!(input.to_lowercase().as_str(), "y" | "yes" | "true" | "1");
     }
 
     Ok(new_area)
@@ -5372,7 +5704,7 @@ fn line_plane_intersection(
 
     // Calculate intersection parameter t
     let t = (z_height - z1) / (z2 - z1);
-    
+
     // Calculate intersection point
     let x = x1 + t * (x2 - x1);
     let y = y1 + t * (y2 - y1);
@@ -5414,7 +5746,7 @@ fn triangle_plane_intersection(
 
 /// Compute beam-plane intersection for a cylindrical beam
 /// Returns a circle in 2D if the beam crosses the Z plane
-/// 
+///
 /// # Arguments
 /// * `p1` - First endpoint of the beam (x, y, z)
 /// * `p2` - Second endpoint of the beam (x, y, z)
@@ -5450,17 +5782,23 @@ fn beam_plane_intersection(
 
     // Find intersection point along beam axis
     let t = (z_height - z1) / (z2 - z1);
-    
+
     // Clamp t to [0, 1] to handle numerical precision issues
     let t = t.clamp(0.0, 1.0);
-    
+
     let center_x = x1 + t * (x2 - x1);
     let center_y = y1 + t * (y2 - y1);
 
     // Interpolate radius for tapered beams
     let radius = r1 + t * (r2 - r1);
 
-    Some((Point2D { x: center_x, y: center_y }, radius))
+    Some((
+        Point2D {
+            x: center_x,
+            y: center_y,
+        },
+        radius,
+    ))
 }
 
 /// Compute ball-plane intersection for a spherical ball joint
@@ -5481,9 +5819,9 @@ fn ball_plane_intersection(
     if radius <= 0.0 {
         return None; // Invalid radius
     }
-    
+
     let dz = (z - z_height).abs();
-    
+
     if dz > radius {
         return None; // Plane doesn't intersect sphere
     }
@@ -5495,7 +5833,7 @@ fn ball_plane_intersection(
 }
 
 /// Convert a circle to a polygon approximation with specified number of segments
-/// 
+///
 /// # Arguments
 /// * `center` - Center of the circle
 /// * `radius` - Radius of the circle (should be positive)
@@ -5509,11 +5847,11 @@ fn circle_to_line_segments(center: Point2D, radius: f32, segments: u32) -> Vec<L
 
     let mut line_segments = Vec::with_capacity(segments as usize);
     let two_pi = 2.0 * std::f32::consts::PI;
-    
+
     for i in 0..segments {
         let angle1 = two_pi * (i as f32) / (segments as f32);
         let angle2 = two_pi * ((i + 1) as f32) / (segments as f32);
-        
+
         let p1 = Point2D {
             x: center.x + radius * angle1.cos(),
             y: center.y + radius * angle1.sin(),
@@ -5522,10 +5860,10 @@ fn circle_to_line_segments(center: Point2D, radius: f32, segments: u32) -> Vec<L
             x: center.x + radius * angle2.cos(),
             y: center.y + radius * angle2.sin(),
         };
-        
+
         line_segments.push(LineSegment2D { start: p1, end: p2 });
     }
-    
+
     line_segments
 }
 
@@ -5583,9 +5921,15 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
                         let r1 = beam.r1.unwrap_or(beamset.radius) as f32;
                         let r2 = beam.r2.or(beam.r1).unwrap_or(beamset.radius) as f32;
 
-                        if let Some((center, radius)) = beam_plane_intersection(p1, p2, r1, r2, z_height) {
+                        if let Some((center, radius)) =
+                            beam_plane_intersection(p1, p2, r1, r2, z_height)
+                        {
                             // Convert circle to polygon segments
-                            segments.extend(circle_to_line_segments(center, radius, CIRCLE_APPROXIMATION_SEGMENTS));
+                            segments.extend(circle_to_line_segments(
+                                center,
+                                radius,
+                                CIRCLE_APPROXIMATION_SEGMENTS,
+                            ));
                         }
                     }
 
@@ -5600,13 +5944,20 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
                         let center = (vertex.x as f32, vertex.y as f32, vertex.z as f32);
 
                         // Get ball radius (with fallback to beamset ball_radius or default radius)
-                        let radius = ball.radius
+                        let radius = ball
+                            .radius
                             .or(beamset.ball_radius)
                             .unwrap_or(beamset.radius) as f32;
 
-                        if let Some((center_2d, slice_radius)) = ball_plane_intersection(center, radius, z_height) {
+                        if let Some((center_2d, slice_radius)) =
+                            ball_plane_intersection(center, radius, z_height)
+                        {
                             // Convert circle to polygon segments
-                            segments.extend(circle_to_line_segments(center_2d, slice_radius, CIRCLE_APPROXIMATION_SEGMENTS));
+                            segments.extend(circle_to_line_segments(
+                                center_2d,
+                                slice_radius,
+                                CIRCLE_APPROXIMATION_SEGMENTS,
+                            ));
                         }
                     }
                 }
@@ -5618,10 +5969,14 @@ fn compute_slice_contours(model: &Model, z_height: f32) -> Vec<LineSegment2D> {
 }
 
 /// Draw slice plane in 3D view
-fn draw_slice_plane(window: &mut Window, slice_view: &SliceView, model_bounds: ((f32, f32, f32), (f32, f32, f32))) {
+fn draw_slice_plane(
+    window: &mut Window,
+    slice_view: &SliceView,
+    model_bounds: ((f32, f32, f32), (f32, f32, f32)),
+) {
     let (min_bound, max_bound) = model_bounds;
     let z = slice_view.z_height;
-    
+
     // Define corners of the plane slightly larger than model bounds
     let margin = 10.0;
     let x_min = min_bound.0 - margin;
@@ -5631,7 +5986,7 @@ fn draw_slice_plane(window: &mut Window, slice_view: &SliceView, model_bounds: (
 
     // Draw plane outline as 4 lines
     let color = Point3::new(1.0, 1.0, 0.0); // Yellow color for slice plane
-    
+
     window.draw_line(
         &Point3::new(x_min, y_min, z),
         &Point3::new(x_max, y_min, z),
@@ -5669,49 +6024,53 @@ fn draw_slice_contours(window: &mut Window, slice_view: &SliceView) {
 }
 
 /// Draw a single slice from the slice stack at current index
-fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &lib3mf::model::SliceStack) {
+fn draw_slice_stack_single(
+    window: &mut Window,
+    slice_view: &SliceView,
+    stack: &lib3mf::model::SliceStack,
+) {
     use lib3mf::model::Vertex2D;
-    
+
     // Early return if slice stack is empty or index is out of bounds
     if stack.slices.is_empty() || slice_view.current_slice_index >= stack.slices.len() {
         return;
     }
-    
+
     let slice = &stack.slices[slice_view.current_slice_index];
     let z = slice.ztop as f32;
-    
+
     // Color based on position in stack (gradient from blue to red)
     let t = slice_view.current_slice_index as f32 / stack.slices.len() as f32;
     let color = Point3::new(t, 0.0, 1.0 - t);
-    
+
     // Draw each polygon in the slice
     for polygon in &slice.polygons {
         if polygon.startv >= slice.vertices.len() {
             continue;
         }
-        
+
         // Build the polygon vertices
         let mut vertices: Vec<&Vertex2D> = Vec::new();
         vertices.push(&slice.vertices[polygon.startv]);
-        
+
         for segment in &polygon.segments {
             if segment.v2 < slice.vertices.len() {
                 vertices.push(&slice.vertices[segment.v2]);
             }
         }
-        
+
         // Draw polygon edges
         for i in 0..vertices.len() {
             let v1 = vertices[i];
             let v2 = vertices[(i + 1) % vertices.len()];
-            
+
             window.draw_line(
                 &Point3::new(v1.x as f32, v1.y as f32, z),
                 &Point3::new(v2.x as f32, v2.y as f32, z),
                 &color,
             );
         }
-        
+
         // If filled mode, draw filled triangles (simple fan triangulation)
         if slice_view.filled_mode && vertices.len() >= 3 {
             // Note: kiss3d doesn't have a simple filled polygon primitive
@@ -5719,63 +6078,63 @@ fn draw_slice_stack_single(window: &mut Window, slice_view: &SliceView, stack: &
             let center_x = vertices.iter().map(|v| v.x as f32).sum::<f32>() / vertices.len() as f32;
             let center_y = vertices.iter().map(|v| v.y as f32).sum::<f32>() / vertices.len() as f32;
             let center = Point3::new(center_x, center_y, z);
-            
+
             for v in vertices.iter() {
-                window.draw_line(
-                    &Point3::new(v.x as f32, v.y as f32, z),
-                    &center,
-                    &color,
-                );
+                window.draw_line(&Point3::new(v.x as f32, v.y as f32, z), &center, &color);
             }
         }
     }
 }
 
 /// Draw all slices in the stack in 3D
-fn draw_slice_stack_3d(window: &mut Window, slice_view: &SliceView, stack: &lib3mf::model::SliceStack) {
+fn draw_slice_stack_3d(
+    window: &mut Window,
+    slice_view: &SliceView,
+    stack: &lib3mf::model::SliceStack,
+) {
     use lib3mf::model::Vertex2D;
-    
+
     // Early return if slice stack is empty
     if stack.slices.is_empty() {
         return;
     }
-    
+
     for (slice_idx, slice) in stack.slices.iter().enumerate() {
         // Apply spread factor
         let z = slice.ztop as f32 * slice_view.spread_factor;
-        
+
         // Color gradient from blue (bottom) to red (top)
         let t = slice_idx as f32 / stack.slices.len() as f32;
         let color = Point3::new(t, 0.0, 1.0 - t);
-        
+
         // Highlight current slice with brighter color
         let color = if slice_idx == slice_view.current_slice_index {
             Point3::new(1.0, 1.0, 0.0) // Yellow for current slice
         } else {
             color
         };
-        
+
         // Draw each polygon in the slice
         for polygon in &slice.polygons {
             if polygon.startv >= slice.vertices.len() {
                 continue;
             }
-            
+
             // Build the polygon vertices
             let mut vertices: Vec<&Vertex2D> = Vec::new();
             vertices.push(&slice.vertices[polygon.startv]);
-            
+
             for segment in &polygon.segments {
                 if segment.v2 < slice.vertices.len() {
                     vertices.push(&slice.vertices[segment.v2]);
                 }
             }
-            
+
             // Draw polygon edges
             for i in 0..vertices.len() {
                 let v1 = vertices[i];
                 let v2 = vertices[(i + 1) % vertices.len()];
-                
+
                 window.draw_line(
                     &Point3::new(v1.x as f32, v1.y as f32, z),
                     &Point3::new(v2.x as f32, v2.y as f32, z),
@@ -5785,7 +6144,6 @@ fn draw_slice_stack_3d(window: &mut Window, slice_view: &SliceView, stack: &lib3
         }
     }
 }
-
 
 /// Export slice view to PNG file
 fn export_slice_to_png(
@@ -5801,28 +6159,28 @@ fn export_slice_to_png(
     }
 
     let (min_bound, max_bound) = model_bounds;
-    
+
     // Calculate bounds for the 2D view
     let x_min = min_bound.0;
     let x_max = max_bound.0;
     let y_min = min_bound.1;
     let y_max = max_bound.1;
-    
+
     let width_units = x_max - x_min;
     let height_units = y_max - y_min;
-    
+
     // Image dimensions (pixels) - scale to a reasonable size
     let scale = 10.0; // pixels per unit
     let img_width = (width_units * scale).max(100.0) as u32;
     let img_height = (height_units * scale).max(100.0) as u32;
-    
+
     // Create white background image
     let mut img: RgbImage = ImageBuffer::from_pixel(img_width, img_height, Rgb([255, 255, 255]));
-    
+
     // Draw grid lines
     let grid_color = Rgb([220, 220, 220]);
     let grid_spacing = 10.0; // units
-    
+
     // Vertical grid lines
     let mut x = (x_min / grid_spacing).ceil() * grid_spacing;
     while x <= x_max {
@@ -5836,7 +6194,7 @@ fn export_slice_to_png(
         }
         x += grid_spacing;
     }
-    
+
     // Horizontal grid lines
     let mut y = (y_min / grid_spacing).ceil() * grid_spacing;
     while y <= y_max {
@@ -5850,7 +6208,7 @@ fn export_slice_to_png(
         }
         y += grid_spacing;
     }
-    
+
     // Draw contour lines in red
     let line_color = Rgb([255, 0, 0]);
     for segment in &slice_view.contours {
@@ -5858,11 +6216,11 @@ fn export_slice_to_png(
         let y1 = img_height as i32 - ((segment.start.y - y_min) * scale) as i32 - 1;
         let x2 = ((segment.end.x - x_min) * scale) as i32;
         let y2 = img_height as i32 - ((segment.end.y - y_min) * scale) as i32 - 1;
-        
+
         // Simple line drawing using Bresenham's algorithm
         draw_line(&mut img, x1, y1, x2, y2, line_color);
     }
-    
+
     // Generate filename with Z height
     let now = chrono::Local::now();
     let filename = format!(
@@ -5870,13 +6228,13 @@ fn export_slice_to_png(
         slice_view.z_height,
         now.format("%Y%m%d_%H%M%S")
     );
-    
+
     // Save image
     img.save(&filename)?;
     println!("\n✓ Slice exported to: {}", filename);
     println!("  Z height: {} {}", slice_view.z_height, unit);
     println!("  Contours: {} segments", slice_view.contours.len());
-    
+
     Ok(())
 }
 
@@ -5992,7 +6350,7 @@ mod tests {
     fn test_create_camera_for_empty_scene() {
         // Test camera creation for empty scene
         let camera = create_camera_for_model(None);
-        
+
         // Should create a default camera
         assert!(camera.dist() > 0.0, "Camera distance should be positive");
     }
@@ -6002,14 +6360,20 @@ mod tests {
         // Create a default camera
         let mut camera = create_camera_for_model(None);
         let initial_dist = camera.dist();
-        
+
         // Zoom in
         zoom_camera(&mut camera, ZOOM_STEP);
-        assert!(camera.dist() < initial_dist, "Zoom in should decrease distance");
-        
+        assert!(
+            camera.dist() < initial_dist,
+            "Zoom in should decrease distance"
+        );
+
         // Zoom out
         zoom_camera(&mut camera, 1.0 / ZOOM_STEP);
-        assert!((camera.dist() - initial_dist).abs() < 0.01, "Zoom in/out should be reversible");
+        assert!(
+            (camera.dist() - initial_dist).abs() < 0.01,
+            "Zoom in/out should be reversible"
+        );
     }
 
     #[test]
@@ -6017,12 +6381,15 @@ mod tests {
         // Create a default camera
         let mut camera = create_camera_for_model(None);
         let initial_at = camera.at();
-        
+
         // Pan right (positive X)
         pan_camera(&mut camera, 1.0, 0.0, 0.0);
         let after_pan = camera.at();
-        
-        assert!(after_pan.x > initial_at.x, "Pan right should increase X coordinate");
+
+        assert!(
+            after_pan.x > initial_at.x,
+            "Pan right should increase X coordinate"
+        );
         assert_eq!(after_pan.y, initial_at.y, "Pan right should not change Y");
         assert_eq!(after_pan.z, initial_at.z, "Pan right should not change Z");
     }
@@ -6035,15 +6402,18 @@ mod tests {
         let r1 = 2.0;
         let r2 = 4.0;
         let z_height = 5.0;
-        
+
         let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
         assert!(result.is_some(), "Beam crossing plane should intersect");
-        
+
         let (center, radius) = result.unwrap();
         // At z=5, t should be 0.5
         assert!((center.x - 5.0).abs() < 0.001, "X should be at midpoint");
         assert!((center.y - 5.0).abs() < 0.001, "Y should be at midpoint");
-        assert!((radius - 3.0).abs() < 0.001, "Radius should be interpolated to 3.0");
+        assert!(
+            (radius - 3.0).abs() < 0.001,
+            "Radius should be interpolated to 3.0"
+        );
     }
 
     #[test]
@@ -6052,10 +6422,10 @@ mod tests {
         let p1 = (0.0, 0.0, 0.0);
         let p2 = (10.0, 10.0, 10.0);
         let z_height = 5.0;
-        
+
         let result = beam_plane_intersection(p1, p2, -1.0, 2.0, z_height);
         assert!(result.is_none(), "Negative radius should return None");
-        
+
         let result = beam_plane_intersection(p1, p2, 2.0, 0.0, z_height);
         assert!(result.is_none(), "Zero radius should return None");
     }
@@ -6068,9 +6438,12 @@ mod tests {
         let r1 = 2.0;
         let r2 = 4.0;
         let z_height = 5.0;
-        
+
         let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
-        assert!(result.is_none(), "Beam not crossing plane should not intersect");
+        assert!(
+            result.is_none(),
+            "Beam not crossing plane should not intersect"
+        );
     }
 
     #[test]
@@ -6081,14 +6454,17 @@ mod tests {
         let r1 = 2.5;
         let r2 = 2.5;
         let z_height = 7.0;
-        
+
         let result = beam_plane_intersection(p1, p2, r1, r2, z_height);
         assert!(result.is_some(), "Vertical beam should intersect");
-        
+
         let (center, radius) = result.unwrap();
         assert!((center.x - 0.0).abs() < 0.001, "X should be at beam center");
         assert!((center.y - 0.0).abs() < 0.001, "Y should be at beam center");
-        assert!((radius - 2.5).abs() < 0.001, "Radius should remain constant");
+        assert!(
+            (radius - 2.5).abs() < 0.001,
+            "Radius should remain constant"
+        );
     }
 
     #[test]
@@ -6097,17 +6473,26 @@ mod tests {
         let center = (10.0, 20.0, 5.0);
         let radius = 3.0;
         let z_height = 6.0; // 1 unit above center
-        
+
         let result = ball_plane_intersection(center, radius, z_height);
         assert!(result.is_some(), "Ball should intersect plane");
-        
+
         let (center_2d, slice_radius) = result.unwrap();
-        assert!((center_2d.x - 10.0).abs() < 0.001, "X should match ball center");
-        assert!((center_2d.y - 20.0).abs() < 0.001, "Y should match ball center");
-        
+        assert!(
+            (center_2d.x - 10.0).abs() < 0.001,
+            "X should match ball center"
+        );
+        assert!(
+            (center_2d.y - 20.0).abs() < 0.001,
+            "Y should match ball center"
+        );
+
         // At dz=1, slice_radius = sqrt(3^2 - 1^2) = sqrt(8) ≈ 2.828
         let expected_radius = (radius * radius - 1.0 * 1.0).sqrt();
-        assert!((slice_radius - expected_radius).abs() < 0.001, "Slice radius should be sqrt(8)");
+        assert!(
+            (slice_radius - expected_radius).abs() < 0.001,
+            "Slice radius should be sqrt(8)"
+        );
     }
 
     #[test]
@@ -6116,7 +6501,7 @@ mod tests {
         let center = (10.0, 20.0, 5.0);
         let radius = 2.0;
         let z_height = 10.0; // 5 units above center
-        
+
         let result = ball_plane_intersection(center, radius, z_height);
         assert!(result.is_none(), "Ball should not intersect distant plane");
     }
@@ -6126,10 +6511,10 @@ mod tests {
         // Test negative and zero radius
         let center = (10.0, 20.0, 5.0);
         let z_height = 5.0;
-        
+
         let result = ball_plane_intersection(center, -1.0, z_height);
         assert!(result.is_none(), "Negative radius should return None");
-        
+
         let result = ball_plane_intersection(center, 0.0, z_height);
         assert!(result.is_none(), "Zero radius should return None");
     }
@@ -6140,12 +6525,15 @@ mod tests {
         let center = (10.0, 20.0, 5.0);
         let radius = 3.0;
         let z_height = 5.0;
-        
+
         let result = ball_plane_intersection(center, radius, z_height);
         assert!(result.is_some(), "Ball should intersect plane at center");
-        
+
         let (_, slice_radius) = result.unwrap();
-        assert!((slice_radius - radius).abs() < 0.001, "Slice radius should equal ball radius");
+        assert!(
+            (slice_radius - radius).abs() < 0.001,
+            "Slice radius should equal ball radius"
+        );
     }
 
     #[test]
@@ -6153,126 +6541,142 @@ mod tests {
         let center = Point2D { x: 10.0, y: 20.0 };
         let radius = 5.0;
         let segments = 8;
-        
+
         let line_segs = circle_to_line_segments(center, radius, segments);
-        
-        assert_eq!(line_segs.len(), segments as usize, "Should have correct number of segments");
-        
+
+        assert_eq!(
+            line_segs.len(),
+            segments as usize,
+            "Should have correct number of segments"
+        );
+
         // Check that all segments are connected (end of one is start of next)
         for i in 0..segments as usize {
             let current = &line_segs[i];
             let next = &line_segs[(i + 1) % segments as usize];
-            
-            assert!((current.end.x - next.start.x).abs() < 0.001, "Segments should be connected");
-            assert!((current.end.y - next.start.y).abs() < 0.001, "Segments should be connected");
+
+            assert!(
+                (current.end.x - next.start.x).abs() < 0.001,
+                "Segments should be connected"
+            );
+            assert!(
+                (current.end.y - next.start.y).abs() < 0.001,
+                "Segments should be connected"
+            );
         }
-        
+
         // Check that points are approximately at the right distance from center
         for seg in &line_segs {
             let dx_start = seg.start.x - center.x;
             let dy_start = seg.start.y - center.y;
             let dist_start = (dx_start * dx_start + dy_start * dy_start).sqrt();
-            
-            assert!((dist_start - radius).abs() < 0.001, "Start point should be at radius distance");
+
+            assert!(
+                (dist_start - radius).abs() < 0.001,
+                "Start point should be at radius distance"
+            );
         }
     }
 
     #[test]
     fn test_compute_slice_with_beam_lattice() {
         use std::fs::File;
-        
+
         // Load the pyramid beam lattice test file
         let file = File::open("../../test_files/beam_lattice/pyramid.3mf")
             .expect("Failed to open pyramid.3mf test file");
         let model = Model::from_reader(file).expect("Failed to parse pyramid.3mf");
-        
+
         // Compute slices at different heights
         let z_heights = [0.0, 25.0, 50.0, 75.0, 100.0];
-        
+
         for z_height in z_heights {
             let segments = compute_slice_contours(&model, z_height);
-            
+
             // At each height, we should have some segments from beams crossing
             // The exact number depends on the beam lattice structure
             // For z > 0 and z < 100, we expect some beam intersections
             if z_height > 0.0 && z_height < 100.0 {
-                assert!(segments.len() > 0, 
-                    "Expected beam lattice slices at z={}, but got {} segments", 
-                    z_height, segments.len());
+                assert!(
+                    segments.len() > 0,
+                    "Expected beam lattice slices at z={}, but got {} segments",
+                    z_height,
+                    segments.len()
+                );
             }
         }
     }
-    
+
     #[test]
     fn test_length_unit_conversions() {
         // Test mm to mm
         assert!((LengthUnit::Millimeters.to_mm(100.0) - 100.0).abs() < 0.01);
         assert!((LengthUnit::Millimeters.from_mm(100.0) - 100.0).abs() < 0.01);
-        
+
         // Test inches to mm
         assert!((LengthUnit::Inches.to_mm(1.0) - 25.4).abs() < 0.01);
         assert!((LengthUnit::Inches.from_mm(25.4) - 1.0).abs() < 0.01);
-        
+
         // Test round trip conversion
         let original = 100.0;
         let converted = LengthUnit::Inches.to_mm(original);
         let back = LengthUnit::Inches.from_mm(converted);
         assert!((back - original).abs() < 0.01);
     }
-    
+
     #[test]
     fn test_print_area_dimensions() {
         let mut area = PrintArea::new();
-        
+
         // Test default values
         assert_eq!(area.width, 200.0);
         assert_eq!(area.depth, 200.0);
         assert_eq!(area.height, 200.0);
         assert!(matches!(area.unit, LengthUnit::Millimeters));
         assert!(matches!(area.origin, Origin::Corner));
-        
+
         // Test width_mm, depth_mm, height_mm
         assert!((area.width_mm() - 200.0).abs() < 0.01);
         assert!((area.depth_mm() - 200.0).abs() < 0.01);
         assert!((area.height_mm() - 200.0).abs() < 0.01);
-        
+
         // Test with inches
         area.unit = LengthUnit::Inches;
         area.width = 10.0;
         area.depth = 8.0;
         area.height = 10.0;
-        
+
         assert!((area.width_mm() - 254.0).abs() < 0.1);
         assert!((area.depth_mm() - 203.2).abs() < 0.1);
         assert!((area.height_mm() - 254.0).abs() < 0.1);
     }
-    
+
     #[test]
     fn test_printer_presets() {
         let presets = printer_presets();
-        
+
         // Check we have expected presets
         assert!(presets.len() >= 4);
-        
+
         // Check Prusa MK3S+ preset
         let prusa = presets.iter().find(|p| p.name == "Prusa MK3S+").unwrap();
         assert_eq!(prusa.width, 250.0);
         assert_eq!(prusa.depth, 210.0);
         assert_eq!(prusa.height, 210.0);
-        
+
         // Check Ender 3 preset
         let ender = presets.iter().find(|p| p.name == "Ender 3").unwrap();
         assert_eq!(ender.width, 220.0);
         assert_eq!(ender.depth, 220.0);
         assert_eq!(ender.height, 250.0);
-        
+
         // Check Bambu Lab X1 preset
         let bambu = presets.iter().find(|p| p.name == "Bambu Lab X1").unwrap();
         assert_eq!(bambu.width, 256.0);
         assert_eq!(bambu.depth, 256.0);
         assert_eq!(bambu.height, 256.0);
     }
-    
+
     #[test]
     fn test_calculate_tick_spacing() {
         assert_eq!(calculate_tick_spacing(30.0), 5.0);
@@ -6281,7 +6685,7 @@ mod tests {
         assert_eq!(calculate_tick_spacing(700.0), 50.0);
         assert_eq!(calculate_tick_spacing(1500.0), 100.0);
     }
-    
+
     #[test]
     fn test_round_to_nice_number() {
         // Test various inputs round to nice numbers
@@ -6290,25 +6694,25 @@ mod tests {
         assert!((round_to_nice_number(47.0) - 50.0).abs() < 0.01);
         assert!((round_to_nice_number(89.0) - 100.0).abs() < 0.01);
     }
-    
+
     #[test]
     fn test_print_area_toggles() {
         let mut area = PrintArea::new();
-        
+
         // Test visibility toggle
         assert!(area.visible);
         area.toggle_visibility();
         assert!(!area.visible);
         area.toggle_visibility();
         assert!(area.visible);
-        
+
         // Test ruler toggle
         assert!(!area.show_ruler);
         area.toggle_ruler();
         assert!(area.show_ruler);
         area.toggle_ruler();
         assert!(!area.show_ruler);
-        
+
         // Test scale bar toggle
         assert!(!area.show_scale_bar);
         area.toggle_scale_bar();
