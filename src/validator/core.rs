@@ -35,7 +35,7 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
                         tri_idx,
                         triangle.v1,
                         num_vertices,
-                        num_vertices - 1
+                        num_vertices.saturating_sub(1)
                     )));
                 }
                 if triangle.v2 >= num_vertices {
@@ -47,7 +47,7 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
                         tri_idx,
                         triangle.v2,
                         num_vertices,
-                        num_vertices - 1
+                        num_vertices.saturating_sub(1)
                     )));
                 }
                 if triangle.v3 >= num_vertices {
@@ -59,7 +59,7 @@ pub fn validate_mesh_geometry(model: &Model) -> Result<()> {
                         tri_idx,
                         triangle.v3,
                         num_vertices,
-                        num_vertices - 1
+                        num_vertices.saturating_sub(1)
                     )));
                 }
 

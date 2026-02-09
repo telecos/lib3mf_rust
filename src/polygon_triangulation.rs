@@ -170,8 +170,10 @@ pub fn triangulate_with_holes(
 
     // Convert vertices to flat coordinate array
     // Format: [outer_x0, outer_y0, ..., hole1_x0, hole1_y0, ..., hole2_x0, ...]
-    let mut coords =
-        Vec::with_capacity((outer.len() + holes.iter().map(|h| h.len()).sum::<usize>()) * 2);
+    let total_vertices = outer
+        .len()
+        .saturating_add(holes.iter().map(|h| h.len()).sum::<usize>());
+    let mut coords = Vec::with_capacity(total_vertices.saturating_mul(2));
 
     // Add outer boundary
     for vertex in outer {

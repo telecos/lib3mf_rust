@@ -294,8 +294,15 @@ pub(super) fn parse_compositematerials_start<R: std::io::BufRead>(
     })?;
     let matindices: Vec<usize> = matindices_str
         .split_whitespace()
-        .filter_map(|s| s.parse::<usize>().ok())
-        .collect();
+        .map(|s| {
+            s.parse::<usize>().map_err(|_| {
+                Error::InvalidXml(format!(
+                    "compositematerials matindices contains invalid value '{}'",
+                    s
+                ))
+            })
+        })
+        .collect::<Result<Vec<usize>>>()?;
 
     // Validate we parsed at least one index
     if matindices.is_empty() {
@@ -320,8 +327,12 @@ pub(super) fn parse_composite<R: std::io::BufRead>(
         .ok_or_else(|| Error::InvalidXml("composite missing values attribute".to_string()))?;
     let values: Vec<f32> = values_str
         .split_whitespace()
-        .filter_map(|s| s.parse::<f32>().ok())
-        .collect();
+        .map(|s| {
+            s.parse::<f32>().map_err(|_| {
+                Error::InvalidXml(format!("composite values contains invalid number '{}'", s))
+            })
+        })
+        .collect::<Result<Vec<f32>>>()?;
 
     // Validate we parsed at least one value
     if values.is_empty() {
@@ -349,8 +360,15 @@ pub(super) fn parse_multiproperties_start<R: std::io::BufRead>(
         .ok_or_else(|| Error::InvalidXml("multiproperties missing pids attribute".to_string()))?;
     let pids: Vec<usize> = pids_str
         .split_whitespace()
-        .filter_map(|s| s.parse::<usize>().ok())
-        .collect();
+        .map(|s| {
+            s.parse::<usize>().map_err(|_| {
+                Error::InvalidXml(format!(
+                    "multiproperties pids contains invalid value '{}'",
+                    s
+                ))
+            })
+        })
+        .collect::<Result<Vec<usize>>>()?;
 
     // Validate we parsed at least one property ID
     if pids.is_empty() {
@@ -386,18 +404,18 @@ pub(super) fn parse_multi<R: std::io::BufRead>(
     let pindices_str = attrs
         .get("pindices")
         .ok_or_else(|| Error::InvalidXml("multi missing pindices attribute".to_string()))?;
-    let pindices: Vec<usize> = pindices_str
-        .split_whitespace()
-        .filter_map(|s| s.parse::<usize>().ok())
-        .collect();
-
-    // Note: Empty pindices is allowed per spec - defaults to 0
-    // But if there's text that all failed to parse, that's an error
-    if !pindices_str.trim().is_empty() && pindices.is_empty() {
-        return Err(Error::InvalidXml(
-            "multi pindices contains invalid values that could not be parsed".to_string(),
-        ));
-    }
+    let pindices: Vec<usize> = if pindices_str.trim().is_empty() {
+        Vec::new()
+    } else {
+        pindices_str
+            .split_whitespace()
+            .map(|s| {
+                s.parse::<usize>().map_err(|_| {
+                    Error::InvalidXml(format!("multi pindices contains invalid value '{}'", s))
+                })
+            })
+            .collect::<Result<Vec<usize>>>()?
+    };
 
     Ok(Multi::new(pindices))
 }

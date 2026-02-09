@@ -10,22 +10,22 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
     let mut valid_resource_ids = HashSet::new();
 
     for obj in &model.resources.objects {
-        valid_resource_ids.insert(obj.id as u32);
+        valid_resource_ids.insert(obj.id);
     }
     for cg in &model.resources.color_groups {
-        valid_resource_ids.insert(cg.id as u32);
+        valid_resource_ids.insert(cg.id);
     }
     for bg in &model.resources.base_material_groups {
-        valid_resource_ids.insert(bg.id as u32);
+        valid_resource_ids.insert(bg.id);
     }
     for tg in &model.resources.texture2d_groups {
-        valid_resource_ids.insert(tg.id as u32);
+        valid_resource_ids.insert(tg.id);
     }
     for c2d in &model.resources.composite_materials {
-        valid_resource_ids.insert(c2d.id as u32);
+        valid_resource_ids.insert(c2d.id);
     }
     for mg in &model.resources.multi_properties {
-        valid_resource_ids.insert(mg.id as u32);
+        valid_resource_ids.insert(mg.id);
     }
 
     // Validate each object with beam lattice
@@ -78,7 +78,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
 
                 // Validate beam material references
                 if let Some(pid) = beam.property_id
-                    && !valid_resource_ids.contains(&pid)
+                    && !valid_resource_ids.contains(&(pid as usize))
                 {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: Beam {} references non-existent property group ID {}. \
@@ -208,7 +208,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
 
                 // Validate ball material references
                 if let Some(ball_pid) = ball.property_id {
-                    if !valid_resource_ids.contains(&ball_pid) {
+                    if !valid_resource_ids.contains(&(ball_pid as usize)) {
                         return Err(Error::InvalidModel(format!(
                             "Object {}: Ball {} references non-existent property group ID {}. \
                                  Property group IDs must reference existing color groups, base material groups, \
@@ -224,7 +224,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                             .resources
                             .color_groups
                             .iter()
-                            .find(|cg| cg.id as u32 == ball_pid)
+                            .find(|cg| cg.id == ball_pid as usize)
                         {
                             if ball_p as usize >= colorgroup.colors.len() {
                                 let max_index = colorgroup.colors.len().saturating_sub(1);
@@ -245,7 +245,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                             .resources
                             .base_material_groups
                             .iter()
-                            .find(|bg| bg.id as u32 == ball_pid)
+                            .find(|bg| bg.id == ball_pid as usize)
                             && ball_p as usize >= basematerialgroup.materials.len()
                         {
                             let max_index = basematerialgroup.materials.len().saturating_sub(1);
@@ -266,7 +266,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
 
             // Validate clipping mesh reference
             if let Some(clip_id) = beamset.clipping_mesh_id {
-                if !valid_resource_ids.contains(&clip_id) {
+                if !valid_resource_ids.contains(&(clip_id as usize)) {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: BeamLattice references non-existent clippingmesh ID {}. \
                              The clippingmesh attribute must reference a valid object resource.",
@@ -275,7 +275,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                 }
 
                 // Check for self-reference (clipping mesh cannot be the same object)
-                if clip_id == object.id as u32 {
+                if clip_id as usize == object.id {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: BeamLattice clippingmesh references itself. \
                              The clippingmesh cannot be the same object that contains the beamlattice.",
@@ -289,7 +289,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                     .resources
                     .objects
                     .iter()
-                    .position(|o| o.id as u32 == clip_id)
+                    .position(|o| o.id == clip_id as usize)
                     && clip_obj_position >= obj_position
                 {
                     return Err(Error::InvalidModel(format!(
@@ -306,7 +306,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                     .resources
                     .objects
                     .iter()
-                    .find(|o| o.id as u32 == clip_id)
+                    .find(|o| o.id == clip_id as usize)
                 {
                     // Object must have a mesh, not just components
                     if clip_obj.mesh.is_none() && !clip_obj.components.is_empty() {
@@ -332,7 +332,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
 
             // Validate representation mesh reference
             if let Some(rep_id) = beamset.representation_mesh_id {
-                if !valid_resource_ids.contains(&rep_id) {
+                if !valid_resource_ids.contains(&(rep_id as usize)) {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: BeamLattice references non-existent representationmesh ID {}. \
                              The representationmesh attribute must reference a valid object resource.",
@@ -341,7 +341,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                 }
 
                 // Check for self-reference (representation mesh cannot be the same object)
-                if rep_id == object.id as u32 {
+                if rep_id as usize == object.id {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: BeamLattice representationmesh references itself. \
                              The representationmesh cannot be the same object that contains the beamlattice.",
@@ -355,7 +355,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                     .resources
                     .objects
                     .iter()
-                    .position(|o| o.id as u32 == rep_id)
+                    .position(|o| o.id == rep_id as usize)
                     && rep_obj_position >= obj_position
                 {
                     return Err(Error::InvalidModel(format!(
@@ -372,7 +372,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                     .resources
                     .objects
                     .iter()
-                    .find(|o| o.id as u32 == rep_id)
+                    .find(|o| o.id == rep_id as usize)
                 {
                     // Object must have a mesh, not just components
                     if rep_obj.mesh.is_none() && !rep_obj.components.is_empty() {
@@ -442,7 +442,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
 
             // Validate beamset material reference and property index
             if let Some(pid) = beamset.property_id {
-                if !valid_resource_ids.contains(&pid) {
+                if !valid_resource_ids.contains(&(pid as usize)) {
                     return Err(Error::InvalidModel(format!(
                         "Object {}: BeamLattice references non-existent property group ID {}. \
                              Property group IDs must reference existing color groups, base material groups, \
@@ -458,7 +458,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                         .resources
                         .color_groups
                         .iter()
-                        .find(|cg| cg.id as u32 == pid)
+                        .find(|cg| cg.id == pid as usize)
                     {
                         if pindex as usize >= colorgroup.colors.len() {
                             let max_index = colorgroup.colors.len().saturating_sub(1);
@@ -478,7 +478,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                         .resources
                         .base_material_groups
                         .iter()
-                        .find(|bg| bg.id as u32 == pid)
+                        .find(|bg| bg.id == pid as usize)
                         && pindex as usize >= basematerialgroup.materials.len()
                     {
                         let max_index = basematerialgroup.materials.len().saturating_sub(1);
@@ -506,7 +506,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                         .resources
                         .color_groups
                         .iter()
-                        .find(|cg| cg.id as u32 == pid)
+                        .find(|cg| cg.id == pid as usize)
                     {
                         let num_colors = colorgroup.colors.len();
 
@@ -539,7 +539,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
                         .resources
                         .base_material_groups
                         .iter()
-                        .find(|bg| bg.id as u32 == pid)
+                        .find(|bg| bg.id == pid as usize)
                     {
                         let num_materials = basematerialgroup.materials.len();
 
