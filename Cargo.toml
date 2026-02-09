@@ -12,13 +12,17 @@ readme = "README.md"
 keywords = ["3mf", "3d", "manufacturing", "3dprinting", "opc"]
 categories = ["parser-implementations", "encoding"]
 exclude = [
-    "tools/",
     ".github/",
     "*.sh",
     "*.py",
+    "benches/",
+    "docs/",
+    "examples/",
+    "fuzz/",
     "test_suites/",
     "test_files/",
-    "fuzz/",
+    "tests/",
+    "tools/"
 ]
 
 [features]
