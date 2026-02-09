@@ -94,6 +94,27 @@ fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
         )));
     }
 
+    // Validate vertex coordinates are finite and within f32 range
+    // parry3d uses f32 internally, so coordinates outside f32 range become
+    // infinity, and NaN/infinity cause unpredictable behavior
+    for (i, vertex) in mesh.vertices.iter().enumerate() {
+        if !vertex.x.is_finite() || !vertex.y.is_finite() || !vertex.z.is_finite() {
+            return Err(Error::InvalidFormat(format!(
+                "Vertex {} has non-finite coordinates: ({}, {}, {})",
+                i, vertex.x, vertex.y, vertex.z
+            )));
+        }
+        // Check coordinates fit within f32 range to prevent infinity after cast
+        let f32_max = f32::MAX as f64;
+        if vertex.x.abs() > f32_max || vertex.y.abs() > f32_max || vertex.z.abs() > f32_max {
+            return Err(Error::InvalidFormat(format!(
+                "Vertex {} has coordinates outside f32 range: ({}, {}, {}). \
+                 Values must be within ±{:.0}",
+                i, vertex.x, vertex.y, vertex.z, f32_max
+            )));
+        }
+    }
+
     // Validate each triangle
     for (i, triangle) in mesh.triangles.iter().enumerate() {
         // Check indices are valid
@@ -1316,8 +1337,14 @@ impl Default for SubdivisionOptions {
 /// assert_eq!(subdivided.triangles.len(), 4);
 /// ```
 pub fn subdivide(mesh: &Mesh, options: &SubdivisionOptions) -> Mesh {
+    // Cap subdivision levels to prevent exponential memory growth.
+    // Each level multiplies triangle count by 4, so level 10 produces 4^10 ≈ 1M
+    // triangles per original triangle. Beyond this is almost certainly unintentional.
+    const MAX_SUBDIVISION_LEVELS: u32 = 10;
+    let capped_levels = options.levels.min(MAX_SUBDIVISION_LEVELS);
+
     let mut result = mesh.clone();
-    for _ in 0..options.levels {
+    for _ in 0..capped_levels {
         result = match options.method {
             SubdivisionMethod::Midpoint => subdivide_midpoint(&result),
             SubdivisionMethod::Loop => subdivide_loop(&result),
@@ -1391,11 +1418,17 @@ pub fn subdivide_midpoint(mesh: &Mesh) -> Mesh {
         return mesh.clone();
     }
 
+    let num_vertices = mesh.vertices.len();
+
     // Pre-allocate capacity for new mesh
     // Estimate: Original vertices + ~1.5 edges per triangle (Euler's formula for closed meshes)
     // Each edge adds one midpoint vertex
-    let estimated_new_vertices = mesh.vertices.len() + (mesh.triangles.len() * 3 / 2);
-    let new_triangle_count = mesh.triangles.len() * 4;
+    // Use saturating arithmetic to avoid overflow on large meshes
+    let estimated_new_vertices = mesh
+        .vertices
+        .len()
+        .saturating_add(mesh.triangles.len().saturating_mul(3) / 2);
+    let new_triangle_count = mesh.triangles.len().saturating_mul(4);
 
     let mut result = Mesh::with_capacity(estimated_new_vertices, new_triangle_count);
 
@@ -1407,6 +1440,12 @@ pub fn subdivide_midpoint(mesh: &Mesh) -> Mesh {
     let mut edge_midpoints: HashMap<(usize, usize), usize> = HashMap::new();
 
     for triangle in &mesh.triangles {
+        // Skip triangles with out-of-bounds vertex indices to prevent panics
+        if triangle.v1 >= num_vertices || triangle.v2 >= num_vertices || triangle.v3 >= num_vertices
+        {
+            continue;
+        }
+
         // Get or create midpoint vertices for each edge
         let m0 = get_or_create_midpoint(
             &mut result.vertices,

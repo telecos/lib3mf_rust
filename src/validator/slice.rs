@@ -204,7 +204,7 @@ pub fn validate_slice(
                 poly_idx,
                 polygon.startv,
                 num_vertices,
-                num_vertices - 1
+                num_vertices.saturating_sub(1)
             )));
         }
 
@@ -237,7 +237,7 @@ pub fn validate_slice(
                     seg_idx,
                     segment.v2,
                     num_vertices,
-                    num_vertices - 1
+                    num_vertices.saturating_sub(1)
                 )));
             }
 

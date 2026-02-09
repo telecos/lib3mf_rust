@@ -326,13 +326,30 @@ fn decrypt_aes_gcm(ciphertext: &[u8], cek: &[u8], params: &CEKParams) -> Result<
     Ok(plaintext)
 }
 
+/// Maximum decompressed size to prevent decompression bombs (256 MB)
+const MAX_DECOMPRESSED_SIZE: u64 = 256 * 1024 * 1024;
+
 /// Decompress data using DEFLATE
+///
+/// Limits decompressed output to `MAX_DECOMPRESSED_SIZE` bytes to prevent
+/// decompression bomb attacks where a small compressed payload expands to
+/// gigabytes of data.
 fn decompress_deflate(compressed: &[u8]) -> Result<Vec<u8>> {
-    let mut decoder = DeflateDecoder::new(compressed);
+    let mut decoder = DeflateDecoder::new(compressed).take(MAX_DECOMPRESSED_SIZE);
     let mut decompressed = Vec::new();
     decoder
         .read_to_end(&mut decompressed)
         .map_err(|e| Error::InvalidSecureContent(format!("Decompression failed: {}", e)))?;
+
+    // Check if we hit the limit (data was truncated)
+    // If the decompressed size exactly equals the limit, there may be more data
+    if decompressed.len() as u64 >= MAX_DECOMPRESSED_SIZE {
+        return Err(Error::InvalidSecureContent(format!(
+            "Decompressed data exceeds maximum allowed size of {} bytes",
+            MAX_DECOMPRESSED_SIZE
+        )));
+    }
+
     Ok(decompressed)
 }
 
