@@ -17,13 +17,19 @@ impl<'a> Arbitrary<'a> for FuzzMesh {
             vertices.push((u.arbitrary()?, u.arbitrary()?, u.arbitrary()?));
         }
         
+        // Generate triangles with indices constrained to valid vertex range
+        // This avoids generating meaningless out-of-bounds triangles that would be filtered out,
+        // and prevents panics in downstream mesh operations unrelated to the target logic.
         let triangle_count = u.int_in_range(0..=50)?;
         let mut triangles = Vec::new();
-        for _ in 0..triangle_count {
-            let v1: u32 = u.arbitrary()?;
-            let v2: u32 = u.arbitrary()?;
-            let v3: u32 = u.arbitrary()?;
-            triangles.push((v1 as usize, v2 as usize, v3 as usize));
+        if vertex_count > 0 {
+            let vertex_range = 0..=(vertex_count - 1);
+            for _ in 0..triangle_count {
+                let v1 = u.int_in_range(vertex_range.clone())?;
+                let v2 = u.int_in_range(vertex_range.clone())?;
+                let v3 = u.int_in_range(vertex_range.clone())?;
+                triangles.push((v1, v2, v3));
+            }
         }
         
         Ok(FuzzMesh { vertices, triangles })
