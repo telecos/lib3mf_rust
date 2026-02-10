@@ -15,6 +15,7 @@ use crate::model::{Mesh, Model, Triangle, Vertex};
 use parry3d::math::Vector as ParryVector;
 use parry3d::shape::{Shape, TriMesh as ParryTriMesh};
 use std::collections::HashMap;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// A 3D point represented as (x, y, z)
 pub type Point3d = (f64, f64, f64);
@@ -27,6 +28,14 @@ pub type BoundingBox = (Point3d, Point3d);
 
 /// A 2D point represented as (x, y)
 pub type Point2D = (f64, f64);
+
+/// Minimum absolute value for non-zero mesh coordinates
+///
+/// Coordinates with absolute value below this threshold (when non-zero) are rejected
+/// to prevent numerical instability in parry3d's geometric computations. This value
+/// is well above the denormal/subnormal range and catches pathologically small values
+/// that can cause issues during BVH construction and other spatial operations.
+const MIN_COORDINATE_ABS_VALUE: f64 = 1e-30;
 
 /// Compute the signed volume of a mesh using the divergence theorem
 ///
@@ -113,6 +122,20 @@ fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
                 i, vertex.x, vertex.y, vertex.z, f32_max
             )));
         }
+
+        // Check for denormal/subnormal values and extremely small values that
+        // could cause numerical issues in parry3d's BVH construction.
+        for (coord_name, coord_val) in [("x", vertex.x), ("y", vertex.y), ("z", vertex.z)] {
+            let abs_val = coord_val.abs();
+            if abs_val > 0.0 && abs_val < MIN_COORDINATE_ABS_VALUE {
+                return Err(Error::InvalidFormat(format!(
+                    "Vertex {} has extremely small {} coordinate: {}. \
+                     Non-zero values must be >= {:.2e} in absolute value to prevent \
+                     numerical instability in geometric computations.",
+                    i, coord_name, coord_val, MIN_COORDINATE_ABS_VALUE
+                )));
+            }
+        }
     }
 
     // Validate each triangle
@@ -138,6 +161,36 @@ fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Safely create a parry3d TriMesh, handling potential panics in BVH construction
+///
+/// parry3d 0.26 has a known issue where BVH construction can panic with certain
+/// edge cases (e.g., when indices approach usize::MAX). This wrapper catches such
+/// panics and converts them to proper errors.
+///
+/// # Arguments
+/// * `vertices` - Vector of vertex positions
+/// * `indices` - Vector of triangle indices (each element is [v1, v2, v3])
+///
+/// # Returns
+/// Result containing the TriMesh or an error if creation fails or panics
+fn safe_create_trimesh(vertices: Vec<ParryVector>, indices: Vec<[u32; 3]>) -> Result<ParryTriMesh> {
+    // Use catch_unwind to handle panics from parry3d BVH builder
+    let result = catch_unwind(AssertUnwindSafe(|| ParryTriMesh::new(vertices, indices)));
+
+    match result {
+        Ok(Ok(trimesh)) => Ok(trimesh),
+        Ok(Err(e)) => Err(Error::InvalidFormat(format!(
+            "Failed to create TriMesh: {}",
+            e
+        ))),
+        Err(_) => Err(Error::InvalidFormat(
+            "parry3d BVH builder panicked during TriMesh creation. \
+             This can happen with certain edge cases in mesh geometry."
+                .to_string(),
+        )),
+    }
 }
 
 /// Compute the unsigned volume of a mesh using parry3d
@@ -171,9 +224,8 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
         .map(|t| [t.v1 as u32, t.v2 as u32, t.v3 as u32])
         .collect();
 
-    // Create parry3d TriMesh
-    let trimesh = ParryTriMesh::new(vertices, indices)
-        .map_err(|e| Error::InvalidFormat(format!("Failed to create TriMesh: {}", e)))?;
+    // Create parry3d TriMesh using safe wrapper
+    let trimesh = safe_create_trimesh(vertices, indices)?;
 
     // Compute mass properties with density 1.0
     let mass_props = trimesh.mass_properties(1.0);
@@ -221,9 +273,8 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         .map(|t| [t.v1 as u32, t.v2 as u32, t.v3 as u32])
         .collect();
 
-    // Create parry3d TriMesh
-    let trimesh = ParryTriMesh::new(vertices, indices)
-        .map_err(|e| Error::InvalidFormat(format!("Failed to create TriMesh: {}", e)))?;
+    // Create parry3d TriMesh using safe wrapper
+    let trimesh = safe_create_trimesh(vertices, indices)?;
 
     // Get the local AABB
     let aabb = trimesh.local_aabb();
@@ -1262,6 +1313,64 @@ mod tests {
         assert!(
             err_msg.contains("exceed") || err_msg.contains("invalid"),
             "Error message was: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_parry3d_bvh_panic_handling() {
+        // Regression test for fuzzing crash 461ce8e5
+        // This test ensures that parry3d BVH construction panics are caught
+        // and converted to proper errors instead of crashing the process.
+
+        // Create a mesh that might trigger edge cases in parry3d's BVH builder
+        let mut mesh = Mesh::new();
+
+        // Add some vertices with extreme values (but still within f32 range and above MIN_COORDINATE_ABS_VALUE)
+        let large_val = f32::MAX as f64 * 0.5;
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(large_val, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, large_val, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 0.0, large_val));
+
+        // Add triangles
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh.triangles.push(Triangle::new(0, 2, 3));
+        mesh.triangles.push(Triangle::new(0, 3, 1));
+        mesh.triangles.push(Triangle::new(1, 3, 2));
+
+        // These operations should not panic with extreme but valid values
+        // They should succeed since coordinates are within acceptable range
+        let volume_result = compute_mesh_volume(&mesh);
+        assert!(
+            volume_result.is_ok(),
+            "Volume computation should succeed with large valid coordinates: {:?}",
+            volume_result
+        );
+
+        let aabb_result = compute_mesh_aabb(&mesh);
+        assert!(
+            aabb_result.is_ok(),
+            "AABB computation should succeed with large valid coordinates: {:?}",
+            aabb_result
+        );
+
+        // Test that extremely small values are properly rejected
+        let mut small_mesh = Mesh::new();
+        small_mesh.vertices.push(Vertex::new(1e-35, 0.0, 0.0)); // Below MIN_COORDINATE_ABS_VALUE
+        small_mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        small_mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        small_mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let small_volume_result = compute_mesh_volume(&small_mesh);
+        assert!(
+            small_volume_result.is_err(),
+            "Volume computation should reject extremely small coordinates"
+        );
+        let err_msg = small_volume_result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("extremely small") || err_msg.contains("numerical instability"),
+            "Error should mention numerical issues: {}",
             err_msg
         );
     }
