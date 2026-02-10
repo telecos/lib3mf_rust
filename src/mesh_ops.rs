@@ -1299,6 +1299,39 @@ mod tests {
             err_msg
         );
     }
+
+    #[test]
+    fn test_parry3d_bvh_panic_handling() {
+        // Regression test for fuzzing crash 461ce8e5
+        // This test ensures that parry3d BVH construction panics are caught
+        // and converted to proper errors instead of crashing the process.
+        
+        // Create a mesh that might trigger edge cases in parry3d's BVH builder
+        let mut mesh = Mesh::new();
+        
+        // Add some vertices with extreme values (but still within f32 range)
+        let large_val = f32::MAX as f64 * 0.5;
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(large_val, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, large_val, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 0.0, large_val));
+        
+        // Add triangles
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh.triangles.push(Triangle::new(0, 2, 3));
+        mesh.triangles.push(Triangle::new(0, 3, 1));
+        mesh.triangles.push(Triangle::new(1, 3, 2));
+        
+        // These operations should not panic, even if parry3d BVH construction fails
+        // They should either succeed or return an error
+        let volume_result = compute_mesh_volume(&mesh);
+        // We don't assert success/failure - just that it doesn't panic
+        let _ = volume_result;
+        
+        let aabb_result = compute_mesh_aabb(&mesh);
+        // We don't assert success/failure - just that it doesn't panic
+        let _ = aabb_result;
+    }
 }
 
 /// Mesh subdivision method
