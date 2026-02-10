@@ -114,6 +114,25 @@ fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
                 i, vertex.x, vertex.y, vertex.z, f32_max
             )));
         }
+        
+        // Check for denormal/subnormal values and extremely small values that 
+        // could cause numerical issues in parry3d's BVH construction.
+        // Even non-denormal but very small values can lead to precision issues
+        // and edge cases in spatial indexing when used in geometric computations.
+        // We use a practical minimum of 1e-30 which is well above denormal range
+        // but catches pathologically small values that cause issues.
+        const MIN_ABS_VALUE: f64 = 1e-30;
+        for (coord_name, coord_val) in [("x", vertex.x), ("y", vertex.y), ("z", vertex.z)] {
+            let abs_val = coord_val.abs();
+            if abs_val > 0.0 && abs_val < MIN_ABS_VALUE {
+                return Err(Error::InvalidFormat(format!(
+                    "Vertex {} has extremely small {} coordinate: {}. \
+                     Non-zero values must be >= {:.2e} in absolute value to prevent \
+                     numerical instability in geometric computations.",
+                    i, coord_name, coord_val, MIN_ABS_VALUE
+                )));
+            }
+        }
     }
 
     // Validate each triangle
