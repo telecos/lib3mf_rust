@@ -15,6 +15,7 @@ use crate::model::{Mesh, Model, Triangle, Vertex};
 use parry3d::math::Vector as ParryVector;
 use parry3d::shape::{Shape, TriMesh as ParryTriMesh};
 use std::collections::HashMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// A 3D point represented as (x, y, z)
 pub type Point3d = (f64, f64, f64);
@@ -140,6 +141,41 @@ fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
     Ok(())
 }
 
+/// Safely create a parry3d TriMesh, handling potential panics in BVH construction
+///
+/// parry3d 0.26 has a known issue where BVH construction can panic with certain
+/// edge cases (e.g., when indices approach usize::MAX). This wrapper catches such
+/// panics and converts them to proper errors.
+///
+/// # Arguments
+/// * `vertices` - Vector of vertex positions
+/// * `indices` - Vector of triangle indices (each element is [v1, v2, v3])
+///
+/// # Returns
+/// Result containing the TriMesh or an error if creation fails or panics
+fn safe_create_trimesh(
+    vertices: Vec<ParryVector>,
+    indices: Vec<[u32; 3]>,
+) -> Result<ParryTriMesh> {
+    // Use catch_unwind to handle panics from parry3d BVH builder
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        ParryTriMesh::new(vertices, indices)
+    }));
+
+    match result {
+        Ok(Ok(trimesh)) => Ok(trimesh),
+        Ok(Err(e)) => Err(Error::InvalidFormat(format!(
+            "Failed to create TriMesh: {}",
+            e
+        ))),
+        Err(_) => Err(Error::InvalidFormat(
+            "parry3d BVH builder panicked during TriMesh creation. \
+             This can happen with certain edge cases in mesh geometry."
+                .to_string(),
+        )),
+    }
+}
+
 /// Compute the unsigned volume of a mesh using parry3d
 ///
 /// Returns the absolute volume in cubic units. This is useful for computing
@@ -171,9 +207,8 @@ pub fn compute_mesh_volume(mesh: &Mesh) -> Result<f64> {
         .map(|t| [t.v1 as u32, t.v2 as u32, t.v3 as u32])
         .collect();
 
-    // Create parry3d TriMesh
-    let trimesh = ParryTriMesh::new(vertices, indices)
-        .map_err(|e| Error::InvalidFormat(format!("Failed to create TriMesh: {}", e)))?;
+    // Create parry3d TriMesh using safe wrapper
+    let trimesh = safe_create_trimesh(vertices, indices)?;
 
     // Compute mass properties with density 1.0
     let mass_props = trimesh.mass_properties(1.0);
@@ -221,9 +256,8 @@ pub fn compute_mesh_aabb(mesh: &Mesh) -> Result<BoundingBox> {
         .map(|t| [t.v1 as u32, t.v2 as u32, t.v3 as u32])
         .collect();
 
-    // Create parry3d TriMesh
-    let trimesh = ParryTriMesh::new(vertices, indices)
-        .map_err(|e| Error::InvalidFormat(format!("Failed to create TriMesh: {}", e)))?;
+    // Create parry3d TriMesh using safe wrapper
+    let trimesh = safe_create_trimesh(vertices, indices)?;
 
     // Get the local AABB
     let aabb = trimesh.local_aabb();
