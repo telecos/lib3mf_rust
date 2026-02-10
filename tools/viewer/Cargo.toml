@@ -31,7 +31,7 @@ rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 chrono = "0.4"
 zip = "7.2"
 # GitHub test suite browser dependencies
-reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
+reqwest = { version = "0.13", features = ["json", "blocking"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "5.0"
