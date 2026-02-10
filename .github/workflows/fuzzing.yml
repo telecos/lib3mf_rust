@@ -149,7 +149,7 @@ jobs:
       
       - name: Create issue for crash
         if: failure() && steps.check_crashes.outputs.crash_count && github.event_name == 'schedule'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -310,7 +310,7 @@ jobs:
       
       - name: Create issue for crash
         if: failure() && steps.check_crashes.outputs.crash_count
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
