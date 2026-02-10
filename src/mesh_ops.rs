@@ -29,6 +29,14 @@ pub type BoundingBox = (Point3d, Point3d);
 /// A 2D point represented as (x, y)
 pub type Point2D = (f64, f64);
 
+/// Minimum absolute value for non-zero mesh coordinates
+///
+/// Coordinates with absolute value below this threshold (when non-zero) are rejected
+/// to prevent numerical instability in parry3d's geometric computations. This value
+/// is well above the denormal/subnormal range and catches pathologically small values
+/// that can cause issues during BVH construction and other spatial operations.
+const MIN_COORDINATE_ABS_VALUE: f64 = 1e-30;
+
 /// Compute the signed volume of a mesh using the divergence theorem
 ///
 /// Returns the signed volume in cubic units. For a watertight mesh with correct winding order,
@@ -117,19 +125,14 @@ fn validate_mesh_for_parry3d(mesh: &Mesh) -> Result<()> {
         
         // Check for denormal/subnormal values and extremely small values that 
         // could cause numerical issues in parry3d's BVH construction.
-        // Even non-denormal but very small values can lead to precision issues
-        // and edge cases in spatial indexing when used in geometric computations.
-        // We use a practical minimum of 1e-30 which is well above denormal range
-        // but catches pathologically small values that cause issues.
-        const MIN_ABS_VALUE: f64 = 1e-30;
         for (coord_name, coord_val) in [("x", vertex.x), ("y", vertex.y), ("z", vertex.z)] {
             let abs_val = coord_val.abs();
-            if abs_val > 0.0 && abs_val < MIN_ABS_VALUE {
+            if abs_val > 0.0 && abs_val < MIN_COORDINATE_ABS_VALUE {
                 return Err(Error::InvalidFormat(format!(
                     "Vertex {} has extremely small {} coordinate: {}. \
                      Non-zero values must be >= {:.2e} in absolute value to prevent \
                      numerical instability in geometric computations.",
-                    i, coord_name, coord_val, MIN_ABS_VALUE
+                    i, coord_name, coord_val, MIN_COORDINATE_ABS_VALUE
                 )));
             }
         }
@@ -1328,7 +1331,7 @@ mod tests {
         // Create a mesh that might trigger edge cases in parry3d's BVH builder
         let mut mesh = Mesh::new();
         
-        // Add some vertices with extreme values (but still within f32 range)
+        // Add some vertices with extreme values (but still within f32 range and above MIN_COORDINATE_ABS_VALUE)
         let large_val = f32::MAX as f64 * 0.5;
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(large_val, 0.0, 0.0));
@@ -1341,15 +1344,40 @@ mod tests {
         mesh.triangles.push(Triangle::new(0, 3, 1));
         mesh.triangles.push(Triangle::new(1, 3, 2));
         
-        // These operations should not panic, even if parry3d BVH construction fails
-        // They should either succeed or return an error
+        // These operations should not panic with extreme but valid values
+        // They should succeed since coordinates are within acceptable range
         let volume_result = compute_mesh_volume(&mesh);
-        // We don't assert success/failure - just that it doesn't panic
-        let _ = volume_result;
+        assert!(
+            volume_result.is_ok(),
+            "Volume computation should succeed with large valid coordinates: {:?}",
+            volume_result
+        );
         
         let aabb_result = compute_mesh_aabb(&mesh);
-        // We don't assert success/failure - just that it doesn't panic
-        let _ = aabb_result;
+        assert!(
+            aabb_result.is_ok(),
+            "AABB computation should succeed with large valid coordinates: {:?}",
+            aabb_result
+        );
+        
+        // Test that extremely small values are properly rejected
+        let mut small_mesh = Mesh::new();
+        small_mesh.vertices.push(Vertex::new(1e-35, 0.0, 0.0)); // Below MIN_COORDINATE_ABS_VALUE
+        small_mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        small_mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        small_mesh.triangles.push(Triangle::new(0, 1, 2));
+        
+        let small_volume_result = compute_mesh_volume(&small_mesh);
+        assert!(
+            small_volume_result.is_err(),
+            "Volume computation should reject extremely small coordinates"
+        );
+        let err_msg = small_volume_result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("extremely small") || err_msg.contains("numerical instability"),
+            "Error should mention numerical issues: {}",
+            err_msg
+        );
     }
 }
 
