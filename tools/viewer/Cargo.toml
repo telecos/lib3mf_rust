@@ -27,7 +27,7 @@ lib3mf = "0.1.1"
 clap = { version = "4.5", features = ["derive"] }
 image = "0.25"
 kiss3d = { version = "0.35.1", package = "kiss3d-filedrop" }
-rfd = { version = "0.12", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 chrono = "0.4"
 zip = "7.2"
 # GitHub test suite browser dependencies
