@@ -1,6 +1,10 @@
 //! Tests for custom key provider functionality
 //!
 //! These tests validate that custom key providers can be used for decryption
+//!
+//! Note: These tests require the 'crypto' feature to be enabled
+
+#![cfg(feature = "crypto")]
 
 use lib3mf::{
     AccessRight, CEKParams, KEKParams, KeyProvider, ParserConfig, Result, SecureContentInfo,
