@@ -64,7 +64,9 @@
 //!
 //! ## Mesh Slicing Example
 //!
-//! ```no_run
+//! Requires the `mesh-ops` feature (enabled by default).
+//!
+//! ```ignore
 //! use lib3mf::{collect_intersection_segments, assemble_contours, Mesh, Vertex, Triangle};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
