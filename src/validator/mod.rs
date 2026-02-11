@@ -650,6 +650,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "mesh-ops")]
     fn test_sliced_object_allows_negative_volume_mesh() {
         use crate::model::SliceStack;
 
@@ -690,6 +691,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "mesh-ops")]
     fn test_non_sliced_object_rejects_negative_volume() {
         let mut model = Model::new();
 

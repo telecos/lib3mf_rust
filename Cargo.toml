@@ -62,6 +62,22 @@ proptest = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+[[example]]
+name = "calculate_normals"
+required-features = ["mesh-ops"]
+
+[[example]]
+name = "mesh_analysis"
+required-features = ["mesh-ops"]
+
+[[example]]
+name = "mesh_slicing_demo"
+required-features = ["mesh-ops"]
+
+[[example]]
+name = "mesh_subdivision"
+required-features = ["mesh-ops"]
+
 [[test]]
 name = "conformance_individual"
 path = "tests/conformance/individual.rs"
