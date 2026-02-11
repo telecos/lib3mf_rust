@@ -92,6 +92,7 @@
 pub mod error;
 pub mod extension;
 pub mod extensions;
+#[cfg(feature = "mesh-ops")]
 pub mod mesh_ops;
 pub mod model;
 pub mod opc;
@@ -117,6 +118,7 @@ pub use extensions::{
     SliceExtensionHandler, create_default_registry, register_all_handlers,
 };
 pub use key_provider::KeyProvider;
+#[cfg(feature = "mesh-ops")]
 pub use mesh_ops::{
     Point2D, SubdivisionMethod, SubdivisionOptions, assemble_contours,
     collect_intersection_segments, subdivide, subdivide_simple, triangle_plane_intersection,

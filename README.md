@@ -44,6 +44,35 @@ lib3mf = "0.1"
 
 The library provides optional features that can be enabled as needed:
 
+#### Mesh Operations Feature (Default)
+
+The `mesh-ops` feature enables advanced geometric operations on meshes using computational geometry libraries (parry3d and nalgebra). This feature is **enabled by default** and provides:
+
+- Volume calculation (signed volume for mesh orientation detection)
+- Axis-aligned bounding box (AABB) computation
+- BVH-based mesh validation
+- Mesh subdivision (midpoint and Loop algorithms)
+- Mesh-plane slicing with contour extraction
+- Vertex normal calculation
+
+**When to disable:**
+- You only need to parse/write 3MF files without geometric computations
+- You want to minimize compilation time and dependency tree
+
+To disable (reduces dependencies):
+```toml
+[dependencies]
+lib3mf = { version = "0.1", default-features = false }
+```
+
+To explicitly enable:
+```toml
+[dependencies]
+lib3mf = { version = "0.1", features = ["mesh-ops"] }
+```
+
+**Note:** Some examples require this feature: `calculate_normals`, `mesh_analysis`, `mesh_slicing_demo`, `mesh_subdivision`.
+
 #### Crypto Feature
 
 The `crypto` feature enables decryption support for the Secure Content extension. This pulls in cryptographic dependencies (rsa, aes-gcm, base64, flate2, sha1, sha2) required for decrypting encrypted 3MF files using test keys.
