@@ -14,6 +14,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleaned up non-standard implementation documentation
   - Reorganized viewer documentation
 
+## [0.1.3] - 2026-02-11
+
+### Added
+
+- **Feature flags for optional dependencies** — Dependencies are now organized
+  into feature groups so users only pull in what they need:
+  - `mesh-ops` (default) — Enables advanced mesh operations (`parry3d`,
+    `nalgebra`). Disable with `default-features = false` if you only need
+    parsing/writing.
+  - `polygon-ops` (default) — Enables polygon clipping and triangulation
+    (`clipper2`, `earcutr`). Disable with `default-features = false` if not
+    processing slice polygon data.
+  - `crypto` (opt-in) — Enables Secure Content extension decryption (`rsa`,
+    `aes-gcm`, `base64`, `flate2`, `sha1`, `sha2`). Enable with
+    `features = ["crypto"]` when you need to decrypt encrypted 3MF files.
+- Examples that require optional features now declare `required-features` in
+  `Cargo.toml` (`calculate_normals`, `mesh_analysis`, `mesh_slicing_demo`,
+  `mesh_subdivision`, `polygon_clipping_demo`, `polygon_triangulation_demo`).
+
+### Fixed
+
+- **Critical: parry3d BVH panic on extremely small mesh coordinates** — Added
+  validation for subnormal/extremely small vertex coordinates that caused
+  parry3d's BVH construction to panic. Meshes with coordinates below `1e-35`
+  are now rejected with a clear error. Added a `safe_create_trimesh` wrapper
+  for additional robustness.
+
+### Changed
+
+- Bump `tempfile` dev-dependency from 3.24 to 3.25.
+
+### Removed
+
+- Removed unused `regex` dependency from runtime dependencies.
+
 ## [0.1.2] - 2026-02-09
 
 ### Fixed
