@@ -97,7 +97,9 @@ pub mod mesh_ops;
 pub mod model;
 pub mod opc;
 pub mod parser;
+#[cfg(feature = "polygon-ops")]
 pub mod polygon_clipping;
+#[cfg(feature = "polygon-ops")]
 pub mod polygon_triangulation;
 pub mod streaming;
 pub mod validator;

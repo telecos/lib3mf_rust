@@ -26,13 +26,15 @@ exclude = [
 ]
 
 [features]
-default = ["mesh-ops"]
+default = ["mesh-ops", "polygon-ops"]
 # Enable this feature in CI to run tests that require external test_suites folder
 ci = []
 # Enable cryptographic support for SecureContent extension decryption
 crypto = ["dep:rsa", "dep:aes-gcm", "dep:base64", "dep:flate2", "dep:sha1", "dep:sha2"]
 # Enable advanced mesh operations (volume, AABB, validation, subdivision, slicing)
 mesh-ops = ["dep:parry3d", "dep:nalgebra"]
+# Enable polygon operations (boolean operations, triangulation)
+polygon-ops = ["dep:clipper2", "dep:earcutr"]
 
 [dependencies]
 zip = "7.2"
@@ -49,8 +51,9 @@ urlencoding = "2.1"
 # Geometry dependencies for advanced mesh operations (optional, enabled via 'mesh-ops' feature)
 parry3d = { version = "0.26", optional = true }
 nalgebra = { version = "0.34", optional = true }
-clipper2 = "0.5"
-earcutr = "0.5"
+# Polygon operation dependencies (optional, enabled via 'polygon-ops' feature)
+clipper2 = { version = "0.5", optional = true }
+earcutr = { version = "0.5", optional = true }
 
 [dev-dependencies]
 tempfile = "3.25"
@@ -77,6 +80,14 @@ required-features = ["mesh-ops"]
 [[example]]
 name = "mesh_subdivision"
 required-features = ["mesh-ops"]
+
+[[example]]
+name = "polygon_clipping_demo"
+required-features = ["polygon-ops"]
+
+[[example]]
+name = "polygon_triangulation_demo"
+required-features = ["polygon-ops"]
 
 [[test]]
 name = "conformance_individual"
