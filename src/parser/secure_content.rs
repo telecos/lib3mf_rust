@@ -23,6 +23,10 @@ const VALID_WRAPPING_ALGORITHM_2009: &str = "http://www.w3.org/2009/xmlenc11#rsa
 /// Default compression value for SecureContent CEK params
 const DEFAULT_COMPRESSION: &str = "none";
 
+/// Test consumer ID from Suite 8 test specification
+/// This is duplicated from the decryption module to avoid a dependency when crypto feature is disabled
+const TEST_CONSUMER_ID: &str = "test3mf01";
+
 /// Valid MGF algorithms for SecureContent kekparams
 const VALID_MGF_ALGORITHMS: &[&str] = &[
     "http://www.w3.org/2009/xmlenc11#mgf1sha1",
@@ -739,7 +743,7 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
                         .find(|(idx, _)| {
                             if *idx < secure_content.consumers.len() {
                                 secure_content.consumers[*idx].consumer_id
-                                    == crate::decryption::TEST_CONSUMER_ID
+                                    == TEST_CONSUMER_ID
                             } else {
                                 false
                             }
@@ -780,15 +784,26 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
                 ))
             })?
     } else {
-        crate::decryption::decrypt_with_test_key(
-            &encrypted_data,
-            &resource_data.cek_params,
-            &access_right,
-            secure_content,
-        )
-        .map_err(|e| {
-            Error::InvalidSecureContent(format!("Failed to decrypt file '{}': {}", display_path, e))
-        })?
+        #[cfg(feature = "crypto")]
+        {
+            crate::decryption::decrypt_with_test_key(
+                &encrypted_data,
+                &resource_data.cek_params,
+                &access_right,
+                secure_content,
+            )
+            .map_err(|e| {
+                Error::InvalidSecureContent(format!("Failed to decrypt file '{}': {}", display_path, e))
+            })?
+        }
+        #[cfg(not(feature = "crypto"))]
+        {
+            return Err(Error::InvalidSecureContent(
+                "Decryption requires the 'crypto' feature to be enabled. \
+                 Rebuild with --features crypto to enable test key decryption, \
+                 or provide a custom KeyProvider.".to_string()
+            ));
+        }
     };
 
     // Convert to string

@@ -103,6 +103,7 @@ pub mod validator;
 mod writer;
 
 // Decryption support for SecureContent (test keys only, for Suite 8 validation)
+#[cfg(feature = "crypto")]
 pub mod decryption;
 
 // Key provider trait for custom encryption/decryption
