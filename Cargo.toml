@@ -29,18 +29,20 @@ exclude = [
 default = []
 # Enable this feature in CI to run tests that require external test_suites folder
 ci = []
+# Enable cryptographic support for SecureContent extension decryption
+crypto = ["dep:rsa", "dep:aes-gcm", "dep:base64", "dep:flate2", "dep:sha1", "dep:sha2"]
 
 [dependencies]
 zip = "7.2"
 quick-xml = "0.39"
 thiserror = "2.0"
-# Cryptographic dependencies for SecureContent decryption
-rsa = "0.9"
-aes-gcm = "0.10"
-base64 = "0.22"
-flate2 = "1.1"
-sha1 = "0.10"
-sha2 = "0.10"
+# Cryptographic dependencies for SecureContent decryption (optional, enabled via 'crypto' feature)
+rsa = { version = "0.9", optional = true }
+aes-gcm = { version = "0.10", optional = true }
+base64 = { version = "0.22", optional = true }
+flate2 = { version = "1.1", optional = true }
+sha1 = { version = "0.10", optional = true }
+sha2 = { version = "0.10", optional = true }
 urlencoding = "2.1"
 parry3d = "0.26"
 nalgebra = "0.34"

@@ -71,6 +71,7 @@ fn test_suite7_config() {
 }
 
 #[test]
+#[cfg(feature = "crypto")]
 fn test_suite8_config() {
     let config = common::get_suite_config("suite8_secure");
     assert!(config.supports(&Extension::Core));

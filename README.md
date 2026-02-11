@@ -40,6 +40,27 @@ Add this to your `Cargo.toml`:
 lib3mf = "0.1"
 ```
 
+### Optional Features
+
+The library provides optional features that can be enabled as needed:
+
+#### Crypto Feature
+
+The `crypto` feature enables decryption support for the Secure Content extension. This pulls in cryptographic dependencies (rsa, aes-gcm, base64, flate2, sha1, sha2) required for decrypting encrypted 3MF files using test keys.
+
+**When to enable:**
+- You need to decrypt 3MF files encrypted with Suite 8 test keys
+- You're running conformance tests that include encrypted files
+
+**Default:** Disabled (most users don't need decryption)
+
+```toml
+[dependencies]
+lib3mf = { version = "0.1", features = ["crypto"] }
+```
+
+**Note:** The crypto feature only provides test key decryption for conformance validation. For production applications, use the `KeyProvider` trait to implement custom decryption with your own keys. The Secure Content extension metadata (consumers, keystores, encryption parameters) is always available regardless of the feature flag.
+
 ## Usage
 
 ### Reading 3MF Files
@@ -832,10 +853,16 @@ The parser successfully handles files using all 3MF extensions including:
 - Displacement Extension (1.0.0)
 
 **Important Security Note**: The Secure Content extension provides:
-1. **Test-only decryption** using Suite 8 test keys for conformance validation
-2. **Complete keystore metadata extraction** for production applications
+1. **Test-only decryption** using Suite 8 test keys for conformance validation (requires `crypto` feature)
+2. **Complete keystore metadata extraction** for production applications (always available)
 
-Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automatically decrypted during parsing. For production applications, access all encryption metadata (consumers, encryption parameters, access rights) and implement decryption using external cryptographic libraries. **Never use embedded test keys in production.**
+Files encrypted with Suite 8 test keys (consumerid="test3mf01") are automatically decrypted during parsing when the `crypto` feature is enabled. For production applications, access all encryption metadata (consumers, keystores, encryption parameters, access rights) and implement decryption using the `KeyProvider` trait with your own cryptographic libraries. **Never use embedded test keys in production.**
+
+To enable test key decryption for conformance testing:
+```toml
+[dependencies]
+lib3mf = { version = "0.1", features = ["crypto"] }
+```
 
 See [CONFORMANCE_REPORT.md](CONFORMANCE_REPORT.md) for detailed test results and analysis.
 

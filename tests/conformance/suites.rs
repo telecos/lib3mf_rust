@@ -296,6 +296,7 @@ suite_tests!(
     "positive_test_cases",
     "negative_test_cases"
 );
+#[cfg(feature = "crypto")]
 suite_tests!(
     suite8_secure,
     "suite8_secure",
@@ -327,7 +328,7 @@ suite_tests!(
 fn summary() {
     println!("\n=== 3MF Conformance Test Suite Summary ===\n");
 
-    let suites = vec![
+    let mut suites = vec![
         (
             "suite1_core_slice_prod",
             "positive_test_cases",
@@ -355,15 +356,21 @@ fn summary() {
             "negative_test_cases",
         ),
         ("suite7_beam", "positive_test_cases", "negative_test_cases"),
-        (
-            "suite8_secure",
-            "positive_test_cases",
-            "negative_test_cases",
-        ),
+    ];
+
+    // Suite 8 requires crypto feature for decryption
+    #[cfg(feature = "crypto")]
+    suites.push((
+        "suite8_secure",
+        "positive_test_cases",
+        "negative_test_cases",
+    ));
+
+    suites.extend_from_slice(&[
         ("suite9_core_ext", "Positive Tests", "Negative Tests"),
         ("suite10_boolean", "Positive Tests", "Negative Tests"),
         ("suite11_Displacement", "Positive Tests", "Negative Tests"),
-    ];
+    ]);
 
     let expected_failures = common::ExpectedFailuresManager::load();
     let mut total_positive = 0;
