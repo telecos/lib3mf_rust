@@ -135,7 +135,11 @@ jobs:
         id: run-tests
         run: |
           echo "Testing suite: ${{ matrix.suite.name }}"
-          cargo test --features ci --test conformance ${{ matrix.suite.name }} -- --nocapture
+          if [ "${{ matrix.suite.name }}" = "suite8_secure" ]; then
+            cargo test --features ci,crypto --test conformance ${{ matrix.suite.name }} -- --nocapture
+          else
+            cargo test --features ci --test conformance ${{ matrix.suite.name }} -- --nocapture
+          fi
       
       - name: Generate suite report
         if: always()

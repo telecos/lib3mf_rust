@@ -357,7 +357,7 @@ fn summary() {
         ),
         ("suite7_beam", "positive_test_cases", "negative_test_cases"),
     ];
-    
+
     // Suite 8 requires crypto feature for decryption
     #[cfg(feature = "crypto")]
     suites.push((
@@ -365,7 +365,7 @@ fn summary() {
         "positive_test_cases",
         "negative_test_cases",
     ));
-    
+
     suites.extend_from_slice(&[
         ("suite9_core_ext", "Positive Tests", "Negative Tests"),
         ("suite10_boolean", "Positive Tests", "Negative Tests"),

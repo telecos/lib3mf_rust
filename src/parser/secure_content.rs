@@ -742,8 +742,7 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
                         .enumerate()
                         .find(|(idx, _)| {
                             if *idx < secure_content.consumers.len() {
-                                secure_content.consumers[*idx].consumer_id
-                                    == TEST_CONSUMER_ID
+                                secure_content.consumers[*idx].consumer_id == TEST_CONSUMER_ID
                             } else {
                                 false
                             }
@@ -793,7 +792,10 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
                 secure_content,
             )
             .map_err(|e| {
-                Error::InvalidSecureContent(format!("Failed to decrypt file '{}': {}", display_path, e))
+                Error::InvalidSecureContent(format!(
+                    "Failed to decrypt file '{}': {}",
+                    display_path, e
+                ))
             })?
         }
         #[cfg(not(feature = "crypto"))]
@@ -801,7 +803,8 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
             return Err(Error::InvalidSecureContent(
                 "Decryption requires the 'crypto' feature to be enabled. \
                  Rebuild with --features crypto to enable test key decryption, \
-                 or provide a custom KeyProvider.".to_string()
+                 or provide a custom KeyProvider."
+                    .to_string(),
             ));
         }
     };
