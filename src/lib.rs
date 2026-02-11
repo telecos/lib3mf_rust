@@ -64,7 +64,9 @@
 //!
 //! ## Mesh Slicing Example
 //!
-//! ```no_run
+//! Requires the `mesh-ops` feature (enabled by default).
+//!
+//! ```ignore
 //! use lib3mf::{collect_intersection_segments, assemble_contours, Mesh, Vertex, Triangle};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,7 +99,9 @@ pub mod mesh_ops;
 pub mod model;
 pub mod opc;
 pub mod parser;
+#[cfg(feature = "polygon-ops")]
 pub mod polygon_clipping;
+#[cfg(feature = "polygon-ops")]
 pub mod polygon_triangulation;
 pub mod streaming;
 pub mod validator;

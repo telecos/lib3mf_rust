@@ -73,6 +73,33 @@ lib3mf = { version = "0.1", features = ["mesh-ops"] }
 
 **Note:** Some examples require this feature: `calculate_normals`, `mesh_analysis`, `mesh_slicing_demo`, `mesh_subdivision`.
 
+#### Polygon Operations Feature (Default)
+
+The `polygon-ops` feature enables polygon clipping and triangulation operations using the clipper2 and earcutr libraries. This feature is **enabled by default** and provides:
+
+- Polygon boolean operations (union, intersection, difference, XOR)
+- Self-intersection resolution for slice polygons
+- Ear-clipping triangulation of polygons with or without holes
+
+**When to disable:**
+- You parse/write 3MF files without processing slice polygon data
+- You don't need polygon clipping or triangulation operations
+- You want to minimize compilation time and dependency tree
+
+To disable (reduces dependencies):
+```toml
+[dependencies]
+lib3mf = { version = "0.1", default-features = false }
+```
+
+To explicitly enable:
+```toml
+[dependencies]
+lib3mf = { version = "0.1", features = ["polygon-ops"] }
+```
+
+**Note:** Some examples require this feature: `polygon_clipping_demo`, `polygon_triangulation_demo`.
+
 #### Crypto Feature
 
 The `crypto` feature enables decryption support for the Secure Content extension. This pulls in cryptographic dependencies (rsa, aes-gcm, base64, flate2, sha1, sha2) required for decrypting encrypted 3MF files using test keys.

@@ -7,6 +7,7 @@ mod infrastructure {
     pub mod custom_extensions;
     pub mod extension_registry;
     pub mod extension_support;
+    #[cfg(feature = "mesh-ops")]
     pub mod mesh_operations;
     pub mod post_parse_hooks;
     pub mod texture_paths;

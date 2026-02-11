@@ -15,6 +15,7 @@ mod extensions {
 
     pub mod slice {
         pub mod integration;
+        #[cfg(feature = "mesh-ops")]
         pub mod mesh_operations;
     }
 
