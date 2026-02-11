@@ -26,11 +26,13 @@ exclude = [
 ]
 
 [features]
-default = []
+default = ["mesh-ops"]
 # Enable this feature in CI to run tests that require external test_suites folder
 ci = []
 # Enable cryptographic support for SecureContent extension decryption
 crypto = ["dep:rsa", "dep:aes-gcm", "dep:base64", "dep:flate2", "dep:sha1", "dep:sha2"]
+# Enable advanced mesh operations (volume, AABB, validation, subdivision, slicing)
+mesh-ops = ["dep:parry3d", "dep:nalgebra"]
 
 [dependencies]
 zip = "7.2"
@@ -44,8 +46,9 @@ flate2 = { version = "1.1", optional = true }
 sha1 = { version = "0.10", optional = true }
 sha2 = { version = "0.10", optional = true }
 urlencoding = "2.1"
-parry3d = "0.26"
-nalgebra = "0.34"
+# Geometry dependencies for advanced mesh operations (optional, enabled via 'mesh-ops' feature)
+parry3d = { version = "0.26", optional = true }
+nalgebra = { version = "0.34", optional = true }
 clipper2 = "0.5"
 earcutr = "0.5"
 

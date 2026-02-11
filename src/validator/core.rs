@@ -1,6 +1,7 @@
 //! Core validation functions for 3MF models
 
 use crate::error::{Error, Result};
+#[cfg(feature = "mesh-ops")]
 use crate::mesh_ops;
 use crate::model::{Extension, Model};
 use std::collections::HashSet;
@@ -556,6 +557,7 @@ pub(crate) fn validate_transform_matrices(model: &Model) -> Result<()> {
 ///
 /// Uses signed volume calculation to detect inverted meshes.
 /// Skips validation for sliced objects where mesh orientation doesn't matter.
+#[cfg(feature = "mesh-ops")]
 pub(crate) fn validate_mesh_volume(model: &Model) -> Result<()> {
     for object in &model.resources.objects {
         // Skip mesh volume validation for sliced objects
@@ -580,6 +582,16 @@ pub(crate) fn validate_mesh_volume(model: &Model) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Validates mesh volume is positive (not inverted) - stub when mesh-ops is disabled
+///
+/// When the mesh-ops feature is disabled, this validation is skipped since it requires
+/// the parry3d dependency for volume calculation.
+#[cfg(not(feature = "mesh-ops"))]
+pub(crate) fn validate_mesh_volume(_model: &Model) -> Result<()> {
+    // Volume validation requires mesh-ops feature
     Ok(())
 }
 
