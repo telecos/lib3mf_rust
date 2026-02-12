@@ -37,7 +37,7 @@ mesh-ops = ["dep:parry3d", "dep:nalgebra"]
 polygon-ops = ["dep:clipper2", "dep:earcutr"]
 
 [dependencies]
-zip = "7.2"
+zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 quick-xml = "0.39"
 thiserror = "2.0"
 # Cryptographic dependencies for SecureContent decryption (optional, enabled via 'crypto' feature)
@@ -57,7 +57,7 @@ earcutr = { version = "0.5", optional = true }
 
 [dev-dependencies]
 tempfile = "3.25"
-zip = "7.2"
+zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 walkdir = "2.5"
 libtest-mimic = "0.8"
 criterion = "0.8"
