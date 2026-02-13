@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Minimized zip crate dependency** — Reduced dependency footprint by disabling
+  all default zip features and enabling only `deflate-flate2-zlib-rs`. This uses
+  pure Rust DEFLATE compression (via `zlib-rs`) instead of the full feature set
+  (which includes bzip2, lzma, zstd, xz, and aes-crypto). Uses version "7" to
+  allow flexibility for patch and minor updates. This change reduces dependency
+  conflicts with third-party crates that use minimal zip features.
+
 ### Added
 - Documentation improvements:
   - Added CONTRIBUTING.md with contribution guidelines
