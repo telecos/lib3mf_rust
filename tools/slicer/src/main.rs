@@ -42,7 +42,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load configuration
     println!("Loading configuration from: {}", args.config_file.display());
-    let config = SlicerConfig::from_file(args.config_file.to_str().unwrap())?;
+    let config_path = args
+        .config_file
+        .to_str()
+        .ok_or("Invalid UTF-8 in config file path")?;
+    let config = SlicerConfig::from_file(config_path)?;
     println!("Configuration loaded successfully.\n");
 
     // Create slicer
