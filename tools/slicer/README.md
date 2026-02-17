@@ -273,6 +273,44 @@ The printable box defines the world-space region to slice. Image dimensions are 
 
 Objects are positioned according to their build item transforms, and only objects that intersect with the current Z layer are processed for that layer.
 
+## Sample Configurations
+
+The `samples/` directory contains example configurations demonstrating various slicing scenarios:
+
+### 1. Pyramid - Beam Lattice Structure
+
+Location: `samples/pyramid/`
+
+Demonstrates slicing of beam lattice structures with:
+- Cylindrical beams with circular cross-sections
+- Tapered beams with interpolated radii
+- Ball joints at vertices
+- 58 contours at base (Z=0), 6 at apex (Z=100mm)
+
+See `samples/pyramid/README.md` for detailed information.
+
+### 2. Cube Gears - Standard Mesh Geometry
+
+Location: `samples/cube_gears/`
+
+Standard mesh slicing example.
+
+### 3. Multiple Textures - Material Support
+
+Location: `samples/multipletextures/`
+
+Demonstrates material and texture handling.
+
+To run any sample:
+
+```bash
+cargo build --release
+../../target/release/lib3mf-slicer \
+    samples/<sample_name>/<model>.3mf \
+    samples/<sample_name>/config.json \
+    -o samples/<sample_name>/output
+```
+
 ## Dependencies
 
 - **lib3mf**: 3MF file parsing and mesh operations
