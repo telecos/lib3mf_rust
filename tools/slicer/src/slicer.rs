@@ -8,6 +8,10 @@ use lib3mf::{BuildItem, Mesh, Model, Object, Vertex, assemble_contours};
 use std::path::Path;
 use thiserror::Error;
 
+/// Minimum acceptable value for transform scale components
+/// Values below this threshold are considered degenerate
+const MIN_TRANSFORM_SCALE: f64 = 1e-10;
+
 /// Slicer errors
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]
@@ -730,7 +734,7 @@ impl Slicer {
         let object_z = if let Some(t) = transform {
             let tz = t[11];  // Z translation
             let m22 = t[8];   // Z scale/rotation component
-            if m22.abs() < 1e-10 {
+            if m22.abs() < MIN_TRANSFORM_SCALE {
                 // Degenerate transform - can't compute object Z
                 return Ok((Vec::new(), Vec::new()));
             }
@@ -810,7 +814,8 @@ impl Slicer {
 
         // For now, we don't generate colored contours from slice stacks
         // as they don't carry per-vertex color information
-        // TODO: Could use object's material properties for border coloring
+        // The _color_resolver parameter is kept for future use when implementing
+        // material-based border coloring for slice stacks
         let colored_contours = Vec::new();
 
         Ok((fill_contours, colored_contours))
