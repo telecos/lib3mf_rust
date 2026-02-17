@@ -7,6 +7,7 @@
 
 mod color;
 mod config;
+mod displacement;
 mod renderer;
 mod slicer;
 
