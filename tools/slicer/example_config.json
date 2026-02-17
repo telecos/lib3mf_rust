@@ -1,0 +1,28 @@
+{
+  "slice_thickness_um": 50,
+  "printable_box": {
+    "origin": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "end": {
+      "x": 200.0,
+      "y": 200.0,
+      "z": 200.0
+    }
+  },
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "key_file": null,
+  "spec_support": {
+    "meshes": true,
+    "materials": true,
+    "beam_lattice": true,
+    "boolean_ops": true,
+    "displacement": true,
+    "slice_extension": true
+  }
+}
