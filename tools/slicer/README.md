@@ -10,8 +10,8 @@ A command-line tool for slicing 3MF (3D Manufacturing Format) files into 2D imag
 - Materials and surface colors
 - Boolean operations
 - Beam lattice structures
-- **Displacement maps** (NEW!)
-- Slice extension data
+- **Displacement maps**
+- **Slice stacks** (pre-computed slice data) (NEW!)
 - Encrypted content (with optional crypto feature)
 
 ## Visual Examples
@@ -323,13 +323,31 @@ Demonstrates slicing of beam lattice structures with:
 
 See `samples/pyramid/README.md` for detailed information.
 
-### 2. Cube Gears - Standard Mesh Geometry
+### 2. Box with Slice Stack - Slice Extension
+
+Location: `samples/box_sliced/`
+
+Demonstrates the slicer's ability to work with pre-computed slice data from the Slice extension:
+- Object references a slice stack instead of computing slices from mesh
+- 378 pre-computed slices at 0.08mm intervals
+- Build item transforms correctly applied to 2D slice vertices
+- World-space to object-space Z coordinate conversion
+
+Key features demonstrated:
+- **Slice stack detection**: Automatically uses pre-computed slices when available
+- **Transform handling**: Applies affine transforms to slice vertices
+- **Z-coordinate mapping**: Converts between world and object coordinate systems
+- **Efficient slicing**: No mesh intersection computation needed
+
+See `samples/box_sliced/README.md` for detailed information about slice stack processing.
+
+### 3. Cube Gears - Standard Mesh Geometry
 
 Location: `samples/cube_gears/`
 
 Standard mesh slicing example.
 
-### 3. Multiple Textures - Material Support
+### 4. Multiple Textures - Material Support
 
 Location: `samples/multipletextures/`
 
