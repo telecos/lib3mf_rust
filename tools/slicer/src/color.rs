@@ -12,8 +12,8 @@ use std::path::Path;
 /// RGBA color as [r, g, b, a]
 pub type Rgba = [u8; 4];
 
-/// Default color when no material is assigned (mid-gray, fully opaque)
-pub const DEFAULT_COLOR: Rgba = [128, 128, 128, 255];
+/// Default color when no material is assigned (black, fully opaque)
+pub const DEFAULT_COLOR: Rgba = [0, 0, 0, 255];
 
 /// Information about a property group
 enum PropertyGroup {
