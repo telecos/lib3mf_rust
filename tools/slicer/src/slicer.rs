@@ -288,7 +288,12 @@ impl Slicer {
 
                 if let Some(object) = object {
                     // Check if object intersects with current Z layer
-                    if self.object_intersects_z_layer(object, build_item, z, &displacement_handler)? {
+                    if self.object_intersects_z_layer(
+                        object,
+                        build_item,
+                        z,
+                        &displacement_handler,
+                    )? {
                         // Extract and transform contours for this object
                         let (contours, colored) = self.slice_object_at_z_with_color(
                             object,

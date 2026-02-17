@@ -5,7 +5,7 @@
 
 use image::GrayImage;
 use lib3mf::{
-    Disp2DGroup, Displacement2D, DisplacementMesh, Mesh, Model, NormVectorGroup, Vertex, Triangle,
+    Disp2DGroup, Displacement2D, DisplacementMesh, Mesh, Model, NormVectorGroup, Triangle, Vertex,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -221,9 +221,10 @@ impl DisplacementHandler {
                 let mut found = false;
 
                 if let Ok(mut entry) = archive.by_name(normalized)
-                    && std::io::copy(&mut entry, &mut buf).is_ok() {
-                        found = true;
-                    }
+                    && std::io::copy(&mut entry, &mut buf).is_ok()
+                {
+                    found = true;
+                }
 
                 if !found {
                     eprintln!(
@@ -252,10 +253,7 @@ impl DisplacementHandler {
             }
         }
 
-        println!(
-            "  Loaded {} displacement texture(s)",
-            textures.len()
-        );
+        println!("  Loaded {} displacement texture(s)", textures.len());
 
         textures
     }
