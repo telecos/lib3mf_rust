@@ -144,7 +144,7 @@ fn run_slice_test(test_case: &SliceTestCase) {
         let generated_slice = slice_files
             .iter()
             .find(|path| path.file_name().unwrap().to_str().unwrap().ends_with(&z_str))
-            .expect(&format!("Could not find generated slice at Z={}", z_height));
+            .unwrap_or_else(|| panic!("Could not find generated slice at Z={}", z_height));
         
         let reference_slice = reference_dir.join(reference_filename);
         
@@ -157,7 +157,7 @@ fn run_slice_test(test_case: &SliceTestCase) {
             .expect("Failed to load generated image")
             .to_rgb8();
         let reference_img = open(&reference_slice)
-            .expect(&format!("Failed to load reference image: {}", reference_slice.display()))
+            .unwrap_or_else(|_| panic!("Failed to load reference image: {}", reference_slice.display()))
             .to_rgb8();
         
         // Compare dimensions
