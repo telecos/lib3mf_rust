@@ -8,17 +8,17 @@ use thiserror::Error;
 pub struct SlicerConfig {
     /// Slice thickness in micrometers
     pub slice_thickness_um: f64,
-    
+
     /// Printable box definition
     pub printable_box: PrintableBox,
-    
+
     /// Resolution for generated slice images
     pub resolution: Resolution,
-    
+
     /// Optional path to public key file for encrypted 3MF files
     #[serde(default)]
     pub key_file: Option<String>,
-    
+
     /// Optional specification support configuration
     #[serde(default)]
     pub spec_support: Option<SpecSupport>,
@@ -29,7 +29,7 @@ pub struct SlicerConfig {
 pub struct PrintableBox {
     /// Origin point (min corner) in mm
     pub origin: Point3D,
-    
+
     /// End point (max corner) in mm
     pub end: Point3D,
 }
@@ -47,7 +47,7 @@ pub struct Point3D {
 pub struct Resolution {
     /// Width in pixels
     pub width: u32,
-    
+
     /// Height in pixels
     pub height: u32,
 }
@@ -58,23 +58,23 @@ pub struct SpecSupport {
     /// Enable mesh support (default: true)
     #[serde(default = "default_true")]
     pub meshes: bool,
-    
+
     /// Enable materials support (default: true)
     #[serde(default = "default_true")]
     pub materials: bool,
-    
+
     /// Enable beam lattice support (default: true)
     #[serde(default = "default_true")]
     pub beam_lattice: bool,
-    
+
     /// Enable boolean operations support (default: true)
     #[serde(default = "default_true")]
     pub boolean_ops: bool,
-    
+
     /// Enable displacement maps support (default: true)
     #[serde(default = "default_true")]
     pub displacement: bool,
-    
+
     /// Enable slice extension support (default: true)
     #[serde(default = "default_true")]
     pub slice_extension: bool,
@@ -93,7 +93,7 @@ impl PrintableBox {
             self.end.z - self.origin.z,
         )
     }
-    
+
     /// Get the Z range (min, max) in mm
     pub fn z_range(&self) -> (f64, f64) {
         (self.origin.z, self.end.z)
@@ -105,16 +105,16 @@ impl PrintableBox {
 pub enum ConfigError {
     #[error("Invalid slice thickness: {0} (must be positive)")]
     InvalidSliceThickness(f64),
-    
+
     #[error("Invalid printable box: origin must be less than end in all dimensions")]
     InvalidPrintableBox,
-    
+
     #[error("Invalid resolution: {0}x{1} (both dimensions must be positive)")]
     InvalidResolution(u32, u32),
-    
+
     #[error("Failed to parse JSON config: {0}")]
     JsonError(#[from] serde_json::Error),
-    
+
     #[error("Failed to read config file: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -127,14 +127,14 @@ impl SlicerConfig {
         config.validate()?;
         Ok(config)
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
         // Validate slice thickness
         if self.slice_thickness_um <= 0.0 {
             return Err(ConfigError::InvalidSliceThickness(self.slice_thickness_um));
         }
-        
+
         // Validate printable box
         if self.printable_box.origin.x >= self.printable_box.end.x
             || self.printable_box.origin.y >= self.printable_box.end.y
@@ -142,7 +142,7 @@ impl SlicerConfig {
         {
             return Err(ConfigError::InvalidPrintableBox);
         }
-        
+
         // Validate resolution
         if self.resolution.width == 0 || self.resolution.height == 0 {
             return Err(ConfigError::InvalidResolution(
@@ -150,10 +150,10 @@ impl SlicerConfig {
                 self.resolution.height,
             ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Get slice thickness in millimeters
     pub fn slice_thickness_mm(&self) -> f64 {
         self.slice_thickness_um / 1000.0
@@ -163,36 +163,58 @@ impl SlicerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_config_validation() {
         let config = SlicerConfig {
             slice_thickness_um: 50.0,
             printable_box: PrintableBox {
-                origin: Point3D { x: 0.0, y: 0.0, z: 0.0 },
-                end: Point3D { x: 200.0, y: 200.0, z: 200.0 },
+                origin: Point3D {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                end: Point3D {
+                    x: 200.0,
+                    y: 200.0,
+                    z: 200.0,
+                },
             },
-            resolution: Resolution { width: 1920, height: 1080 },
+            resolution: Resolution {
+                width: 1920,
+                height: 1080,
+            },
             key_file: None,
             spec_support: None,
         };
-        
+
         assert!(config.validate().is_ok());
     }
-    
+
     #[test]
     fn test_invalid_slice_thickness() {
         let config = SlicerConfig {
             slice_thickness_um: -10.0,
             printable_box: PrintableBox {
-                origin: Point3D { x: 0.0, y: 0.0, z: 0.0 },
-                end: Point3D { x: 200.0, y: 200.0, z: 200.0 },
+                origin: Point3D {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                end: Point3D {
+                    x: 200.0,
+                    y: 200.0,
+                    z: 200.0,
+                },
             },
-            resolution: Resolution { width: 1920, height: 1080 },
+            resolution: Resolution {
+                width: 1920,
+                height: 1080,
+            },
             key_file: None,
             spec_support: None,
         };
-        
+
         assert!(config.validate().is_err());
     }
 }

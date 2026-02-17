@@ -51,7 +51,7 @@ impl SliceRenderer {
         // Calculate scale to fit the printable box in the image
         let scale_x = width as f64 / box_width;
         let scale_y = height as f64 / box_height;
-        
+
         Self {
             width,
             height,
@@ -61,18 +61,18 @@ impl SliceRenderer {
             offset_y: box_origin_y,
         }
     }
-    
+
     /// Transform a world coordinate to image pixel coordinate
     fn world_to_pixel(&self, x: f64, y: f64) -> (i32, i32) {
         let px = ((x - self.offset_x) * self.scale_x) as i32;
         let py = ((y - self.offset_y) * self.scale_y) as i32;
-        
+
         // Flip Y coordinate (image Y goes down, world Y goes up)
         let py = self.height as i32 - 1 - py;
-        
+
         (px, py)
     }
-    
+
     /// Render contours to a PNG image
     pub fn render_to_file(
         &self,
@@ -80,57 +80,57 @@ impl SliceRenderer {
         output_path: &Path,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut img = RgbImage::new(self.width, self.height);
-        
+
         // Fill with white background
         for pixel in img.pixels_mut() {
             *pixel = Rgb([255, 255, 255]);
         }
-        
+
         // Render each contour
         for contour in contours {
             self.render_contour(&mut img, contour);
         }
-        
+
         img.save(output_path)?;
         Ok(())
     }
-    
+
     /// Render a single contour (filled polygon)
     fn render_contour(&self, img: &mut RgbImage, contour: &SliceContour) {
         if contour.points.len() < 3 {
             return; // Need at least 3 points for a polygon
         }
-        
+
         // Convert points to pixel coordinates
         let pixel_points: Vec<(i32, i32)> = contour
             .points
             .iter()
             .map(|p| self.world_to_pixel(p.x, p.y))
             .collect();
-        
+
         // Triangulate the polygon using earcutr
         let flat_coords: Vec<f64> = pixel_points
             .iter()
             .flat_map(|(x, y)| vec![*x as f64, *y as f64])
             .collect();
-        
+
         if flat_coords.len() < 6 {
             return;
         }
-        
+
         // Get triangle indices
         let indices = match earcutr::earcut(&flat_coords, &[], 2) {
             Ok(indices) => indices,
             Err(_) => return, // Skip malformed polygons
         };
-        
+
         // Render each triangle
         for triangle_indices in indices.chunks(3) {
             if triangle_indices.len() == 3 {
                 let i0 = triangle_indices[0];
                 let i1 = triangle_indices[1];
                 let i2 = triangle_indices[2];
-                
+
                 if i0 < pixel_points.len() && i1 < pixel_points.len() && i2 < pixel_points.len() {
                     self.fill_triangle(
                         img,
@@ -143,7 +143,7 @@ impl SliceRenderer {
             }
         }
     }
-    
+
     /// Fill a triangle using barycentric coordinates
     fn fill_triangle(
         &self,
@@ -158,24 +158,24 @@ impl SliceRenderer {
         let max_x = p0.0.max(p1.0).max(p2.0).min(self.width as i32 - 1);
         let min_y = p0.1.min(p1.1).min(p2.1).max(0);
         let max_y = p0.1.max(p1.1).max(p2.1).min(self.height as i32 - 1);
-        
+
         // Helper function for edge test
         let edge = |ax: i32, ay: i32, bx: i32, by: i32, px: i32, py: i32| -> i32 {
             (px - ax) * (by - ay) - (py - ay) * (bx - ax)
         };
-        
+
         // Rasterize triangle
         for y in min_y..=max_y {
             for x in min_x..=max_x {
                 let w0 = edge(p1.0, p1.1, p2.0, p2.1, x, y);
                 let w1 = edge(p2.0, p2.1, p0.0, p0.1, x, y);
                 let w2 = edge(p0.0, p0.1, p1.0, p1.1, x, y);
-                
+
                 // Point is inside triangle if all weights have same sign
-                if (w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0) {
-                    if let Some(pixel) = img.get_pixel_mut_checked(x as u32, y as u32) {
-                        *pixel = color;
-                    }
+                if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0))
+                    && let Some(pixel) = img.get_pixel_mut_checked(x as u32, y as u32)
+                {
+                    *pixel = color;
                 }
             }
         }
@@ -185,14 +185,14 @@ impl SliceRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_slice_renderer_creation() {
         let renderer = SliceRenderer::new(1920, 1080, 0.0, 0.0, 200.0, 200.0);
         assert_eq!(renderer.width, 1920);
         assert_eq!(renderer.height, 1080);
     }
-    
+
     #[test]
     fn test_world_to_pixel() {
         let renderer = SliceRenderer::new(1000, 1000, 0.0, 0.0, 100.0, 100.0);
