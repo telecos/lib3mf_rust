@@ -82,6 +82,7 @@ impl SliceRenderer {
         box_width: f64,
         box_height: f64,
     ) -> Self {
+        // Calculate scale to fit the printable box in the image
         let scale_x = width as f64 / box_width;
         let scale_y = height as f64 / box_height;
 

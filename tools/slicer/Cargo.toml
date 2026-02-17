@@ -27,6 +27,8 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = "3"
+earcutr = "0.5"
+thiserror = "2.0"
 
 [features]
 default = []
