@@ -170,6 +170,11 @@ fn write_resources<W: IoWrite>(writer: &mut Writer<W>, resources: &Resources) ->
         material::write_multi_properties(writer, multi)?;
     }
 
+    // Write displacement2d resources (displacement extension) - MUST come before disp2dgroup
+    for disp_map in &resources.displacement_maps {
+        displacement::write_displacement2d(writer, disp_map)?;
+    }
+
     // Write normvectorgroup resources (displacement extension)
     for group in &resources.norm_vector_groups {
         displacement::write_normvector_group(writer, group)?;

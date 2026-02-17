@@ -130,11 +130,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     model.resources.objects.push(object);
     model.build.items.push(BuildItem::new(1));
 
-    // Add displacement map (PNG texture)
+    // Add displacement map (PNG texture) - MUST be declared BEFORE Disp2DGroup
     let displacement_map = Displacement2D::new(1, "/3D/Textures/displacement.png".to_string());
     model.resources.displacement_maps.push(displacement_map);
 
-    // Add normal vector group (outward normals for each vertex)
+    // Add normal vector group - MUST be declared BEFORE Disp2DGroup
     let mut norm_group = NormVectorGroup::new(1);
     // Bottom face vertices point down
     norm_group.vectors.push(NormVector::new(0.0, 0.0, -1.0)); // 0
@@ -148,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0));  // 7
     model.resources.norm_vector_groups.push(norm_group);
 
-    // Add displacement coordinate group
+    // Add displacement coordinate group - must reference previously declared resources
     let mut disp_group = Disp2DGroup::new(1, 1, 1, 1.5); // height=1.5mm displacement
     disp_group.offset = 0.0;
     

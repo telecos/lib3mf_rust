@@ -168,7 +168,7 @@ impl DisplacementHandler {
             let v_sampled = 1.0 - apply_tile_style(v, disp_map.tilestylev);
 
             // Handle out-of-bounds after tiling (for None tile style)
-            if u_sampled < 0.0 || u_sampled > 1.0 || v_sampled < 0.0 || v_sampled > 1.0 {
+            if !(0.0..=1.0).contains(&u_sampled) || !(0.0..=1.0).contains(&v_sampled) {
                 return 0.0; // No displacement outside [0,1] for TileStyle::None
             }
 
@@ -220,11 +220,10 @@ impl DisplacementHandler {
                 let mut buf = Vec::new();
                 let mut found = false;
 
-                if let Ok(mut entry) = archive.by_name(normalized) {
-                    if std::io::copy(&mut entry, &mut buf).is_ok() {
+                if let Ok(mut entry) = archive.by_name(normalized)
+                    && std::io::copy(&mut entry, &mut buf).is_ok() {
                         found = true;
                     }
-                }
 
                 if !found {
                     eprintln!(
