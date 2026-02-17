@@ -33,7 +33,7 @@ pub(super) fn write_boolean_shape<W: IoWrite>(
 
     // Write boolean references (operands)
     for boolean_ref in &shape.operands {
-        let mut ref_elem = BytesStart::new("bool:booleanref");
+        let mut ref_elem = BytesStart::new("bool:boolean");
         ref_elem.push_attribute(("objectid", boolean_ref.objectid.to_string().as_str()));
 
         if let Some(ref path) = boolean_ref.path {
@@ -42,7 +42,7 @@ pub(super) fn write_boolean_shape<W: IoWrite>(
 
         writer
             .write_event(Event::Empty(ref_elem))
-            .map_err(|e| Error::xml_write(format!("Failed to write booleanref: {}", e)))?;
+            .map_err(|e| Error::xml_write(format!("Failed to write boolean element: {}", e)))?;
     }
 
     writer

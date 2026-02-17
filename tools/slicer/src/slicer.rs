@@ -55,6 +55,68 @@ fn transform_mesh(mesh: &Mesh, transform: &[f64; 12]) -> Mesh {
     transformed
 }
 
+/// Compose two 3x4 affine transforms: result = parent * child
+///
+/// In 3MF, transforms are applied from right to left: to transform a point,
+/// first apply the child transform, then the parent transform.
+///
+/// Transform matrices are stored as [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]
+/// representing:
+/// ```text
+/// | m00 m01 m02 tx |
+/// | m10 m11 m12 ty |
+/// | m20 m21 m22 tz |
+/// |   0   0   0  1 |
+/// ```
+fn compose_transforms(parent: &[f64; 12], child: &[f64; 12]) -> [f64; 12] {
+    // Extract parent matrix components
+    let p = parent;
+    // Extract child matrix components
+    let c = child;
+
+    // Multiply the 3x3 rotation/scale parts: result_rot = parent_rot * child_rot
+    let m00 = p[0] * c[0] + p[1] * c[3] + p[2] * c[6];
+    let m01 = p[0] * c[1] + p[1] * c[4] + p[2] * c[7];
+    let m02 = p[0] * c[2] + p[1] * c[5] + p[2] * c[8];
+
+    let m10 = p[3] * c[0] + p[4] * c[3] + p[5] * c[6];
+    let m11 = p[3] * c[1] + p[4] * c[4] + p[5] * c[7];
+    let m12 = p[3] * c[2] + p[4] * c[5] + p[5] * c[8];
+
+    let m20 = p[6] * c[0] + p[7] * c[3] + p[8] * c[6];
+    let m21 = p[6] * c[1] + p[7] * c[4] + p[8] * c[7];
+    let m22 = p[6] * c[2] + p[7] * c[5] + p[8] * c[8];
+
+    // Transform child's translation by parent's rotation/scale, then add parent's translation
+    let tx = p[0] * c[9] + p[1] * c[10] + p[2] * c[11] + p[9];
+    let ty = p[3] * c[9] + p[4] * c[10] + p[5] * c[11] + p[10];
+    let tz = p[6] * c[9] + p[7] * c[10] + p[8] * c[11] + p[11];
+
+    [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]
+}
+
+/// Merge another mesh into this mesh, combining vertices and triangles
+fn merge_meshes(base: &mut Mesh, other: &Mesh) {
+    let vertex_offset = base.vertices.len();
+
+    // Add vertices from other mesh
+    base.vertices.extend(other.vertices.iter().cloned());
+
+    // Add triangles from other mesh, adjusting indices
+    for tri in &other.triangles {
+        base.triangles.push(lib3mf::Triangle {
+            v1: tri.v1 + vertex_offset,
+            v2: tri.v2 + vertex_offset,
+            v3: tri.v3 + vertex_offset,
+            pid: tri.pid,
+            p1: tri.p1,
+            p2: tri.p2,
+            p3: tri.p3,
+            pindex: tri.pindex,
+        });
+    }
+}
+
 /// Compute beam-plane intersection for a cylindrical beam
 /// Returns the circle center in 2D and interpolated radius if the beam crosses the Z plane
 ///
@@ -197,6 +259,142 @@ impl Slicer {
         Ok(model)
     }
 
+    /// Recursively resolve mesh from an object, handling component hierarchies
+    ///
+    /// This function traverses component references and combines meshes from the entire
+    /// hierarchy, applying transforms at each level.
+    ///
+    /// # Arguments
+    /// * `object` - The object to resolve
+    /// * `model` - The model containing all objects
+    /// * `accumulated_transform` - Transform accumulated from parent levels
+    /// * `visited` - Set of visited object IDs to detect circular references
+    /// * `displacement_handler` - Handler for displacement mesh conversion
+    /// * `warned_booleans` - Set of object IDs for which boolean warnings have been shown
+    fn resolve_object_mesh_recursive(
+        &self,
+        object: &Object,
+        model: &Model,
+        accumulated_transform: &Option<[f64; 12]>,
+        visited: &mut std::collections::HashSet<usize>,
+        displacement_handler: &DisplacementHandler,
+        warned_booleans: &mut std::collections::HashSet<usize>,
+    ) -> Result<Option<Mesh>, SlicerError> {
+        // Detect circular references
+        if visited.contains(&object.id) {
+            return Ok(None); // Skip circular references
+        }
+        visited.insert(object.id);
+
+        // Check if this object has a boolean shape definition
+        // Boolean operations (CSG) require advanced mesh processing capabilities
+        // that are not yet implemented in this slicer
+        if let Some(ref bool_shape) = object.boolean_shape {
+            if !warned_booleans.contains(&object.id) {
+                println!(
+                    "  Warning: Object {} has boolean shape (operation: {:?}) which is not yet supported by the slicer.",
+                    object.id, bool_shape.operation
+                );
+                println!(
+                    "  Boolean operations will be ignored and only the base mesh will be sliced."
+                );
+                warned_booleans.insert(object.id);
+            }
+
+            // For now, just resolve the base object mesh without boolean operations
+            if let Some(base_obj) = model
+                .resources
+                .objects
+                .iter()
+                .find(|obj| obj.id == bool_shape.objectid)
+            {
+                visited.remove(&object.id);
+                return self.resolve_object_mesh_recursive(
+                    base_obj,
+                    model,
+                    accumulated_transform,
+                    visited,
+                    displacement_handler,
+                    warned_booleans,
+                );
+            }
+        }
+
+        // If the object has a direct mesh, use it
+        if let Some(ref mesh) = object.mesh {
+            let mesh_to_use = mesh.clone();
+            // Apply accumulated transform if present
+            let final_mesh = if let Some(transform) = accumulated_transform {
+                transform_mesh(&mesh_to_use, transform)
+            } else {
+                mesh_to_use
+            };
+            visited.remove(&object.id);
+            return Ok(Some(final_mesh));
+        }
+
+        // If the object has a displacement mesh, convert and use it
+        if let Some(ref disp_mesh) = object.displacement_mesh {
+            let mesh_to_use = displacement_handler.apply_displacement(disp_mesh);
+            // Apply accumulated transform if present
+            let final_mesh = if let Some(transform) = accumulated_transform {
+                transform_mesh(&mesh_to_use, transform)
+            } else {
+                mesh_to_use
+            };
+            visited.remove(&object.id);
+            return Ok(Some(final_mesh));
+        }
+
+        // Otherwise, recursively resolve and combine meshes from all components
+        if !object.components.is_empty() {
+            let mut combined_mesh = Mesh {
+                vertices: Vec::new(),
+                triangles: Vec::new(),
+                beamset: None,
+            };
+
+            for component in &object.components {
+                // Find the referenced object
+                if let Some(ref_object) = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|obj| obj.id == component.objectid)
+                {
+                    // Compose transforms: accumulated * component
+                    let new_transform = match (accumulated_transform, &component.transform) {
+                        (Some(acc), Some(comp)) => Some(compose_transforms(acc, comp)),
+                        (Some(acc), None) => Some(*acc),
+                        (None, Some(comp)) => Some(*comp),
+                        (None, None) => None,
+                    };
+
+                    // Recursively resolve the component's mesh
+                    if let Some(comp_mesh) = self.resolve_object_mesh_recursive(
+                        ref_object,
+                        model,
+                        &new_transform,
+                        visited,
+                        displacement_handler,
+                        warned_booleans,
+                    )? {
+                        merge_meshes(&mut combined_mesh, &comp_mesh);
+                    }
+                }
+            }
+
+            visited.remove(&object.id);
+            if combined_mesh.vertices.is_empty() {
+                return Ok(None);
+            }
+            return Ok(Some(combined_mesh));
+        }
+
+        visited.remove(&object.id);
+        Ok(None)
+    }
+
     /// Slice a model and generate output images
     pub fn slice_model(
         &self,
@@ -270,6 +468,9 @@ impl Slicer {
 
         let mut output_files = Vec::new();
 
+        // Track which objects have shown boolean warnings to avoid duplicates
+        let mut warned_booleans = std::collections::HashSet::new();
+
         // Generate each slice
         for layer_idx in 0..num_layers {
             let z = z_min + (layer_idx as f64) * layer_height;
@@ -293,6 +494,8 @@ impl Slicer {
                         build_item,
                         z,
                         &displacement_handler,
+                        model,
+                        &mut warned_booleans,
                     )? {
                         // Extract and transform contours for this object
                         let (contours, colored) = self.slice_object_at_z_with_color(
@@ -301,6 +504,8 @@ impl Slicer {
                             z,
                             &color_resolver,
                             &displacement_handler,
+                            model,
+                            &mut warned_booleans,
                         )?;
                         all_contours.extend(contours);
                         all_colored_contours.extend(colored);
@@ -350,35 +555,36 @@ impl Slicer {
         build_item: &BuildItem,
         z: f64,
         displacement_handler: &DisplacementHandler,
+        model: &Model,
+        warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<bool, SlicerError> {
-        // Get the mesh from the object (either regular or displacement)
-        let mesh = if let Some(ref disp_mesh) = object.displacement_mesh {
-            // Convert displacement mesh to regular mesh
-            displacement_handler.apply_displacement(disp_mesh)
-        } else if let Some(ref m) = object.mesh {
-            m.clone()
-        } else {
-            return Ok(false); // No mesh, no intersection
+        // Recursively resolve mesh from object (handles components and hierarchy)
+        let mut visited = std::collections::HashSet::new();
+        let mesh_option = self.resolve_object_mesh_recursive(
+            object,
+            model,
+            &build_item.transform,
+            &mut visited,
+            displacement_handler,
+            warned_booleans,
+        )?;
+
+        let mesh = match mesh_option {
+            Some(m) => m,
+            None => return Ok(false), // No mesh, no intersection
         };
 
         if mesh.vertices.is_empty() {
             return Ok(false);
         }
 
-        // Calculate bounding box in object's local space
+        // Calculate bounding box in world space (mesh is already transformed)
         let mut min_z = f64::INFINITY;
         let mut max_z = f64::NEG_INFINITY;
 
         for vertex in &mesh.vertices {
-            // Apply transform if present
-            let transformed = if let Some(transform) = &build_item.transform {
-                apply_transform(&[vertex.x, vertex.y, vertex.z], transform)
-            } else {
-                [vertex.x, vertex.y, vertex.z]
-            };
-
-            min_z = min_z.min(transformed[2]);
-            max_z = max_z.max(transformed[2]);
+            min_z = min_z.min(vertex.z);
+            max_z = max_z.max(vertex.z);
         }
 
         // Check if Z layer intersects the object's Z bounds
@@ -386,6 +592,7 @@ impl Slicer {
     }
 
     /// Slice an object at a given Z height and return transformed contours plus colored contours
+    #[allow(clippy::too_many_arguments)]
     fn slice_object_at_z_with_color(
         &self,
         object: &Object,
@@ -393,23 +600,27 @@ impl Slicer {
         z: f64,
         color_resolver: &ColorResolver,
         displacement_handler: &DisplacementHandler,
+        model: &Model,
+        warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
-        // Get the mesh from the object (either regular or displacement)
-        let mesh = if let Some(ref disp_mesh) = object.displacement_mesh {
-            // Convert displacement mesh to regular mesh
-            displacement_handler.apply_displacement(disp_mesh)
-        } else if let Some(ref m) = object.mesh {
-            m.clone()
-        } else {
-            return Ok((Vec::new(), Vec::new()));
+        // Recursively resolve mesh from object (handles components and hierarchy)
+        let mut visited = std::collections::HashSet::new();
+        let mesh_option = self.resolve_object_mesh_recursive(
+            object,
+            model,
+            &build_item.transform,
+            &mut visited,
+            displacement_handler,
+            warned_booleans,
+        )?;
+
+        let mesh = match mesh_option {
+            Some(m) => m,
+            None => return Ok((Vec::new(), Vec::new())),
         };
 
-        // If there's a transform, apply it to get the mesh in world space
-        let transformed_mesh = if let Some(transform) = &build_item.transform {
-            transform_mesh(&mesh, transform)
-        } else {
-            mesh.clone()
-        };
+        // Mesh is already transformed by resolve_object_mesh_recursive
+        let transformed_mesh = mesh.clone();
 
         // Collect plain segments for fill rendering (uses lib3mf)
         let mut plain_segments = lib3mf::collect_intersection_segments(&transformed_mesh, z);
@@ -429,7 +640,7 @@ impl Slicer {
         // Collect colored segments (iterate triangles directly)
         let colored_segments = self.collect_colored_segments(
             &transformed_mesh,
-            &mesh, // original mesh has the material properties
+            &transformed_mesh, // use transformed mesh for both
             z,
             object,
             color_resolver,
