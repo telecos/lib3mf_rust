@@ -13,8 +13,7 @@
     }
   },
   "resolution": {
-    "width": 1920,
-    "height": 1080
+    "dpi": 300
   },
   "key_file": null,
   "spec_support": {

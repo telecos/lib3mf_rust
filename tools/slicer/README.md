@@ -83,8 +83,7 @@ The configuration file is a JSON file with the following structure:
     }
   },
   "resolution": {
-    "width": 1920,
-    "height": 1080
+    "dpi": 300
   },
   "key_file": null,
   "spec_support": {
@@ -113,10 +112,11 @@ The configuration file is a JSON file with the following structure:
     - **x**, **y**, **z** (numbers): Coordinates in mm
   - All dimensions must be positive (end > origin)
 
-- **resolution** (object): Output image resolution
-  - **width** (number): Image width in pixels
-  - **height** (number): Image height in pixels
-  - Both must be positive integers
+- **resolution** (object): Output image resolution in DPI (dots per inch)
+  - **dpi** (number): Dots per inch for image generation
+  - Must be a positive integer
+  - Image dimensions are calculated automatically: `width = (box_width_mm / 25.4) * dpi`, `height = (box_height_mm / 25.4) * dpi`
+  - Example: `300` DPI for a 200x200mm box = 2362x2362 pixels
 
 #### Optional Parameters
 
@@ -163,8 +163,7 @@ Create a configuration file `config.json`:
     "end": {"x": 200, "y": 200, "z": 200}
   },
   "resolution": {
-    "width": 1920,
-    "height": 1080
+    "dpi": 300
   }
 }
 ```
@@ -177,7 +176,7 @@ lib3mf-slicer model.3mf config.json
 
 ### Example 2: High-Resolution Slicing
 
-For higher quality output:
+For higher quality output with finer details:
 
 ```json
 {
@@ -187,8 +186,7 @@ For higher quality output:
     "end": {"x": 100, "y": 100, "z": 150}
   },
   "resolution": {
-    "width": 3840,
-    "height": 2160
+    "dpi": 600
   }
 }
 ```
@@ -205,8 +203,7 @@ To disable certain features:
     "end": {"x": 200, "y": 200, "z": 200}
   },
   "resolution": {
-    "width": 1920,
-    "height": 1080
+    "dpi": 300
   },
   "spec_support": {
     "meshes": true,
@@ -224,18 +221,25 @@ To disable certain features:
 ### Slicing Algorithm
 
 1. **Model Loading**: Parse the 3MF file and extract all geometry
-2. **Layer Calculation**: Compute Z-heights for each layer based on slice thickness
-3. **Mesh Intersection**: For each layer, intersect all meshes with the Z-plane
-4. **Contour Assembly**: Collect intersection segments and assemble closed contours
-5. **Rasterization**: Triangulate polygons and render to PNG with specified resolution
+2. **Build Item Processing**: Process objects referenced in build items with their transforms
+3. **Layer Calculation**: Compute Z-heights for each layer based on slice thickness and printable box
+4. **Object Filtering**: For each layer, determine which objects intersect that Z-height
+5. **Mesh Transformation**: Apply affine transforms from build items to mesh vertices
+6. **Mesh Intersection**: For each object at current Z, intersect meshes with the Z-plane
+7. **Contour Assembly**: Collect intersection segments and assemble closed contours
+8. **Rasterization**: Triangulate polygons and render to PNG with calculated resolution (DPI-based)
 
 ### Coordinate System
 
 - **Input coordinates**: Millimeters (mm)
 - **Slice thickness**: Micrometers (μm)
-- **Output images**: Pixels (specified resolution)
+- **Output images**: Pixels (calculated from DPI and printable box size in mm)
 
-The printable box defines the world-space region to slice. The tool automatically scales this region to fit the output image resolution while maintaining aspect ratio.
+The printable box defines the world-space region to slice. Image dimensions are automatically calculated based on the printable box size and DPI resolution: 
+- Width (pixels) = (box_width_mm / 25.4) × DPI
+- Height (pixels) = (box_height_mm / 25.4) × DPI
+
+Objects are positioned according to their build item transforms, and only objects that intersect with the current Z layer are processed for that layer.
 
 ## Dependencies
 

@@ -775,7 +775,7 @@ cargo build --release --features crypto
 The slicer requires a JSON configuration file with:
 - Slice thickness in micrometers
 - Printable box dimensions (origin and end points in mm)
-- Output image resolution
+- Output image resolution in DPI (dots per inch)
 - Optional encryption key file path
 - Optional feature support flags
 
@@ -788,16 +788,15 @@ Example configuration:
     "end": { "x": 200.0, "y": 200.0, "z": 200.0 }
   },
   "resolution": {
-    "width": 1920,
-    "height": 1080
+    "dpi": 300
   }
 }
 ```
 
 The slicer generates PNG images for each slice layer, supporting:
-- Standard mesh geometries
+- Standard mesh geometries with affine transforms
 - Materials and surface colors
-- Multiple objects and components
+- Multiple objects positioned via build items
 - All major 3MF extensions
 
 See `tools/slicer/README.md` for complete documentation and examples.

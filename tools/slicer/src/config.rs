@@ -42,14 +42,11 @@ pub struct Point3D {
     pub z: f64,
 }
 
-/// Resolution for generated images
+/// Resolution for generated images in DPI (dots per inch)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Resolution {
-    /// Width in pixels
-    pub width: u32,
-
-    /// Height in pixels
-    pub height: u32,
+    /// DPI (dots per inch) for image generation
+    pub dpi: u32,
 }
 
 /// Specification support configuration
@@ -109,7 +106,7 @@ pub enum ConfigError {
     #[error("Invalid printable box: origin must be less than end in all dimensions")]
     InvalidPrintableBox,
 
-    #[error("Invalid resolution: {0}x{1} (both dimensions must be positive)")]
+    #[error("Invalid resolution: {0} DPI (must be positive)")]
     InvalidResolution(u32, u32),
 
     #[error("Failed to parse JSON config: {0}")]
@@ -144,11 +141,8 @@ impl SlicerConfig {
         }
 
         // Validate resolution
-        if self.resolution.width == 0 || self.resolution.height == 0 {
-            return Err(ConfigError::InvalidResolution(
-                self.resolution.width,
-                self.resolution.height,
-            ));
+        if self.resolution.dpi == 0 {
+            return Err(ConfigError::InvalidResolution(self.resolution.dpi, 0));
         }
 
         Ok(())
@@ -157,6 +151,20 @@ impl SlicerConfig {
     /// Get slice thickness in millimeters
     pub fn slice_thickness_mm(&self) -> f64 {
         self.slice_thickness_um / 1000.0
+    }
+
+    /// Calculate image width in pixels from printable box width (mm) and DPI
+    pub fn calculate_image_width(&self) -> u32 {
+        let width_mm = self.printable_box.end.x - self.printable_box.origin.x;
+        let width_inches = width_mm / 25.4; // Convert mm to inches
+        (width_inches * self.resolution.dpi as f64).round() as u32
+    }
+
+    /// Calculate image height in pixels from printable box height (mm) and DPI
+    pub fn calculate_image_height(&self) -> u32 {
+        let height_mm = self.printable_box.end.y - self.printable_box.origin.y;
+        let height_inches = height_mm / 25.4; // Convert mm to inches
+        (height_inches * self.resolution.dpi as f64).round() as u32
     }
 }
 
@@ -180,10 +188,7 @@ mod tests {
                     z: 200.0,
                 },
             },
-            resolution: Resolution {
-                width: 1920,
-                height: 1080,
-            },
+            resolution: Resolution { dpi: 300 },
             key_file: None,
             spec_support: None,
         };
@@ -207,10 +212,7 @@ mod tests {
                     z: 200.0,
                 },
             },
-            resolution: Resolution {
-                width: 1920,
-                height: 1080,
-            },
+            resolution: Resolution { dpi: 300 },
             key_file: None,
             spec_support: None,
         };

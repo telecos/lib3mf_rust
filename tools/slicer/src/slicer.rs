@@ -2,16 +2,14 @@
 
 use crate::config::SlicerConfig;
 use crate::renderer::{Point2D, SliceContour, SliceRenderer};
-use lib3mf::{Mesh, Model, Object, assemble_contours, collect_intersection_segments};
+use lib3mf::{BuildItem, Mesh, Model, Object, assemble_contours, collect_intersection_segments};
 use std::path::Path;
 use thiserror::Error;
 
 /// Slicer errors
 #[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)]
 pub enum SlicerError {
-    #[error("No objects found in 3MF model")]
-    NoObjects,
-
     #[error("Failed to load 3MF file: {0}")]
     LoadError(#[from] lib3mf::Error),
 
@@ -20,6 +18,33 @@ pub enum SlicerError {
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+}
+
+/// Apply a 3MF affine transform to a 3D point
+/// Transform is stored as 12 values: [m00, m01, m02, m10, m11, m12, m20, m21, m22, m30, m31, m32]
+/// This represents a 3x4 matrix in row-major order
+fn apply_transform(point: &[f64; 3], transform: &[f64; 12]) -> [f64; 3] {
+    let x =
+        transform[0] * point[0] + transform[1] * point[1] + transform[2] * point[2] + transform[3];
+    let y =
+        transform[4] * point[0] + transform[5] * point[1] + transform[6] * point[2] + transform[7];
+    let z = transform[8] * point[0]
+        + transform[9] * point[1]
+        + transform[10] * point[2]
+        + transform[11];
+    [x, y, z]
+}
+
+/// Transform an entire mesh by applying an affine transformation to all vertices
+fn transform_mesh(mesh: &Mesh, transform: &[f64; 12]) -> Mesh {
+    let mut transformed = mesh.clone();
+    for vertex in &mut transformed.vertices {
+        let transformed_point = apply_transform(&[vertex.x, vertex.y, vertex.z], transform);
+        vertex.x = transformed_point[0];
+        vertex.y = transformed_point[1];
+        vertex.z = transformed_point[2];
+    }
+    transformed
 }
 
 /// Main slicer structure
@@ -61,18 +86,17 @@ impl Slicer {
             self.config.printable_box.end.y,
             self.config.printable_box.end.z
         );
+
+        // Calculate image dimensions from printable box size and DPI
+        let image_width = self.config.calculate_image_width();
+        let image_height = self.config.calculate_image_height();
         println!(
-            "  Resolution: {}x{} pixels",
-            self.config.resolution.width, self.config.resolution.height
+            "  Resolution: {} DPI ({}x{} pixels)",
+            self.config.resolution.dpi, image_width, image_height
         );
 
-        // Extract all meshes from the model
-        let meshes = self.extract_meshes(model)?;
-        println!("  Found {} mesh(es)", meshes.len());
-
-        if meshes.is_empty() {
-            return Err(SlicerError::NoObjects);
-        }
+        // Process build items (objects that are actually part of the build)
+        println!("  Build items: {}", model.build.items.len());
 
         // Calculate z layers
         let (z_min, z_max) = self.config.printable_box.z_range();
@@ -90,8 +114,8 @@ impl Slicer {
         // Create renderer
         let (box_width, box_height, _) = self.config.printable_box.dimensions();
         let renderer = SliceRenderer::new(
-            self.config.resolution.width,
-            self.config.resolution.height,
+            image_width,
+            image_height,
             self.config.printable_box.origin.x,
             self.config.printable_box.origin.y,
             box_width,
@@ -104,18 +128,24 @@ impl Slicer {
         for layer_idx in 0..num_layers {
             let z = z_min + (layer_idx as f64) * layer_height;
 
-            // Collect contours from all meshes at this Z height
+            // Collect contours from all build items at this Z height
             let mut all_contours = Vec::new();
 
-            for mesh in &meshes {
-                let segments = collect_intersection_segments(mesh, z);
-                if !segments.is_empty() {
-                    let contours = assemble_contours(segments, 1e-6);
+            for build_item in &model.build.items {
+                // Find the referenced object
+                let object = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|obj| obj.id == build_item.objectid);
 
-                    for contour in contours {
-                        let points: Vec<Point2D> =
-                            contour.iter().map(|(x, y)| Point2D::new(*x, *y)).collect();
-                        all_contours.push(SliceContour::new(points));
+                if let Some(object) = object {
+                    // Check if object intersects with current Z layer
+                    if self.object_intersects_z_layer(object, build_item, z)? {
+                        // Extract and transform contours for this object
+                        if let Some(contours) = self.slice_object_at_z(object, build_item, z)? {
+                            all_contours.extend(contours);
+                        }
                     }
                 }
             }
@@ -149,35 +179,78 @@ impl Slicer {
         Ok(output_files)
     }
 
-    /// Extract all meshes from the model, respecting spec support configuration
-    fn extract_meshes(&self, model: &Model) -> Result<Vec<Mesh>, SlicerError> {
-        let mut meshes = Vec::new();
-        let spec_support = self.config.spec_support.as_ref();
+    /// Check if an object (with its transform) intersects a given Z layer
+    fn object_intersects_z_layer(
+        &self,
+        object: &Object,
+        build_item: &BuildItem,
+        z: f64,
+    ) -> Result<bool, SlicerError> {
+        // Get the mesh from the object
+        let mesh = match &object.mesh {
+            Some(m) => m,
+            None => return Ok(false), // No mesh, no intersection
+        };
 
-        // Check if meshes are enabled
-        let meshes_enabled = spec_support.is_none_or(|s| s.meshes);
-
-        if !meshes_enabled {
-            println!("  Mesh support disabled in configuration");
-            return Ok(meshes);
+        if mesh.vertices.is_empty() {
+            return Ok(false);
         }
 
-        // Extract meshes from all objects
-        for object in &model.resources.objects {
-            if let Some(mesh) = self.extract_mesh_from_object(object) {
-                meshes.push(mesh);
-            }
+        // Calculate bounding box in object's local space
+        let mut min_z = f64::INFINITY;
+        let mut max_z = f64::NEG_INFINITY;
+
+        for vertex in &mesh.vertices {
+            // Apply transform if present
+            let transformed = if let Some(transform) = &build_item.transform {
+                apply_transform(&[vertex.x, vertex.y, vertex.z], transform)
+            } else {
+                [vertex.x, vertex.y, vertex.z]
+            };
+
+            min_z = min_z.min(transformed[2]);
+            max_z = max_z.max(transformed[2]);
         }
 
-        // Note: Support for other formats (boolean ops, beam lattice, etc.)
-        // would be added here in future iterations. For now, we focus on basic meshes.
-
-        Ok(meshes)
+        // Check if Z layer intersects the object's Z bounds
+        Ok(z >= min_z && z <= max_z)
     }
 
-    /// Extract mesh from an object
-    fn extract_mesh_from_object(&self, object: &Object) -> Option<Mesh> {
-        object.mesh.clone()
+    /// Slice an object at a given Z height and return transformed contours
+    fn slice_object_at_z(
+        &self,
+        object: &Object,
+        build_item: &BuildItem,
+        z: f64,
+    ) -> Result<Option<Vec<SliceContour>>, SlicerError> {
+        // Get the mesh from the object
+        let mesh = match &object.mesh {
+            Some(m) => m,
+            None => return Ok(None),
+        };
+
+        // If there's a transform, we need to apply it to get the mesh in world space
+        let transformed_mesh = if let Some(transform) = &build_item.transform {
+            transform_mesh(mesh, transform)
+        } else {
+            mesh.clone()
+        };
+
+        // Slice the transformed mesh at the given Z
+        let segments = collect_intersection_segments(&transformed_mesh, z);
+        if segments.is_empty() {
+            return Ok(None);
+        }
+
+        let contours = assemble_contours(segments, 1e-6);
+        let mut result = Vec::new();
+
+        for contour in contours {
+            let points: Vec<Point2D> = contour.iter().map(|(x, y)| Point2D::new(*x, *y)).collect();
+            result.push(SliceContour::new(points));
+        }
+
+        Ok(Some(result))
     }
 
     /// Print model statistics
@@ -266,10 +339,7 @@ mod tests {
                     z: 200.0,
                 },
             },
-            resolution: Resolution {
-                width: 1920,
-                height: 1080,
-            },
+            resolution: Resolution { dpi: 300 },
             key_file: None,
             spec_support: None,
         };
