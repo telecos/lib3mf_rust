@@ -275,6 +275,7 @@ impl Slicer {
     /// * `visited` - Set of visited object IDs to detect circular references
     /// * `displacement_handler` - Handler for displacement mesh conversion
     /// * `warned_booleans` - Set of object IDs for which boolean warnings have been shown
+    #[allow(clippy::only_used_in_recursion)]
     fn resolve_object_mesh_recursive(
         &self,
         object: &Object,

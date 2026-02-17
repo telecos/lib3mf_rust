@@ -7,20 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Minimized zip crate dependency** — Reduced dependency footprint by disabling
-  all default zip features and enabling only `deflate-flate2-zlib-rs`. This uses
-  pure Rust DEFLATE compression (via `zlib-rs`) instead of the full feature set
-  (which includes bzip2, lzma, zstd, xz, and aes-crypto). Uses version "7" to
-  allow flexibility for patch and minor updates. This change reduces dependency
-  conflicts with third-party crates that use minimal zip features.
+## [0.1.4] - 2026-02-17
 
 ### Added
+- **Slice extension types re-exported from crate root** — `Slice`, `SlicePolygon`,
+  `SliceRef`, `SliceSegment`, `SliceStack`, and `Vertex2D` are now publicly
+  available via `use lib3mf::SliceStack` etc., enabling downstream tools
+  (such as `lib3mf-slicer`) to work with slice stack data without reaching into
+  internal modules.
+- **lib3mf-slicer tool** — New standalone CLI tool for slicing 3MF files into
+  2D layer images. Features include:
+  - Mesh-plane intersection slicing with configurable layer thickness
+  - Slice stack support (uses pre-computed slices from the Slice extension)
+  - Component hierarchy traversal with transform composition
+  - Beam lattice cross-section rendering
+  - Displacement map support
+  - Color/material-aware contour rendering
+  - Configurable printable box, resolution (DPI or pixel dimensions)
+  - PNG image output per layer
 - Documentation improvements:
   - Added CONTRIBUTING.md with contribution guidelines
   - Added CHANGELOG.md for tracking changes
   - Cleaned up non-standard implementation documentation
   - Reorganized viewer documentation
+
+### Changed
+- **Bumped zip dependency from 7.x to 8.x** — Updated to zip v8 with minimized
+  feature set (`deflate-flate2-zlib-rs` only) for pure Rust DEFLATE compression.
+  Reduces dependency footprint by excluding bzip2, lzma, zstd, xz, and
+  aes-crypto support. This also reduces dependency conflicts with third-party
+  crates that use minimal zip features.
+- **Bumped quick-xml from 0.39.0 to 0.39.1**.
 
 ## [0.1.3] - 2026-02-11
 
