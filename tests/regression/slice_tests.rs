@@ -57,11 +57,19 @@ fn run_slice_test(test_case: &SliceTestCase) {
     let slicer_dir = project_root.join("tools/slicer");
     
     // Check if the slicer binary exists, build it if not
-    let slicer_binary = if cfg!(debug_assertions) {
-        slicer_dir.join("target/debug/lib3mf-slicer")
-    } else {
-        slicer_dir.join("target/release/lib3mf-slicer")
-    };
+    // First try the workspace target directory (when running from workspace root)
+    let mut slicer_binary = project_root.parent()
+        .map(|p| p.join("tools/slicer/target/release/lib3mf-slicer"))
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| {
+            // Fall back to the slicer's own target directory
+            slicer_dir.join("target/release/lib3mf-slicer")
+        });
+    
+    // If still not found, try debug build
+    if !slicer_binary.exists() {
+        slicer_binary = slicer_dir.join("target/debug/lib3mf-slicer");
+    }
     
     if !slicer_binary.exists() {
         println!("Building slicer binary...");
@@ -72,6 +80,9 @@ fn run_slice_test(test_case: &SliceTestCase) {
             .status()
             .expect("Failed to build slicer");
         assert!(build_status.success(), "Failed to build slicer");
+        
+        // Update binary path after build
+        slicer_binary = slicer_dir.join("target/release/lib3mf-slicer");
     }
     
     // Create temporary directory for output
@@ -129,7 +140,7 @@ fn run_slice_test(test_case: &SliceTestCase) {
     
     for (z_height, reference_filename) in &test_case.reference_slices {
         // Find the generated slice at this Z height
-        let z_str = format!("{:.3}mm.png", z_height);
+        let z_str = format!("z{:.3}mm.png", z_height);
         let generated_slice = slice_files
             .iter()
             .find(|path| path.file_name().unwrap().to_str().unwrap().ends_with(&z_str))
