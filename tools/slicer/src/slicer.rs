@@ -723,21 +723,13 @@ impl Slicer {
         _color_resolver: &ColorResolver,
     ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
         // Convert world space Z to object space Z
-        // For a transform [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]:
-        // world_z = object_z * m22 + tz (assuming X and Y don't affect Z, which is typical)
-        // So: object_z = (world_z - tz) / m22
+        // Transform format: [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]
+        // For Z coordinate: world_z = object_x * m02 + object_y * m12 + object_z * m22 + tz
+        // For a typical case where X,Y don't affect Z (m02=0, m12=0, m22=1), this simplifies to:
+        // object_z = (world_z - tz) / m22
         let object_z = if let Some(t) = transform {
-            // For safety, we'll use the full inverse computation
-            // But for a pure translation, this is simple: object_z = world_z - tz
-            // For a general affine transform, we need to solve for z in:
-            // world_z = object_x * m02 + object_y * m12 + object_z * m22 + tz
-            // If we assume the slice is at a fixed X,Y in object space, we can use:
-            // object_z ≈ (world_z - tz) / m22 (assuming m22 ≈ 1 for no Z scaling)
-            
-            // For most 3MF files, the transform is just translation or simple scaling
-            // So we use: object_z = (world_z - tz) / m22
-            let tz = t[11];
-            let m22 = t[8];
+            let tz = t[11];  // Z translation
+            let m22 = t[8];   // Z scale/rotation component
             if m22.abs() < 1e-10 {
                 // Degenerate transform - can't compute object Z
                 return Ok((Vec::new(), Vec::new()));
@@ -749,18 +741,11 @@ impl Slicer {
         
         // Find the slice at or just above this object-space Z height
         // Slices are stored in ascending ztop order
+        let mut prev_ztop = slice_stack.zbottom;
         let slice_opt = slice_stack.slices.iter().find(|slice| {
             // Check if object_z is between zbottom and ztop of this slice
-            let zbottom = if let Some(prev_slice) = slice_stack
-                .slices
-                .iter()
-                .take_while(|s| s.ztop < slice.ztop)
-                .last()
-            {
-                prev_slice.ztop
-            } else {
-                slice_stack.zbottom
-            };
+            let zbottom = prev_ztop;
+            prev_ztop = slice.ztop;
             object_z >= zbottom && object_z <= slice.ztop
         });
 
@@ -776,30 +761,44 @@ impl Slicer {
             let mut points = Vec::new();
             
             // Start with the initial vertex
-            if polygon.startv < slice.vertices.len() {
-                let v = &slice.vertices[polygon.startv];
+            if polygon.startv >= slice.vertices.len() {
+                eprintln!(
+                    "Warning: Slice polygon startv={} out of bounds (vertices={})",
+                    polygon.startv,
+                    slice.vertices.len()
+                );
+                continue;
+            }
+            
+            let v = &slice.vertices[polygon.startv];
+            let point = if let Some(t) = transform {
+                // Apply transform to 2D vertex (use object_z for the Z coordinate)
+                let transformed = apply_transform(&[v.x, v.y, object_z], t);
+                Point2D::new(transformed[0], transformed[1])
+            } else {
+                Point2D::new(v.x, v.y)
+            };
+            points.push(point);
+            
+            // Add points from segments
+            for segment in &polygon.segments {
+                if segment.v2 >= slice.vertices.len() {
+                    eprintln!(
+                        "Warning: Slice segment v2={} out of bounds (vertices={})",
+                        segment.v2,
+                        slice.vertices.len()
+                    );
+                    continue;
+                }
+                
+                let v = &slice.vertices[segment.v2];
                 let point = if let Some(t) = transform {
-                    // Apply transform to 2D vertex (use object_z for the Z coordinate)
                     let transformed = apply_transform(&[v.x, v.y, object_z], t);
                     Point2D::new(transformed[0], transformed[1])
                 } else {
                     Point2D::new(v.x, v.y)
                 };
                 points.push(point);
-            }
-            
-            // Add points from segments
-            for segment in &polygon.segments {
-                if segment.v2 < slice.vertices.len() {
-                    let v = &slice.vertices[segment.v2];
-                    let point = if let Some(t) = transform {
-                        let transformed = apply_transform(&[v.x, v.y, object_z], t);
-                        Point2D::new(transformed[0], transformed[1])
-                    } else {
-                        Point2D::new(v.x, v.y)
-                    };
-                    points.push(point);
-                }
             }
             
             // Only add non-empty contours
