@@ -17,7 +17,7 @@ pub(super) fn write_displacement2d<W: IoWrite>(
     let mut elem = BytesStart::new("d:displacement2d");
     elem.push_attribute(("id", disp_map.id.to_string().as_str()));
     elem.push_attribute(("path", disp_map.path.as_str()));
-    
+
     // Write optional attributes
     let channel_str = match disp_map.channel {
         Channel::R => "r",
@@ -26,7 +26,7 @@ pub(super) fn write_displacement2d<W: IoWrite>(
         Channel::A => "a",
     };
     elem.push_attribute(("channel", channel_str));
-    
+
     let tilestyleu_str = match disp_map.tilestyleu {
         TileStyle::Wrap => "wrap",
         TileStyle::Mirror => "mirror",
@@ -34,7 +34,7 @@ pub(super) fn write_displacement2d<W: IoWrite>(
         TileStyle::None => "none",
     };
     elem.push_attribute(("tilestyleu", tilestyleu_str));
-    
+
     let tilestylev_str = match disp_map.tilestylev {
         TileStyle::Wrap => "wrap",
         TileStyle::Mirror => "mirror",
@@ -42,7 +42,7 @@ pub(super) fn write_displacement2d<W: IoWrite>(
         TileStyle::None => "none",
     };
     elem.push_attribute(("tilestylev", tilestylev_str));
-    
+
     let filter_str = match disp_map.filter {
         FilterMode::Auto => "auto",
         FilterMode::Linear => "linear",

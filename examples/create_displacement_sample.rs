@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating displacement sample 3MF file...");
 
     let mut model = Model::new();
-    
+
     // Declare displacement extension as required
     model.required_extensions.push(Extension::Displacement);
 
@@ -21,15 +21,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Box vertices
     // Bottom face (Z=0)
-    displacement_mesh.vertices.push(Vertex::new(-5.0, -5.0, 0.0));  // 0
-    displacement_mesh.vertices.push(Vertex::new(5.0, -5.0, 0.0));   // 1
-    displacement_mesh.vertices.push(Vertex::new(5.0, 5.0, 0.0));    // 2
-    displacement_mesh.vertices.push(Vertex::new(-5.0, 5.0, 0.0));   // 3
+    displacement_mesh
+        .vertices
+        .push(Vertex::new(-5.0, -5.0, 0.0)); // 0
+    displacement_mesh.vertices.push(Vertex::new(5.0, -5.0, 0.0)); // 1
+    displacement_mesh.vertices.push(Vertex::new(5.0, 5.0, 0.0)); // 2
+    displacement_mesh.vertices.push(Vertex::new(-5.0, 5.0, 0.0)); // 3
     // Top face (Z=10)
-    displacement_mesh.vertices.push(Vertex::new(-5.0, -5.0, 10.0)); // 4
-    displacement_mesh.vertices.push(Vertex::new(5.0, -5.0, 10.0));  // 5
-    displacement_mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0));   // 6
-    displacement_mesh.vertices.push(Vertex::new(-5.0, 5.0, 10.0));  // 7
+    displacement_mesh
+        .vertices
+        .push(Vertex::new(-5.0, -5.0, 10.0)); // 4
+    displacement_mesh
+        .vertices
+        .push(Vertex::new(5.0, -5.0, 10.0)); // 5
+    displacement_mesh.vertices.push(Vertex::new(5.0, 5.0, 10.0)); // 6
+    displacement_mesh
+        .vertices
+        .push(Vertex::new(-5.0, 5.0, 10.0)); // 7
 
     // Add triangles with displacement coordinates
     // Bottom face (Z=0) - 2 triangles
@@ -142,16 +150,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     norm_group.vectors.push(NormVector::new(0.0, 0.0, -1.0)); // 2
     norm_group.vectors.push(NormVector::new(0.0, 0.0, -1.0)); // 3
     // Top face vertices point up
-    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0));  // 4
-    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0));  // 5
-    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0));  // 6
-    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0));  // 7
+    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0)); // 4
+    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0)); // 5
+    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0)); // 6
+    norm_group.vectors.push(NormVector::new(0.0, 0.0, 1.0)); // 7
     model.resources.norm_vector_groups.push(norm_group);
 
     // Add displacement coordinate group - must reference previously declared resources
     let mut disp_group = Disp2DGroup::new(1, 1, 1, 1.5); // height=1.5mm displacement
     disp_group.offset = 0.0;
-    
+
     // UV coordinates for each vertex (8 vertices = 8 coords)
     // Bottom vertices
     disp_group.coords.push(Disp2DCoords::new(0.0, 0.0, 0)); // vertex 0
@@ -163,7 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     disp_group.coords.push(Disp2DCoords::new(1.0, 0.0, 5)); // vertex 5
     disp_group.coords.push(Disp2DCoords::new(1.0, 1.0, 6)); // vertex 6
     disp_group.coords.push(Disp2DCoords::new(0.0, 1.0, 7)); // vertex 7
-    
+
     model.resources.disp2d_groups.push(disp_group);
 
     // Get output path from command line or use default
@@ -178,6 +186,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sample displacement 3MF file created successfully!");
     println!("Note: You need to manually add the displacement texture PNG to the 3MF archive.");
     println!("The texture should be placed at /3D/Textures/displacement.png inside the ZIP.");
-    
+
     Ok(())
 }
