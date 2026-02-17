@@ -73,35 +73,35 @@ fn compose_transforms(parent: &[f64; 12], child: &[f64; 12]) -> [f64; 12] {
     let p = parent;
     // Extract child matrix components
     let c = child;
-    
+
     // Multiply the 3x3 rotation/scale parts: result_rot = parent_rot * child_rot
     let m00 = p[0] * c[0] + p[1] * c[3] + p[2] * c[6];
     let m01 = p[0] * c[1] + p[1] * c[4] + p[2] * c[7];
     let m02 = p[0] * c[2] + p[1] * c[5] + p[2] * c[8];
-    
+
     let m10 = p[3] * c[0] + p[4] * c[3] + p[5] * c[6];
     let m11 = p[3] * c[1] + p[4] * c[4] + p[5] * c[7];
     let m12 = p[3] * c[2] + p[4] * c[5] + p[5] * c[8];
-    
+
     let m20 = p[6] * c[0] + p[7] * c[3] + p[8] * c[6];
     let m21 = p[6] * c[1] + p[7] * c[4] + p[8] * c[7];
     let m22 = p[6] * c[2] + p[7] * c[5] + p[8] * c[8];
-    
+
     // Transform child's translation by parent's rotation/scale, then add parent's translation
     let tx = p[0] * c[9] + p[1] * c[10] + p[2] * c[11] + p[9];
     let ty = p[3] * c[9] + p[4] * c[10] + p[5] * c[11] + p[10];
     let tz = p[6] * c[9] + p[7] * c[10] + p[8] * c[11] + p[11];
-    
+
     [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]
 }
 
 /// Merge another mesh into this mesh, combining vertices and triangles
 fn merge_meshes(base: &mut Mesh, other: &Mesh) {
     let vertex_offset = base.vertices.len();
-    
+
     // Add vertices from other mesh
     base.vertices.extend(other.vertices.iter().cloned());
-    
+
     // Add triangles from other mesh, adjusting indices
     for tri in &other.triangles {
         base.triangles.push(lib3mf::Triangle {
@@ -270,6 +270,7 @@ impl Slicer {
     /// * `accumulated_transform` - Transform accumulated from parent levels
     /// * `visited` - Set of visited object IDs to detect circular references
     /// * `displacement_handler` - Handler for displacement mesh conversion
+    /// * `warned_booleans` - Set of object IDs for which boolean warnings have been shown
     fn resolve_object_mesh_recursive(
         &self,
         object: &Object,
@@ -277,12 +278,47 @@ impl Slicer {
         accumulated_transform: &Option<[f64; 12]>,
         visited: &mut std::collections::HashSet<usize>,
         displacement_handler: &DisplacementHandler,
+        warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<Option<Mesh>, SlicerError> {
         // Detect circular references
         if visited.contains(&object.id) {
             return Ok(None); // Skip circular references
         }
         visited.insert(object.id);
+
+        // Check if this object has a boolean shape definition
+        // Boolean operations (CSG) require advanced mesh processing capabilities
+        // that are not yet implemented in this slicer
+        if let Some(ref bool_shape) = object.boolean_shape {
+            if !warned_booleans.contains(&object.id) {
+                println!(
+                    "  Warning: Object {} has boolean shape (operation: {:?}) which is not yet supported by the slicer.",
+                    object.id, bool_shape.operation
+                );
+                println!(
+                    "  Boolean operations will be ignored and only the base mesh will be sliced."
+                );
+                warned_booleans.insert(object.id);
+            }
+
+            // For now, just resolve the base object mesh without boolean operations
+            if let Some(base_obj) = model
+                .resources
+                .objects
+                .iter()
+                .find(|obj| obj.id == bool_shape.objectid)
+            {
+                visited.remove(&object.id);
+                return self.resolve_object_mesh_recursive(
+                    base_obj,
+                    model,
+                    accumulated_transform,
+                    visited,
+                    displacement_handler,
+                    warned_booleans,
+                );
+            }
+        }
 
         // If the object has a direct mesh, use it
         if let Some(ref mesh) = object.mesh {
@@ -320,7 +356,12 @@ impl Slicer {
 
             for component in &object.components {
                 // Find the referenced object
-                if let Some(ref_object) = model.resources.objects.iter().find(|obj| obj.id == component.objectid) {
+                if let Some(ref_object) = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|obj| obj.id == component.objectid)
+                {
                     // Compose transforms: accumulated * component
                     let new_transform = match (accumulated_transform, &component.transform) {
                         (Some(acc), Some(comp)) => Some(compose_transforms(acc, comp)),
@@ -336,6 +377,7 @@ impl Slicer {
                         &new_transform,
                         visited,
                         displacement_handler,
+                        warned_booleans,
                     )? {
                         merge_meshes(&mut combined_mesh, &comp_mesh);
                     }
@@ -426,6 +468,9 @@ impl Slicer {
 
         let mut output_files = Vec::new();
 
+        // Track which objects have shown boolean warnings to avoid duplicates
+        let mut warned_booleans = std::collections::HashSet::new();
+
         // Generate each slice
         for layer_idx in 0..num_layers {
             let z = z_min + (layer_idx as f64) * layer_height;
@@ -450,6 +495,7 @@ impl Slicer {
                         z,
                         &displacement_handler,
                         model,
+                        &mut warned_booleans,
                     )? {
                         // Extract and transform contours for this object
                         let (contours, colored) = self.slice_object_at_z_with_color(
@@ -459,6 +505,7 @@ impl Slicer {
                             &color_resolver,
                             &displacement_handler,
                             model,
+                            &mut warned_booleans,
                         )?;
                         all_contours.extend(contours);
                         all_colored_contours.extend(colored);
@@ -509,6 +556,7 @@ impl Slicer {
         z: f64,
         displacement_handler: &DisplacementHandler,
         model: &Model,
+        warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<bool, SlicerError> {
         // Recursively resolve mesh from object (handles components and hierarchy)
         let mut visited = std::collections::HashSet::new();
@@ -518,6 +566,7 @@ impl Slicer {
             &build_item.transform,
             &mut visited,
             displacement_handler,
+            warned_booleans,
         )?;
 
         let mesh = match mesh_option {
@@ -543,6 +592,7 @@ impl Slicer {
     }
 
     /// Slice an object at a given Z height and return transformed contours plus colored contours
+    #[allow(clippy::too_many_arguments)]
     fn slice_object_at_z_with_color(
         &self,
         object: &Object,
@@ -551,6 +601,7 @@ impl Slicer {
         color_resolver: &ColorResolver,
         displacement_handler: &DisplacementHandler,
         model: &Model,
+        warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
         // Recursively resolve mesh from object (handles components and hierarchy)
         let mut visited = std::collections::HashSet::new();
@@ -560,6 +611,7 @@ impl Slicer {
             &build_item.transform,
             &mut visited,
             displacement_handler,
+            warned_booleans,
         )?;
 
         let mesh = match mesh_option {
