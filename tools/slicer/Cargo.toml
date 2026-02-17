@@ -10,6 +10,7 @@ homepage = "https://github.com/telecos/lib3mf_rust/tree/main/tools/slicer"
 readme = "README.md"
 keywords = ["3mf", "3d", "slicer", "3dprinting"]
 categories = ["command-line-utilities"]
+exclude = ["samples/"]
 
 [[bin]]
 name = "lib3mf-slicer"
@@ -21,6 +22,11 @@ clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 image = "0.25"
+thiserror = "2.0"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
 earcutr = "0.5"
 thiserror = "2.0"
 
