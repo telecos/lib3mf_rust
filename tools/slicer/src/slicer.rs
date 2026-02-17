@@ -2,6 +2,7 @@
 
 use crate::color::{ColorResolver, Rgba, lerp_color};
 use crate::config::SlicerConfig;
+use crate::displacement::DisplacementHandler;
 use crate::renderer::{ColoredContour, Point2D, SliceContour, SliceRenderer};
 use lib3mf::{BuildItem, Mesh, Model, Object, Vertex, assemble_contours};
 use std::path::Path;
@@ -250,6 +251,9 @@ impl Slicer {
             println!("  Color/material information detected — rendering colored borders");
         }
 
+        // Build displacement handler
+        let displacement_handler = DisplacementHandler::from_model(model, input_path);
+
         // Border width in pixels for colored surface rendering
         let border_width: u32 = 5;
 
@@ -284,13 +288,19 @@ impl Slicer {
 
                 if let Some(object) = object {
                     // Check if object intersects with current Z layer
-                    if self.object_intersects_z_layer(object, build_item, z)? {
+                    if self.object_intersects_z_layer(
+                        object,
+                        build_item,
+                        z,
+                        &displacement_handler,
+                    )? {
                         // Extract and transform contours for this object
                         let (contours, colored) = self.slice_object_at_z_with_color(
                             object,
                             build_item,
                             z,
                             &color_resolver,
+                            &displacement_handler,
                         )?;
                         all_contours.extend(contours);
                         all_colored_contours.extend(colored);
@@ -339,11 +349,16 @@ impl Slicer {
         object: &Object,
         build_item: &BuildItem,
         z: f64,
+        displacement_handler: &DisplacementHandler,
     ) -> Result<bool, SlicerError> {
-        // Get the mesh from the object
-        let mesh = match &object.mesh {
-            Some(m) => m,
-            None => return Ok(false), // No mesh, no intersection
+        // Get the mesh from the object (either regular or displacement)
+        let mesh = if let Some(ref disp_mesh) = object.displacement_mesh {
+            // Convert displacement mesh to regular mesh
+            displacement_handler.apply_displacement(disp_mesh)
+        } else if let Some(ref m) = object.mesh {
+            m.clone()
+        } else {
+            return Ok(false); // No mesh, no intersection
         };
 
         if mesh.vertices.is_empty() {
@@ -377,16 +392,21 @@ impl Slicer {
         build_item: &BuildItem,
         z: f64,
         color_resolver: &ColorResolver,
+        displacement_handler: &DisplacementHandler,
     ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
-        // Get the mesh from the object
-        let mesh = match &object.mesh {
-            Some(m) => m,
-            None => return Ok((Vec::new(), Vec::new())),
+        // Get the mesh from the object (either regular or displacement)
+        let mesh = if let Some(ref disp_mesh) = object.displacement_mesh {
+            // Convert displacement mesh to regular mesh
+            displacement_handler.apply_displacement(disp_mesh)
+        } else if let Some(ref m) = object.mesh {
+            m.clone()
+        } else {
+            return Ok((Vec::new(), Vec::new()));
         };
 
         // If there's a transform, apply it to get the mesh in world space
         let transformed_mesh = if let Some(transform) = &build_item.transform {
-            transform_mesh(mesh, transform)
+            transform_mesh(&mesh, transform)
         } else {
             mesh.clone()
         };
@@ -409,7 +429,7 @@ impl Slicer {
         // Collect colored segments (iterate triangles directly)
         let colored_segments = self.collect_colored_segments(
             &transformed_mesh,
-            mesh, // original mesh has the material properties
+            &mesh, // original mesh has the material properties
             z,
             object,
             color_resolver,
