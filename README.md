@@ -754,6 +754,53 @@ The viewer displays:
 
 See `tools/viewer/README.md` for complete documentation.
 
+### 3MF Slicer Tool
+
+The repository includes a command-line slicer tool for generating slice images from 3MF models:
+
+```bash
+# Navigate to the slicer directory
+cd tools/slicer
+
+# Slice a 3MF file with a configuration
+cargo run --release -- ../../test_files/core/box.3mf config.json
+
+# With custom output directory and verbose output
+cargo run --release -- ../../test_files/core/box.3mf config.json --output slices --verbose
+
+# Build with crypto support for encrypted files
+cargo build --release --features crypto
+```
+
+The slicer requires a JSON configuration file with:
+- Slice thickness in micrometers
+- Printable box dimensions (origin and end points in mm)
+- Output image resolution in DPI (dots per inch)
+- Optional encryption key file path
+- Optional feature support flags
+
+Example configuration:
+```json
+{
+  "slice_thickness_um": 100,
+  "printable_box": {
+    "origin": { "x": 0.0, "y": 0.0, "z": 0.0 },
+    "end": { "x": 200.0, "y": 200.0, "z": 200.0 }
+  },
+  "resolution": {
+    "dpi": 300
+  }
+}
+```
+
+The slicer generates PNG images for each slice layer, supporting:
+- Standard mesh geometries with affine transforms
+- Materials and surface colors
+- Multiple objects positioned via build items
+- All major 3MF extensions
+
+See `tools/slicer/README.md` for complete documentation and examples.
+
 ## Architecture
 
 The library is organized into several modules:
