@@ -135,9 +135,10 @@ pub use model::{
     Disp2DGroup, Displacement2D, DisplacementMesh, DisplacementTriangle, Extension, FilterMode,
     ImplicitVolume, KEKParams, Material, Mesh, MetadataEntry, Model, Multi, MultiProperties,
     NormVector, NormVectorGroup, Object, ObjectType, ParserConfig, ProductionInfo, ResourceData,
-    ResourceDataGroup, Resources, SecureContentInfo, Tex2Coord, Texture2D, Texture2DGroup,
-    Thumbnail, TileStyle, Triangle, Vertex, VolumetricBoundary, VolumetricData, VolumetricProperty,
-    VolumetricPropertyGroup, Voxel, VoxelGrid,
+    ResourceDataGroup, Resources, SecureContentInfo, Slice, SlicePolygon, SliceRef, SliceSegment,
+    SliceStack, Tex2Coord, Texture2D, Texture2DGroup, Thumbnail, TileStyle, Triangle, Vertex,
+    Vertex2D, VolumetricBoundary, VolumetricData, VolumetricProperty, VolumetricPropertyGroup,
+    Voxel, VoxelGrid,
 };
 
 use std::io::Read;

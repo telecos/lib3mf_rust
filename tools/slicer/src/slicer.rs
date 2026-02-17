@@ -558,6 +558,43 @@ impl Slicer {
         model: &Model,
         warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<bool, SlicerError> {
+        // Check if object has a slice stack reference
+        if let Some(slicestackid) = object.slicestackid {
+            // Find the slice stack in the model
+            if let Some(slice_stack) = model
+                .resources
+                .slice_stacks
+                .iter()
+                .find(|ss| ss.id == slicestackid)
+            {
+                // For slice stacks, check if Z is within the stack's range
+                if slice_stack.slices.is_empty() {
+                    return Ok(false);
+                }
+                
+                // Transform the zbottom and ztop to world space
+                let zbottom = slice_stack.zbottom;
+                let ztop = slice_stack
+                    .slices
+                    .last()
+                    .map(|s| s.ztop)
+                    .unwrap_or(zbottom);
+                
+                // Apply transform to get world space Z bounds
+                let (world_zbottom, world_ztop) = if let Some(t) = &build_item.transform {
+                    // Transform a point at object's zbottom and ztop
+                    let bottom_point = apply_transform(&[0.0, 0.0, zbottom], t);
+                    let top_point = apply_transform(&[0.0, 0.0, ztop], t);
+                    (bottom_point[2], top_point[2])
+                } else {
+                    (zbottom, ztop)
+                };
+                
+                return Ok(z >= world_zbottom && z <= world_ztop);
+            }
+        }
+
+        // No slice stack - check mesh intersection
         // Recursively resolve mesh from object (handles components and hierarchy)
         let mut visited = std::collections::HashSet::new();
         let mesh_option = self.resolve_object_mesh_recursive(
@@ -603,6 +640,27 @@ impl Slicer {
         model: &Model,
         warned_booleans: &mut std::collections::HashSet<usize>,
     ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
+        // Check if object has a slice stack reference
+        if let Some(slicestackid) = object.slicestackid {
+            // Find the slice stack in the model
+            if let Some(slice_stack) = model
+                .resources
+                .slice_stacks
+                .iter()
+                .find(|ss| ss.id == slicestackid)
+            {
+                // Extract contours from slice stack at this Z height
+                return self.extract_slice_stack_contours(
+                    slice_stack,
+                    z,
+                    &build_item.transform,
+                    object,
+                    color_resolver,
+                );
+            }
+        }
+
+        // No slice stack - use mesh-based slicing
         // Recursively resolve mesh from object (handles components and hierarchy)
         let mut visited = std::collections::HashSet::new();
         let mesh_option = self.resolve_object_mesh_recursive(
@@ -648,6 +706,112 @@ impl Slicer {
 
         // Assemble colored segments into colored contours
         let colored_contours = assemble_colored_contours(colored_segments, 1e-6);
+
+        Ok((fill_contours, colored_contours))
+    }
+
+    /// Extract contours from a slice stack at a given Z height
+    ///
+    /// Finds the appropriate slice from the stack and converts its polygons into contours.
+    /// Applies the build item transform to all vertices.
+    fn extract_slice_stack_contours(
+        &self,
+        slice_stack: &lib3mf::SliceStack,
+        world_z: f64,
+        transform: &Option<[f64; 12]>,
+        _object: &Object,
+        _color_resolver: &ColorResolver,
+    ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
+        // Convert world space Z to object space Z
+        // For a transform [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]:
+        // world_z = object_z * m22 + tz (assuming X and Y don't affect Z, which is typical)
+        // So: object_z = (world_z - tz) / m22
+        let object_z = if let Some(t) = transform {
+            // For safety, we'll use the full inverse computation
+            // But for a pure translation, this is simple: object_z = world_z - tz
+            // For a general affine transform, we need to solve for z in:
+            // world_z = object_x * m02 + object_y * m12 + object_z * m22 + tz
+            // If we assume the slice is at a fixed X,Y in object space, we can use:
+            // object_z ≈ (world_z - tz) / m22 (assuming m22 ≈ 1 for no Z scaling)
+            
+            // For most 3MF files, the transform is just translation or simple scaling
+            // So we use: object_z = (world_z - tz) / m22
+            let tz = t[11];
+            let m22 = t[8];
+            if m22.abs() < 1e-10 {
+                // Degenerate transform - can't compute object Z
+                return Ok((Vec::new(), Vec::new()));
+            }
+            (world_z - tz) / m22
+        } else {
+            world_z
+        };
+        
+        // Find the slice at or just above this object-space Z height
+        // Slices are stored in ascending ztop order
+        let slice_opt = slice_stack.slices.iter().find(|slice| {
+            // Check if object_z is between zbottom and ztop of this slice
+            let zbottom = if let Some(prev_slice) = slice_stack
+                .slices
+                .iter()
+                .take_while(|s| s.ztop < slice.ztop)
+                .last()
+            {
+                prev_slice.ztop
+            } else {
+                slice_stack.zbottom
+            };
+            object_z >= zbottom && object_z <= slice.ztop
+        });
+
+        let slice = match slice_opt {
+            Some(s) => s,
+            None => return Ok((Vec::new(), Vec::new())), // Z is outside slice stack range
+        };
+
+        // Convert slice polygons to contours
+        let mut fill_contours = Vec::new();
+        
+        for polygon in &slice.polygons {
+            let mut points = Vec::new();
+            
+            // Start with the initial vertex
+            if polygon.startv < slice.vertices.len() {
+                let v = &slice.vertices[polygon.startv];
+                let point = if let Some(t) = transform {
+                    // Apply transform to 2D vertex (use object_z for the Z coordinate)
+                    let transformed = apply_transform(&[v.x, v.y, object_z], t);
+                    Point2D::new(transformed[0], transformed[1])
+                } else {
+                    Point2D::new(v.x, v.y)
+                };
+                points.push(point);
+            }
+            
+            // Add points from segments
+            for segment in &polygon.segments {
+                if segment.v2 < slice.vertices.len() {
+                    let v = &slice.vertices[segment.v2];
+                    let point = if let Some(t) = transform {
+                        let transformed = apply_transform(&[v.x, v.y, object_z], t);
+                        Point2D::new(transformed[0], transformed[1])
+                    } else {
+                        Point2D::new(v.x, v.y)
+                    };
+                    points.push(point);
+                }
+            }
+            
+            // Only add non-empty contours
+            if !points.is_empty() {
+                fill_contours.push(SliceContour::new(points));
+            }
+        }
+
+        // For now, we don't generate colored contours from slice stacks
+        // as they don't carry per-vertex color information
+        // TODO: Could use object's material properties for border coloring
+        let colored_contours = Vec::new();
 
         Ok((fill_contours, colored_contours))
     }
