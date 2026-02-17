@@ -44,7 +44,27 @@ This slice illustrates the slicer's capability to (886×915 pixels at 150 DPI):
 - Generate slices from complex surface geometries
 - Render colored borders from texture/material properties with mid-gray fill
 
-Both examples use a 150 DPI resolution and 100 μm (0.1 mm) slice thickness, producing high-quality PNG images suitable for additive manufacturing processes. Models with color data are rendered with colored borders and mid-gray fill, while plain models use black fill.
+### Displacement Mapping (displacement sample)
+
+The slicer now supports the 3MF Displacement Extension, which allows texture-based surface displacement for creating complex surface details. This feature modifies mesh geometry by offsetting vertices along their normal vectors based on grayscale texture values.
+
+**Displacement texture (radial gradient, 256×256 pixels):**
+
+![displacement texture](images/displacement_texture.png)
+
+The displacement mapping process:
+1. **Texture Loading**: PNG textures are loaded from `/3D/Textures/` in the 3MF archive
+2. **UV Sampling**: Each vertex samples the texture using its UV coordinates
+3. **Displacement Calculation**: `vertex_position += normal_vector × (offset + height × texture_value × factor)`
+4. **Tile Modes**: Supports wrap, mirror, clamp, and none modes for handling UV coordinates outside [0,1]
+
+The sample includes a 10mm box with 1.5mm displacement amplitude using the radial gradient texture shown above. White areas (255) create maximum outward displacement, while black areas (0) produce no displacement, resulting in a "bulge" effect on the box faces.
+
+**Configuration**: The displacement sample uses 150 DPI resolution and 100 μm (0.1 mm) slice thickness, configured to capture displaced surfaces in the printable volume.
+
+See `samples/displacement/README.md` for complete documentation and usage examples.
+
+Both standard examples use a 150 DPI resolution and 100 μm (0.1 mm) slice thickness, producing high-quality PNG images suitable for additive manufacturing processes. Models with color data are rendered with colored borders and mid-gray fill, while plain models use black fill.
 
 ## Installation
 
