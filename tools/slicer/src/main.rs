@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod color;
 mod config;
 mod renderer;
 mod slicer;
@@ -64,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Slice the model
     println!("Output directory: {}\n", args.output.display());
-    let output_files = slicer.slice_model(&model, &args.output)?;
+    let output_files = slicer.slice_model(&model, &args.input_file, &args.output)?;
 
     println!("\n=== Slicing Summary ===");
     println!("  Total slices: {}", output_files.len());
