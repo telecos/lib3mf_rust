@@ -20,11 +20,11 @@ A command-line tool for slicing 3MF (3D Manufacturing Format) files into 2D imag
 
 This example shows slicing of a complex multi-part 3MF file containing multiple gears. The model includes 17 build items with various gear components. When sliced, the tool correctly handles all parts and generates contours for each intersected geometry.
 
-**Generated slice at Z=30mm:**
+**Generated slice at Z=38mm:**
 
 ![cube_gears slice example](images/cube_gears_slice.png)
 
-The slice shows multiple gear cross-sections from different parts of the assembly. This demonstrates the slicer's ability to:
+The slice shows multiple gear cross-sections from different parts of the assembly (1033×768 pixels at 150 DPI). This demonstrates the slicer's ability to:
 - Handle multi-part models with multiple build items
 - Process objects with complex geometries
 - Generate accurate 2D contours from 3D mesh intersections
@@ -33,16 +33,16 @@ The slice shows multiple gear cross-sections from different parts of the assembl
 
 This example demonstrates slicing of a 3MF file that contains color texture information. The model includes texture coordinate mappings and multiple texture images.
 
-**Generated slice at Z=30mm:**
+**Generated slice at Z=45mm:**
 
 ![multipletextures slice example](images/multipletextures_slice.png)
 
-This slice illustrates the slicer's capability to:
+This slice illustrates the slicer's capability to (886×945 pixels at 150 DPI):
 - Process models with texture coordinate data
 - Handle 3MF material extensions
 - Generate slices from complex surface geometries
 
-Both examples use a 300 DPI resolution and 100 μm (0.1 mm) slice thickness, producing high-quality PNG images suitable for additive manufacturing processes.
+Both examples use a 150 DPI resolution and 100 μm (0.1 mm) slice thickness, producing high-quality PNG images suitable for additive manufacturing processes.
 
 ## Installation
 
