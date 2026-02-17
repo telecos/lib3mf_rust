@@ -1,0 +1,18 @@
+{
+  "slice_thickness_um": 80,
+  "printable_box": {
+    "origin": {
+      "x": 30.0,
+      "y": 30.0,
+      "z": 14.0
+    },
+    "end": {
+      "x": 45.0,
+      "y": 55.0,
+      "z": 46.0
+    }
+  },
+  "resolution": {
+    "dpi": 150
+  }
+}
