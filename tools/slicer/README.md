@@ -1,6 +1,6 @@
 # lib3mf-slicer
 
-A command-line tool for slicing 3MF (3D Manufacturing Format) files into 2D images.
+A command-line tool for slicing 3MF (3D Manufacturing Format) files into 2D images. This tool is a pretty early stage and will require refinements. Contributions of any kind are more than welcome.
 
 ## Overview
 

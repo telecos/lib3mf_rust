@@ -1,0 +1,4 @@
+# Ignore generated slice images
+*.png
+# But keep the directories
+!.gitkeep

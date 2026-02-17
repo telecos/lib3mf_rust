@@ -1,8 +1,9 @@
 //! Main slicer logic for processing 3MF models
 
+use crate::color::{ColorResolver, Rgba, lerp_color};
 use crate::config::SlicerConfig;
-use crate::renderer::{Point2D, SliceContour, SliceRenderer};
-use lib3mf::{BuildItem, Mesh, Model, Object, assemble_contours, collect_intersection_segments};
+use crate::renderer::{ColoredContour, Point2D, SliceContour, SliceRenderer};
+use lib3mf::{BuildItem, Mesh, Model, Object, Vertex, assemble_contours};
 use std::path::Path;
 use thiserror::Error;
 
@@ -21,18 +22,24 @@ pub enum SlicerError {
 }
 
 /// Apply a 3MF affine transform to a 3D point
-/// Transform is stored as 12 values: [m00, m01, m02, m10, m11, m12, m20, m21, m22, m30, m31, m32]
-/// This represents a 3x4 matrix in row-major order
+///
+/// Transform is stored as 12 values: [m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz]
+///
+/// The 3MF spec uses row-vector × matrix convention:
+///   [x', y', z'] = [x, y, z] × [[m00, m01, m02], [m10, m11, m12], [m20, m21, m22]] + [tx, ty, tz]
+///
+/// Which gives:
+///   x' = x*m00 + y*m10 + z*m20 + tx
+///   y' = x*m01 + y*m11 + z*m21 + ty
+///   z' = x*m02 + y*m12 + z*m22 + tz
 fn apply_transform(point: &[f64; 3], transform: &[f64; 12]) -> [f64; 3] {
-    let x =
-        transform[0] * point[0] + transform[1] * point[1] + transform[2] * point[2] + transform[3];
-    let y =
-        transform[4] * point[0] + transform[5] * point[1] + transform[6] * point[2] + transform[7];
-    let z = transform[8] * point[0]
-        + transform[9] * point[1]
-        + transform[10] * point[2]
-        + transform[11];
-    [x, y, z]
+    let (x, y, z) = (point[0], point[1], point[2]);
+
+    let new_x = x * transform[0] + y * transform[3] + z * transform[6] + transform[9];
+    let new_y = x * transform[1] + y * transform[4] + z * transform[7] + transform[10];
+    let new_z = x * transform[2] + y * transform[5] + z * transform[8] + transform[11];
+
+    [new_x, new_y, new_z]
 }
 
 /// Transform an entire mesh by applying an affine transformation to all vertices
@@ -52,6 +59,14 @@ pub struct Slicer {
     config: SlicerConfig,
 }
 
+/// A line segment with per-endpoint colors from a triangle intersection
+struct ColoredSegment {
+    p0: Point2D,
+    p1: Point2D,
+    color0: Rgba,
+    color1: Rgba,
+}
+
 impl Slicer {
     /// Create a new slicer with the given configuration
     pub fn new(config: SlicerConfig) -> Self {
@@ -69,6 +84,7 @@ impl Slicer {
     pub fn slice_model(
         &self,
         model: &Model,
+        input_path: &Path,
         output_dir: &Path,
     ) -> Result<Vec<String>, SlicerError> {
         println!("Starting slicing process...");
@@ -111,6 +127,16 @@ impl Slicer {
         // Create output directory if it doesn't exist
         std::fs::create_dir_all(output_dir)?;
 
+        // Build color resolver
+        let color_resolver = ColorResolver::from_model(model, input_path);
+        let has_colors = color_resolver.has_colors();
+        if has_colors {
+            println!("  Color/material information detected — rendering colored borders");
+        }
+
+        // Border width in pixels for colored surface rendering
+        let border_width: u32 = 5;
+
         // Create renderer
         let (box_width, box_height, _) = self.config.printable_box.dimensions();
         let renderer = SliceRenderer::new(
@@ -130,6 +156,7 @@ impl Slicer {
 
             // Collect contours from all build items at this Z height
             let mut all_contours = Vec::new();
+            let mut all_colored_contours: Vec<ColoredContour> = Vec::new();
 
             for build_item in &model.build.items {
                 // Find the referenced object
@@ -143,9 +170,14 @@ impl Slicer {
                     // Check if object intersects with current Z layer
                     if self.object_intersects_z_layer(object, build_item, z)? {
                         // Extract and transform contours for this object
-                        if let Some(contours) = self.slice_object_at_z(object, build_item, z)? {
-                            all_contours.extend(contours);
-                        }
+                        let (contours, colored) = self.slice_object_at_z_with_color(
+                            object,
+                            build_item,
+                            z,
+                            &color_resolver,
+                        )?;
+                        all_contours.extend(contours);
+                        all_colored_contours.extend(colored);
                     }
                 }
             }
@@ -155,7 +187,13 @@ impl Slicer {
             let output_path = output_dir.join(&output_filename);
 
             renderer
-                .render_to_file(&all_contours, &output_path)
+                .render_to_file(
+                    &all_contours,
+                    &all_colored_contours,
+                    border_width,
+                    has_colors,
+                    &output_path,
+                )
                 .map_err(|e| SlicerError::RenderError(e.to_string()))?;
 
             if layer_idx % 10 == 0 || layer_idx == num_layers - 1 {
@@ -216,41 +254,81 @@ impl Slicer {
         Ok(z >= min_z && z <= max_z)
     }
 
-    /// Slice an object at a given Z height and return transformed contours
-    fn slice_object_at_z(
+    /// Slice an object at a given Z height and return transformed contours plus colored contours
+    fn slice_object_at_z_with_color(
         &self,
         object: &Object,
         build_item: &BuildItem,
         z: f64,
-    ) -> Result<Option<Vec<SliceContour>>, SlicerError> {
+        color_resolver: &ColorResolver,
+    ) -> Result<(Vec<SliceContour>, Vec<ColoredContour>), SlicerError> {
         // Get the mesh from the object
         let mesh = match &object.mesh {
             Some(m) => m,
-            None => return Ok(None),
+            None => return Ok((Vec::new(), Vec::new())),
         };
 
-        // If there's a transform, we need to apply it to get the mesh in world space
+        // If there's a transform, apply it to get the mesh in world space
         let transformed_mesh = if let Some(transform) = &build_item.transform {
             transform_mesh(mesh, transform)
         } else {
             mesh.clone()
         };
 
-        // Slice the transformed mesh at the given Z
-        let segments = collect_intersection_segments(&transformed_mesh, z);
-        if segments.is_empty() {
-            return Ok(None);
+        // Collect plain segments for fill rendering (uses lib3mf)
+        let plain_segments = lib3mf::collect_intersection_segments(&transformed_mesh, z);
+        let assembled = assemble_contours(plain_segments, 1e-6);
+        let fill_contours: Vec<SliceContour> = assembled
+            .into_iter()
+            .map(|pts| SliceContour::new(pts.iter().map(|(x, y)| Point2D::new(*x, *y)).collect()))
+            .collect();
+
+        // Collect colored segments (iterate triangles directly)
+        let colored_segments = self.collect_colored_segments(
+            &transformed_mesh,
+            mesh, // original mesh has the material properties
+            z,
+            object,
+            color_resolver,
+        );
+
+        // Assemble colored segments into colored contours
+        let colored_contours = assemble_colored_contours(colored_segments, 1e-6);
+
+        Ok((fill_contours, colored_contours))
+    }
+
+    /// Collect intersection segments with per-endpoint color from triangles
+    fn collect_colored_segments(
+        &self,
+        transformed_mesh: &Mesh,
+        original_mesh: &Mesh,
+        z: f64,
+        object: &Object,
+        color_resolver: &ColorResolver,
+    ) -> Vec<ColoredSegment> {
+        let mut segments = Vec::new();
+
+        for tri in original_mesh.triangles.iter() {
+            if tri.v1 >= transformed_mesh.vertices.len()
+                || tri.v2 >= transformed_mesh.vertices.len()
+                || tri.v3 >= transformed_mesh.vertices.len()
+            {
+                continue;
+            }
+
+            let v0 = &transformed_mesh.vertices[tri.v1];
+            let v1 = &transformed_mesh.vertices[tri.v2];
+            let v2 = &transformed_mesh.vertices[tri.v3];
+
+            if let Some(seg) =
+                colored_triangle_intersection(v0, v1, v2, z, tri, object, color_resolver)
+            {
+                segments.push(seg);
+            }
         }
 
-        let contours = assemble_contours(segments, 1e-6);
-        let mut result = Vec::new();
-
-        for contour in contours {
-            let points: Vec<Point2D> = contour.iter().map(|(x, y)| Point2D::new(*x, *y)).collect();
-            result.push(SliceContour::new(points));
-        }
-
-        Ok(Some(result))
+        segments
     }
 
     /// Print model statistics
@@ -316,6 +394,166 @@ impl Slicer {
 
         println!();
     }
+}
+
+/// Intersect a single triangle with a Z plane and return a colored segment.
+///
+/// Each intersection endpoint gets an interpolated color based on the
+/// triangle's material properties and the interpolation parameter along
+/// the intersected edges.
+fn colored_triangle_intersection(
+    v0: &Vertex,
+    v1: &Vertex,
+    v2: &Vertex,
+    z: f64,
+    tri: &lib3mf::Triangle,
+    object: &Object,
+    color_resolver: &ColorResolver,
+) -> Option<ColoredSegment> {
+    // Resolve per-vertex colors for this triangle
+    let (c0, c1, c2) = color_resolver
+        .resolve_triangle_colors(tri, object.pid, object.pindex)
+        .unwrap_or((
+            crate::color::DEFAULT_COLOR,
+            crate::color::DEFAULT_COLOR,
+            crate::color::DEFAULT_COLOR,
+        ));
+
+    let vertices = [v0, v1, v2];
+    let vertex_colors = [c0, c1, c2];
+
+    // Find edge intersections with the z-plane
+    // Each intersection records: (x, y, interpolated_color)
+    let mut intersections: Vec<(f64, f64, Rgba)> = Vec::with_capacity(2);
+
+    for i in 0..3 {
+        let va = vertices[i];
+        let vb = vertices[(i + 1) % 3];
+        let ca = vertex_colors[i];
+        let cb = vertex_colors[(i + 1) % 3];
+
+        let za = va.z;
+        let zb = vb.z;
+
+        if (za - z) * (zb - z) > 0.0 {
+            continue; // both on same side
+        }
+
+        if (za - z).abs() < 1e-10 && (zb - z).abs() < 1e-10 {
+            // Both on plane
+            intersections.push((va.x, va.y, ca));
+            intersections.push((vb.x, vb.y, cb));
+            break;
+        }
+
+        if (za - z).abs() < 1e-10 {
+            intersections.push((va.x, va.y, ca));
+            continue;
+        }
+        if (zb - z).abs() < 1e-10 {
+            intersections.push((vb.x, vb.y, cb));
+            continue;
+        }
+
+        // Interpolation parameter along the edge
+        let t = (z - za) / (zb - za);
+        let x = va.x + t * (vb.x - va.x);
+        let y = va.y + t * (vb.y - va.y);
+
+        if x.is_finite() && y.is_finite() {
+            let color = lerp_color(ca, cb, t);
+            intersections.push((x, y, color));
+        }
+    }
+
+    if intersections.len() < 2 {
+        return None;
+    }
+
+    // Deduplicate if more than 2
+    if intersections.len() > 2 {
+        intersections.sort_by(|a, b| {
+            a.0.partial_cmp(&b.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        });
+        intersections.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-10 && (a.1 - b.1).abs() < 1e-10);
+    }
+
+    if intersections.len() >= 2 {
+        Some(ColoredSegment {
+            p0: Point2D::new(intersections[0].0, intersections[0].1),
+            p1: Point2D::new(intersections[1].0, intersections[1].1),
+            color0: intersections[0].2,
+            color1: intersections[1].2,
+        })
+    } else {
+        None
+    }
+}
+
+/// Assemble colored segments into closed colored contours
+fn assemble_colored_contours(segments: Vec<ColoredSegment>, tolerance: f64) -> Vec<ColoredContour> {
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    let mut remaining: Vec<ColoredSegment> = segments;
+    let mut contours = Vec::new();
+
+    while !remaining.is_empty() {
+        let first = remaining.remove(0);
+        let mut points = vec![first.p0, first.p1];
+        let mut colors = vec![first.color0, first.color1];
+        let start = first.p0;
+        let mut current = first.p1;
+
+        let mut found = true;
+        while found && !remaining.is_empty() {
+            found = false;
+
+            for i in 0..remaining.len() {
+                let seg = &remaining[i];
+                let d0 = dist(current, seg.p0);
+                let d1 = dist(current, seg.p1);
+
+                if d0 <= tolerance {
+                    current = seg.p1;
+                    points.push(current);
+                    colors.push(seg.color1);
+                    remaining.remove(i);
+                    found = true;
+                    break;
+                } else if d1 <= tolerance {
+                    current = seg.p0;
+                    points.push(current);
+                    colors.push(seg.color0);
+                    remaining.remove(i);
+                    found = true;
+                    break;
+                }
+            }
+
+            if dist(current, start) <= tolerance {
+                points.pop();
+                colors.pop();
+                break;
+            }
+        }
+
+        if points.len() >= 3 {
+            contours.push(ColoredContour { points, colors });
+        }
+    }
+
+    contours
+}
+
+#[inline]
+fn dist(a: Point2D, b: Point2D) -> f64 {
+    let dx = a.x - b.x;
+    let dy = a.y - b.y;
+    (dx * dx + dy * dy).sqrt()
 }
 
 #[cfg(test)]
