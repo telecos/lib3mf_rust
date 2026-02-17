@@ -575,15 +575,11 @@ impl Slicer {
                 if slice_stack.slices.is_empty() {
                     return Ok(false);
                 }
-                
+
                 // Transform the zbottom and ztop to world space
                 let zbottom = slice_stack.zbottom;
-                let ztop = slice_stack
-                    .slices
-                    .last()
-                    .map(|s| s.ztop)
-                    .unwrap_or(zbottom);
-                
+                let ztop = slice_stack.slices.last().map(|s| s.ztop).unwrap_or(zbottom);
+
                 // Apply transform to get world space Z bounds
                 let (world_zbottom, world_ztop) = if let Some(t) = &build_item.transform {
                     // Transform a point at object's zbottom and ztop
@@ -593,7 +589,7 @@ impl Slicer {
                 } else {
                     (zbottom, ztop)
                 };
-                
+
                 return Ok(z >= world_zbottom && z <= world_ztop);
             }
         }
@@ -732,8 +728,8 @@ impl Slicer {
         // For a typical case where X,Y don't affect Z (m02=0, m12=0, m22=1), this simplifies to:
         // object_z = (world_z - tz) / m22
         let object_z = if let Some(t) = transform {
-            let tz = t[11];  // Z translation
-            let m22 = t[8];   // Z scale/rotation component
+            let tz = t[11]; // Z translation
+            let m22 = t[8]; // Z scale/rotation component
             if m22.abs() < MIN_TRANSFORM_SCALE {
                 // Degenerate transform - can't compute object Z
                 return Ok((Vec::new(), Vec::new()));
@@ -742,12 +738,12 @@ impl Slicer {
         } else {
             world_z
         };
-        
+
         // Find the slice at or just above this object-space Z height
         // Slices are stored in ascending ztop order
         let mut prev_ztop = slice_stack.zbottom;
         let mut slice_opt = None;
-        
+
         for slice in &slice_stack.slices {
             if object_z >= prev_ztop && object_z <= slice.ztop {
                 slice_opt = Some(slice);
@@ -763,7 +759,7 @@ impl Slicer {
 
         // Convert slice polygons to contours
         let mut fill_contours = Vec::new();
-        
+
         // Helper closure to transform a 2D vertex to world space
         let transform_vertex = |v: &lib3mf::Vertex2D| -> Point2D {
             if let Some(t) = transform {
@@ -774,10 +770,10 @@ impl Slicer {
                 Point2D::new(v.x, v.y)
             }
         };
-        
+
         for polygon in &slice.polygons {
             let mut points = Vec::new();
-            
+
             // Start with the initial vertex
             if polygon.startv >= slice.vertices.len() {
                 eprintln!(
@@ -787,10 +783,10 @@ impl Slicer {
                 );
                 continue;
             }
-            
+
             let v = &slice.vertices[polygon.startv];
             points.push(transform_vertex(v));
-            
+
             // Add points from segments
             for segment in &polygon.segments {
                 if segment.v2 >= slice.vertices.len() {
@@ -801,11 +797,11 @@ impl Slicer {
                     );
                     continue;
                 }
-                
+
                 let v = &slice.vertices[segment.v2];
                 points.push(transform_vertex(v));
             }
-            
+
             // Only add non-empty contours
             if !points.is_empty() {
                 fill_contours.push(SliceContour::new(points));
