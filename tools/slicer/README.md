@@ -10,7 +10,7 @@ A command-line tool for slicing 3MF (3D Manufacturing Format) files into 2D imag
 - Materials and surface colors
 - Boolean operations
 - Beam lattice structures
-- Displacement maps
+- **Displacement maps** (NEW!)
 - Slice extension data
 - Encrypted content (with optional crypto feature)
 
@@ -277,7 +277,21 @@ Objects are positioned according to their build item transforms, and only object
 
 The `samples/` directory contains example configurations demonstrating various slicing scenarios:
 
-### 1. Pyramid - Beam Lattice Structure
+### 1. Displacement Map - Textured Surface Displacement (NEW!)
+
+Location: `samples/displacement/`
+
+Demonstrates slicing of objects with displacement mapping applied:
+- Radial gradient displacement texture (256×256 pixels)
+- 1.5mm displacement amplitude  
+- Proper normal vector handling
+- All tile modes supported (wrap/mirror/clamp/none)
+
+**Note**: Full end-to-end demonstration requires DisplacementMesh writer implementation in core library. The slicer correctly loads textures and applies displacement.
+
+See `samples/displacement/README.md` for detailed information.
+
+### 2. Pyramid - Beam Lattice Structure
 
 Location: `samples/pyramid/`
 
