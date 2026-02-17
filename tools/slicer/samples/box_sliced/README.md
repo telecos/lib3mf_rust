@@ -67,4 +67,4 @@ This is an identity rotation/scale with translation (33.0327, 31.5297, 14.9670) 
 
 ## Source
 
-This file is from the 3MF Consortium's test suite and demonstrates conformance with the Slice extension specification.
+This file (`box_sliced.3mf`) is from the 3MF Consortium's official conformance test suite for the Slice extension. It demonstrates a compliant implementation of pre-computed slice data according to the 3MF Slice specification (http://schemas.microsoft.com/3dmanufacturing/slice/2015/07).

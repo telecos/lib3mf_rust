@@ -742,12 +742,15 @@ impl Slicer {
         // Find the slice at or just above this object-space Z height
         // Slices are stored in ascending ztop order
         let mut prev_ztop = slice_stack.zbottom;
-        let slice_opt = slice_stack.slices.iter().find(|slice| {
-            // Check if object_z is between zbottom and ztop of this slice
-            let zbottom = prev_ztop;
+        let mut slice_opt = None;
+        
+        for slice in &slice_stack.slices {
+            if object_z >= prev_ztop && object_z <= slice.ztop {
+                slice_opt = Some(slice);
+                break;
+            }
             prev_ztop = slice.ztop;
-            object_z >= zbottom && object_z <= slice.ztop
-        });
+        }
 
         let slice = match slice_opt {
             Some(s) => s,
@@ -756,6 +759,17 @@ impl Slicer {
 
         // Convert slice polygons to contours
         let mut fill_contours = Vec::new();
+        
+        // Helper closure to transform a 2D vertex to world space
+        let transform_vertex = |v: &lib3mf::Vertex2D| -> Point2D {
+            if let Some(t) = transform {
+                // Apply transform to 2D vertex (use object_z for the Z coordinate)
+                let transformed = apply_transform(&[v.x, v.y, object_z], t);
+                Point2D::new(transformed[0], transformed[1])
+            } else {
+                Point2D::new(v.x, v.y)
+            }
+        };
         
         for polygon in &slice.polygons {
             let mut points = Vec::new();
@@ -771,14 +785,7 @@ impl Slicer {
             }
             
             let v = &slice.vertices[polygon.startv];
-            let point = if let Some(t) = transform {
-                // Apply transform to 2D vertex (use object_z for the Z coordinate)
-                let transformed = apply_transform(&[v.x, v.y, object_z], t);
-                Point2D::new(transformed[0], transformed[1])
-            } else {
-                Point2D::new(v.x, v.y)
-            };
-            points.push(point);
+            points.push(transform_vertex(v));
             
             // Add points from segments
             for segment in &polygon.segments {
@@ -792,13 +799,7 @@ impl Slicer {
                 }
                 
                 let v = &slice.vertices[segment.v2];
-                let point = if let Some(t) = transform {
-                    let transformed = apply_transform(&[v.x, v.y, object_z], t);
-                    Point2D::new(transformed[0], transformed[1])
-                } else {
-                    Point2D::new(v.x, v.y)
-                };
-                points.push(point);
+                points.push(transform_vertex(v));
             }
             
             // Only add non-empty contours
