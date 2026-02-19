@@ -21,7 +21,7 @@ pub(super) fn write_boolean_shape<W: IoWrite>(
         BooleanOpType::Intersection => "intersection",
         BooleanOpType::Difference => "difference",
     };
-    elem.push_attribute(("op", op_type));
+    elem.push_attribute(("operation", op_type));
 
     if let Some(ref path) = shape.path {
         elem.push_attribute(("path", path.as_str()));
