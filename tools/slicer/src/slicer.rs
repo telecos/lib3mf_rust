@@ -195,7 +195,7 @@ fn apply_boolean_op_2d(
     let (op_polys, op_verts) = contours_to_slice_polygons(&operand_contours);
 
     if base_polys.is_empty() {
-        return base_contours;
+        return Vec::new();
     }
 
     // Combine vertices into a single buffer with offsets for the operand polygons.
@@ -241,7 +241,13 @@ fn apply_boolean_op_2d(
 
     match result_polys {
         Ok(polys) => slice_polygons_to_contours(&polys, &result_verts),
-        Err(_) => base_contours,
+        Err(e) => {
+            eprintln!(
+                "Warning: 2D boolean op {:?} failed: {}; using base contours as fallback",
+                op, e
+            );
+            base_contours
+        }
     }
 }
 
@@ -922,14 +928,14 @@ impl Slicer {
 
             let mut result = base_contours;
             for operand in &bool_shape.operands {
-                let mut visited2 = std::collections::HashSet::new();
+                let mut operand_visited = std::collections::HashSet::new();
                 let operand_contours = self.slice_object_to_contours_at_z(
                     operand.objectid,
                     &build_item.transform,
                     z,
                     model,
                     displacement_handler,
-                    &mut visited2,
+                    &mut operand_visited,
                 )?;
                 result = apply_boolean_op_2d(bool_shape.operation, result, operand_contours);
             }
