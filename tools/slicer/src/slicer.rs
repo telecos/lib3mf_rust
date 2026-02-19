@@ -4,7 +4,10 @@ use crate::color::{ColorResolver, Rgba, lerp_color};
 use crate::config::SlicerConfig;
 use crate::displacement::DisplacementHandler;
 use crate::renderer::{ColoredContour, Point2D, SliceContour, SliceRenderer};
-use lib3mf::{BuildItem, Mesh, Model, Object, Vertex, assemble_contours};
+use lib3mf::{
+    BooleanOpType, BuildItem, Mesh, Model, Object, SlicePolygon, SliceSegment, Vertex, Vertex2D,
+    assemble_contours, polygon_clipping,
+};
 use std::path::Path;
 use thiserror::Error;
 
@@ -121,10 +124,133 @@ fn merge_meshes(base: &mut Mesh, other: &Mesh) {
     }
 }
 
-/// Compute beam-plane intersection for a cylindrical beam
-/// Returns the circle center in 2D and interpolated radius if the beam crosses the Z plane
+/// Convert slice contours to SlicePolygon / Vertex2D format (for polygon clipping)
 ///
-/// # Arguments
+/// All polygons share a single vertex buffer. Degenerate contours (< 3 points) are skipped.
+fn contours_to_slice_polygons(contours: &[SliceContour]) -> (Vec<SlicePolygon>, Vec<Vertex2D>) {
+    let mut vertices: Vec<Vertex2D> = Vec::new();
+    let mut polygons: Vec<SlicePolygon> = Vec::new();
+
+    for contour in contours {
+        if contour.points.len() < 3 {
+            continue;
+        }
+
+        let start_idx = vertices.len();
+        vertices.push(Vertex2D::new(contour.points[0].x, contour.points[0].y));
+        let mut polygon = SlicePolygon::new(start_idx);
+
+        for point in contour.points.iter().skip(1) {
+            let idx = vertices.len();
+            vertices.push(Vertex2D::new(point.x, point.y));
+            polygon.segments.push(SliceSegment::new(idx));
+        }
+
+        polygons.push(polygon);
+    }
+
+    (polygons, vertices)
+}
+
+/// Convert SlicePolygon / Vertex2D pairs back to slice contours
+fn slice_polygons_to_contours(
+    polygons: &[SlicePolygon],
+    vertices: &[Vertex2D],
+) -> Vec<SliceContour> {
+    polygons
+        .iter()
+        .filter_map(|p| {
+            let mut points = Vec::new();
+
+            if p.startv < vertices.len() {
+                let v = &vertices[p.startv];
+                points.push(Point2D::new(v.x, v.y));
+            }
+
+            for seg in &p.segments {
+                if seg.v2 < vertices.len() {
+                    let v = &vertices[seg.v2];
+                    points.push(Point2D::new(v.x, v.y));
+                }
+            }
+
+            if points.len() >= 3 {
+                Some(SliceContour::new(points))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Apply a 2D polygon boolean operation on two sets of contours
+///
+/// Returns the result contours. On error, returns the base contours unchanged.
+fn apply_boolean_op_2d(
+    op: BooleanOpType,
+    base_contours: Vec<SliceContour>,
+    operand_contours: Vec<SliceContour>,
+) -> Vec<SliceContour> {
+    let (base_polys, base_verts) = contours_to_slice_polygons(&base_contours);
+    let (op_polys, op_verts) = contours_to_slice_polygons(&operand_contours);
+
+    if base_polys.is_empty() {
+        return Vec::new();
+    }
+
+    // Combine vertices into a single buffer with offsets for the operand polygons.
+    // The polygon clipping API requires a single shared vertex buffer, so we
+    // need to re-index the operand polygons to account for the base vertices.
+    let base_len = base_verts.len();
+    let mut combined_verts = base_verts;
+    combined_verts.extend(op_verts);
+
+    // Re-index operand polygons to use the combined vertex buffer
+    let reindexed_op_polys: Vec<SlicePolygon> = op_polys
+        .into_iter()
+        .map(|mut p| {
+            p.startv += base_len;
+            for seg in &mut p.segments {
+                seg.v2 += base_len;
+            }
+            p
+        })
+        .collect();
+
+    let mut result_verts = Vec::new();
+
+    let result_polys = match op {
+        BooleanOpType::Union => {
+            let mut all_polys = base_polys;
+            all_polys.extend(reindexed_op_polys);
+            polygon_clipping::union_polygons(&all_polys, &combined_verts, &mut result_verts)
+        }
+        BooleanOpType::Intersection => polygon_clipping::intersect_polygons(
+            &base_polys,
+            &reindexed_op_polys,
+            &combined_verts,
+            &mut result_verts,
+        ),
+        BooleanOpType::Difference => polygon_clipping::difference_polygons(
+            &base_polys,
+            &reindexed_op_polys,
+            &combined_verts,
+            &mut result_verts,
+        ),
+    };
+
+    match result_polys {
+        Ok(polys) => slice_polygons_to_contours(&polys, &result_verts),
+        Err(e) => {
+            eprintln!(
+                "Warning: 2D boolean op {:?} failed: {}; using base contours as fallback",
+                op, e
+            );
+            base_contours
+        }
+    }
+}
+
 /// * `p1` - First endpoint of the beam (x, y, z)
 /// * `p2` - Second endpoint of the beam (x, y, z)
 /// * `r1` - Radius at p1 (must be positive, supports tapered beams)
@@ -263,9 +389,114 @@ impl Slicer {
         Ok(model)
     }
 
-    /// Recursively resolve mesh from an object, handling component hierarchies
+    /// Returns true if the boolean operations extension is enabled in the slicer config
+    fn boolean_ops_enabled(&self) -> bool {
+        self.config
+            .spec_support
+            .as_ref()
+            .map(|s| s.boolean_ops)
+            .unwrap_or(true)
+    }
+
+    /// Slice a single object (identified by ID) at a given Z height and return plain contours.
     ///
-    /// This function traverses component references and combines meshes from the entire
+    /// This method is used when applying 2D boolean operations: it resolves and slices the
+    /// referenced object, recursively handling nested boolean shapes when enabled.
+    #[allow(clippy::too_many_arguments)]
+    fn slice_object_to_contours_at_z(
+        &self,
+        objectid: usize,
+        transform: &Option<[f64; 12]>,
+        z: f64,
+        model: &Model,
+        displacement_handler: &DisplacementHandler,
+        visited: &mut std::collections::HashSet<usize>,
+    ) -> Result<Vec<SliceContour>, SlicerError> {
+        // Prevent cycles
+        if visited.contains(&objectid) {
+            return Ok(Vec::new());
+        }
+
+        let object = match model
+            .resources
+            .objects
+            .iter()
+            .find(|obj| obj.id == objectid)
+        {
+            Some(o) => o,
+            None => return Ok(Vec::new()),
+        };
+
+        // If the object itself has a boolean shape and boolean ops are enabled,
+        // handle it recursively with 2D operations.
+        if self.boolean_ops_enabled()
+            && let Some(ref bool_shape) = object.boolean_shape
+        {
+            visited.insert(objectid);
+
+            let base_contours = self.slice_object_to_contours_at_z(
+                bool_shape.objectid,
+                transform,
+                z,
+                model,
+                displacement_handler,
+                visited,
+            )?;
+
+            let mut result = base_contours;
+            for operand in &bool_shape.operands {
+                let operand_contours = self.slice_object_to_contours_at_z(
+                    operand.objectid,
+                    transform,
+                    z,
+                    model,
+                    displacement_handler,
+                    visited,
+                )?;
+                result = apply_boolean_op_2d(bool_shape.operation, result, operand_contours);
+            }
+
+            visited.remove(&objectid);
+            return Ok(result);
+        }
+
+        // Resolve and slice the object's mesh
+        visited.insert(objectid);
+        let mut mesh_visited = std::collections::HashSet::new();
+        let mut warned_booleans = std::collections::HashSet::new();
+        let mesh_option = self.resolve_object_mesh_recursive(
+            object,
+            model,
+            transform,
+            &mut mesh_visited,
+            displacement_handler,
+            &mut warned_booleans,
+        )?;
+        visited.remove(&objectid);
+
+        let mesh = match mesh_option {
+            Some(m) => m,
+            None => return Ok(Vec::new()),
+        };
+
+        let segments = lib3mf::collect_intersection_segments(&mesh, z);
+        let mut plain_segments = segments;
+
+        if let Some(ref beamset) = mesh.beamset {
+            let beam_segs = self.collect_beam_segments(&mesh, beamset, z);
+            plain_segments.extend(beam_segs);
+        }
+
+        let assembled = assemble_contours(plain_segments, 1e-6);
+        let contours = assembled
+            .into_iter()
+            .map(|pts| SliceContour::new(pts.iter().map(|(x, y)| Point2D::new(*x, *y)).collect()))
+            .collect();
+
+        Ok(contours)
+    }
+
+    /// Recursively resolve mesh from an object, handling component hierarchies
     /// hierarchy, applying transforms at each level.
     ///
     /// # Arguments
@@ -292,36 +523,55 @@ impl Slicer {
         visited.insert(object.id);
 
         // Check if this object has a boolean shape definition
-        // Boolean operations (CSG) require advanced mesh processing capabilities
-        // that are not yet implemented in this slicer
         if let Some(ref bool_shape) = object.boolean_shape {
-            if !warned_booleans.contains(&object.id) {
-                println!(
-                    "  Warning: Object {} has boolean shape (operation: {:?}) which is not yet supported by the slicer.",
-                    object.id, bool_shape.operation
-                );
-                println!(
-                    "  Boolean operations will be ignored and only the base mesh will be sliced."
-                );
-                warned_booleans.insert(object.id);
-            }
+            if self.boolean_ops_enabled() {
+                // Boolean ops are handled at the 2D slice level (in slice_object_to_contours_at_z).
+                // For mesh resolution we simply fall back to the base object mesh so that
+                // Z-intersection checking still works.
+                if let Some(base_obj) = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|obj| obj.id == bool_shape.objectid)
+                {
+                    visited.remove(&object.id);
+                    return self.resolve_object_mesh_recursive(
+                        base_obj,
+                        model,
+                        accumulated_transform,
+                        visited,
+                        displacement_handler,
+                        warned_booleans,
+                    );
+                }
+            } else {
+                // Boolean ops disabled: warn once and fall back to base mesh
+                if !warned_booleans.contains(&object.id) {
+                    println!(
+                        "  Warning: Object {} has boolean shape (operation: {:?}). \
+                         Boolean operations are disabled in spec_support — \
+                         only the base mesh will be sliced.",
+                        object.id, bool_shape.operation
+                    );
+                    warned_booleans.insert(object.id);
+                }
 
-            // For now, just resolve the base object mesh without boolean operations
-            if let Some(base_obj) = model
-                .resources
-                .objects
-                .iter()
-                .find(|obj| obj.id == bool_shape.objectid)
-            {
-                visited.remove(&object.id);
-                return self.resolve_object_mesh_recursive(
-                    base_obj,
-                    model,
-                    accumulated_transform,
-                    visited,
-                    displacement_handler,
-                    warned_booleans,
-                );
+                if let Some(base_obj) = model
+                    .resources
+                    .objects
+                    .iter()
+                    .find(|obj| obj.id == bool_shape.objectid)
+                {
+                    visited.remove(&object.id);
+                    return self.resolve_object_mesh_recursive(
+                        base_obj,
+                        model,
+                        accumulated_transform,
+                        visited,
+                        displacement_handler,
+                        warned_booleans,
+                    );
+                }
             }
         }
 
@@ -661,7 +911,38 @@ impl Slicer {
             }
         }
 
-        // No slice stack - use mesh-based slicing
+        // If the object has a boolean shape and boolean ops are enabled, apply 2D polygon ops
+        if self.boolean_ops_enabled()
+            && let Some(ref bool_shape) = object.boolean_shape
+        {
+            let mut visited = std::collections::HashSet::new();
+
+            let base_contours = self.slice_object_to_contours_at_z(
+                bool_shape.objectid,
+                &build_item.transform,
+                z,
+                model,
+                displacement_handler,
+                &mut visited,
+            )?;
+
+            let mut result = base_contours;
+            for operand in &bool_shape.operands {
+                let mut operand_visited = std::collections::HashSet::new();
+                let operand_contours = self.slice_object_to_contours_at_z(
+                    operand.objectid,
+                    &build_item.transform,
+                    z,
+                    model,
+                    displacement_handler,
+                    &mut operand_visited,
+                )?;
+                result = apply_boolean_op_2d(bool_shape.operation, result, operand_contours);
+            }
+
+            return Ok((result, Vec::new()));
+        }
+
         // Recursively resolve mesh from object (handles components and hierarchy)
         let mut visited = std::collections::HashSet::new();
         let mesh_option = self.resolve_object_mesh_recursive(
@@ -1145,7 +1426,7 @@ fn dist(a: Point2D, b: Point2D) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Point3D, PrintableBox, Resolution};
+    use crate::config::{Point3D, PrintableBox, Resolution, SpecSupport};
 
     #[test]
     fn test_slicer_creation() {
@@ -1170,5 +1451,203 @@ mod tests {
 
         let slicer = Slicer::new(config);
         assert_eq!(slicer.config.slice_thickness_um, 50.0);
+    }
+
+    /// Create a square SliceContour with corners at (x0,y0) to (x1,y1)
+    fn make_square_contour(x0: f64, y0: f64, x1: f64, y1: f64) -> SliceContour {
+        SliceContour::new(vec![
+            Point2D::new(x0, y0),
+            Point2D::new(x1, y0),
+            Point2D::new(x1, y1),
+            Point2D::new(x0, y1),
+        ])
+    }
+
+    /// Compute the approximate area of a contour using the shoelace formula
+    fn contour_area(contour: &SliceContour) -> f64 {
+        let pts = &contour.points;
+        let n = pts.len();
+        let mut area = 0.0;
+        for i in 0..n {
+            let j = (i + 1) % n;
+            area += pts[i].x * pts[j].y;
+            area -= pts[j].x * pts[i].y;
+        }
+        area.abs() / 2.0
+    }
+
+    /// Compute total area of all contours (treating each as an independent region)
+    fn total_area(contours: &[SliceContour]) -> f64 {
+        contours.iter().map(|c| contour_area(c)).sum()
+    }
+
+    #[test]
+    fn test_contours_to_slice_polygons_roundtrip() {
+        let square = make_square_contour(0.0, 0.0, 10.0, 10.0);
+        let (polys, verts) = contours_to_slice_polygons(&[square.clone()]);
+        assert_eq!(polys.len(), 1);
+        assert_eq!(verts.len(), 4);
+
+        let result = slice_polygons_to_contours(&polys, &verts);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].points.len(), 4);
+    }
+
+    #[test]
+    fn test_apply_boolean_op_2d_difference_non_overlapping() {
+        // Two non-overlapping squares: difference should return the subject unchanged
+        let subject = make_square_contour(0.0, 0.0, 10.0, 10.0);
+        let clip = make_square_contour(20.0, 20.0, 30.0, 30.0);
+
+        let result =
+            apply_boolean_op_2d(BooleanOpType::Difference, vec![subject.clone()], vec![clip]);
+
+        // Result should cover the full subject area
+        assert!(
+            !result.is_empty(),
+            "Difference of non-overlapping squares should not be empty"
+        );
+        let area = total_area(&result);
+        let expected_area = 100.0; // 10x10 = 100mm²
+        assert!(
+            (area - expected_area).abs() < 1.0,
+            "Expected area ≈ {:.1}, got {:.1}",
+            expected_area,
+            area
+        );
+    }
+
+    #[test]
+    fn test_apply_boolean_op_2d_difference_overlapping() {
+        // Two overlapping squares: subject=[0,10]x[0,10], clip=[5,15]x[5,15]
+        // Overlap: [5,10]x[5,10] = 5x5=25mm²
+        // Expected result area: 100 - 25 = 75mm²
+        let subject = make_square_contour(0.0, 0.0, 10.0, 10.0);
+        let clip = make_square_contour(5.0, 5.0, 15.0, 15.0);
+
+        let result = apply_boolean_op_2d(BooleanOpType::Difference, vec![subject], vec![clip]);
+
+        assert!(
+            !result.is_empty(),
+            "Difference of overlapping squares should not be empty"
+        );
+        let area = total_area(&result);
+        let expected_area = 75.0;
+        assert!(
+            (area - expected_area).abs() < 1.0,
+            "Expected area ≈ {:.1}, got {:.1}",
+            expected_area,
+            area
+        );
+    }
+
+    #[test]
+    fn test_apply_boolean_op_2d_union() {
+        // Union of two touching squares
+        let a = make_square_contour(0.0, 0.0, 10.0, 10.0);
+        let b = make_square_contour(10.0, 0.0, 20.0, 10.0);
+
+        let result = apply_boolean_op_2d(BooleanOpType::Union, vec![a], vec![b]);
+
+        assert!(!result.is_empty(), "Union should not be empty");
+        let area = total_area(&result);
+        let expected_area = 200.0; // Two touching 10x10 squares = 200mm²
+        assert!(
+            (area - expected_area).abs() < 2.0,
+            "Expected area ≈ {:.1}, got {:.1}",
+            expected_area,
+            area
+        );
+    }
+
+    #[test]
+    fn test_apply_boolean_op_2d_intersection() {
+        // Intersection of two overlapping squares
+        let a = make_square_contour(0.0, 0.0, 10.0, 10.0);
+        let b = make_square_contour(5.0, 5.0, 15.0, 15.0);
+
+        let result = apply_boolean_op_2d(BooleanOpType::Intersection, vec![a], vec![b]);
+
+        assert!(!result.is_empty(), "Intersection should not be empty");
+        let area = total_area(&result);
+        let expected_area = 25.0; // [5,10]x[5,10] = 5x5=25mm²
+        assert!(
+            (area - expected_area).abs() < 1.0,
+            "Expected area ≈ {:.1}, got {:.1}",
+            expected_area,
+            area
+        );
+    }
+
+    #[test]
+    fn test_apply_boolean_op_2d_difference_empty_operand() {
+        // Difference with empty operand should return subject unchanged
+        let subject = make_square_contour(0.0, 0.0, 10.0, 10.0);
+        let expected_area = contour_area(&subject);
+
+        let result = apply_boolean_op_2d(BooleanOpType::Difference, vec![subject], vec![]);
+
+        assert!(
+            !result.is_empty(),
+            "Difference with empty operand should return subject"
+        );
+        let area = total_area(&result);
+        assert!(
+            (area - expected_area).abs() < 1.0,
+            "Expected area ≈ {:.1}, got {:.1}",
+            expected_area,
+            area
+        );
+    }
+
+    #[test]
+    fn test_boolean_ops_enabled_default() {
+        let config = SlicerConfig {
+            slice_thickness_um: 50.0,
+            printable_box: PrintableBox {
+                origin: Point3D {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                end: Point3D {
+                    x: 200.0,
+                    y: 200.0,
+                    z: 200.0,
+                },
+            },
+            resolution: Resolution { dpi: 300 },
+            key_file: None,
+            spec_support: None, // No spec_support → defaults to enabled
+        };
+        let slicer = Slicer::new(config);
+        assert!(slicer.boolean_ops_enabled());
+    }
+
+    #[test]
+    fn test_boolean_ops_disabled() {
+        let config = SlicerConfig {
+            slice_thickness_um: 50.0,
+            printable_box: PrintableBox {
+                origin: Point3D {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                end: Point3D {
+                    x: 200.0,
+                    y: 200.0,
+                    z: 200.0,
+                },
+            },
+            resolution: Resolution { dpi: 300 },
+            key_file: None,
+            spec_support: Some(SpecSupport {
+                boolean_ops: false,
+                ..SpecSupport::default()
+            }),
+        };
+        let slicer = Slicer::new(config);
+        assert!(!slicer.boolean_ops_enabled());
     }
 }

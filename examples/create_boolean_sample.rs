@@ -112,9 +112,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Boolean operation: DIFFERENCE (A - B)");
     println!("  - Build transform: moves result up 10mm");
     println!("  - Final Z range: approximately 0mm to 20mm");
-    println!("\nNote: Boolean mesh operations (CSG) are not yet implemented in the slicer.");
-    println!("The slicer will detect the boolean shape and log a warning,");
-    println!("then slice only the base object (Cube A) for now.");
+    println!(
+        "\nThe slicer applies the boolean difference at each slice layer using 2D polygon operations."
+    );
+    println!("Slices will show the L-shaped cross-section where Cube A overlaps with Cube B.");
 
     Ok(())
 }
