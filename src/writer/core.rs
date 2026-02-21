@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
 use super::beam_lattice::write_beamset;
@@ -14,8 +15,11 @@ use super::boolean_ops::write_boolean_shape;
 
 /// Write an object
 pub(super) fn write_object<W: IoWrite>(writer: &mut Writer<W>, object: &Object) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("object");
-    elem.push_attribute(("id", object.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", object.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     let obj_type = match object.object_type {
         ObjectType::Model => "model",
@@ -31,15 +35,21 @@ pub(super) fn write_object<W: IoWrite>(writer: &mut Writer<W>, object: &Object) 
     }
 
     if let Some(pid) = object.pid {
-        elem.push_attribute(("pid", pid.to_string().as_str()));
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", pid).unwrap();
+        elem.push_attribute(("pid", fmt_buf.as_str()));
     }
 
     if let Some(pindex) = object.pindex {
-        elem.push_attribute(("pindex", pindex.to_string().as_str()));
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", pindex).unwrap();
+        elem.push_attribute(("pindex", fmt_buf.as_str()));
     }
 
     if let Some(basematerialid) = object.basematerialid {
-        elem.push_attribute(("basematerialid", basematerialid.to_string().as_str()));
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", basematerialid).unwrap();
+        elem.push_attribute(("basematerialid", fmt_buf.as_str()));
     }
 
     // Production extension attributes
@@ -90,11 +100,23 @@ pub(super) fn write_mesh<W: IoWrite>(writer: &mut Writer<W>, mesh: &Mesh) -> Res
         .write_event(Event::Start(BytesStart::new("vertices")))
         .map_err(|e| Error::xml_write(format!("Failed to write vertices element: {}", e)))?;
 
+    // Reuse a single format buffer to avoid per-attribute String allocations
+    let mut fmt_buf = String::with_capacity(32);
+
     for vertex in &mesh.vertices {
         let mut v_elem = BytesStart::new("vertex");
-        v_elem.push_attribute(("x", vertex.x.to_string().as_str()));
-        v_elem.push_attribute(("y", vertex.y.to_string().as_str()));
-        v_elem.push_attribute(("z", vertex.z.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", vertex.x).unwrap();
+        v_elem.push_attribute(("x", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", vertex.y).unwrap();
+        v_elem.push_attribute(("y", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", vertex.z).unwrap();
+        v_elem.push_attribute(("z", fmt_buf.as_str()));
 
         writer
             .write_event(Event::Empty(v_elem))
@@ -112,28 +134,47 @@ pub(super) fn write_mesh<W: IoWrite>(writer: &mut Writer<W>, mesh: &Mesh) -> Res
 
     for triangle in &mesh.triangles {
         let mut t_elem = BytesStart::new("triangle");
-        t_elem.push_attribute(("v1", triangle.v1.to_string().as_str()));
-        t_elem.push_attribute(("v2", triangle.v2.to_string().as_str()));
-        t_elem.push_attribute(("v3", triangle.v3.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", triangle.v1).unwrap();
+        t_elem.push_attribute(("v1", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", triangle.v2).unwrap();
+        t_elem.push_attribute(("v2", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", triangle.v3).unwrap();
+        t_elem.push_attribute(("v3", fmt_buf.as_str()));
 
         if let Some(pid) = triangle.pid {
-            t_elem.push_attribute(("pid", pid.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", pid).unwrap();
+            t_elem.push_attribute(("pid", fmt_buf.as_str()));
         }
 
         if let Some(pindex) = triangle.pindex {
-            t_elem.push_attribute(("pindex", pindex.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", pindex).unwrap();
+            t_elem.push_attribute(("pindex", fmt_buf.as_str()));
         }
 
         if let Some(p1) = triangle.p1 {
-            t_elem.push_attribute(("p1", p1.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", p1).unwrap();
+            t_elem.push_attribute(("p1", fmt_buf.as_str()));
         }
 
         if let Some(p2) = triangle.p2 {
-            t_elem.push_attribute(("p2", p2.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", p2).unwrap();
+            t_elem.push_attribute(("p2", fmt_buf.as_str()));
         }
 
         if let Some(p3) = triangle.p3 {
-            t_elem.push_attribute(("p3", p3.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", p3).unwrap();
+            t_elem.push_attribute(("p3", fmt_buf.as_str()));
         }
 
         writer
@@ -166,17 +207,25 @@ pub(super) fn write_components<W: IoWrite>(
         .write_event(Event::Start(BytesStart::new("components")))
         .map_err(|e| Error::xml_write(format!("Failed to write components element: {}", e)))?;
 
+    // Reuse a single format buffer to avoid per-attribute String allocations
+    let mut fmt_buf = String::with_capacity(32);
+
     for component in components {
         let mut elem = BytesStart::new("component");
-        elem.push_attribute(("objectid", component.objectid.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", component.objectid).unwrap();
+        elem.push_attribute(("objectid", fmt_buf.as_str()));
 
         if let Some(transform) = component.transform {
-            let transform_str = transform
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<_>>()
-                .join(" ");
-            elem.push_attribute(("transform", transform_str.as_str()));
+            fmt_buf.clear();
+            for (i, v) in transform.iter().enumerate() {
+                if i > 0 {
+                    fmt_buf.push(' ');
+                }
+                write!(fmt_buf, "{}", v).unwrap();
+            }
+            elem.push_attribute(("transform", fmt_buf.as_str()));
         }
 
         // Production extension attributes

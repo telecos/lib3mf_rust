@@ -1546,16 +1546,13 @@ pub(crate) fn validate_attributes(
     allowed: &[&str],
     element_name: &str,
 ) -> Result<()> {
-    use std::collections::HashSet;
-    let allowed_set: HashSet<&str> = allowed.iter().copied().collect();
-
     for key in attrs.keys() {
         // Skip namespace and extension attributes
         if should_skip_attribute(key) {
             continue;
         }
 
-        if !allowed_set.contains(key.as_str()) {
+        if !allowed.contains(&key.as_str()) {
             return Err(Error::InvalidXml(format!(
                 "Unknown attribute '{}' on <{}>",
                 key, element_name

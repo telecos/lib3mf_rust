@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
 /// Write a volumetric property group resource (`<v:volumetricpropertygroup>`)
@@ -15,8 +16,11 @@ pub(super) fn write_volumetric_property_group<W: IoWrite>(
     writer: &mut Writer<W>,
     group: &VolumetricPropertyGroup,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("v:volumetricpropertygroup");
-    elem.push_attribute(("id", group.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", group.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     writer.write_event(Event::Start(elem)).map_err(|e| {
         Error::xml_write(format!(
@@ -27,7 +31,10 @@ pub(super) fn write_volumetric_property_group<W: IoWrite>(
 
     for prop in &group.properties {
         let mut prop_elem = BytesStart::new("v:property");
-        prop_elem.push_attribute(("index", prop.index.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", prop.index).unwrap();
+        prop_elem.push_attribute(("index", fmt_buf.as_str()));
         prop_elem.push_attribute(("value", prop.value.as_str()));
 
         writer
@@ -52,8 +59,11 @@ pub(super) fn write_volumetric_data<W: IoWrite>(
     writer: &mut Writer<W>,
     vol_data: &VolumetricData,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("v:volumetricdata");
-    elem.push_attribute(("id", vol_data.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", vol_data.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -83,13 +93,25 @@ pub(super) fn write_volumetric_data<W: IoWrite>(
 
 /// Write a `<v:boundary>` element
 fn write_boundary<W: IoWrite>(writer: &mut Writer<W>, boundary: &VolumetricBoundary) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(64);
     let mut elem = BytesStart::new("v:boundary");
 
-    let min_str = format!("{} {} {}", boundary.min.0, boundary.min.1, boundary.min.2);
-    let max_str = format!("{} {} {}", boundary.max.0, boundary.max.1, boundary.max.2);
+    write!(
+        fmt_buf,
+        "{} {} {}",
+        boundary.min.0, boundary.min.1, boundary.min.2
+    )
+    .unwrap();
+    elem.push_attribute(("min", fmt_buf.as_str()));
 
-    elem.push_attribute(("min", min_str.as_str()));
-    elem.push_attribute(("max", max_str.as_str()));
+    fmt_buf.clear();
+    write!(
+        fmt_buf,
+        "{} {} {}",
+        boundary.max.0, boundary.max.1, boundary.max.2
+    )
+    .unwrap();
+    elem.push_attribute(("max", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Empty(elem))
@@ -100,22 +122,27 @@ fn write_boundary<W: IoWrite>(writer: &mut Writer<W>, boundary: &VolumetricBound
 
 /// Write a `<v:voxels>` element with child `<v:voxel>` entries
 fn write_voxels<W: IoWrite>(writer: &mut Writer<W>, grid: &VoxelGrid) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(64);
     let mut elem = BytesStart::new("v:voxels");
 
-    let dims_str = format!(
+    write!(
+        fmt_buf,
         "{} {} {}",
         grid.dimensions.0, grid.dimensions.1, grid.dimensions.2
-    );
-    elem.push_attribute(("dimensions", dims_str.as_str()));
+    )
+    .unwrap();
+    elem.push_attribute(("dimensions", fmt_buf.as_str()));
 
     if let Some(spacing) = grid.spacing {
-        let spacing_str = format!("{} {} {}", spacing.0, spacing.1, spacing.2);
-        elem.push_attribute(("spacing", spacing_str.as_str()));
+        fmt_buf.clear();
+        write!(fmt_buf, "{} {} {}", spacing.0, spacing.1, spacing.2).unwrap();
+        elem.push_attribute(("spacing", fmt_buf.as_str()));
     }
 
     if let Some(origin) = grid.origin {
-        let origin_str = format!("{} {} {}", origin.0, origin.1, origin.2);
-        elem.push_attribute(("origin", origin_str.as_str()));
+        fmt_buf.clear();
+        write!(fmt_buf, "{} {} {}", origin.0, origin.1, origin.2).unwrap();
+        elem.push_attribute(("origin", fmt_buf.as_str()));
     }
 
     writer
@@ -124,16 +151,29 @@ fn write_voxels<W: IoWrite>(writer: &mut Writer<W>, grid: &VoxelGrid) -> Result<
 
     for voxel in &grid.voxels {
         let mut voxel_elem = BytesStart::new("v:voxel");
-        voxel_elem.push_attribute(("x", voxel.position.0.to_string().as_str()));
-        voxel_elem.push_attribute(("y", voxel.position.1.to_string().as_str()));
-        voxel_elem.push_attribute(("z", voxel.position.2.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", voxel.position.0).unwrap();
+        voxel_elem.push_attribute(("x", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", voxel.position.1).unwrap();
+        voxel_elem.push_attribute(("y", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", voxel.position.2).unwrap();
+        voxel_elem.push_attribute(("z", fmt_buf.as_str()));
 
         if let Some(prop_id) = voxel.property_id {
-            voxel_elem.push_attribute(("property", prop_id.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", prop_id).unwrap();
+            voxel_elem.push_attribute(("property", fmt_buf.as_str()));
         }
 
         if let Some(color_id) = voxel.color_id {
-            voxel_elem.push_attribute(("color", color_id.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", color_id).unwrap();
+            voxel_elem.push_attribute(("color", fmt_buf.as_str()));
         }
 
         writer

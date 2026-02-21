@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
 /// Write build section
@@ -34,16 +35,21 @@ pub(super) fn write_build<W: IoWrite>(writer: &mut Writer<W>, build: &Build) -> 
 
 /// Write a build item
 pub(super) fn write_build_item<W: IoWrite>(writer: &mut Writer<W>, item: &BuildItem) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("item");
-    elem.push_attribute(("objectid", item.objectid.to_string().as_str()));
+
+    write!(fmt_buf, "{}", item.objectid).unwrap();
+    elem.push_attribute(("objectid", fmt_buf.as_str()));
 
     if let Some(transform) = item.transform {
-        let transform_str = transform
-            .iter()
-            .map(|v| v.to_string())
-            .collect::<Vec<_>>()
-            .join(" ");
-        elem.push_attribute(("transform", transform_str.as_str()));
+        fmt_buf.clear();
+        for (i, v) in transform.iter().enumerate() {
+            if i > 0 {
+                fmt_buf.push(' ');
+            }
+            write!(fmt_buf, "{}", v).unwrap();
+        }
+        elem.push_attribute(("transform", fmt_buf.as_str()));
     }
 
     // Production extension attributes

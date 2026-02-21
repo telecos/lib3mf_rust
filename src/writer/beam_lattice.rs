@@ -6,14 +6,21 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
 /// Write beamset (beam lattice extension)
 pub(super) fn write_beamset<W: IoWrite>(writer: &mut Writer<W>, beamset: &BeamSet) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("b:beamset");
 
-    elem.push_attribute(("radius", beamset.radius.to_string().as_str()));
-    elem.push_attribute(("minlength", beamset.min_length.to_string().as_str()));
+    write!(fmt_buf, "{}", beamset.radius).unwrap();
+    elem.push_attribute(("radius", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", beamset.min_length).unwrap();
+    elem.push_attribute(("minlength", fmt_buf.as_str()));
+
     elem.push_attribute(("capmode", beamset.cap_mode.to_string().as_str()));
 
     writer
@@ -22,15 +29,25 @@ pub(super) fn write_beamset<W: IoWrite>(writer: &mut Writer<W>, beamset: &BeamSe
 
     for beam in &beamset.beams {
         let mut beam_elem = BytesStart::new("b:beam");
-        beam_elem.push_attribute(("v1", beam.v1.to_string().as_str()));
-        beam_elem.push_attribute(("v2", beam.v2.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", beam.v1).unwrap();
+        beam_elem.push_attribute(("v1", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", beam.v2).unwrap();
+        beam_elem.push_attribute(("v2", fmt_buf.as_str()));
 
         if let Some(r1) = beam.r1 {
-            beam_elem.push_attribute(("r1", r1.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", r1).unwrap();
+            beam_elem.push_attribute(("r1", fmt_buf.as_str()));
         }
 
         if let Some(r2) = beam.r2 {
-            beam_elem.push_attribute(("r2", r2.to_string().as_str()));
+            fmt_buf.clear();
+            write!(fmt_buf, "{}", r2).unwrap();
+            beam_elem.push_attribute(("r2", fmt_buf.as_str()));
         }
 
         if let Some(cap1) = beam.cap1 {
