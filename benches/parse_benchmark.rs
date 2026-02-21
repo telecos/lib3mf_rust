@@ -193,11 +193,58 @@ fn bench_parse_real_files(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark writing: create a model with many vertices and triangles and write it
+fn bench_write_mesh(c: &mut Criterion) {
+    use lib3mf::{BuildItem, Mesh, Object, Vertex};
+
+    let mut group = c.benchmark_group("write_mesh");
+
+    for &(vertices, triangles) in &[(1000, 500), (10000, 5000), (50000, 25000)] {
+        group.bench_with_input(
+            BenchmarkId::new(
+                "vertices_triangles",
+                format!("{}v_{}t", vertices, triangles),
+            ),
+            &(vertices, triangles),
+            |b, &(v_count, t_count)| {
+                // Build the model once outside the timed loop
+                let mut model = Model::new();
+                let mut mesh = Mesh::with_capacity(v_count, t_count);
+
+                for i in 0..v_count {
+                    let x = (i % 100) as f64;
+                    let y = (i / 100) as f64;
+                    mesh.vertices.push(Vertex::new(x, y, 0.0));
+                }
+                let v_max = v_count.saturating_sub(2);
+                for i in 0..t_count {
+                    let base = (i * 3) % v_max.max(1);
+                    mesh.triangles
+                        .push(lib3mf::Triangle::new(base, base + 1, base + 2));
+                }
+
+                let mut object = Object::new(1);
+                object.mesh = Some(mesh);
+                model.resources.objects.push(object);
+                model.build.items.push(BuildItem::new(1));
+
+                b.iter(|| {
+                    let buf = std::io::Cursor::new(Vec::with_capacity(v_count * 64));
+                    black_box(model.clone().to_writer(buf).unwrap());
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_parse_small,
     bench_parse_medium,
     bench_parse_large,
-    bench_parse_real_files
+    bench_parse_real_files,
+    bench_write_mesh
 );
 criterion_main!(benches);

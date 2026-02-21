@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
 /// Write displacement2d resource (displacement extension)
@@ -14,8 +15,11 @@ pub(super) fn write_displacement2d<W: IoWrite>(
     writer: &mut Writer<W>,
     disp_map: &Displacement2D,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("d:displacement2d");
-    elem.push_attribute(("id", disp_map.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", disp_map.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
     elem.push_attribute(("path", disp_map.path.as_str()));
 
     // Write optional attributes
@@ -62,8 +66,11 @@ pub(super) fn write_normvector_group<W: IoWrite>(
     writer: &mut Writer<W>,
     group: &NormVectorGroup,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("d:normvectorgroup");
-    elem.push_attribute(("id", group.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", group.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -71,9 +78,18 @@ pub(super) fn write_normvector_group<W: IoWrite>(
 
     for vector in &group.vectors {
         let mut vec_elem = BytesStart::new("d:normvector");
-        vec_elem.push_attribute(("x", vector.x.to_string().as_str()));
-        vec_elem.push_attribute(("y", vector.y.to_string().as_str()));
-        vec_elem.push_attribute(("z", vector.z.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", vector.x).unwrap();
+        vec_elem.push_attribute(("x", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", vector.y).unwrap();
+        vec_elem.push_attribute(("y", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", vector.z).unwrap();
+        vec_elem.push_attribute(("z", fmt_buf.as_str()));
 
         writer
             .write_event(Event::Empty(vec_elem))
@@ -92,12 +108,27 @@ pub(super) fn write_disp2d_group<W: IoWrite>(
     writer: &mut Writer<W>,
     group: &Disp2DGroup,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("d:disp2dgroup");
-    elem.push_attribute(("id", group.id.to_string().as_str()));
-    elem.push_attribute(("dispid", group.dispid.to_string().as_str()));
-    elem.push_attribute(("nid", group.nid.to_string().as_str()));
-    elem.push_attribute(("height", group.height.to_string().as_str()));
-    elem.push_attribute(("offset", group.offset.to_string().as_str()));
+
+    write!(fmt_buf, "{}", group.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", group.dispid).unwrap();
+    elem.push_attribute(("dispid", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", group.nid).unwrap();
+    elem.push_attribute(("nid", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", group.height).unwrap();
+    elem.push_attribute(("height", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", group.offset).unwrap();
+    elem.push_attribute(("offset", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -105,8 +136,14 @@ pub(super) fn write_disp2d_group<W: IoWrite>(
 
     for coord in &group.coords {
         let mut coord_elem = BytesStart::new("d:disp2d");
-        coord_elem.push_attribute(("u", coord.u.to_string().as_str()));
-        coord_elem.push_attribute(("v", coord.v.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", coord.u).unwrap();
+        coord_elem.push_attribute(("u", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", coord.v).unwrap();
+        coord_elem.push_attribute(("v", fmt_buf.as_str()));
 
         writer
             .write_event(Event::Empty(coord_elem))

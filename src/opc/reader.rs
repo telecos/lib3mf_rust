@@ -534,7 +534,8 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
         .archive
         .by_name(&path_to_use)
         .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
-    let mut content = String::new();
+    // Pre-allocate with uncompressed size to avoid repeated reallocations
+    let mut content = String::with_capacity(file.size() as usize);
     file.read_to_string(&mut content)?;
 
     Ok(content)
@@ -549,7 +550,8 @@ pub(super) fn get_file<R: Read + std::io::Seek>(
         .archive
         .by_name(name)
         .map_err(|_| Error::MissingFile(name.to_string()))?;
-    let mut content = String::new();
+    // Pre-allocate with uncompressed size to avoid repeated reallocations
+    let mut content = String::with_capacity(file.size() as usize);
     file.read_to_string(&mut content)?;
     Ok(content)
 }

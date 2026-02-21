@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::model::*;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
 /// Write a base material group
@@ -14,8 +15,11 @@ pub(super) fn write_base_material_group<W: IoWrite>(
     writer: &mut Writer<W>,
     group: &BaseMaterialGroup,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("m:basematerials");
-    elem.push_attribute(("id", group.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", group.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -25,14 +29,17 @@ pub(super) fn write_base_material_group<W: IoWrite>(
         let mut mat_elem = BytesStart::new("m:base");
         mat_elem.push_attribute(("name", material.name.as_str()));
 
-        let color = format!(
+        fmt_buf.clear();
+        write!(
+            fmt_buf,
             "#{:02X}{:02X}{:02X}{:02X}",
             material.displaycolor.0,
             material.displaycolor.1,
             material.displaycolor.2,
             material.displaycolor.3
-        );
-        mat_elem.push_attribute(("displaycolor", color.as_str()));
+        )
+        .unwrap();
+        mat_elem.push_attribute(("displaycolor", fmt_buf.as_str()));
 
         writer
             .write_event(Event::Empty(mat_elem))
@@ -51,8 +58,11 @@ pub(super) fn write_texture2d<W: IoWrite>(
     writer: &mut Writer<W>,
     texture: &Texture2D,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("m:texture2d");
-    elem.push_attribute(("id", texture.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", texture.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
     elem.push_attribute(("path", texture.path.as_str()));
     elem.push_attribute(("contenttype", texture.contenttype.as_str()));
 
@@ -91,9 +101,15 @@ pub(super) fn write_texture2d_group<W: IoWrite>(
     writer: &mut Writer<W>,
     group: &Texture2DGroup,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("m:texture2dgroup");
-    elem.push_attribute(("id", group.id.to_string().as_str()));
-    elem.push_attribute(("texid", group.texid.to_string().as_str()));
+
+    write!(fmt_buf, "{}", group.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", group.texid).unwrap();
+    elem.push_attribute(("texid", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -101,8 +117,14 @@ pub(super) fn write_texture2d_group<W: IoWrite>(
 
     for coord in &group.tex2coords {
         let mut coord_elem = BytesStart::new("m:tex2coord");
-        coord_elem.push_attribute(("u", coord.u.to_string().as_str()));
-        coord_elem.push_attribute(("v", coord.v.to_string().as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", coord.u).unwrap();
+        coord_elem.push_attribute(("u", fmt_buf.as_str()));
+
+        fmt_buf.clear();
+        write!(fmt_buf, "{}", coord.v).unwrap();
+        coord_elem.push_attribute(("v", fmt_buf.as_str()));
 
         writer
             .write_event(Event::Empty(coord_elem))
@@ -121,8 +143,11 @@ pub(super) fn write_color_group<W: IoWrite>(
     writer: &mut Writer<W>,
     group: &ColorGroup,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(32);
     let mut elem = BytesStart::new("m:colorgroup");
-    elem.push_attribute(("id", group.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", group.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Start(elem))
@@ -130,11 +155,14 @@ pub(super) fn write_color_group<W: IoWrite>(
 
     for color in &group.colors {
         let mut color_elem = BytesStart::new("m:color");
-        let color_str = format!(
+        fmt_buf.clear();
+        write!(
+            fmt_buf,
             "#{:02X}{:02X}{:02X}{:02X}",
             color.0, color.1, color.2, color.3
-        );
-        color_elem.push_attribute(("color", color_str.as_str()));
+        )
+        .unwrap();
+        color_elem.push_attribute(("color", fmt_buf.as_str()));
 
         writer
             .write_event(Event::Empty(color_elem))
@@ -153,18 +181,25 @@ pub(super) fn write_composite_materials<W: IoWrite>(
     writer: &mut Writer<W>,
     composite: &CompositeMaterials,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(64);
     let mut elem = BytesStart::new("m:compositematerials");
-    elem.push_attribute(("id", composite.id.to_string().as_str()));
-    elem.push_attribute(("matid", composite.matid.to_string().as_str()));
+
+    write!(fmt_buf, "{}", composite.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
+
+    fmt_buf.clear();
+    write!(fmt_buf, "{}", composite.matid).unwrap();
+    elem.push_attribute(("matid", fmt_buf.as_str()));
 
     // Convert matindices to space-separated string
-    let matindices_str = composite
-        .matindices
-        .iter()
-        .map(|i| i.to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
-    elem.push_attribute(("matindices", matindices_str.as_str()));
+    fmt_buf.clear();
+    for (i, idx) in composite.matindices.iter().enumerate() {
+        if i > 0 {
+            fmt_buf.push(' ');
+        }
+        write!(fmt_buf, "{}", idx).unwrap();
+    }
+    elem.push_attribute(("matindices", fmt_buf.as_str()));
 
     writer.write_event(Event::Start(elem)).map_err(|e| {
         Error::xml_write(format!("Failed to write compositematerials element: {}", e))
@@ -188,16 +223,17 @@ pub(super) fn write_composite<W: IoWrite>(
     writer: &mut Writer<W>,
     composite: &Composite,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(64);
     let mut elem = BytesStart::new("m:composite");
 
     // Convert values to space-separated string
-    let values_str = composite
-        .values
-        .iter()
-        .map(|v| v.to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
-    elem.push_attribute(("values", values_str.as_str()));
+    for (i, v) in composite.values.iter().enumerate() {
+        if i > 0 {
+            fmt_buf.push(' ');
+        }
+        write!(fmt_buf, "{}", v).unwrap();
+    }
+    elem.push_attribute(("values", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Empty(elem))
@@ -211,17 +247,21 @@ pub(super) fn write_multi_properties<W: IoWrite>(
     writer: &mut Writer<W>,
     multi: &MultiProperties,
 ) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(64);
     let mut elem = BytesStart::new("m:multiproperties");
-    elem.push_attribute(("id", multi.id.to_string().as_str()));
+
+    write!(fmt_buf, "{}", multi.id).unwrap();
+    elem.push_attribute(("id", fmt_buf.as_str()));
 
     // Convert pids to space-separated string
-    let pids_str = multi
-        .pids
-        .iter()
-        .map(|i| i.to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
-    elem.push_attribute(("pids", pids_str.as_str()));
+    fmt_buf.clear();
+    for (i, pid) in multi.pids.iter().enumerate() {
+        if i > 0 {
+            fmt_buf.push(' ');
+        }
+        write!(fmt_buf, "{}", pid).unwrap();
+    }
+    elem.push_attribute(("pids", fmt_buf.as_str()));
 
     // Convert blendmethods to space-separated string
     if !multi.blendmethods.is_empty() {
@@ -254,16 +294,17 @@ pub(super) fn write_multi_properties<W: IoWrite>(
 
 /// Write a multi entry
 pub(super) fn write_multi<W: IoWrite>(writer: &mut Writer<W>, multi: &Multi) -> Result<()> {
+    let mut fmt_buf = String::with_capacity(64);
     let mut elem = BytesStart::new("m:multi");
 
     // Convert pindices to space-separated string
-    let pindices_str = multi
-        .pindices
-        .iter()
-        .map(|i| i.to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
-    elem.push_attribute(("pindices", pindices_str.as_str()));
+    for (i, idx) in multi.pindices.iter().enumerate() {
+        if i > 0 {
+            fmt_buf.push(' ');
+        }
+        write!(fmt_buf, "{}", idx).unwrap();
+    }
+    elem.push_attribute(("pindices", fmt_buf.as_str()));
 
     writer
         .write_event(Event::Empty(elem))
@@ -271,3 +312,4 @@ pub(super) fn write_multi<W: IoWrite>(writer: &mut Writer<W>, multi: &Multi) -> 
 
     Ok(())
 }
+
