@@ -312,4 +312,3 @@ pub(super) fn write_multi<W: IoWrite>(writer: &mut Writer<W>, multi: &Multi) -> 
 
     Ok(())
 }
-
