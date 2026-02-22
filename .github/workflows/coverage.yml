@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -37,12 +38,15 @@ jobs:
           files: lcov-lib3mf.info
           flags: lib3mf
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          slug: telecos/lib3mf_rust
 
   coverage-slicer:
     name: Coverage (lib3mf-slicer)
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -69,3 +73,5 @@ jobs:
           files: lcov-slicer.info
           flags: lib3mf-slicer
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          slug: telecos/lib3mf_rust
