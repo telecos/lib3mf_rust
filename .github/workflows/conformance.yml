@@ -136,24 +136,71 @@ jobs:
         run: |
           echo "Testing suite: ${{ matrix.suite.name }}"
           if [ "${{ matrix.suite.name }}" = "suite8_secure" ]; then
-            cargo test --features ci,crypto --test conformance ${{ matrix.suite.name }} -- --nocapture
+            cargo test --features ci,crypto --test conformance ${{ matrix.suite.name }} -- --nocapture 2>&1 | tee test-output.txt
+            exit ${PIPESTATUS[0]}
           else
-            cargo test --features ci --test conformance ${{ matrix.suite.name }} -- --nocapture
+            cargo test --features ci --test conformance ${{ matrix.suite.name }} -- --nocapture 2>&1 | tee test-output.txt
+            exit ${PIPESTATUS[0]}
           fi
       
-      - name: Generate suite report
+      - name: Generate Job Summary
         if: always()
+        shell: bash
         run: |
-          echo "# ${{ matrix.suite.name }} Results" > ${{ matrix.suite.name }}-results.md
-          echo "Exit code from tests: ${{ steps.run-tests.outcome }}" >> ${{ matrix.suite.name }}-results.md
-      
-      - name: Upload suite report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: conformance-report-${{ matrix.suite.name }}
-          path: ${{ matrix.suite.name }}-results.md
-          retention-days: 30
+          SUITE="${{ matrix.suite.name }}"
+          case "$SUITE" in
+            suite1_core_slice_prod) DESC="Core + Production + Slice Extensions" ;;
+            suite2_core_prod_matl)  DESC="Core + Production + Materials Extensions" ;;
+            suite3_core)            DESC="Core Specification (Basic)" ;;
+            suite4_core_slice)      DESC="Core + Slice Extension" ;;
+            suite5_core_prod)       DESC="Core + Production Extension" ;;
+            suite6_core_matl)       DESC="Core + Materials Extension" ;;
+            suite7_beam)            DESC="Beam Lattice Extension" ;;
+            suite8_secure)          DESC="Secure Content Extension" ;;
+            suite9_core_ext)        DESC="Core Extensions" ;;
+            suite10_boolean)        DESC="Boolean Operations Extension" ;;
+            suite11_displacement)   DESC="Displacement Extension" ;;
+            *)                      DESC="$SUITE" ;;
+          esac
+
+          if [ -f test-output.txt ]; then
+            POS_LINE=$(grep "^${SUITE}: .* positive tests" test-output.txt || true)
+            NEG_LINE=$(grep "^${SUITE}: .* negative tests" test-output.txt || true)
+            HAS_FAILURE=$(grep -cE "FAILED|failed tests" test-output.txt || true)
+          else
+            POS_LINE=""
+            NEG_LINE=""
+            HAS_FAILURE=1
+          fi
+
+          if [ "${HAS_FAILURE}" = "0" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          {
+            echo "## ${STATUS} ${SUITE}"
+            echo "*${DESC}*"
+            echo ""
+            [ -n "$POS_LINE" ] && echo "- **${POS_LINE}**"
+            [ -n "$NEG_LINE" ] && echo "- **${NEG_LINE}**"
+
+            if [ -f test-output.txt ] && grep -q "Failed tests:" test-output.txt; then
+              FAIL_COUNT=$(grep -cE "^  [0-9]+\." test-output.txt || echo "?")
+              echo ""
+              echo "<details>"
+              echo "<summary>❌ Failed test cases (${FAIL_COUNT})</summary>"
+              echo ""
+              echo '```'
+              sed -n '/Failed tests:/,/^test result:/p' test-output.txt \
+                | grep -v "^test result:" \
+                | head -100
+              echo '```'
+              echo "</details>"
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
   
   # Generate overall summary after all suites complete
   conformance-summary:

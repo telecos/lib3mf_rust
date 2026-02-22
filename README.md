@@ -7,6 +7,7 @@ Note: Most part of this code has been vibe-coded using GitHub Copilot Agents
 [![Crates.io](https://img.shields.io/crates/v/lib3mf.svg)](https://crates.io/crates/lib3mf)
 [![docs.rs](https://docs.rs/lib3mf/badge.svg)](https://docs.rs/lib3mf)
 [![Build Status](https://github.com/telecos/lib3mf_rust/actions/workflows/ci.yml/badge.svg)](https://github.com/telecos/lib3mf_rust/actions/workflows/ci.yml)
+[![Conformance Tests](https://github.com/telecos/lib3mf_rust/actions/workflows/conformance.yml/badge.svg)](https://github.com/telecos/lib3mf_rust/actions/workflows/conformance.yml)
 [![Coverage](https://codecov.io/gh/telecos/lib3mf_rust/graph/badge.svg?flag=lib3mf)](https://codecov.io/gh/telecos/lib3mf_rust)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
