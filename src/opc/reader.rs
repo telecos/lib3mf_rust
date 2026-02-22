@@ -18,7 +18,7 @@ use zip::ZipArchive;
 /// We cap the hint at this safe value; the buffer will still grow as needed.
 const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 
-/// Maximum uncompressed size for text files (XML model, slice, relationship files) - 64 MB.
+/// Maximum uncompressed size for text files (XML model, slice, relationship files) - 1 GB.
 ///
 /// A crafted ZIP entry can decompress to a size far exceeding the compressed input
 /// (ZIP bomb / decompression-bomb DoS). Capping the pre-allocation hint only prevents
@@ -26,12 +26,15 @@ const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 /// grow the buffer without bound as decompression proceeds.
 /// We enforce this hard limit via `Read::take` so that no single ZIP entry can exhaust
 /// available memory regardless of how well it compresses.
-pub(crate) const MAX_UNCOMPRESSED_TEXT_SIZE: u64 = 64 * 1024 * 1024;
+///
+/// The limit is set to 1 GB to accommodate large but legitimate 3MF files:
+/// official 3MF Consortium conformance test files reach ~363 MB when uncompressed.
+pub(crate) const MAX_UNCOMPRESSED_TEXT_SIZE: u64 = 1024 * 1024 * 1024;
 
-/// Maximum uncompressed size for binary files (thumbnails, textures) - 64 MB.
+/// Maximum uncompressed size for binary files (thumbnails, textures) - 1 GB.
 ///
 /// Same rationale as `MAX_UNCOMPRESSED_TEXT_SIZE` above.
-pub(crate) const MAX_UNCOMPRESSED_BINARY_SIZE: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_UNCOMPRESSED_BINARY_SIZE: u64 = 1024 * 1024 * 1024;
 
 /// Open a 3MF package from a reader
 pub(super) fn open<R: Read + std::io::Seek>(reader: R) -> Result<Package<R>> {
