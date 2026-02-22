@@ -515,27 +515,32 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
     Ok(())
 }
 
-/// Get the main 3D model file content
-pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Result<String> {
+/// Resolve the model file path within the package, trying both direct and URL-decoded paths
+fn resolve_model_path<R: Read + std::io::Seek>(package: &mut Package<R>) -> Result<String> {
     // Discover model path from relationships (validation already done in open())
     let model_path = discover_model_path(package)?;
 
     // Determine which path to use: try the original first, then decoded
-    let path_to_use = if has_file(package, &model_path) {
-        model_path.clone()
+    if has_file(package, &model_path) {
+        Ok(model_path)
     } else {
         // If the direct path fails, try URL-decoding
         if let Ok(decoded) = decode(&model_path) {
             let decoded_path = decoded.into_owned();
             if decoded_path != model_path && has_file(package, &decoded_path) {
-                decoded_path
+                Ok(decoded_path)
             } else {
-                return Err(Error::MissingFile(model_path));
+                Err(Error::MissingFile(model_path))
             }
         } else {
-            return Err(Error::MissingFile(model_path));
+            Err(Error::MissingFile(model_path))
         }
-    };
+    }
+}
+
+/// Get the main 3D model file content
+pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Result<String> {
+    let path_to_use = resolve_model_path(package)?;
 
     // Now read the file
     let mut file = package
@@ -549,6 +554,24 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
     file.read_to_string(&mut content)?;
 
     Ok(content)
+}
+
+/// Get a streaming reader for the main 3D model file
+///
+/// Returns a reader that decompresses the model file on-the-fly from the ZIP archive,
+/// avoiding loading the entire file into memory at once. The returned reader implements
+/// `Read` and borrows the package for its lifetime.
+pub(super) fn get_model_reader<'a, R: Read + std::io::Seek>(
+    package: &'a mut Package<R>,
+) -> Result<impl Read + 'a> {
+    let path_to_use = resolve_model_path(package)?;
+
+    let file = package
+        .archive
+        .by_name(&path_to_use)
+        .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
+
+    Ok(file)
 }
 
 /// Get a file from the package by name

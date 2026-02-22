@@ -157,8 +157,8 @@ impl<R: Read + Seek> StreamingParser<R> {
     /// # }
     /// ```
     pub fn parse_full(mut self) -> Result<Model> {
-        let model_xml = self.package.get_model()?;
-        crate::parser::parse_model_xml_with_config(&model_xml, self.config)
+        let model_reader = self.package.get_model_reader()?;
+        crate::parser::parse_model_from_reader(model_reader, self.config)
     }
 }
 

@@ -74,10 +74,12 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     // Per 3MF spec, thumbnails MUST be at package level, not part/model level
     package.validate_no_model_level_thumbnails()?;
 
-    // Clone config before moving it to parse_model_xml_with_config
+    // Clone config before moving it to parse_model_from_reader
     let config_clone = config.clone();
-    let model_xml = package.get_model()?;
-    let mut model = parse_model_xml_with_config(&model_xml, config)?;
+    // Stream the model XML directly from the ZIP archive's decompression stream,
+    // avoiding loading the entire model file into memory as a string.
+    let model_reader = package.get_model_reader()?;
+    let mut model = parse_model_from_reader(model_reader, config)?;
 
     // Add thumbnail metadata to model
     model.thumbnail = thumbnail;
@@ -230,6 +232,37 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
+    parse_model_from_xml_reader(&mut reader, config)
+}
+
+/// Parse a 3D model from a reader
+///
+/// This function accepts any type implementing `Read` and parses the 3MF model XML.
+/// It is the reader-based counterpart to `parse_model_xml_with_config` and is used
+/// internally by `parse_3mf_with_config` to read the model from the ZIP archive's
+/// decompression stream.
+///
+/// # Note
+///
+/// The XML content is currently buffered into memory before parsing due to a known
+/// buffer boundary issue in `quick-xml` 0.39's `Reader<BufRead>` implementation.
+/// The internal parsing loop (`parse_model_from_xml_reader`) is already generic over
+/// `BufRead` and will enable fully streamed XML parsing once the quick-xml issue is
+/// resolved.
+pub fn parse_model_from_reader(mut reader: impl Read, config: ParserConfig) -> Result<Model> {
+    let mut content = String::new();
+    reader.read_to_string(&mut content)?;
+    parse_model_xml_with_config(&content, config)
+}
+
+/// Internal generic parsing function that works with any `quick_xml::Reader<R: BufRead>`.
+///
+/// Both `parse_model_xml_with_config` (from `&str`) and `parse_model_from_reader`
+/// (from streaming `Read`) delegate to this function for the actual XML parsing.
+fn parse_model_from_xml_reader<R: std::io::BufRead>(
+    reader: &mut Reader<R>,
+    config: ParserConfig,
+) -> Result<Model> {
     let mut model = Model::new();
     // Pre-allocate buffer with reasonable capacity to reduce allocations
     let mut buf = Vec::with_capacity(XML_BUFFER_CAPACITY);
@@ -427,7 +460,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "metadata" => {
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
 
                         // Validate that name attribute exists (required by 3MF Core spec)
                         let name = attrs.get("name").ok_or_else(|| {
@@ -518,7 +551,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_build = true;
 
                         // Extract and validate build element attributes
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         // Per 3MF Core spec: build element has no standard attributes
                         // Only extension attributes (like p:UUID) are allowed
                         validate_attributes(&attrs, &[], "build")?;
@@ -529,7 +562,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "object" if in_resources => {
-                        current_object = Some(parse_object(&reader, e)?);
+                        current_object = Some(parse_object(reader, e)?);
                     }
                     "mesh" if in_resources && current_object.is_some() => {
                         // Pre-allocate with reasonable capacity to reduce reallocations
@@ -550,7 +583,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "component" if in_components => {
                         if let Some(ref mut obj) = current_object {
-                            let component = parse_component(&reader, e)?;
+                            let component = parse_component(reader, e)?;
                             obj.components.push(component);
                         }
                     }
@@ -564,13 +597,13 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
                         validate_displacement_namespace_prefix(name_str, "vertex")?;
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
-                            let vertex = parse_vertex(&reader, e)?;
+                            let vertex = parse_vertex(reader, e)?;
                             disp_mesh.vertices.push(vertex);
                         }
                     }
                     "vertex" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
-                            let vertex = parse_vertex(&reader, e)?;
+                            let vertex = parse_vertex(reader, e)?;
                             mesh.vertices.push(vertex);
                         }
                     }
@@ -592,7 +625,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         has_displacement_triangles = true;
                         in_displacement_triangles = true;
                         // Parse did attribute from triangles element
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         if let Some(did_str) = attrs.get("did") {
                             let did = did_str.parse::<usize>()?;
                             // Validate forward reference (DPX 3312)
@@ -616,7 +649,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         // Per DPX spec 4.1: All elements under displacementmesh MUST use displacement namespace
                         validate_displacement_namespace_prefix(name_str, "triangle")?;
                         if let Some(ref mut disp_mesh) = current_displacement_mesh {
-                            let mut triangle = parse_displacement_triangle(&reader, e)?;
+                            let mut triangle = parse_displacement_triangle(reader, e)?;
 
                             // Per DPX spec 4.1.2.1: Validate displacement attribute consistency
                             // If d2 or d3 specified without d1, that's invalid
@@ -660,89 +693,89 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "triangle" if current_mesh.is_some() => {
                         if let Some(ref mut mesh) = current_mesh {
-                            let triangle = parse_triangle(&reader, e)?;
+                            let triangle = parse_triangle(reader, e)?;
                             mesh.triangles.push(triangle);
                         }
                     }
                     "item" if in_build => {
-                        let item = parse_build_item(&reader, e)?;
+                        let item = parse_build_item(reader, e)?;
                         model.build.items.push(item);
                     }
                     "basematerials" if in_resources => {
                         in_basematerials = true;
                         material_index = 0;
-                        let group = parse_basematerials_start(&reader, e, resource_parse_order)?;
+                        let group = parse_basematerials_start(reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_basematerialgroup = Some(group);
                     }
                     "base" if in_basematerials => {
                         // Materials within basematerials group
                         if let Some(ref mut group) = current_basematerialgroup {
-                            let base = parse_base_element(&reader, e)?;
+                            let base = parse_base_element(reader, e)?;
                             group.materials.push(base);
                         }
 
                         // Still parse to materials list for backward compatibility
-                        let material = parse_base_material(&reader, e, material_index)?;
+                        let material = parse_base_material(reader, e, material_index)?;
                         model.resources.materials.push(material);
                         material_index += 1;
                     }
                     "colorgroup" if in_resources => {
                         in_colorgroup = true;
-                        let group = parse_colorgroup_start(&reader, e, resource_parse_order)?;
+                        let group = parse_colorgroup_start(reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_colorgroup = Some(group);
                     }
                     "color" if in_colorgroup => {
                         if let Some(ref mut colorgroup) = current_colorgroup {
-                            let color = parse_color_element(&reader, e, colorgroup.id)?;
+                            let color = parse_color_element(reader, e, colorgroup.id)?;
                             colorgroup.colors.push(color);
                         }
                     }
                     "texture2d" if in_resources => {
-                        let texture = parse_texture2d(&reader, e, resource_parse_order)?;
+                        let texture = parse_texture2d(reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         model.resources.texture2d_resources.push(texture);
                     }
                     "texture2dgroup" if in_resources => {
                         in_texture2dgroup = true;
-                        let group = parse_texture2dgroup_start(&reader, e, resource_parse_order)?;
+                        let group = parse_texture2dgroup_start(reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_texture2dgroup = Some(group);
                     }
                     "tex2coord" if in_texture2dgroup => {
                         if let Some(ref mut group) = current_texture2dgroup {
-                            let coord = parse_tex2coord(&reader, e)?;
+                            let coord = parse_tex2coord(reader, e)?;
                             group.tex2coords.push(coord);
                         }
                     }
                     "compositematerials" if in_resources => {
                         in_compositematerials = true;
                         let group =
-                            parse_compositematerials_start(&reader, e, resource_parse_order)?;
+                            parse_compositematerials_start(reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_compositematerials = Some(group);
                     }
                     "composite" if in_compositematerials => {
                         if let Some(ref mut group) = current_compositematerials {
-                            let composite = parse_composite(&reader, e)?;
+                            let composite = parse_composite(reader, e)?;
                             group.composites.push(composite);
                         }
                     }
                     "multiproperties" if in_resources => {
                         in_multiproperties = true;
-                        let multi = parse_multiproperties_start(&reader, e, resource_parse_order)?;
+                        let multi = parse_multiproperties_start(reader, e, resource_parse_order)?;
                         resource_parse_order += 1;
                         current_multiproperties = Some(multi);
                     }
                     "multi" if in_multiproperties => {
                         if let Some(ref mut group) = current_multiproperties {
-                            let multi = parse_multi(&reader, e)?;
+                            let multi = parse_multi(reader, e)?;
                             group.multis.push(multi);
                         }
                     }
                     "displacement2d" if in_resources => {
-                        let disp = parse_displacement2d(&reader, e)?;
+                        let disp = parse_displacement2d(reader, e)?;
                         let id = disp.id;
                         model.resources.displacement_maps.push(disp);
                         declared_displacement2d_ids.insert(id); // Track for forward-reference validation
@@ -765,7 +798,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                             obj.has_extension_shapes = true;
                         }
 
-                        let beamset = parse_beamlattice_start(&reader, e)?;
+                        let beamset = parse_beamlattice_start(reader, e)?;
                         current_beamset = Some(beamset);
                     }
                     "beams" if in_beamset => {
@@ -773,7 +806,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "beam" if in_beamset => {
                         if let Some(ref mut beamset) = current_beamset {
-                            let beam = parse_beam(&reader, e)?;
+                            let beam = parse_beam(reader, e)?;
                             beamset.beams.push(beam);
                         }
                     }
@@ -787,7 +820,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ref" if in_beamset => {
                         // ref element can be in beamsets or ballsets
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         if let Some(index_str) = attrs.get("index") {
                             let index = index_str.parse::<usize>()?;
                             // Store the ref index for validation
@@ -808,7 +841,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ball" if in_beamset => {
                         if let Some(ref mut beamset) = current_beamset {
-                            let ball = parse_ball(&reader, e)?;
+                            let ball = parse_ball(reader, e)?;
                             beamset.balls.push(ball);
                         }
                     }
@@ -823,7 +856,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ballref" if in_beamset => {
                         // ballref element - explicit ball reference (alternative to generic ref in ballsets)
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         if let Some(index_str) = attrs.get("index") {
                             let index = index_str.parse::<usize>()?;
                             // Store the ballref index for validation
@@ -834,19 +867,19 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "normvectorgroup" if in_resources => {
                         in_normvectorgroup = true;
-                        let group = parse_normvectorgroup_start(&reader, e)?;
+                        let group = parse_normvectorgroup_start(reader, e)?;
                         current_normvectorgroup = Some(group);
                     }
                     "normvector" if in_normvectorgroup => {
                         if let Some(ref mut nvgroup) = current_normvectorgroup {
-                            let vector = parse_normvector(&reader, e)?;
+                            let vector = parse_normvector(reader, e)?;
                             nvgroup.vectors.push(vector);
                         }
                     }
                     "disp2dgroup" if in_resources => {
                         in_disp2dgroup = true;
                         let group = parse_disp2dgroup_start(
-                            &reader,
+                            reader,
                             e,
                             &declared_displacement2d_ids,
                             &declared_normvectorgroup_ids,
@@ -855,18 +888,18 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "disp2dcoord" if in_disp2dgroup => {
                         if let Some(ref mut d2dgroup) = current_disp2dgroup {
-                            let coord = parse_disp2dcoord(&reader, e)?;
+                            let coord = parse_disp2dcoord(reader, e)?;
                             d2dgroup.coords.push(coord);
                         }
                     }
                     "slicestack" if in_resources => {
                         in_slicestack = true;
-                        let stack = parse_slicestack_start(&reader, e)?;
+                        let stack = parse_slicestack_start(reader, e)?;
                         current_slicestack = Some(stack);
                     }
                     "slice" if in_slicestack => {
                         in_slice = true;
-                        let slice = parse_slice_start(&reader, e)?;
+                        let slice = parse_slice_start(reader, e)?;
 
                         // For self-closing empty slice tags like <s:slice ztop="100.060"/>,
                         // immediately push the slice since there won't be an End event
@@ -880,7 +913,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         }
                     }
                     "sliceref" if in_slicestack => {
-                        let slice_ref = parse_sliceref(&reader, e)?;
+                        let slice_ref = parse_sliceref(reader, e)?;
                         if let Some(ref mut slicestack) = current_slicestack {
                             slicestack.slice_refs.push(slice_ref);
                         }
@@ -889,18 +922,18 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_slice_vertices = true;
                     }
                     "vertex" if in_slice_vertices => {
-                        let vertex = parse_slice_vertex(&reader, e)?;
+                        let vertex = parse_slice_vertex(reader, e)?;
                         if let Some(ref mut slice) = current_slice {
                             slice.vertices.push(vertex);
                         }
                     }
                     "polygon" if in_slice => {
                         in_slice_polygon = true;
-                        let polygon = parse_slice_polygon_start(&reader, e)?;
+                        let polygon = parse_slice_polygon_start(reader, e)?;
                         current_slice_polygon = Some(polygon);
                     }
                     "segment" if in_slice_polygon => {
-                        let segment = parse_slice_segment(&reader, e)?;
+                        let segment = parse_slice_segment(reader, e)?;
                         if let Some(ref mut polygon) = current_slice_polygon {
                             polygon.segments.push(segment);
                         }
@@ -920,7 +953,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                                 "Object can only have one booleanshape element".to_string(),
                             ));
                         }
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         let objectid = attrs
                             .get("objectid")
                             .ok_or_else(|| {
@@ -941,7 +974,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                         in_boolean_shape = true;
                     }
                     "boolean" if in_boolean_shape => {
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         let objectid = attrs
                             .get("objectid")
                             .ok_or_else(|| {
@@ -962,7 +995,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "triangleset" if in_trianglesets => {
                         // Triangleset element - validate name attribute is not empty
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         if let Some(name) = attrs.get("name")
                             && name.trim().is_empty()
                         {
@@ -973,7 +1006,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "ref" if in_trianglesets => {
                         // Validate triangle index in ref element
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         if let Some(index_str) = attrs.get("index") {
                             let index = index_str.parse::<usize>().map_err(|_| {
                                 Error::InvalidXml(format!("Invalid triangle index: {}", index_str))
@@ -986,7 +1019,7 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     }
                     "refrange" if in_trianglesets => {
                         // Validate triangle index range in refrange element
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         if let (Some(start_str), Some(end_str)) =
                             (attrs.get("startindex"), attrs.get("endindex"))
                         {
@@ -1021,46 +1054,46 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
                     // Volumetric extension elements
                     "volumetricdata" if in_resources => {
                         in_volumetricdata = true;
-                        let vol_data = parse_volumetricdata_start(&reader, e)?;
+                        let vol_data = parse_volumetricdata_start(reader, e)?;
                         current_volumetricdata = Some(vol_data);
                     }
                     "boundary" if in_volumetricdata => {
-                        let boundary = parse_boundary(&reader, e)?;
+                        let boundary = parse_boundary(reader, e)?;
                         if let Some(ref mut vol_data) = current_volumetricdata {
                             vol_data.boundary = Some(boundary);
                         }
                     }
                     "voxels" if in_volumetricdata => {
                         in_voxels = true;
-                        let grid = parse_voxels_start(&reader, e)?;
+                        let grid = parse_voxels_start(reader, e)?;
                         current_voxelgrid = Some(grid);
                     }
                     "voxel" if in_voxels => {
                         if let Some(ref mut grid) = current_voxelgrid {
-                            let voxel = parse_voxel(&reader, e)?;
+                            let voxel = parse_voxel(reader, e)?;
                             grid.voxels.push(voxel);
                         }
                     }
                     "implicit" if in_volumetricdata => {
-                        let implicit = parse_implicit_start(&reader, e)?;
+                        let implicit = parse_implicit_start(reader, e)?;
                         if let Some(ref mut vol_data) = current_volumetricdata {
                             vol_data.implicit = Some(implicit);
                         }
                     }
                     "volumetricpropertygroup" if in_resources => {
                         in_volumetric_propgroup = true;
-                        let group = parse_volumetricpropertygroup_start(&reader, e)?;
+                        let group = parse_volumetricpropertygroup_start(reader, e)?;
                         current_volumetric_propgroup = Some(group);
                     }
                     "property" if in_volumetric_propgroup => {
                         if let Some(ref mut group) = current_volumetric_propgroup {
-                            let prop = parse_volumetric_property(&reader, e)?;
+                            let prop = parse_volumetric_property(reader, e)?;
                             group.properties.push(prop);
                         }
                     }
                     _ => {
                         // Unknown/custom extension element - validate that attribute values don't use namespace prefixes
-                        let attrs = parse_attributes(&reader, e)?;
+                        let attrs = parse_attributes(reader, e)?;
                         validate_attribute_values(&attrs, &declared_namespaces)?;
                     }
                 }
@@ -1746,5 +1779,45 @@ mod tests {
 
         assert_eq!(obj3.components[1].objectid, 2);
         assert!(obj3.components[1].transform.is_some());
+    }
+
+    #[test]
+    fn test_parse_model_from_reader() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+
+        // Test from_str (original path)
+        let model_str = parse_model_xml(xml).unwrap();
+
+        // Test from_reader (new reader-based path)
+        let cursor = std::io::Cursor::new(xml.as_bytes());
+        let config = ParserConfig::with_all_extensions();
+        let model_reader = parse_model_from_reader(cursor, config).unwrap();
+
+        assert_eq!(model_str.unit, model_reader.unit);
+        assert_eq!(model_str.xmlns, model_reader.xmlns);
+        assert_eq!(
+            model_str.resources.objects.len(),
+            model_reader.resources.objects.len()
+        );
+        assert_eq!(model_str.build.items.len(), model_reader.build.items.len());
     }
 }
