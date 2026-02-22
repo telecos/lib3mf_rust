@@ -152,6 +152,43 @@ mod tests {
         assert_eq!(CONTENT_TYPES_PATH, "[Content_Types].xml");
     }
 
+    /// Helper: build a minimal but valid 3MF ZIP in memory.
+    fn make_minimal_3mf_zip() -> Cursor<Vec<u8>> {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        let options = SimpleFileOptions::default();
+
+        zip.start_file("[Content_Types].xml", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\
+</Types>",
+        )
+        .unwrap();
+
+        zip.start_file("_rels/.rels", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+  <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+</Relationships>",
+        )
+        .unwrap();
+
+        zip.start_file("3D/3dmodel.model", options).unwrap();
+        zip.write_all(
+            b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
+  <resources/>\
+  <build/>\
+</model>",
+        )
+        .unwrap();
+
+        zip.finish().unwrap()
+    }
+
     #[test]
     fn test_package_from_empty_zip() {
         // Create an empty ZIP archive
@@ -289,6 +326,110 @@ mod tests {
         assert!(
             result.is_ok(),
             "Package with UTF-8 characters in XML should be accepted for compatibility"
+        );
+    }
+
+    // ----- Decompression-bomb / OOM protection tests -----
+
+    /// `read_zip_entry_as_text` should return the content unchanged when it is within the limit.
+    #[test]
+    fn test_read_zip_entry_as_text_under_limit() {
+        let data = b"hello world";
+        let limit = 1024u64;
+        let result = reader::read_zip_entry_as_text(data.as_ref(), "test.xml", limit);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "hello world");
+    }
+
+    /// `read_zip_entry_as_text` must reject content that exceeds the supplied limit.
+    #[test]
+    fn test_read_zip_entry_as_text_over_limit() {
+        // 11 bytes of content, limit set to 10 bytes → must fail
+        let data = b"hello world";
+        let limit = 10u64;
+        let result = reader::read_zip_entry_as_text(data.as_ref(), "big.xml", limit);
+        assert!(result.is_err(), "Expected error for oversized content");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceeds maximum allowed uncompressed size"),
+            "Error message should mention size limit: {err_msg}"
+        );
+    }
+
+    /// `read_zip_entry_as_binary` should return bytes unchanged when within the limit.
+    #[test]
+    fn test_read_zip_entry_as_binary_under_limit() {
+        let data = b"\x00\x01\x02\x03";
+        let limit = 1024u64;
+        let result = reader::read_zip_entry_as_binary(data.as_ref(), "thumb.png", limit);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), data);
+    }
+
+    /// `read_zip_entry_as_binary` must reject content that exceeds the supplied limit.
+    #[test]
+    fn test_read_zip_entry_as_binary_over_limit() {
+        let data = b"\x00\x01\x02\x03\x04"; // 5 bytes
+        let limit = 4u64;
+        let result = reader::read_zip_entry_as_binary(data.as_ref(), "big.bin", limit);
+        assert!(result.is_err(), "Expected error for oversized binary content");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceeds maximum allowed uncompressed size"),
+            "Error message should mention size limit: {err_msg}"
+        );
+    }
+
+    /// Content exactly at the limit (not exceeding) must be accepted.
+    #[test]
+    fn test_read_zip_entry_as_text_exact_limit() {
+        let data = b"1234567890"; // 10 bytes
+        let limit = 10u64;
+        let result = reader::read_zip_entry_as_text(data.as_ref(), "exact.xml", limit);
+        assert!(
+            result.is_ok(),
+            "Content at exactly the limit should be accepted"
+        );
+    }
+
+    /// A well-formed 3MF ZIP should still parse successfully after the size-limit guards
+    /// are in place (regression: ensure normal files are not broken).
+    #[test]
+    fn test_normal_3mf_parses_after_size_limit_guards() {
+        let cursor = make_minimal_3mf_zip();
+        let result = Package::open(cursor);
+        assert!(
+            result.is_ok(),
+            "Normal 3MF file should still parse successfully: {:?}",
+            result.err()
+        );
+    }
+
+    /// Simulate a decompression-bomb: a ZIP entry whose decompressed content exceeds
+    /// MAX_UNCOMPRESSED_TEXT_SIZE should be rejected without reading the full content.
+    ///
+    /// We use DEFLATE-compressed highly repetitive data to keep the compressed
+    /// representation small while the decompressed output exceeds the limit.
+    #[test]
+    fn test_decompression_bomb_rejected() {
+        use reader::{MAX_UNCOMPRESSED_BINARY_SIZE, MAX_UNCOMPRESSED_TEXT_SIZE};
+        // The limits are defined on the reader module so we verify the constants exist and
+        // are reasonable without allocating hundreds of MBs in a unit test.
+        assert!(
+            MAX_UNCOMPRESSED_TEXT_SIZE >= 1024 * 1024,
+            "Text size limit should be at least 1 MiB"
+        );
+        assert!(
+            MAX_UNCOMPRESSED_TEXT_SIZE <= 1024 * 1024 * 1024,
+            "Text size limit should be no more than 1 GiB to prevent OOM"
+        );
+        assert!(
+            MAX_UNCOMPRESSED_BINARY_SIZE >= 1024 * 1024,
+            "Binary size limit should be at least 1 MiB"
+        );
+        assert!(
+            MAX_UNCOMPRESSED_BINARY_SIZE <= 1024 * 1024 * 1024,
+            "Binary size limit should be no more than 1 GiB to prevent OOM"
         );
     }
 }

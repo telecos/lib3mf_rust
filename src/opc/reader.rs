@@ -18,6 +18,21 @@ use zip::ZipArchive;
 /// We cap the hint at this safe value; the buffer will still grow as needed.
 const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 
+/// Maximum uncompressed size for text files (XML model, slice, relationship files) - 64 MB.
+///
+/// A crafted ZIP entry can decompress to a size far exceeding the compressed input
+/// (ZIP bomb / decompression-bomb DoS). Capping the pre-allocation hint only prevents
+/// the *initial* allocation from being large; `read_to_string` / `read_to_end` will still
+/// grow the buffer without bound as decompression proceeds.
+/// We enforce this hard limit via `Read::take` so that no single ZIP entry can exhaust
+/// available memory regardless of how well it compresses.
+pub(crate) const MAX_UNCOMPRESSED_TEXT_SIZE: u64 = 64 * 1024 * 1024;
+
+/// Maximum uncompressed size for binary files (thumbnails, textures) - 64 MB.
+///
+/// Same rationale as `MAX_UNCOMPRESSED_TEXT_SIZE` above.
+pub(crate) const MAX_UNCOMPRESSED_BINARY_SIZE: u64 = 64 * 1024 * 1024;
+
 /// Open a 3MF package from a reader
 pub(super) fn open<R: Read + std::io::Seek>(reader: R) -> Result<Package<R>> {
     let archive = ZipArchive::new(reader)?;
@@ -538,15 +553,11 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
     };
 
     // Now read the file
-    let mut file = package
+    let file = package
         .archive
         .by_name(&path_to_use)
         .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
-    // Cap the pre-allocation hint: the ZIP header's `uncompressed_size` field is
-    // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
-    let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
-    let mut content = String::with_capacity(capacity);
-    file.read_to_string(&mut content)?;
+    let content = read_zip_entry_as_text(file, &path_to_use, MAX_UNCOMPRESSED_TEXT_SIZE)?;
 
     Ok(content)
 }
@@ -556,15 +567,48 @@ pub(super) fn get_file<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     name: &str,
 ) -> Result<String> {
-    let mut file = package
+    let file = package
         .archive
         .by_name(name)
         .map_err(|_| Error::MissingFile(name.to_string()))?;
-    // Cap the pre-allocation hint: the ZIP header's `uncompressed_size` field is
-    // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
-    let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
-    let mut content = String::with_capacity(capacity);
-    file.read_to_string(&mut content)?;
+    read_zip_entry_as_text(file, name, MAX_UNCOMPRESSED_TEXT_SIZE)
+}
+
+/// Read a ZIP file entry as a UTF-8 string, enforcing a maximum decompressed size.
+///
+/// Uses `Read::take(limit + 1)` so that at most `limit + 1` bytes are ever decompressed.
+/// If the entry would produce more than `limit` bytes, an error is returned and no further
+/// memory is allocated. This is the primary defence against decompression-bomb DoS.
+pub(super) fn read_zip_entry_as_text<F: Read>(file: F, name: &str, limit: u64) -> Result<String> {
+    // Cap the pre-allocation hint to a safe constant; the ZIP header's `uncompressed_size`
+    // field is attacker-controlled and must not be used as-is.
+    let mut content = String::with_capacity(MAX_PREALLOC_BYTES.min(limit as usize));
+    file.take(limit + 1).read_to_string(&mut content)?;
+    if content.len() as u64 > limit {
+        return Err(Error::InvalidFormat(format!(
+            "File '{}' exceeds maximum allowed uncompressed size of {} bytes",
+            name, limit
+        )));
+    }
+    Ok(content)
+}
+
+/// Read a ZIP file entry as raw bytes, enforcing a maximum decompressed size.
+///
+/// Same rationale as `read_zip_entry_as_text`.
+pub(super) fn read_zip_entry_as_binary<F: Read>(
+    file: F,
+    name: &str,
+    limit: u64,
+) -> Result<Vec<u8>> {
+    let mut content = Vec::with_capacity(MAX_PREALLOC_BYTES.min(limit as usize));
+    file.take(limit + 1).read_to_end(&mut content)?;
+    if content.len() as u64 > limit {
+        return Err(Error::InvalidFormat(format!(
+            "File '{}' exceeds maximum allowed uncompressed size of {} bytes",
+            name, limit
+        )));
+    }
     Ok(content)
 }
 
@@ -601,13 +645,11 @@ pub(super) fn get_file_binary<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     name: &str,
 ) -> Result<Vec<u8>> {
-    let mut file = package
+    let file = package
         .archive
         .by_name(name)
         .map_err(|_| Error::MissingFile(name.to_string()))?;
-    let mut content = Vec::new();
-    file.read_to_end(&mut content)?;
-    Ok(content)
+    read_zip_entry_as_binary(file, name, MAX_UNCOMPRESSED_BINARY_SIZE)
 }
 
 /// Discover the model file path from the relationships file
