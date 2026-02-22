@@ -40,7 +40,7 @@ polygon-ops = ["dep:clipper2", "dep:earcutr"]
 zip = { version = "8", default-features = false, features = [
     "deflate-flate2-zlib-rs",
 ] }
-quick-xml = "0.39"
+quick-xml = "0.39.2"
 thiserror = "2.0"
 # Cryptographic dependencies for SecureContent decryption (optional, enabled via 'crypto' feature)
 rsa = { version = "0.9", optional = true }

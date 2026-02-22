@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Streaming XML parsing from ZIP** — `parse_model_from_reader` now parses
+  model XML directly from the ZIP decompression stream via
+  `Reader::from_reader(BufReader)` instead of buffering the entire content into
+  a `String` first. This reduces peak memory usage for large 3MF files.
+- **Bump quick-xml to 0.39.2** — Fixes a buffer-boundary bug (quick-xml #939)
+  where `Reader<BufRead>` could emit spurious `UnclosedTag` errors when `<` fell
+  at the last byte of a `BufReader` buffer. This regression in 0.39.1 blocked
+  true streamed XML parsing; 0.39.2 resolves it.
+
 ## [0.1.4] - 2026-02-17
 
 ### Added
