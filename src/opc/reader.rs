@@ -18,6 +18,14 @@ use zip::ZipArchive;
 /// We cap the hint at this safe value; the buffer will still grow as needed.
 const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 
+/// Maximum bytes to read from a single ZIP entry (1 GB).
+///
+/// This prevents decompression bombs (zip bombs) where a small compressed
+/// payload decompresses into gigabytes of data, exhausting available memory.
+/// 1 GB is generous enough for any legitimate 3MF file while preventing
+/// catastrophic memory exhaustion from malicious inputs.
+const MAX_FILE_CONTENT_BYTES: usize = 1024 * 1024 * 1024;
+
 /// Open a 3MF package from a reader
 pub(super) fn open<R: Read + std::io::Seek>(reader: R) -> Result<Package<R>> {
     let archive = ZipArchive::new(reader)?;
@@ -551,7 +559,16 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
     // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
     let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
     let mut content = String::with_capacity(capacity);
-    file.read_to_string(&mut content)?;
+    // Bound the read to prevent decompression bombs from exhausting memory.
+    (&mut file)
+        .take(MAX_FILE_CONTENT_BYTES as u64 + 1)
+        .read_to_string(&mut content)?;
+    if content.len() > MAX_FILE_CONTENT_BYTES {
+        return Err(Error::InvalidFormat(format!(
+            "File '{}' exceeds maximum allowed size of {} bytes",
+            path_to_use, MAX_FILE_CONTENT_BYTES
+        )));
+    }
 
     Ok(content)
 }
@@ -587,7 +604,16 @@ pub(super) fn get_file<R: Read + std::io::Seek>(
     // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
     let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
     let mut content = String::with_capacity(capacity);
-    file.read_to_string(&mut content)?;
+    // Bound the read to prevent decompression bombs from exhausting memory.
+    (&mut file)
+        .take(MAX_FILE_CONTENT_BYTES as u64 + 1)
+        .read_to_string(&mut content)?;
+    if content.len() > MAX_FILE_CONTENT_BYTES {
+        return Err(Error::InvalidFormat(format!(
+            "File '{}' exceeds maximum allowed size of {} bytes",
+            name, MAX_FILE_CONTENT_BYTES
+        )));
+    }
     Ok(content)
 }
 
@@ -628,8 +654,18 @@ pub(super) fn get_file_binary<R: Read + std::io::Seek>(
         .archive
         .by_name(name)
         .map_err(|_| Error::MissingFile(name.to_string()))?;
-    let mut content = Vec::new();
-    file.read_to_end(&mut content)?;
+    let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
+    let mut content = Vec::with_capacity(capacity);
+    // Bound the read to prevent decompression bombs from exhausting memory.
+    (&mut file)
+        .take(MAX_FILE_CONTENT_BYTES as u64 + 1)
+        .read_to_end(&mut content)?;
+    if content.len() > MAX_FILE_CONTENT_BYTES {
+        return Err(Error::InvalidFormat(format!(
+            "File '{}' exceeds maximum allowed size of {} bytes",
+            name, MAX_FILE_CONTENT_BYTES
+        )));
+    }
     Ok(content)
 }
 
