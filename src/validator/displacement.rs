@@ -586,3 +586,223 @@ pub fn validate_displacement_extension(model: &Model) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{
+        Disp2DCoords, Disp2DGroup, Displacement2D, DisplacementMesh, DisplacementTriangle,
+        NormVector, NormVectorGroup, Object, Vertex,
+    };
+
+    fn make_valid_displacement_model() -> Model {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        // Add a displacement map
+        model.resources.displacement_maps.push(Displacement2D::new(
+            1,
+            "/3D/Textures/disp.png".to_string(),
+        ));
+
+        // Add a norm vector group
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+        model.resources.norm_vector_groups.push(ng);
+
+        model
+    }
+
+    #[test]
+    fn test_empty_model_is_valid() {
+        let model = Model::new();
+        assert!(validate_displacement_extension(&model).is_ok());
+    }
+
+    #[test]
+    fn test_displacement_without_required_extension() {
+        let mut model = Model::new();
+        // Add displacement map but don't declare extension
+        model.resources.displacement_maps.push(Displacement2D::new(
+            1,
+            "/3D/Textures/disp.png".to_string(),
+        ));
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requiredextensions"));
+    }
+
+    #[test]
+    fn test_valid_displacement_with_extension_declared() {
+        let model = make_valid_displacement_model();
+        assert!(validate_displacement_extension(&model).is_ok());
+    }
+
+    #[test]
+    fn test_path_not_in_textures_dir() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+        model.resources.displacement_maps.push(Displacement2D::new(
+            1,
+            "/3D/wrong/disp.png".to_string(),
+        ));
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("/3D/Textures/"));
+    }
+
+    #[test]
+    fn test_path_without_png_extension() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+        model.resources.displacement_maps.push(Displacement2D::new(
+            1,
+            "/3D/Textures/disp.jpg".to_string(),
+        ));
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(".png"));
+    }
+
+    #[test]
+    fn test_disp2dgroup_invalid_dispid() {
+        let mut model = make_valid_displacement_model();
+        // Add a disp2d group referencing nonexistent displacement2d
+        let group = Disp2DGroup::new(3, 99, 2, 1.0); // dispid=99 doesn't exist
+        model.resources.disp2d_groups.push(group);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("non-existent Displacement2D"));
+    }
+
+    #[test]
+    fn test_disp2dgroup_invalid_nid() {
+        let mut model = make_valid_displacement_model();
+        // Add a disp2d group referencing nonexistent norm vector group
+        let group = Disp2DGroup::new(3, 1, 99, 1.0); // nid=99 doesn't exist
+        model.resources.disp2d_groups.push(group);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("non-existent NormVectorGroup"));
+    }
+
+    #[test]
+    fn test_disp2dgroup_coord_out_of_bounds() {
+        let mut model = make_valid_displacement_model();
+        // Add a disp2d group with a coord referencing nonexistent normvector
+        let mut group = Disp2DGroup::new(3, 1, 2, 1.0);
+        group.coords.push(Disp2DCoords::new(0.0, 0.0, 99)); // n=99 out of bounds
+        model.resources.disp2d_groups.push(group);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("normvector index"));
+    }
+
+    #[test]
+    fn test_normvector_zero_length() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+        // Add a norm vector group with a zero-length vector
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 0.0)); // zero length
+        model.resources.norm_vector_groups.push(ng);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("near-zero length"));
+    }
+
+    #[test]
+    fn test_displacement_mesh_too_few_triangles() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = DisplacementMesh::new();
+        disp_mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        disp_mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        disp_mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 1, 2));
+        // Only 1 triangle - not enough
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("at least 4 triangles"));
+    }
+
+    #[test]
+    fn test_displacement_mesh_negative_volume() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = DisplacementMesh::new();
+        // Create a properly inverted tetrahedron (negative volume)
+        // The key: only triangle (1,3,2) gives non-zero contribution = -1
+        // Others involve vertex[0]=(0,0,0) and give 0
+        disp_mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        disp_mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        disp_mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        disp_mesh.vertices.push(Vertex::new(0.0, 0.0, 1.0));
+        // These triangles give volume = -1/6 (inverted from standard CCW orientation)
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 1, 2));
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 3, 1));
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 2, 3));
+        disp_mesh.triangles.push(DisplacementTriangle::new(1, 3, 2)); // key triangle: gives -1
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("volume"));
+    }
+
+    #[test]
+    fn test_displacement_mesh_duplicate_vertices() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = DisplacementMesh::new();
+        // Use a valid tetrahedron (positive volume) but add a 5th vertex that
+        // duplicates vertex 0. The volume check passes, then the duplicate vertex check fires.
+        disp_mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // vertex 0
+        disp_mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // vertex 1
+        disp_mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // vertex 2
+        disp_mesh.vertices.push(Vertex::new(0.0, 0.0, 1.0)); // vertex 3
+        disp_mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // vertex 4: duplicate of vertex 0
+        // Positive-volume tetrahedron using only vertices 0-3
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 1, 2));
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 3, 1));
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 2, 3));
+        disp_mesh.triangles.push(DisplacementTriangle::new(1, 2, 3)); // gives +1 → volume = +1/6
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("duplicate vertices"));
+    }
+
+    #[test]
+    fn test_norm_vector_group_displacement_used_without_extension() {
+        let mut model = Model::new();
+        // Add a norm vector group but no extension declaration
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+        model.resources.norm_vector_groups.push(ng);
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requiredextensions"));
+    }
+
+    #[test]
+    fn test_valid_displacement_with_textures_case_variations() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+        // Case-insensitive path check
+        model.resources.displacement_maps.push(Displacement2D::new(
+            1,
+            "/3D/textures/disp.png".to_string(),
+        ));
+        assert!(validate_displacement_extension(&model).is_ok());
+    }
+}
