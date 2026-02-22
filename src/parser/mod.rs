@@ -235,22 +235,20 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
     parse_model_from_xml_reader(&mut reader, config)
 }
 
-/// Parse a 3D model from a streaming reader
+/// Parse a 3D model from a reader
 ///
 /// This function accepts any type implementing `Read` and parses the 3MF model XML.
-/// The reader is consumed incrementally via streaming decompression from the ZIP archive,
-/// then the XML content is parsed.
-///
-/// This is the streaming counterpart to `parse_model_xml_with_config`. It is used
-/// internally by `parse_3mf_with_config` to parse the model directly from the ZIP
-/// archive's decompression stream.
+/// It is the reader-based counterpart to `parse_model_xml_with_config` and is used
+/// internally by `parse_3mf_with_config` to read the model from the ZIP archive's
+/// decompression stream.
 ///
 /// # Note
 ///
-/// The XML content is buffered into memory before parsing because `quick-xml`'s
-/// `Reader<BufRead>` has a known issue with buffer boundary handling. The streaming
-/// decompression from the ZIP archive still avoids holding both compressed and
-/// decompressed data simultaneously.
+/// The XML content is currently buffered into memory before parsing due to a known
+/// buffer boundary issue in `quick-xml` 0.39's `Reader<BufRead>` implementation.
+/// The internal parsing loop (`parse_model_from_xml_reader`) is already generic over
+/// `BufRead` and will enable fully streamed XML parsing once the quick-xml issue is
+/// resolved.
 pub fn parse_model_from_reader(mut reader: impl Read, config: ParserConfig) -> Result<Model> {
     let mut content = String::new();
     reader.read_to_string(&mut content)?;
@@ -1809,8 +1807,8 @@ mod tests {
         // Test from_str (original path)
         let model_str = parse_model_xml(xml).unwrap();
 
-        // Test from_reader (new streaming path)
-        let cursor = std::io::Cursor::new(xml.as_bytes().to_vec());
+        // Test from_reader (new reader-based path)
+        let cursor = std::io::Cursor::new(xml.as_bytes());
         let config = ParserConfig::with_all_extensions();
         let model_reader = parse_model_from_reader(cursor, config).unwrap();
 
