@@ -578,6 +578,9 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
 /// Returns a reader that decompresses the model file on-the-fly from the ZIP archive,
 /// avoiding loading the entire file into memory at once. The returned reader implements
 /// `Read` and borrows the package for its lifetime.
+///
+/// The reader is bounded by `MAX_FILE_CONTENT_BYTES` to prevent decompression bombs
+/// (zip bombs) from exhausting available memory.
 pub(super) fn get_model_reader<'a, R: Read + std::io::Seek>(
     package: &'a mut Package<R>,
 ) -> Result<impl Read + 'a> {
@@ -588,7 +591,8 @@ pub(super) fn get_model_reader<'a, R: Read + std::io::Seek>(
         .by_name(&path_to_use)
         .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
 
-    Ok(file)
+    // Bound the read to prevent decompression bombs from exhausting memory.
+    Ok(file.take(MAX_FILE_CONTENT_BYTES as u64 + 1))
 }
 
 /// Get a file from the package by name

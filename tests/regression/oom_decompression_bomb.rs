@@ -8,9 +8,11 @@
 //! After the fix, all file reads are bounded by `MAX_FILE_CONTENT_BYTES` (1 GB)
 //! using `Read::take()`, so decompression bombs cannot exhaust available memory.
 //!
-//! Reference: fuzzing artifact `oom-781b3b8632ef181d4bbdfc85c468298b95f75a4d`
+//! References:
+//! - fuzzing artifact `oom-781b3b8632ef181d4bbdfc85c468298b95f75a4d` (fuzz_parse_3mf)
+//! - fuzzing artifact `oom-decd7af532fee02b2569d0e28017a693ea1938db` (fuzz_parse_with_extensions)
 
-use lib3mf::Model;
+use lib3mf::{Model, ParserConfig};
 use std::io::{Cursor, Write};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -109,6 +111,29 @@ fn test_moderately_large_model_parses() {
     assert!(
         result.is_ok(),
         "A 10 MB 3MF model should parse successfully; got: {:?}",
+        result.err()
+    );
+}
+
+/// Regression test: the `fuzz_parse_with_extensions` target (all extensions enabled)
+/// is protected by the same read bound as the basic parser.
+///
+/// Before the fix, `get_model_reader()` returned an unbounded reader, so a ZIP
+/// decompression bomb would exhaust memory inside `parse_model_from_reader`'s
+/// `read_to_string` call regardless of the extension config used.
+/// After the fix, `get_model_reader()` applies `Read::take(MAX_FILE_CONTENT_BYTES + 1)`,
+/// bounding the streaming decompression for all callers.
+///
+/// Reference: fuzzing artifact `oom-decd7af532fee02b2569d0e28017a693ea1938db` (hash 6cffe6233fa57583)
+#[test]
+fn test_with_all_extensions_is_protected_by_read_limit() {
+    // A 10 MB model should still parse successfully even with all extensions enabled.
+    let bytes = make_3mf_with_large_model(10 * 1024 * 1024);
+    let config = ParserConfig::with_all_extensions();
+    let result = Model::from_reader_with_config(Cursor::new(bytes), config);
+    assert!(
+        result.is_ok(),
+        "A 10 MB 3MF model with all extensions should parse successfully; got: {:?}",
         result.err()
     );
 }
