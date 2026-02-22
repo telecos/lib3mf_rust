@@ -251,3 +251,209 @@ pub fn lerp_color(c0: Rgba, c1: Rgba, t: f64) -> Rgba {
         (c0[3] as f32 * inv + c1[3] as f32 * t).round() as u8,
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lib3mf::{BaseMaterial, BaseMaterialGroup, ColorGroup, Model, Tex2Coord, Texture2DGroup};
+    use std::path::Path;
+
+    // --- lerp_color tests ---
+
+    #[test]
+    fn test_lerp_color_at_zero() {
+        let c0: Rgba = [255, 0, 0, 255];
+        let c1: Rgba = [0, 255, 0, 128];
+        assert_eq!(lerp_color(c0, c1, 0.0), c0);
+    }
+
+    #[test]
+    fn test_lerp_color_at_one() {
+        let c0: Rgba = [255, 0, 0, 255];
+        let c1: Rgba = [0, 255, 0, 128];
+        assert_eq!(lerp_color(c0, c1, 1.0), c1);
+    }
+
+    #[test]
+    fn test_lerp_color_midpoint() {
+        let c0: Rgba = [0, 0, 0, 0];
+        let c1: Rgba = [200, 100, 50, 255];
+        let result = lerp_color(c0, c1, 0.5);
+        assert_eq!(result[0], 100);
+        assert_eq!(result[1], 50);
+        assert_eq!(result[2], 25);
+        assert_eq!(result[3], 128);
+    }
+
+    #[test]
+    fn test_lerp_color_clamp_below_zero() {
+        let c0: Rgba = [100, 100, 100, 100];
+        let c1: Rgba = [200, 200, 200, 200];
+        // t < 0.0 should be clamped to 0.0 → result == c0
+        assert_eq!(lerp_color(c0, c1, -1.0), c0);
+    }
+
+    #[test]
+    fn test_lerp_color_clamp_above_one() {
+        let c0: Rgba = [100, 100, 100, 100];
+        let c1: Rgba = [200, 200, 200, 200];
+        // t > 1.0 should be clamped to 1.0 → result == c1
+        assert_eq!(lerp_color(c0, c1, 2.0), c1);
+    }
+
+    // --- ColorResolver tests ---
+
+    fn make_model_with_color_group() -> Model {
+        let mut model = Model::default();
+        let mut cg = ColorGroup::new(1);
+        cg.colors = vec![(255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255)];
+        model.resources.color_groups.push(cg);
+        model
+    }
+
+    fn make_model_with_base_material_group() -> Model {
+        let mut model = Model::default();
+        let mut bmg = BaseMaterialGroup::new(2);
+        bmg.materials = vec![
+            BaseMaterial {
+                name: "Red".to_string(),
+                displaycolor: (200, 0, 0, 255),
+            },
+            BaseMaterial {
+                name: "Blue".to_string(),
+                displaycolor: (0, 0, 200, 255),
+            },
+        ];
+        model.resources.base_material_groups.push(bmg);
+        model
+    }
+
+    fn make_model_with_texture_group() -> Model {
+        let mut model = Model::default();
+        let mut tg = Texture2DGroup::new(3, 10);
+        tg.tex2coords = vec![Tex2Coord { u: 0.0, v: 0.0 }, Tex2Coord { u: 1.0, v: 0.0 }];
+        model.resources.texture2d_groups.push(tg);
+        model
+    }
+
+    #[test]
+    fn test_has_colors_empty_model() {
+        let model = Model::default();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        assert!(!resolver.has_colors());
+    }
+
+    #[test]
+    fn test_has_colors_with_color_group() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        assert!(resolver.has_colors());
+    }
+
+    #[test]
+    fn test_resolve_color_from_color_group() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        // Index 0 → red
+        assert_eq!(resolver.resolve_color(1, 0), [255, 0, 0, 255]);
+        // Index 1 → green
+        assert_eq!(resolver.resolve_color(1, 1), [0, 255, 0, 255]);
+        // Index 2 → blue
+        assert_eq!(resolver.resolve_color(1, 2), [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn test_resolve_color_out_of_bounds_returns_default() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        assert_eq!(resolver.resolve_color(1, 99), DEFAULT_COLOR);
+    }
+
+    #[test]
+    fn test_resolve_color_unknown_pid_returns_default() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        assert_eq!(resolver.resolve_color(99, 0), DEFAULT_COLOR);
+    }
+
+    #[test]
+    fn test_resolve_color_from_base_material_group() {
+        let model = make_model_with_base_material_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        assert_eq!(resolver.resolve_color(2, 0), [200, 0, 0, 255]);
+        assert_eq!(resolver.resolve_color(2, 1), [0, 0, 200, 255]);
+    }
+
+    #[test]
+    fn test_resolve_color_from_texture_group_no_texture() {
+        // Texture group but no actual texture loaded → falls back to DEFAULT_COLOR
+        let model = make_model_with_texture_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        assert_eq!(resolver.resolve_color(3, 0), DEFAULT_COLOR);
+    }
+
+    #[test]
+    fn test_resolve_color_texture_group_out_of_bounds() {
+        let model = make_model_with_texture_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        // Out-of-bounds coord index → DEFAULT_COLOR
+        assert_eq!(resolver.resolve_color(3, 99), DEFAULT_COLOR);
+    }
+
+    #[test]
+    fn test_resolve_triangle_colors_no_pid() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        let tri = lib3mf::Triangle::new(0, 1, 2);
+        // No pid on triangle, no object pid → None
+        assert!(resolver.resolve_triangle_colors(&tri, None, None).is_none());
+    }
+
+    #[test]
+    fn test_resolve_triangle_colors_with_pid() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        let mut tri = lib3mf::Triangle::new(0, 1, 2);
+        tri.pid = Some(1);
+        tri.p1 = Some(0);
+        tri.p2 = Some(1);
+        tri.p3 = Some(2);
+        let result = resolver.resolve_triangle_colors(&tri, None, None);
+        assert!(result.is_some());
+        let (c1, c2, c3) = result.unwrap();
+        assert_eq!(c1, [255, 0, 0, 255]);
+        assert_eq!(c2, [0, 255, 0, 255]);
+        assert_eq!(c3, [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn test_resolve_triangle_colors_fallback_to_object_pid() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        // Triangle has no pid, but object has pid=1, pindex=0
+        let tri = lib3mf::Triangle::new(0, 1, 2);
+        let result = resolver.resolve_triangle_colors(&tri, Some(1), Some(0));
+        assert!(result.is_some());
+        let (c1, c2, c3) = result.unwrap();
+        // All fall back to index 0 (red)
+        assert_eq!(c1, [255, 0, 0, 255]);
+        assert_eq!(c2, [255, 0, 0, 255]);
+        assert_eq!(c3, [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn test_resolve_triangle_colors_p2_p3_fallback_to_p1() {
+        let model = make_model_with_color_group();
+        let resolver = ColorResolver::from_model(&model, Path::new("/nonexistent.3mf"));
+        let mut tri = lib3mf::Triangle::new(0, 1, 2);
+        tri.pid = Some(1);
+        tri.p1 = Some(2); // Blue
+        // p2, p3 not set → fall back to p1 (index 2)
+        let result = resolver.resolve_triangle_colors(&tri, None, None);
+        assert!(result.is_some());
+        let (c1, c2, c3) = result.unwrap();
+        assert_eq!(c1, [0, 0, 255, 255]);
+        assert_eq!(c2, [0, 0, 255, 255]);
+        assert_eq!(c3, [0, 0, 255, 255]);
+    }
+}

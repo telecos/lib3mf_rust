@@ -348,6 +348,25 @@ mod tests {
     }
 
     #[test]
+    fn test_world_to_pixel_origin_offset() {
+        // Renderer with non-zero origin offset
+        let renderer = SliceRenderer::new(100, 100, 10.0, 10.0, 100.0, 100.0);
+        let (px, _py) = renderer.world_to_pixel_f64(10.0, 10.0); // origin maps to (0, height)
+        assert!((px - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_renders_empty_contours_produces_white_image() {
+        let renderer = SliceRenderer::new(50, 50, 0.0, 0.0, 100.0, 100.0);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.png");
+        renderer.render_to_file(&[], &[], 0, false, &path).unwrap();
+        let img = image::open(&path).unwrap().to_rgb8();
+        // All pixels should be white
+        assert_eq!(img.get_pixel(25, 25), &Rgb([255, 255, 255]));
+    }
+
+    #[test]
     fn test_renders_square_contour() {
         // A simple square contour should produce filled pixels
         let renderer = SliceRenderer::new(100, 100, 0.0, 0.0, 100.0, 100.0);
@@ -369,6 +388,139 @@ mod tests {
         assert_eq!(img.get_pixel(50, 50), &Rgb([0, 0, 0]));
         // Corner pixel should be white (outside)
         assert_eq!(img.get_pixel(5, 5), &Rgb([255, 255, 255]));
+    }
+
+    #[test]
+    fn test_renders_with_gray_fill() {
+        // With use_gray_fill=true, interior should be mid-gray
+        let renderer = SliceRenderer::new(100, 100, 0.0, 0.0, 100.0, 100.0);
+        let contour = SliceContour::new(vec![
+            Point2D::new(20.0, 20.0),
+            Point2D::new(80.0, 20.0),
+            Point2D::new(80.0, 80.0),
+            Point2D::new(20.0, 80.0),
+        ]);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_gray.png");
+        renderer
+            .render_to_file(&[contour], &[], 0, true, &path)
+            .unwrap();
+
+        let img = image::open(&path).unwrap().to_rgb8();
+        // Center pixel should be mid-gray (128, 128, 128)
+        assert_eq!(img.get_pixel(50, 50), &Rgb([128, 128, 128]));
+    }
+
+    #[test]
+    fn test_renders_with_degenerate_contour() {
+        // A contour with fewer than 3 points is degenerate and should be skipped
+        let renderer = SliceRenderer::new(50, 50, 0.0, 0.0, 100.0, 100.0);
+        let contour = SliceContour::new(vec![Point2D::new(10.0, 10.0), Point2D::new(90.0, 90.0)]);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_degenerate.png");
+        renderer
+            .render_to_file(&[contour], &[], 0, false, &path)
+            .unwrap();
+
+        let img = image::open(&path).unwrap().to_rgb8();
+        // No fill - all pixels white
+        assert_eq!(img.get_pixel(25, 25), &Rgb([255, 255, 255]));
+    }
+
+    #[test]
+    fn test_render_with_colored_borders() {
+        let renderer = SliceRenderer::new(100, 100, 0.0, 0.0, 100.0, 100.0);
+
+        // A filled contour
+        let fill_contour = SliceContour::new(vec![
+            Point2D::new(20.0, 20.0),
+            Point2D::new(80.0, 20.0),
+            Point2D::new(80.0, 80.0),
+            Point2D::new(20.0, 80.0),
+        ]);
+
+        // A colored contour with a single edge (red)
+        let colored = ColoredContour {
+            points: vec![
+                Point2D::new(20.0, 50.0),
+                Point2D::new(80.0, 50.0),
+                Point2D::new(80.0, 80.0),
+                Point2D::new(20.0, 80.0),
+            ],
+            colors: vec![
+                [255, 0, 0, 255],
+                [255, 0, 0, 255],
+                [255, 0, 0, 255],
+                [255, 0, 0, 255],
+            ],
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_colored.png");
+        renderer
+            .render_to_file(&[fill_contour], &[colored], 3, true, &path)
+            .unwrap();
+
+        // Image should be created successfully
+        let img = image::open(&path).unwrap().to_rgb8();
+        // Background stays white outside
+        assert_eq!(img.get_pixel(5, 5), &Rgb([255, 255, 255]));
+    }
+
+    #[test]
+    fn test_render_colored_border_degenerate_edge() {
+        // A colored contour with two identical points (zero-length edge)
+        let renderer = SliceRenderer::new(100, 100, 0.0, 0.0, 100.0, 100.0);
+        let fill_contour = SliceContour::new(vec![
+            Point2D::new(20.0, 20.0),
+            Point2D::new(80.0, 20.0),
+            Point2D::new(80.0, 80.0),
+            Point2D::new(20.0, 80.0),
+        ]);
+        let colored = ColoredContour {
+            points: vec![
+                Point2D::new(50.0, 50.0),
+                Point2D::new(50.0, 50.0), // duplicate point → zero-length edge
+                Point2D::new(51.0, 51.0),
+            ],
+            colors: vec![[0, 0, 255, 255], [0, 0, 255, 255], [0, 0, 255, 255]],
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_degenerate_edge.png");
+        // Should not panic
+        renderer
+            .render_to_file(&[fill_contour], &[colored], 3, true, &path)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_render_colored_contour_mismatched_colors() {
+        // Colored contour with wrong number of colors → skipped
+        let renderer = SliceRenderer::new(50, 50, 0.0, 0.0, 100.0, 100.0);
+        let fill_contour = SliceContour::new(vec![
+            Point2D::new(10.0, 10.0),
+            Point2D::new(90.0, 10.0),
+            Point2D::new(90.0, 90.0),
+            Point2D::new(10.0, 90.0),
+        ]);
+        let colored = ColoredContour {
+            points: vec![
+                Point2D::new(20.0, 20.0),
+                Point2D::new(80.0, 20.0),
+                Point2D::new(80.0, 80.0),
+            ],
+            colors: vec![[255, 0, 0, 255]], // wrong count
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_mismatch.png");
+        // Should not panic
+        renderer
+            .render_to_file(&[fill_contour], &[colored], 3, false, &path)
+            .unwrap();
     }
 
     #[test]
@@ -401,5 +553,20 @@ mod tests {
         let img = image::open(&path).unwrap().to_rgb8();
         // Pixel inside outer but outside inner should be black
         assert_eq!(img.get_pixel(25, 50), &Rgb([0, 0, 0]));
+    }
+
+    #[test]
+    fn test_slice_contour_new() {
+        let points = vec![Point2D::new(1.0, 2.0), Point2D::new(3.0, 4.0)];
+        let contour = SliceContour::new(points.clone());
+        assert_eq!(contour.points.len(), 2);
+        assert!((contour.points[0].x - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_point2d_new() {
+        let p = Point2D::new(3.14, 2.71);
+        assert!((p.x - 3.14).abs() < 1e-10);
+        assert!((p.y - 2.71).abs() < 1e-10);
     }
 }
