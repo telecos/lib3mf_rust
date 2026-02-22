@@ -237,22 +237,17 @@ pub fn parse_model_xml_with_config(xml: &str, config: ParserConfig) -> Result<Mo
 
 /// Parse a 3D model from a reader
 ///
-/// This function accepts any type implementing `Read` and parses the 3MF model XML.
+/// This function accepts any type implementing `Read` and parses the 3MF model XML
+/// directly from the stream without buffering the entire content into memory.
 /// It is the reader-based counterpart to `parse_model_xml_with_config` and is used
 /// internally by `parse_3mf_with_config` to read the model from the ZIP archive's
 /// decompression stream.
-///
-/// # Note
-///
-/// The XML content is currently buffered into memory before parsing due to a known
-/// buffer boundary issue in `quick-xml` 0.39's `Reader<BufRead>` implementation.
-/// The internal parsing loop (`parse_model_from_xml_reader`) is already generic over
-/// `BufRead` and will enable fully streamed XML parsing once the quick-xml issue is
-/// resolved.
-pub fn parse_model_from_reader(mut reader: impl Read, config: ParserConfig) -> Result<Model> {
-    let mut content = String::new();
-    reader.read_to_string(&mut content)?;
-    parse_model_xml_with_config(&content, config)
+pub fn parse_model_from_reader(reader: impl Read, config: ParserConfig) -> Result<Model> {
+    let buf_reader = std::io::BufReader::new(reader);
+    let mut xml_reader = Reader::from_reader(buf_reader);
+    xml_reader.config_mut().trim_text(true);
+
+    parse_model_from_xml_reader(&mut xml_reader, config)
 }
 
 /// Internal generic parsing function that works with any `quick_xml::Reader<R: BufRead>`.
