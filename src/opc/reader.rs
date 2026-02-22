@@ -21,7 +21,7 @@ const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 /// Hard limit on the uncompressed size of any single file read from a 3MF package (256 MB).
 ///
 /// This guards against ZIP-bomb payloads where a small compressed input expands into a
-/// very large decompressed stream.  3MF model XML, relationship files, and content-type
+/// very large decompressed stream. 3MF model XML, relationship files, and content-type
 /// declarations are all text-based and should never legitimately exceed this limit.
 const MAX_FILE_CONTENT_BYTES: u64 = 256 * 1024 * 1024;
 

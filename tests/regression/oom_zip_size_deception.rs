@@ -1,7 +1,7 @@
 //! Regression tests for Out-of-Memory (OOM) via ZIP size-deception.
 //!
 //! A crafted ZIP file can declare a very large `uncompressed_size` in its local
-//! file header while containing only a tiny compressed payload.  Previously the
+//! file header while containing only a tiny compressed payload. Previously the
 //! parser called `String::with_capacity(file.size() as usize)`, which blindly
 //! trusted that attacker-controlled header field and would attempt to allocate
 //! gigabytes of memory before reading a single byte.
@@ -17,7 +17,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
 /// Helper that builds a minimal valid 3MF ZIP archive whose model XML is
-/// replaced by `model_content`.  The ZIP entry is stored with
+/// replaced by `model_content`. The ZIP entry is stored with
 /// `declared_uncompressed_size` reported in the local file header (only used
 /// for the `file.size()` hint; the actual bytes written are the real content).
 ///
@@ -148,7 +148,7 @@ fn test_normal_3mf_still_parses() {
 /// but whose actual payload is tiny must not cause an OOM.
 ///
 /// Before the fix `String::with_capacity(2_147_483_648)` was called, which
-/// immediately exhausted available memory on most systems.  After the fix the
+/// immediately exhausted available memory on most systems. After the fix the
 /// pre-allocation is capped at 64 KB and the parse either succeeds or returns
 /// an `InvalidFormat` error — but it must not panic or abort.
 #[test]
@@ -157,7 +157,7 @@ fn test_lied_uncompressed_size_does_not_cause_oom() {
     let lied_size: u32 = 2u32 * 1024 * 1024 * 1024; // 2 GiB
     let bytes = make_3mf_with_lied_size(MINIMAL_MODEL_XML, lied_size);
 
-    // Must not OOM / panic.  May succeed (the actual bytes are valid XML) or
+    // Must not OOM / panic. May succeed (the actual bytes are valid XML) or
     // fail with an error, but must complete without running out of memory.
     let result = Model::from_reader(Cursor::new(bytes));
     // The actual XML is valid so we expect success (the lie only affects the
