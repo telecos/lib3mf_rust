@@ -1,5 +1,8 @@
 # lib3mf Viewer
 
+[![Build Status](https://github.com/telecos/lib3mf_rust/actions/workflows/ci.yml/badge.svg)](https://github.com/telecos/lib3mf_rust/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+
 A powerful tool for viewing and analyzing 3MF (3D Manufacturing Format) files, built using the `lib3mf_rust` library.
 
 ## Features
