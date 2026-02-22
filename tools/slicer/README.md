@@ -1,5 +1,9 @@
 # lib3mf-slicer
 
+[![Build Status](https://github.com/telecos/lib3mf_rust/actions/workflows/ci.yml/badge.svg)](https://github.com/telecos/lib3mf_rust/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/telecos/lib3mf_rust/graph/badge.svg?flag=lib3mf-slicer)](https://codecov.io/gh/telecos/lib3mf_rust)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+
 A command-line tool for slicing 3MF (3D Manufacturing Format) files into 2D images. This tool is a pretty early stage and will require refinements as was mainly intended as a sample usage of lib3mf crate. Contributions of any kind are more than welcome.
 
 ## Overview

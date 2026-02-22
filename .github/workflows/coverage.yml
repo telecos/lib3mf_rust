@@ -1,0 +1,71 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  coverage-lib3mf:
+    name: Coverage (lib3mf)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate coverage (lib3mf)
+        run: cargo llvm-cov --features ci --lib --test core --test extensions --test validation --test infrastructure --lcov --output-path lcov-lib3mf.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov-lib3mf.info
+          flags: lib3mf
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  coverage-slicer:
+    name: Coverage (lib3mf-slicer)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate coverage (lib3mf-slicer)
+        working-directory: tools/slicer
+        run: cargo llvm-cov --lcov --output-path ../../lcov-slicer.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov-slicer.info
+          flags: lib3mf-slicer
+          token: ${{ secrets.CODECOV_TOKEN }}
