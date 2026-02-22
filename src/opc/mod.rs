@@ -72,6 +72,15 @@ impl<R: Read + std::io::Seek> Package<R> {
         reader::get_model(self)
     }
 
+    /// Get a streaming reader for the main 3D model file
+    ///
+    /// Returns a reader that decompresses the model file on-the-fly from the ZIP
+    /// archive, avoiding loading the entire file into memory. The returned reader
+    /// implements `Read` and borrows the package for its lifetime.
+    pub fn get_model_reader(&mut self) -> Result<impl Read + '_> {
+        reader::get_model_reader(self)
+    }
+
     /// Get a file from the package by name
     pub fn get_file(&mut self, name: &str) -> Result<String> {
         reader::get_file(self, name)
