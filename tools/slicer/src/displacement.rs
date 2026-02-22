@@ -277,3 +277,298 @@ fn apply_tile_style(coord: f32, tile_style: lib3mf::TileStyle) -> f32 {
         TileStyle::None => coord, // Return as-is, caller will check bounds
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lib3mf::{
+        Disp2DCoords, Disp2DGroup, DisplacementMesh, DisplacementTriangle, Model, NormVector,
+        NormVectorGroup, TileStyle, Vertex,
+    };
+    use std::path::Path;
+
+    // --- apply_tile_style tests ---
+
+    #[test]
+    fn test_apply_tile_style_wrap_in_range() {
+        let result = apply_tile_style(0.5, TileStyle::Wrap);
+        assert!((result - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_wrap_above_one() {
+        let result = apply_tile_style(1.3, TileStyle::Wrap);
+        assert!((result - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_wrap_negative() {
+        let result = apply_tile_style(-0.2, TileStyle::Wrap);
+        assert!((result - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_mirror_in_range() {
+        let result = apply_tile_style(0.4, TileStyle::Mirror);
+        assert!((result - 0.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_mirror_above_one() {
+        // wrapped = 1.3 % 2 = 1.3 → 2.0 - 1.3 = 0.7
+        let result = apply_tile_style(1.3, TileStyle::Mirror);
+        assert!((result - 0.7).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_apply_tile_style_mirror_at_one() {
+        // wrapped = 1.0 → NOT > 1.0 → returns 1.0
+        let result = apply_tile_style(1.0, TileStyle::Mirror);
+        assert!((result - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_clamp_below_zero() {
+        let result = apply_tile_style(-0.5, TileStyle::Clamp);
+        assert!((result - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_clamp_above_one() {
+        let result = apply_tile_style(1.5, TileStyle::Clamp);
+        assert!((result - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_clamp_in_range() {
+        let result = apply_tile_style(0.7, TileStyle::Clamp);
+        assert!((result - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tile_style_none_returns_as_is() {
+        let result = apply_tile_style(1.8, TileStyle::None);
+        assert!((result - 1.8).abs() < 1e-6);
+    }
+
+    // --- DisplacementHandler::from_model tests ---
+
+    #[test]
+    fn test_displacement_handler_empty_model() {
+        let model = Model::default();
+        // Empty model: no displacement maps → handler is essentially empty (no panic)
+        let _handler = DisplacementHandler::from_model(&model, Path::new("/nonexistent.3mf"));
+    }
+
+    // --- DisplacementHandler::apply_displacement tests ---
+
+    #[test]
+    fn test_apply_displacement_no_displacement_group() {
+        let model = Model::default();
+        let handler = DisplacementHandler::from_model(&model, Path::new("/nonexistent.3mf"));
+
+        // A displacement mesh with a triangle that references a nonexistent did
+        let mut disp_mesh = DisplacementMesh::default();
+        disp_mesh.vertices.push(Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        });
+        disp_mesh.triangles.push(DisplacementTriangle {
+            v1: 0,
+            v2: 1,
+            v3: 2,
+            pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
+            did: Some(99), // nonexistent group
+            d1: Some(0),
+            d2: Some(0),
+            d3: Some(0),
+        });
+
+        let mesh = handler.apply_displacement(&disp_mesh);
+        // Vertices unchanged since group doesn't exist
+        assert_eq!(mesh.vertices.len(), 3);
+        assert!((mesh.vertices[0].x - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_apply_displacement_no_did() {
+        let model = Model::default();
+        let handler = DisplacementHandler::from_model(&model, Path::new("/nonexistent.3mf"));
+
+        let mut disp_mesh = DisplacementMesh::default();
+        disp_mesh.vertices.push(Vertex {
+            x: 1.0,
+            y: 2.0,
+            z: 3.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 4.0,
+            y: 5.0,
+            z: 6.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 7.0,
+            y: 8.0,
+            z: 9.0,
+        });
+        disp_mesh.triangles.push(DisplacementTriangle {
+            v1: 0,
+            v2: 1,
+            v3: 2,
+            pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
+            did: None, // No displacement
+            d1: None,
+            d2: None,
+            d3: None,
+        });
+
+        let mesh = handler.apply_displacement(&disp_mesh);
+        // Vertices must be unchanged
+        assert_eq!(mesh.vertices.len(), 3);
+        assert!((mesh.vertices[0].x - 1.0).abs() < 1e-10);
+        assert!((mesh.vertices[2].z - 9.0).abs() < 1e-10);
+    }
+
+    fn make_handler_with_disp_group() -> (DisplacementHandler, usize, usize) {
+        // Build a DisplacementHandler with one group, one normal, no texture
+        // (no texture → displacement value = 0.0, so no actual displacement applied)
+        let mut model = Model::default();
+
+        let disp_map_id = 100;
+        model
+            .resources
+            .displacement_maps
+            .push(lib3mf::Displacement2D::new(
+                disp_map_id,
+                "/nonexistent_texture.png".to_string(),
+            ));
+
+        let norm_group_id = 200;
+        model.resources.norm_vector_groups.push(NormVectorGroup {
+            id: norm_group_id,
+            vectors: vec![NormVector {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            }],
+        });
+
+        let disp_group_id = 300;
+        model.resources.disp2d_groups.push(Disp2DGroup {
+            id: disp_group_id,
+            dispid: disp_map_id,
+            nid: norm_group_id,
+            height: 5.0,
+            offset: 0.0,
+            coords: vec![Disp2DCoords {
+                u: 0.0,
+                v: 0.0,
+                n: 0,
+                f: 1.0,
+            }],
+        });
+
+        let handler = DisplacementHandler::from_model(&model, Path::new("/nonexistent.3mf"));
+        (handler, disp_group_id, norm_group_id)
+    }
+
+    #[test]
+    fn test_apply_displacement_with_group_no_texture() {
+        let (handler, disp_group_id, _) = make_handler_with_disp_group();
+
+        let mut disp_mesh = DisplacementMesh::default();
+        disp_mesh.vertices.push(Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        });
+        disp_mesh.triangles.push(DisplacementTriangle {
+            v1: 0,
+            v2: 1,
+            v3: 2,
+            pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
+            did: Some(disp_group_id),
+            d1: Some(0),
+            d2: Some(0),
+            d3: Some(0),
+        });
+
+        let mesh = handler.apply_displacement(&disp_mesh);
+        // Texture not loaded → displacement value = 0.0 → vertices unchanged
+        assert_eq!(mesh.vertices.len(), 3);
+        assert!((mesh.vertices[0].z - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_apply_displacement_out_of_bounds_vertex() {
+        let (handler, disp_group_id, _) = make_handler_with_disp_group();
+
+        let mut disp_mesh = DisplacementMesh::default();
+        disp_mesh.vertices.push(Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        disp_mesh.vertices.push(Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        });
+        disp_mesh.triangles.push(DisplacementTriangle {
+            v1: 99, // Out of bounds vertex
+            v2: 1,
+            v3: 2,
+            pid: None,
+            pindex: None,
+            p1: None,
+            p2: None,
+            p3: None,
+            did: Some(disp_group_id),
+            d1: Some(0),
+            d2: Some(99), // Out of bounds coord index
+            d3: Some(0),
+        });
+
+        // Should not panic; out-of-bounds cases are handled gracefully
+        let mesh = handler.apply_displacement(&disp_mesh);
+        assert_eq!(mesh.vertices.len(), 3);
+    }
+}

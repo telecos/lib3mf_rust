@@ -1427,6 +1427,10 @@ fn dist(a: Point2D, b: Point2D) -> f64 {
 mod tests {
     use super::*;
     use crate::config::{Point3D, PrintableBox, Resolution, SpecSupport};
+    use lib3mf::{
+        Beam, BeamSet, BuildItem, Mesh, Model, Object, Slice, SlicePolygon, SliceSegment,
+        SliceStack, Triangle, Vertex, Vertex2D,
+    };
 
     #[test]
     fn test_slicer_creation() {
@@ -1649,5 +1653,1173 @@ mod tests {
         };
         let slicer = Slicer::new(config);
         assert!(!slicer.boolean_ops_enabled());
+    }
+
+    // --- apply_transform tests ---
+
+    #[test]
+    fn test_apply_transform_identity() {
+        // Identity transform: [1,0,0, 0,1,0, 0,0,1, 0,0,0]
+        let identity: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let point = [3.0, 4.0, 5.0];
+        let result = apply_transform(&point, &identity);
+        assert!((result[0] - 3.0).abs() < 1e-10);
+        assert!((result[1] - 4.0).abs() < 1e-10);
+        assert!((result[2] - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_apply_transform_translation() {
+        // Pure translation: [1,0,0, 0,1,0, 0,0,1, tx,ty,tz]
+        let t: [f64; 12] = [
+            1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0,
+        ];
+        let point = [1.0, 2.0, 3.0];
+        let result = apply_transform(&point, &t);
+        assert!((result[0] - 11.0).abs() < 1e-10);
+        assert!((result[1] - 22.0).abs() < 1e-10);
+        assert!((result[2] - 33.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_apply_transform_scale() {
+        // Scale by 2 on X, 3 on Y, 4 on Z
+        let t: [f64; 12] = [2.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0];
+        let point = [1.0, 2.0, 3.0];
+        let result = apply_transform(&point, &t);
+        assert!((result[0] - 2.0).abs() < 1e-10);
+        assert!((result[1] - 6.0).abs() < 1e-10);
+        assert!((result[2] - 12.0).abs() < 1e-10);
+    }
+
+    // --- compose_transforms tests ---
+
+    #[test]
+    fn test_compose_transforms_identity() {
+        let identity: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let t: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 5.0, 10.0, 15.0];
+        let result = compose_transforms(&identity, &t);
+        // identity * t = t
+        for i in 0..12 {
+            assert!(
+                (result[i] - t[i]).abs() < 1e-10,
+                "index {}: {} vs {}",
+                i,
+                result[i],
+                t[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_compose_transforms_two_translations() {
+        // Two translations: (5,0,0) followed by (3,0,0) = (8,0,0)
+        let t1: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 5.0, 0.0, 0.0];
+        let t2: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 3.0, 0.0, 0.0];
+        let result = compose_transforms(&t1, &t2);
+        // Translation should be 5 + 3 = 8
+        assert!((result[9] - 8.0).abs() < 1e-10);
+        assert!((result[10] - 0.0).abs() < 1e-10);
+        assert!((result[11] - 0.0).abs() < 1e-10);
+    }
+
+    // --- transform_mesh tests ---
+
+    #[test]
+    fn test_transform_mesh_translation() {
+        use lib3mf::{Mesh, Vertex};
+        let mut mesh = Mesh::default();
+        mesh.vertices.push(Vertex {
+            x: 1.0,
+            y: 2.0,
+            z: 3.0,
+        });
+        mesh.vertices.push(Vertex {
+            x: 4.0,
+            y: 5.0,
+            z: 6.0,
+        });
+        let t: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 0.0, 0.0];
+        let result = transform_mesh(&mesh, &t);
+        assert!((result.vertices[0].x - 11.0).abs() < 1e-10);
+        assert!((result.vertices[1].x - 14.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_transform_mesh_preserves_triangle_count() {
+        use lib3mf::{Mesh, Triangle, Vertex};
+        let mut mesh = Mesh::default();
+        for _ in 0..3 {
+            mesh.vertices.push(Vertex {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            });
+        }
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        let identity: [f64; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let result = transform_mesh(&mesh, &identity);
+        assert_eq!(result.triangles.len(), 1);
+    }
+
+    // --- merge_meshes tests ---
+
+    #[test]
+    fn test_merge_meshes_combines_vertices() {
+        use lib3mf::{Mesh, Triangle, Vertex};
+        let mut base = Mesh::default();
+        base.vertices.push(Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        base.vertices.push(Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        base.vertices.push(Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        });
+        base.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut other = Mesh::default();
+        other.vertices.push(Vertex {
+            x: 5.0,
+            y: 5.0,
+            z: 5.0,
+        });
+        other.vertices.push(Vertex {
+            x: 6.0,
+            y: 5.0,
+            z: 5.0,
+        });
+        other.vertices.push(Vertex {
+            x: 5.0,
+            y: 6.0,
+            z: 5.0,
+        });
+        other.triangles.push(Triangle::new(0, 1, 2));
+
+        merge_meshes(&mut base, &other);
+
+        assert_eq!(base.vertices.len(), 6);
+        assert_eq!(base.triangles.len(), 2);
+        // Second triangle should have indices offset by 3
+        assert_eq!(base.triangles[1].v1, 3);
+        assert_eq!(base.triangles[1].v2, 4);
+        assert_eq!(base.triangles[1].v3, 5);
+    }
+
+    // --- beam_plane_intersection tests ---
+
+    #[test]
+    fn test_beam_plane_intersection_crossing() {
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (0.0, 0.0, 10.0);
+        let result = beam_plane_intersection(p1, p2, 2.0, 2.0, 5.0);
+        assert!(result.is_some());
+        let (center, radius) = result.unwrap();
+        assert!((center.x - 0.0).abs() < 1e-10);
+        assert!((center.y - 0.0).abs() < 1e-10);
+        assert!((radius - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_no_crossing() {
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (0.0, 0.0, 4.0);
+        // Z=5 is above both endpoints
+        let result = beam_plane_intersection(p1, p2, 1.0, 1.0, 5.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_invalid_radius() {
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (0.0, 0.0, 10.0);
+        let result = beam_plane_intersection(p1, p2, 0.0, 1.0, 5.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_both_endpoints_same_side() {
+        let p1 = (0.0, 0.0, 1.0);
+        let p2 = (0.0, 0.0, 3.0);
+        // Z=5 is above both
+        let result = beam_plane_intersection(p1, p2, 1.0, 1.0, 5.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_tapered() {
+        // Beam from z=0 (r=1.0) to z=10 (r=3.0), intersected at z=5 → radius ≈ 2.0
+        let p1 = (0.0, 0.0, 0.0);
+        let p2 = (0.0, 0.0, 10.0);
+        let result = beam_plane_intersection(p1, p2, 1.0, 3.0, 5.0);
+        assert!(result.is_some());
+        let (_, radius) = result.unwrap();
+        assert!((radius - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_beam_plane_intersection_both_on_plane() {
+        // Both endpoints at z=5 (both on plane → degenerate)
+        let p1 = (1.0, 0.0, 5.0);
+        let p2 = (5.0, 0.0, 5.0);
+        let result = beam_plane_intersection(p1, p2, 1.0, 1.0, 5.0);
+        assert!(result.is_none());
+    }
+
+    // --- ball_plane_intersection tests ---
+
+    #[test]
+    fn test_ball_plane_intersection_center_on_plane() {
+        let center = (0.0, 0.0, 5.0);
+        let result = ball_plane_intersection(center, 3.0, 5.0);
+        assert!(result.is_some());
+        let (_, radius) = result.unwrap();
+        // Max circle = full sphere radius when dz=0
+        assert!((radius - 3.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_above_sphere() {
+        let center = (0.0, 0.0, 5.0);
+        // Plane at z=10, sphere radius 3 → no intersection
+        let result = ball_plane_intersection(center, 3.0, 10.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_at_edge() {
+        let center = (0.0, 0.0, 5.0);
+        // Plane at z=8 = center+3 → tangent point, radius should be 0
+        let result = ball_plane_intersection(center, 3.0, 8.0);
+        assert!(result.is_some());
+        let (_, radius) = result.unwrap();
+        assert!(radius.abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_ball_plane_intersection_invalid_radius() {
+        let center = (0.0, 0.0, 5.0);
+        let result = ball_plane_intersection(center, 0.0, 5.0);
+        assert!(result.is_none());
+    }
+
+    // --- circle_to_line_segments tests ---
+
+    #[test]
+    fn test_circle_to_line_segments_basic() {
+        let center = Point2D::new(0.0, 0.0);
+        let segments = circle_to_line_segments(center, 1.0, 8);
+        assert_eq!(segments.len(), 8);
+    }
+
+    #[test]
+    fn test_circle_to_line_segments_too_few() {
+        let center = Point2D::new(0.0, 0.0);
+        // segments < 3 → empty
+        let result = circle_to_line_segments(center, 1.0, 2);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_circle_to_line_segments_closed() {
+        // The last segment should end near the first segment's start
+        let center = Point2D::new(5.0, 5.0);
+        let segments = circle_to_line_segments(center, 2.0, 16);
+        assert_eq!(segments.len(), 16);
+        let first_start = segments[0].0;
+        let last_end = segments[15].1;
+        let dx = first_start.x - last_end.x;
+        let dy = first_start.y - last_end.y;
+        assert!((dx * dx + dy * dy).sqrt() < 1e-10);
+    }
+
+    #[test]
+    fn test_circle_to_line_segments_three_segments() {
+        let center = Point2D::new(0.0, 0.0);
+        let segments = circle_to_line_segments(center, 1.0, 3);
+        assert_eq!(segments.len(), 3);
+    }
+
+    // --- dist function tests ---
+
+    #[test]
+    fn test_dist_same_point() {
+        let p = Point2D::new(3.0, 4.0);
+        assert!((dist(p, p) - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_dist_known_distance() {
+        let a = Point2D::new(0.0, 0.0);
+        let b = Point2D::new(3.0, 4.0);
+        assert!((dist(a, b) - 5.0).abs() < 1e-10);
+    }
+
+    // --- slice_polygons_to_contours edge cases ---
+
+    #[test]
+    fn test_slice_polygons_to_contours_empty() {
+        let result = slice_polygons_to_contours(&[], &[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_contours_to_slice_polygons_degenerate_contour() {
+        // Contour with < 3 points should be skipped
+        let short = SliceContour::new(vec![Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)]);
+        let (polys, verts) = contours_to_slice_polygons(&[short]);
+        assert!(polys.is_empty());
+        assert!(verts.is_empty());
+    }
+
+    // --- assemble_colored_contours tests ---
+
+    #[test]
+    fn test_assemble_colored_contours_empty() {
+        let result = assemble_colored_contours(vec![], 1e-6);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_assemble_colored_contours_single_triangle() {
+        // Create 3 segments forming a triangle
+        let p0 = Point2D::new(0.0, 0.0);
+        let p1 = Point2D::new(1.0, 0.0);
+        let p2 = Point2D::new(0.5, 1.0);
+        let red: Rgba = [255, 0, 0, 255];
+
+        let segments = vec![
+            ColoredSegment {
+                p0,
+                p1,
+                color0: red,
+                color1: red,
+            },
+            ColoredSegment {
+                p0: p1,
+                p1: p2,
+                color0: red,
+                color1: red,
+            },
+            ColoredSegment {
+                p0: p2,
+                p1: p0,
+                color0: red,
+                color1: red,
+            },
+        ];
+
+        let result = assemble_colored_contours(segments, 1e-6);
+        assert!(!result.is_empty());
+        assert!(result[0].points.len() >= 3);
+    }
+
+    // --- colored_triangle_intersection tests ---
+
+    #[test]
+    fn test_colored_triangle_intersection_crossing() {
+        use lib3mf::{Model, Object, Triangle, Vertex};
+        let v0 = Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let v1 = Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 10.0,
+        };
+        let v2 = Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        };
+        let tri = Triangle::new(0, 1, 2);
+
+        let model = Model::default();
+        let resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+
+        // z=5 cuts through edge v0-v1 (z goes 0→10) and edge v1-v2 (z goes 10→0)
+        let result = colored_triangle_intersection(&v0, &v1, &v2, 5.0, &tri, &object, &resolver);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_colored_triangle_intersection_no_crossing() {
+        use lib3mf::{Model, Object, Triangle, Vertex};
+        let v0 = Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let v1 = Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 1.0,
+        };
+        let v2 = Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 2.0,
+        };
+        let tri = Triangle::new(0, 1, 2);
+
+        let model = Model::default();
+        let resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+
+        // z=5 is above all vertices → no intersection
+        let result = colored_triangle_intersection(&v0, &v1, &v2, 5.0, &tri, &object, &resolver);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_colored_triangle_intersection_all_on_plane() {
+        use lib3mf::{Model, Object, Triangle, Vertex};
+        // All three vertices at z=5 → degenerate (both edges on plane)
+        let v0 = Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 5.0,
+        };
+        let v1 = Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 5.0,
+        };
+        let v2 = Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 5.0,
+        };
+        let tri = Triangle::new(0, 1, 2);
+        let model = Model::default();
+        let resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+        // Should return Some (first two on-plane vertices found)
+        let result = colored_triangle_intersection(&v0, &v1, &v2, 5.0, &tri, &object, &resolver);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_colored_triangle_intersection_one_vertex_on_plane() {
+        use lib3mf::{Model, Object, Triangle, Vertex};
+        // v0 at z=5, v1 at z=0, v2 at z=10 → v0 exactly on plane
+        let v0 = Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 5.0,
+        };
+        let v1 = Vertex {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let v2 = Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 10.0,
+        };
+        let tri = Triangle::new(0, 1, 2);
+        let model = Model::default();
+        let resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+        let result = colored_triangle_intersection(&v0, &v1, &v2, 5.0, &tri, &object, &resolver);
+        // Should have a segment (v0 on plane, plus intersection of v1-v2 edge)
+        assert!(result.is_some());
+    }
+
+    // --- Helper: create a simple triangle mesh (unit tetrahedron spanning z=[0,10]) ---
+
+    fn make_box_mesh() -> Mesh {
+        // A simple box mesh spanning x=[0,10], y=[0,10], z=[0,10]
+        let mut mesh = Mesh::default();
+        // 8 vertices of a unit cube (scaled 10x)
+        for &(x, y, z) in &[
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (10.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0),
+            (0.0, 0.0, 10.0),
+            (10.0, 0.0, 10.0),
+            (10.0, 10.0, 10.0),
+            (0.0, 10.0, 10.0),
+        ] {
+            mesh.vertices.push(Vertex { x, y, z });
+        }
+        // 12 triangles forming 6 faces
+        let faces: &[(usize, usize, usize)] = &[
+            (0, 1, 2),
+            (0, 2, 3), // bottom
+            (4, 6, 5),
+            (4, 7, 6), // top
+            (0, 5, 1),
+            (0, 4, 5), // front
+            (2, 6, 7),
+            (2, 7, 3), // back
+            (0, 3, 7),
+            (0, 7, 4), // left
+            (1, 5, 6),
+            (1, 6, 2), // right
+        ];
+        for &(v1, v2, v3) in faces {
+            mesh.triangles.push(Triangle::new(v1, v2, v3));
+        }
+        mesh
+    }
+
+    fn make_default_config() -> SlicerConfig {
+        SlicerConfig {
+            slice_thickness_um: 1000.0,
+            printable_box: PrintableBox {
+                origin: Point3D {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                end: Point3D {
+                    x: 20.0,
+                    y: 20.0,
+                    z: 20.0,
+                },
+            },
+            resolution: Resolution { dpi: 10 },
+            key_file: None,
+            spec_support: None,
+        }
+    }
+
+    // --- object_intersects_z_layer tests ---
+
+    #[test]
+    fn test_object_intersects_z_layer_mesh_intersects() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh()); // z range [0,10]
+
+        let build_item = BuildItem::new(1);
+        let result = slicer
+            .object_intersects_z_layer(
+                &object,
+                &build_item,
+                5.0,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(result, "Z=5 should intersect box at z=[0,10]");
+    }
+
+    #[test]
+    fn test_object_intersects_z_layer_no_intersection() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh()); // z range [0,10]
+
+        let build_item = BuildItem::new(1);
+        let result = slicer
+            .object_intersects_z_layer(
+                &object,
+                &build_item,
+                15.0,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(!result, "Z=15 should not intersect box at z=[0,10]");
+    }
+
+    #[test]
+    fn test_object_intersects_z_layer_no_mesh() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let object = Object::new(1); // no mesh
+        let build_item = BuildItem::new(1);
+        let result = slicer
+            .object_intersects_z_layer(
+                &object,
+                &build_item,
+                5.0,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(!result, "Object with no mesh should not intersect");
+    }
+
+    #[test]
+    fn test_object_intersects_z_layer_with_transform() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh()); // z range [0,10]
+
+        // Translate by +5 in Z → z range becomes [5, 15]
+        let mut build_item = BuildItem::new(1);
+        build_item.transform = Some([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 5.0]);
+
+        let result = slicer
+            .object_intersects_z_layer(
+                &object,
+                &build_item,
+                12.0,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(result, "Z=12 should intersect translated box at z=[5,15]");
+    }
+
+    // --- slice_object_at_z_with_color tests ---
+
+    #[test]
+    fn test_slice_object_at_z_with_color_simple_mesh() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let color_resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh()); // z range [0,10]
+
+        let build_item = BuildItem::new(1);
+        let (contours, _colored) = slicer
+            .slice_object_at_z_with_color(
+                &object,
+                &build_item,
+                5.0,
+                &color_resolver,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        // Should produce some contours at z=5 inside the box
+        assert!(!contours.is_empty(), "Should produce contours at z=5");
+    }
+
+    #[test]
+    fn test_slice_object_at_z_with_color_no_mesh() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let color_resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let object = Object::new(1); // no mesh
+        let build_item = BuildItem::new(1);
+        let (contours, colored) = slicer
+            .slice_object_at_z_with_color(
+                &object,
+                &build_item,
+                5.0,
+                &color_resolver,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(contours.is_empty());
+        assert!(colored.is_empty());
+    }
+
+    // --- slice_object_at_z_with_color with slice stack ---
+
+    #[test]
+    fn test_slice_object_at_z_with_slice_stack() {
+        let slicer = Slicer::new(make_default_config());
+        let mut model = Model::default();
+        let color_resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        // Build a slice stack with one slice at z=[0,10]
+        let v0 = Vertex2D::new(0.0, 0.0);
+        let v1 = Vertex2D::new(10.0, 0.0);
+        let v2 = Vertex2D::new(10.0, 10.0);
+        let v3 = Vertex2D::new(0.0, 10.0);
+        let mut polygon = SlicePolygon::new(0); // startv=0
+        polygon.segments.push(SliceSegment::new(1));
+        polygon.segments.push(SliceSegment::new(2));
+        polygon.segments.push(SliceSegment::new(3));
+
+        let slice = Slice {
+            ztop: 10.0,
+            vertices: vec![v0, v1, v2, v3],
+            polygons: vec![polygon],
+        };
+
+        let stack = SliceStack {
+            id: 5,
+            zbottom: 0.0,
+            slices: vec![slice],
+            slice_refs: vec![],
+        };
+        model.resources.slice_stacks.push(stack);
+
+        let mut object = Object::new(1);
+        object.slicestackid = Some(5);
+        let build_item = BuildItem::new(1);
+
+        let (contours, _colored) = slicer
+            .slice_object_at_z_with_color(
+                &object,
+                &build_item,
+                5.0,
+                &color_resolver,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        // Should produce contours from the slice stack polygon
+        assert!(!contours.is_empty(), "Slice stack should produce contours");
+    }
+
+    // --- print_model_info test ---
+
+    #[test]
+    fn test_print_model_info() {
+        let slicer = Slicer::new(make_default_config());
+        let mut model = Model::default();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh());
+        model.resources.objects.push(object);
+
+        // Should not panic
+        slicer.print_model_info(&model);
+    }
+
+    #[test]
+    fn test_print_model_info_empty() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        slicer.print_model_info(&model);
+    }
+
+    // --- collect_beam_segments tests ---
+
+    #[test]
+    fn test_collect_beam_segments_with_beam_intersection() {
+        let slicer = Slicer::new(make_default_config());
+
+        let mut mesh = Mesh::default();
+        mesh.vertices.push(Vertex {
+            x: 5.0,
+            y: 5.0,
+            z: 0.0,
+        });
+        mesh.vertices.push(Vertex {
+            x: 5.0,
+            y: 5.0,
+            z: 10.0,
+        });
+
+        let mut beamset = BeamSet::new();
+        beamset.radius = 1.0;
+        let mut beam = Beam::new(0, 1);
+        beam.r1 = Some(1.0);
+        beam.r2 = Some(1.0);
+        beamset.beams.push(beam);
+
+        let segments = slicer.collect_beam_segments(&mesh, &beamset, 5.0);
+        // Should produce 16 segments (circle approximation)
+        assert_eq!(segments.len(), 16);
+    }
+
+    #[test]
+    fn test_collect_beam_segments_no_intersection() {
+        let slicer = Slicer::new(make_default_config());
+
+        let mut mesh = Mesh::default();
+        mesh.vertices.push(Vertex {
+            x: 5.0,
+            y: 5.0,
+            z: 0.0,
+        });
+        mesh.vertices.push(Vertex {
+            x: 5.0,
+            y: 5.0,
+            z: 4.0,
+        }); // ends before z=5
+
+        let mut beamset = BeamSet::new();
+        beamset.radius = 1.0;
+        beamset.beams.push(Beam::new(0, 1));
+
+        let segments = slicer.collect_beam_segments(&mesh, &beamset, 5.0);
+        assert!(segments.is_empty());
+    }
+
+    #[test]
+    fn test_collect_beam_segments_with_ball() {
+        let slicer = Slicer::new(make_default_config());
+
+        let mut mesh = Mesh::default();
+        mesh.vertices.push(Vertex {
+            x: 5.0,
+            y: 5.0,
+            z: 5.0,
+        }); // ball center at z=5
+
+        let mut beamset = BeamSet::new();
+        beamset.radius = 2.0;
+        // No beams, just a ball
+        let mut ball = lib3mf::model::Ball::new(0);
+        ball.radius = Some(2.0);
+        beamset.balls.push(ball);
+
+        let segments = slicer.collect_beam_segments(&mesh, &beamset, 5.0);
+        // Ball at z=5, radius=2, slice at z=5 → full circle with 16 segments
+        assert_eq!(segments.len(), 16);
+    }
+
+    #[test]
+    fn test_collect_beam_segments_invalid_vertex_index() {
+        let slicer = Slicer::new(make_default_config());
+
+        let mesh = Mesh::default(); // no vertices
+
+        let mut beamset = BeamSet::new();
+        beamset.radius = 1.0;
+        beamset.beams.push(Beam::new(99, 100)); // invalid indices
+
+        // Should not panic
+        let segments = slicer.collect_beam_segments(&mesh, &beamset, 5.0);
+        assert!(segments.is_empty());
+    }
+
+    // --- resolve_object_mesh_recursive tests ---
+
+    #[test]
+    fn test_resolve_object_mesh_recursive_simple_mesh() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh());
+
+        let mut visited = std::collections::HashSet::new();
+        let result = slicer
+            .resolve_object_mesh_recursive(
+                &object,
+                &model,
+                &None,
+                &mut visited,
+                &disp_handler,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(result.is_some());
+        let mesh = result.unwrap();
+        assert_eq!(mesh.vertices.len(), 8);
+    }
+
+    #[test]
+    fn test_resolve_object_mesh_recursive_circular_reference() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh());
+
+        // Mark object as already visited → circular reference detection
+        let mut visited = std::collections::HashSet::new();
+        visited.insert(1usize);
+
+        let result = slicer
+            .resolve_object_mesh_recursive(
+                &object,
+                &model,
+                &None,
+                &mut visited,
+                &disp_handler,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(result.is_none(), "Circular reference should return None");
+    }
+
+    #[test]
+    fn test_resolve_object_mesh_recursive_no_mesh_no_components() {
+        let slicer = Slicer::new(make_default_config());
+        let model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let object = Object::new(1); // no mesh, no components
+        let mut visited = std::collections::HashSet::new();
+
+        let result = slicer
+            .resolve_object_mesh_recursive(
+                &object,
+                &model,
+                &None,
+                &mut visited,
+                &disp_handler,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    // --- object_intersects_z_layer with slice stack ---
+
+    #[test]
+    fn test_object_intersects_z_layer_with_slice_stack() {
+        let slicer = Slicer::new(make_default_config());
+        let mut model = Model::default();
+        let disp_handler = crate::displacement::DisplacementHandler::from_model(
+            &model,
+            std::path::Path::new("/nonexistent"),
+        );
+        let mut warned = std::collections::HashSet::new();
+
+        let slice = Slice {
+            ztop: 10.0,
+            vertices: vec![
+                Vertex2D::new(0.0, 0.0),
+                Vertex2D::new(10.0, 0.0),
+                Vertex2D::new(5.0, 10.0),
+            ],
+            polygons: vec![],
+        };
+        model.resources.slice_stacks.push(SliceStack {
+            id: 5,
+            zbottom: 0.0,
+            slices: vec![slice],
+            slice_refs: vec![],
+        });
+
+        let mut object = Object::new(1);
+        object.slicestackid = Some(5);
+        let build_item = BuildItem::new(1);
+
+        let result = slicer
+            .object_intersects_z_layer(
+                &object,
+                &build_item,
+                5.0,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(result, "Z=5 should be within slice stack z=[0,10]");
+
+        let result_outside = slicer
+            .object_intersects_z_layer(
+                &object,
+                &build_item,
+                15.0,
+                &disp_handler,
+                &model,
+                &mut warned,
+            )
+            .unwrap();
+        assert!(
+            !result_outside,
+            "Z=15 should be outside slice stack z=[0,10]"
+        );
+    }
+
+    // --- extract_slice_stack_contours tests ---
+
+    #[test]
+    fn test_extract_slice_stack_contours_out_of_range() {
+        let slicer = Slicer::new(make_default_config());
+
+        let slice = Slice {
+            ztop: 10.0,
+            vertices: vec![Vertex2D::new(0.0, 0.0)],
+            polygons: vec![],
+        };
+        let stack = SliceStack {
+            id: 1,
+            zbottom: 0.0,
+            slices: vec![slice],
+            slice_refs: vec![],
+        };
+
+        let model = Model::default();
+        let color_resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+        let (contours, colored) = slicer
+            .extract_slice_stack_contours(&stack, 15.0, &None, &object, &color_resolver)
+            .unwrap();
+        assert!(contours.is_empty());
+        assert!(colored.is_empty());
+    }
+
+    #[test]
+    fn test_extract_slice_stack_contours_degenerate_transform() {
+        let slicer = Slicer::new(make_default_config());
+
+        let slice = Slice {
+            ztop: 10.0,
+            vertices: vec![Vertex2D::new(0.0, 0.0)],
+            polygons: vec![],
+        };
+        let stack = SliceStack {
+            id: 1,
+            zbottom: 0.0,
+            slices: vec![slice],
+            slice_refs: vec![],
+        };
+
+        let model = Model::default();
+        let color_resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+
+        // Degenerate transform with m22=0
+        let degenerate_transform: [f64; 12] =
+            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+
+        let (contours, colored) = slicer
+            .extract_slice_stack_contours(
+                &stack,
+                5.0,
+                &Some(degenerate_transform),
+                &object,
+                &color_resolver,
+            )
+            .unwrap();
+        assert!(contours.is_empty());
+        assert!(colored.is_empty());
+    }
+
+    #[test]
+    fn test_extract_slice_stack_contours_empty_stack() {
+        let slicer = Slicer::new(make_default_config());
+
+        // Empty stack (no slices)
+        let stack = SliceStack {
+            id: 1,
+            zbottom: 0.0,
+            slices: vec![],
+            slice_refs: vec![],
+        };
+
+        let model = Model::default();
+        let color_resolver =
+            crate::color::ColorResolver::from_model(&model, std::path::Path::new("/nonexistent"));
+        let object = Object::new(1);
+        let (contours, _) = slicer
+            .extract_slice_stack_contours(&stack, 5.0, &None, &object, &color_resolver)
+            .unwrap();
+        assert!(contours.is_empty());
+    }
+
+    // --- slice_model integration test ---
+
+    #[test]
+    fn test_slice_model_simple() {
+        let config = SlicerConfig {
+            slice_thickness_um: 2000.0, // 2mm thick slices
+            printable_box: PrintableBox {
+                origin: Point3D {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                end: Point3D {
+                    x: 20.0,
+                    y: 20.0,
+                    z: 10.0,
+                },
+            },
+            resolution: Resolution { dpi: 10 },
+            key_file: None,
+            spec_support: None,
+        };
+        let slicer = Slicer::new(config);
+
+        let mut model = Model::default();
+        let mut object = Object::new(1);
+        object.mesh = Some(make_box_mesh());
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        let dir = tempfile::tempdir().unwrap();
+        let output_dir = dir.path().join("slices");
+        let result = slicer.slice_model(
+            &model,
+            std::path::Path::new("/nonexistent.3mf"),
+            &output_dir,
+        );
+        assert!(result.is_ok());
+        let files = result.unwrap();
+        assert!(!files.is_empty(), "Should produce slice files");
     }
 }
