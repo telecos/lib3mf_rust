@@ -18,13 +18,6 @@ use zip::ZipArchive;
 /// We cap the hint at this safe value; the buffer will still grow as needed.
 const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 
-/// Hard limit on the uncompressed size of any single file read from a 3MF package (256 MB).
-///
-/// This guards against ZIP-bomb payloads where a small compressed input expands into a
-/// very large decompressed stream. 3MF model XML, relationship files, and content-type
-/// declarations are all text-based and should never legitimately exceed this limit.
-const MAX_FILE_CONTENT_BYTES: u64 = 256 * 1024 * 1024;
-
 /// Open a 3MF package from a reader
 pub(super) fn open<R: Read + std::io::Seek>(reader: R) -> Result<Package<R>> {
     let archive = ZipArchive::new(reader)?;
@@ -545,7 +538,7 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
     };
 
     // Now read the file
-    let file = package
+    let mut file = package
         .archive
         .by_name(&path_to_use)
         .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
@@ -553,17 +546,7 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
     // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
     let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
     let mut content = String::with_capacity(capacity);
-    // Enforce a hard read limit to prevent ZIP-bomb decompression OOM.
-    // Read up to MAX_FILE_CONTENT_BYTES + 1 bytes so we can distinguish
-    // "file is exactly the limit" (ok) from "file exceeds the limit" (error).
-    file.take(MAX_FILE_CONTENT_BYTES + 1)
-        .read_to_string(&mut content)?;
-    if content.len() > MAX_FILE_CONTENT_BYTES as usize {
-        return Err(Error::InvalidFormat(format!(
-            "File '{}' exceeds the maximum allowed uncompressed size of {} bytes",
-            path_to_use, MAX_FILE_CONTENT_BYTES
-        )));
-    }
+    file.read_to_string(&mut content)?;
 
     Ok(content)
 }
@@ -573,7 +556,7 @@ pub(super) fn get_file<R: Read + std::io::Seek>(
     package: &mut Package<R>,
     name: &str,
 ) -> Result<String> {
-    let file = package
+    let mut file = package
         .archive
         .by_name(name)
         .map_err(|_| Error::MissingFile(name.to_string()))?;
@@ -581,17 +564,7 @@ pub(super) fn get_file<R: Read + std::io::Seek>(
     // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
     let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
     let mut content = String::with_capacity(capacity);
-    // Enforce a hard read limit to prevent ZIP-bomb decompression OOM.
-    // Read up to MAX_FILE_CONTENT_BYTES + 1 bytes so we can distinguish
-    // "file is exactly the limit" (ok) from "file exceeds the limit" (error).
-    file.take(MAX_FILE_CONTENT_BYTES + 1)
-        .read_to_string(&mut content)?;
-    if content.len() > MAX_FILE_CONTENT_BYTES as usize {
-        return Err(Error::InvalidFormat(format!(
-            "File '{}' exceeds the maximum allowed uncompressed size of {} bytes",
-            name, MAX_FILE_CONTENT_BYTES
-        )));
-    }
+    file.read_to_string(&mut content)?;
     Ok(content)
 }
 

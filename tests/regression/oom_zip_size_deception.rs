@@ -6,8 +6,9 @@
 //! trusted that attacker-controlled header field and would attempt to allocate
 //! gigabytes of memory before reading a single byte.
 //!
-//! After the fix, the pre-allocation is capped at 64 KB and a hard 256 MB limit
-//! is enforced on the actual bytes read, so both vectors are neutralised.
+//! After the fix, the pre-allocation hint is capped at 64 KB so a lied header
+//! field never triggers a large upfront allocation. The buffer still grows
+//! as actual bytes are read, so legitimate large files are unaffected.
 //!
 //! Reference: fuzzing artifact `oom-c064722642ee5d1624dfa84e1f5c2ff38ec086b0`
 
@@ -149,19 +150,17 @@ fn test_normal_3mf_still_parses() {
 ///
 /// Before the fix `String::with_capacity(2_147_483_648)` was called, which
 /// immediately exhausted available memory on most systems. After the fix the
-/// pre-allocation is capped at 64 KB and the parse either succeeds or returns
-/// an `InvalidFormat` error — but it must not panic or abort.
+/// pre-allocation is capped at 64 KB and the parse succeeds because the
+/// actual payload is only a few hundred bytes.
 #[test]
 fn test_lied_uncompressed_size_does_not_cause_oom() {
     // Claim 2 GiB uncompressed while actual content is only a few hundred bytes.
     let lied_size: u32 = 2u32 * 1024 * 1024 * 1024; // 2 GiB
     let bytes = make_3mf_with_lied_size(MINIMAL_MODEL_XML, lied_size);
 
-    // Must not OOM / panic. May succeed (the actual bytes are valid XML) or
-    // fail with an error, but must complete without running out of memory.
+    // The actual XML is valid; the lied header field only affected the capacity
+    // hint, which is now safely capped.  The parse must succeed without OOM.
     let result = Model::from_reader(Cursor::new(bytes));
-    // The actual XML is valid so we expect success (the lie only affects the
-    // capacity hint, not the data).
     assert!(
         result.is_ok(),
         "Parser should succeed even when the ZIP header lies about uncompressed size; got: {:?}",
