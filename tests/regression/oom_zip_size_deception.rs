@@ -10,7 +10,10 @@
 //! field never triggers a large upfront allocation. The buffer still grows
 //! as actual bytes are read, so legitimate large files are unaffected.
 //!
-//! Reference: fuzzing artifact `oom-c064722642ee5d1624dfa84e1f5c2ff38ec086b0`
+//! References:
+//! - fuzzing artifact `oom-c064722642ee5d1624dfa84e1f5c2ff38ec086b0` (lied model uncompressed size)
+//! - fuzzing artifact `oom-b005ceb96c1d2f53cb537a0e9816f45213ef77e8` (hash `1540c29df25a1778`,
+//!   lied `[Content_Types].xml` compressed+uncompressed size = near u32::MAX)
 
 use lib3mf::Model;
 use std::io::{Cursor, Write};
@@ -181,4 +184,82 @@ fn test_max_lied_uncompressed_size_does_not_cause_oom() {
         "Parser should succeed with u32::MAX lied size; got: {:?}",
         result.err()
     );
+}
+
+/// Build a 3MF ZIP archive where the FIRST entry (`[Content_Types].xml`) has
+/// both its `compressed_size` and `uncompressed_size` local-header fields
+/// patched to `lied_size`, while the actual data is a normal short XML.
+///
+/// This simulates the fuzzing artifact `oom-b005ceb96c1d2f53cb537a0e9816f45213ef77e8`
+/// (hash `1540c29df25a1778`) where `[Content_Types].xml` declared both sizes as
+/// ~4 GB in the local file header.
+fn make_3mf_with_lied_content_types_size(lied_size: u32) -> Vec<u8> {
+    let buf = Cursor::new(Vec::new());
+    let mut zip = ZipWriter::new(buf);
+    let opts = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Stored)
+        .large_file(false);
+
+    // [Content_Types].xml (first entry – this is the one we will patch)
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    // _rels/.rels
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    // 3D/3dmodel.model
+    zip.start_file("3D/3dmodel.model", opts).unwrap();
+    zip.write_all(MINIMAL_MODEL_XML).unwrap();
+
+    let cursor = zip.finish().unwrap();
+    let mut bytes = cursor.into_inner();
+
+    // Patch the FIRST local file header (for `[Content_Types].xml`).
+    // The first entry starts at offset 0 with the PK\x03\x04 signature.
+    // ZIP local file header layout (offsets from start of header):
+    //   0x12  4  compressed size
+    //   0x16  4  uncompressed size
+    let sig = b"PK\x03\x04";
+    if bytes.starts_with(sig) {
+        let lied = lied_size.to_le_bytes();
+        bytes[0x12..0x16].copy_from_slice(&lied); // compressed size
+        bytes[0x16..0x1A].copy_from_slice(&lied); // uncompressed size
+    }
+
+    bytes
+}
+
+/// Regression test for fuzzing artifact `oom-b005ceb96c1d2f53cb537a0e9816f45213ef77e8`
+/// (hash `1540c29df25a1778`).
+///
+/// A ZIP where `[Content_Types].xml` claims both `compressed_size` and
+/// `uncompressed_size` equal to u32::MAX (~4 GB) must not cause an OOM.
+///
+/// Before the fix, `get_file()` called `String::with_capacity(file.size() as usize)`
+/// where `file.size()` returned u32::MAX, immediately exhausting memory. After the
+/// fix the pre-allocation hint is capped at 64 KB.
+#[test]
+fn test_lied_content_types_sizes_does_not_cause_oom() {
+    let bytes = make_3mf_with_lied_content_types_size(u32::MAX);
+
+    // The actual XML payload is valid; only the size fields in the local header
+    // are inflated. The parser must not OOM and must complete (with either
+    // a success or a graceful error – the lied compressed_size makes the stored
+    // entry corrupt from the zip crate's perspective).
+    let _result = Model::from_reader(Cursor::new(bytes));
+    // We only assert that execution reached this point without panic/OOM.
 }
