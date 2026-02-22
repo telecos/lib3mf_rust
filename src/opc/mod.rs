@@ -372,7 +372,10 @@ mod tests {
         let data = b"\x00\x01\x02\x03\x04"; // 5 bytes
         let limit = 4u64;
         let result = reader::read_zip_entry_as_binary(data.as_ref(), "big.bin", limit);
-        assert!(result.is_err(), "Expected error for oversized binary content");
+        assert!(
+            result.is_err(),
+            "Expected error for oversized binary content"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("exceeds maximum allowed uncompressed size"),
