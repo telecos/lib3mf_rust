@@ -10,6 +10,14 @@ use std::io::Read;
 use urlencoding::decode;
 use zip::ZipArchive;
 
+/// Maximum bytes to pre-allocate when reading a ZIP entry (64 KB).
+///
+/// ZIP local file headers contain an attacker-controlled `uncompressed_size` field.
+/// Using that value directly as a `with_capacity` hint allows a crafted ZIP to
+/// trigger an out-of-memory allocation before a single byte is decompressed.
+/// We cap the hint at this safe value; the buffer will still grow as needed.
+const MAX_PREALLOC_BYTES: usize = 64 * 1024;
+
 /// Open a 3MF package from a reader
 pub(super) fn open<R: Read + std::io::Seek>(reader: R) -> Result<Package<R>> {
     let archive = ZipArchive::new(reader)?;
@@ -534,8 +542,10 @@ pub(super) fn get_model<R: Read + std::io::Seek>(package: &mut Package<R>) -> Re
         .archive
         .by_name(&path_to_use)
         .map_err(|_| Error::MissingFile(path_to_use.clone()))?;
-    // Pre-allocate with uncompressed size to avoid repeated reallocations
-    let mut content = String::with_capacity(file.size() as usize);
+    // Cap the pre-allocation hint: the ZIP header's `uncompressed_size` field is
+    // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
+    let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
+    let mut content = String::with_capacity(capacity);
     file.read_to_string(&mut content)?;
 
     Ok(content)
@@ -550,8 +560,10 @@ pub(super) fn get_file<R: Read + std::io::Seek>(
         .archive
         .by_name(name)
         .map_err(|_| Error::MissingFile(name.to_string()))?;
-    // Pre-allocate with uncompressed size to avoid repeated reallocations
-    let mut content = String::with_capacity(file.size() as usize);
+    // Cap the pre-allocation hint: the ZIP header's `uncompressed_size` field is
+    // attacker-controlled and must not be used as-is (ZIP size-deception / OOM).
+    let capacity = (file.size() as usize).min(MAX_PREALLOC_BYTES);
+    let mut content = String::with_capacity(capacity);
     file.read_to_string(&mut content)?;
     Ok(content)
 }
