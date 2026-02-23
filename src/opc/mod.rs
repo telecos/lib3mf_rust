@@ -182,8 +182,7 @@ mod tests {
   <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
 </Relationships>";
 
-    const MINIMAL_MODEL: &[u8] =
-        b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+    const MINIMAL_MODEL: &[u8] = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <model unit=\"millimeter\" xml:lang=\"en-US\" \
 xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
   <resources/><build/></model>";
@@ -214,11 +213,11 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
         let png: &[u8] = &[
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG magic
             0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00,
-            0x90, 0x77, 0x53, 0xDE, // IHDR data + CRC
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
+            0x77, 0x53, 0xDE, // IHDR data + CRC
             0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, // IDAT chunk
-            0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE2,
-            0x21, 0xBC, 0x33, // IDAT data + CRC
+            0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21,
+            0xBC, 0x33, // IDAT data + CRC
             0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82, // IEND
         ];
         make_zip(&[
@@ -246,7 +245,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
             ("[Content_Types].xml", content_types),
             ("_rels/.rels", rels),
             ("3D/3dmodel.model", MINIMAL_MODEL),
-            ("Metadata/keystore.xml", b"<?xml version=\"1.0\"?><keystore/>"),
+            (
+                "Metadata/keystore.xml",
+                b"<?xml version=\"1.0\"?><keystore/>",
+            ),
         ])
     }
 
@@ -258,7 +260,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_package_get_model() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
         let model = pkg.get_model().unwrap();
-        assert!(model.contains("<model"), "get_model should return model XML");
+        assert!(
+            model.contains("<model"),
+            "get_model should return model XML"
+        );
     }
 
     #[test]
@@ -267,7 +272,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
         let mut reader = pkg.get_model_reader().unwrap();
         let mut content = String::new();
         reader.read_to_string(&mut content).unwrap();
-        assert!(content.contains("<model"), "get_model_reader should stream model XML");
+        assert!(
+            content.contains("<model"),
+            "get_model_reader should stream model XML"
+        );
     }
 
     #[test]
@@ -283,8 +291,14 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     #[test]
     fn test_package_has_file_existing_and_missing() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
-        assert!(pkg.has_file(MODEL_PATH), "has_file should return true for existing file");
-        assert!(!pkg.has_file("nonexistent.bin"), "has_file should return false for missing file");
+        assert!(
+            pkg.has_file(MODEL_PATH),
+            "has_file should return true for existing file"
+        );
+        assert!(
+            !pkg.has_file("nonexistent.bin"),
+            "has_file should return false for missing file"
+        );
     }
 
     #[test]
@@ -308,7 +322,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_package_get_file_binary() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
         let data = pkg.get_file_binary(MODEL_PATH).unwrap();
-        assert!(!data.is_empty(), "get_file_binary should return non-empty data");
+        assert!(
+            !data.is_empty(),
+            "get_file_binary should return non-empty data"
+        );
         // Model XML starts with <?xml
         assert_eq!(&data[..5], b"<?xml");
     }
@@ -331,7 +348,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
             ("3D/3dmodel.model", MINIMAL_MODEL),
         ]);
         let result = Package::open(cursor);
-        assert!(result.is_err(), "Package without _rels/.rels should fail to open");
+        assert!(
+            result.is_err(),
+            "Package without _rels/.rels should fail to open"
+        );
         let err = result.err().unwrap().to_string();
         assert!(
             err.contains("_rels/.rels") || err.contains("rels"),
@@ -927,7 +947,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_get_thumbnail_metadata_returns_none_when_no_thumbnail() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
         let result = pkg.get_thumbnail_metadata().unwrap();
-        assert!(result.is_none(), "Package without thumbnail should return None");
+        assert!(
+            result.is_none(),
+            "Package without thumbnail should return None"
+        );
     }
 
     #[test]
@@ -1057,7 +1080,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_discover_keystore_path_returns_none_when_absent() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
         let path = pkg.discover_keystore_path().unwrap();
-        assert!(path.is_none(), "No keystore relationship should return None");
+        assert!(
+            path.is_none(),
+            "No keystore relationship should return None"
+        );
     }
 
     #[test]
@@ -1090,7 +1116,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
                 None,
             )
             .unwrap();
-        assert!(!found, "Should not find thumbnail relationship in package without thumbnail");
+        assert!(
+            !found,
+            "Should not find thumbnail relationship in package without thumbnail"
+        );
     }
 
     #[test]
@@ -1114,14 +1143,18 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_validate_keystore_relationship_fails_when_absent() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
         let result = pkg.validate_keystore_relationship("Metadata/keystore.xml");
-        assert!(result.is_err(), "Should fail when no keystore relationship exists");
+        assert!(
+            result.is_err(),
+            "Should fail when no keystore relationship exists"
+        );
     }
 
     #[test]
     fn test_validate_keystore_relationship_succeeds_when_present() {
         let mut pkg = Package::open(minimal_3mf_with_keystore()).unwrap();
         assert!(
-            pkg.validate_keystore_relationship("Metadata/keystore.xml").is_ok(),
+            pkg.validate_keystore_relationship("Metadata/keystore.xml")
+                .is_ok(),
             "Should succeed when keystore relationship is present"
         );
     }
@@ -1131,7 +1164,8 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
         // Content types has Default Extension="xml" with keystore content type
         let mut pkg = Package::open(minimal_3mf_with_keystore()).unwrap();
         assert!(
-            pkg.validate_keystore_content_type("Metadata/keystore.xml").is_ok(),
+            pkg.validate_keystore_content_type("Metadata/keystore.xml")
+                .is_ok(),
             "Should accept keystore content type declared via Default Extension='xml'"
         );
     }
@@ -1153,11 +1187,15 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
             ("[Content_Types].xml", ct),
             ("_rels/.rels", rels),
             ("3D/3dmodel.model", MINIMAL_MODEL),
-            ("Metadata/keystore.xml", b"<?xml version=\"1.0\"?><keystore/>"),
+            (
+                "Metadata/keystore.xml",
+                b"<?xml version=\"1.0\"?><keystore/>",
+            ),
         ]);
         let mut pkg = Package::open(cursor).unwrap();
         assert!(
-            pkg.validate_keystore_content_type("Metadata/keystore.xml").is_ok(),
+            pkg.validate_keystore_content_type("Metadata/keystore.xml")
+                .is_ok(),
             "Should accept keystore content type declared via Override PartName"
         );
     }
@@ -1166,7 +1204,10 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_validate_keystore_content_type_fails_when_absent() {
         let mut pkg = Package::open(minimal_3mf()).unwrap();
         let result = pkg.validate_keystore_content_type("Metadata/keystore.xml");
-        assert!(result.is_err(), "Should fail when no keystore content type exists");
+        assert!(
+            result.is_err(),
+            "Should fail when no keystore content type exists"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1177,8 +1218,8 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
     fn test_create_package_with_thumbnail_no_thumbnail_data() {
         // Call create_package_with_thumbnail with None thumbnail -> should produce valid package
         let model_xml = std::str::from_utf8(MINIMAL_MODEL).unwrap();
-        let buf = create_package_with_thumbnail(Cursor::new(Vec::new()), model_xml, None, None)
-            .unwrap();
+        let buf =
+            create_package_with_thumbnail(Cursor::new(Vec::new()), model_xml, None, None).unwrap();
         let mut pkg = Package::open(buf).unwrap();
         assert!(pkg.get_model().is_ok());
     }
