@@ -543,3 +543,144 @@ pub fn validate_component_chain(_model: &Model) -> Result<()> {
     // The current understanding is insufficient to implement this correctly.
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{BuildItem, Component, Object, ProductionInfo};
+
+    #[test]
+    fn test_validate_empty_model() {
+        let model = Model::new();
+        assert!(validate_production_extension(&model).is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_invalid_no_leading_slash() {
+        let mut model = Model::new();
+        let mut item = BuildItem::new(1);
+        item.production_path = Some("relative/path.3mf".to_string());
+        model.build.items.push(item);
+        let result = validate_production_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("start with /"));
+    }
+
+    #[test]
+    fn test_validate_path_with_parent_dir() {
+        let mut model = Model::new();
+        let mut item = BuildItem::new(1);
+        item.production_path = Some("/../secret.3mf".to_string());
+        model.build.items.push(item);
+        let result = validate_production_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(".."));
+    }
+
+    #[test]
+    fn test_validate_path_with_trailing_slash() {
+        let mut model = Model::new();
+        let mut item = BuildItem::new(1);
+        item.production_path = Some("/3D/parts/".to_string());
+        model.build.items.push(item);
+        let result = validate_production_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("end with /"));
+    }
+
+    #[test]
+    fn test_validate_valid_path() {
+        let mut model = Model::new();
+        let mut item = BuildItem::new(1);
+        item.production_path = Some("/3D/parts/part.model".to_string()); // must end with .model
+        model.build.items.push(item);
+        assert!(validate_production_extension(&model).is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_opc_rels_dir() {
+        let mut model = Model::new();
+        let mut item = BuildItem::new(1);
+        item.production_path = Some("/_rels/somefile".to_string());
+        model.build.items.push(item);
+        let result = validate_production_paths(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OPC internal relationships"));
+    }
+
+    #[test]
+    fn test_validate_path_opc_content_types() {
+        let mut model = Model::new();
+        let mut item = BuildItem::new(1);
+        item.production_path = Some("/[Content_Types].xml".to_string());
+        model.build.items.push(item);
+        let result = validate_production_paths(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OPC content types"));
+    }
+
+    #[test]
+    fn test_validate_invalid_uuid_format() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        let mut info = ProductionInfo::default();
+        info.uuid = Some("not-a-valid-uuid".to_string());
+        obj.production = Some(info);
+        model.resources.objects.push(obj);
+        let result = validate_uuid_formats(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid UUID"));
+    }
+
+    #[test]
+    fn test_validate_valid_uuid_format() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        let mut info = ProductionInfo::default();
+        info.uuid = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
+        obj.production = Some(info);
+        model.resources.objects.push(obj);
+        assert!(validate_uuid_formats(&model).is_ok());
+    }
+
+    #[test]
+    fn test_validate_duplicate_uuids() {
+        let mut model = Model::new();
+        let uuid = "550e8400-e29b-41d4-a716-446655440000".to_string();
+        let mut obj1 = Object::new(1);
+        let mut info1 = ProductionInfo::default();
+        info1.uuid = Some(uuid.clone());
+        obj1.production = Some(info1);
+        model.resources.objects.push(obj1);
+
+        let mut obj2 = Object::new(2);
+        let mut info2 = ProductionInfo::default();
+        info2.uuid = Some(uuid.clone());
+        obj2.production = Some(info2);
+        model.resources.objects.push(obj2);
+
+        let result = validate_duplicate_uuids(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Duplicate UUID"));
+    }
+
+    #[test]
+    fn test_validate_component_path_without_uuid() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Production);
+
+        let mut obj = Object::new(1);
+        let config = ParserConfig::default();
+        let mut prod_info = ProductionInfo::default();
+        prod_info.path = Some("/3D/part.3mf".to_string());
+        prod_info.uuid = None; // Missing UUID
+        let mut component = Component::new(2);
+        component.production = Some(prod_info);
+        obj.components.push(component);
+        model.resources.objects.push(obj);
+
+        let result = validate_production_extension_with_config(&model, &config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p:UUID"));
+    }
+}

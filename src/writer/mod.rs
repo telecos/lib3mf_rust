@@ -306,4 +306,173 @@ mod tests {
         let xml = String::from_utf8(buffer).unwrap();
         assert!(xml.contains("basematerialid=\"5\""));
     }
+
+    #[test]
+    fn test_write_model_with_beamset() {
+        use crate::model::{Beam, BeamCapMode, BeamSet, Extension};
+
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::BeamLattice);
+
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 10.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+
+        let mut beamset = BeamSet::new();
+        beamset.radius = 1.5;
+        beamset.cap_mode = BeamCapMode::Butt;
+        let mut beam = Beam::new(0, 1);
+        beam.r1 = Some(1.0);
+        beam.r2 = Some(2.0);
+        beam.cap1 = Some(BeamCapMode::Sphere);
+        beam.cap2 = Some(BeamCapMode::Hemisphere);
+        beamset.beams.push(beam);
+        beamset.beams.push(Beam::with_radius(1, 2, 0.5));
+        mesh.beamset = Some(beamset);
+
+        let mut object = Object::new(1);
+        object.mesh = Some(mesh);
+        model.resources.objects.push(object);
+        model.build.items.push(BuildItem::new(1));
+
+        let mut buffer = Vec::new();
+        write_model_xml(&model, &mut buffer).unwrap();
+
+        let xml = String::from_utf8(buffer).unwrap();
+        assert!(xml.contains("b:beamset"), "Should have beamset element");
+        assert!(xml.contains("radius=\"1.5\""), "Should have beamset radius");
+        assert!(xml.contains("capmode=\"butt\""), "Should have cap mode");
+        assert!(xml.contains("b:beam"), "Should have beam elements");
+        assert!(xml.contains("r1=\"1\""), "Should have r1");
+        assert!(xml.contains("r2=\"2\""), "Should have r2");
+        assert!(xml.contains("cap1=\"sphere\""), "Should have cap1");
+        assert!(xml.contains("cap2=\"hemisphere\""), "Should have cap2");
+    }
+
+    #[test]
+    fn test_write_model_with_boolean_shape() {
+        use crate::model::{BooleanOpType, BooleanRef, BooleanShape, Extension};
+
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::BooleanOperations);
+
+        // Object 1: base mesh
+        let mut mesh1 = Mesh::new();
+        mesh1.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh1.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+        mesh1.vertices.push(Vertex::new(0.0, 10.0, 0.0));
+        mesh1.triangles.push(Triangle::new(0, 1, 2));
+        let mut obj1 = Object::new(1);
+        obj1.mesh = Some(mesh1);
+        model.resources.objects.push(obj1);
+
+        // Object 2: operand mesh
+        let mut mesh2 = Mesh::new();
+        mesh2.vertices.push(Vertex::new(5.0, 0.0, 0.0));
+        mesh2.vertices.push(Vertex::new(15.0, 0.0, 0.0));
+        mesh2.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+        mesh2.triangles.push(Triangle::new(0, 1, 2));
+        let mut obj2 = Object::new(2);
+        obj2.mesh = Some(mesh2);
+        model.resources.objects.push(obj2);
+
+        // Object 3: boolean shape with union
+        let mut boolean_shape = BooleanShape::new(1, BooleanOpType::Union);
+        boolean_shape.operands.push(BooleanRef::new(2));
+        let mut ref_with_path = BooleanRef::new(2);
+        ref_with_path.path = Some("/3D/other.model".to_string());
+        boolean_shape.operands.push(ref_with_path);
+        boolean_shape.path = Some("/3D/base.model".to_string());
+        let mut obj3 = Object::new(3);
+        obj3.boolean_shape = Some(boolean_shape);
+        model.resources.objects.push(obj3);
+
+        // Also test difference operation
+        let mut obj4 = Object::new(4);
+        let mut diff_shape = BooleanShape::new(1, BooleanOpType::Difference);
+        diff_shape.operands.push(BooleanRef::new(2));
+        obj4.boolean_shape = Some(diff_shape);
+        model.resources.objects.push(obj4);
+
+        // And intersection
+        let mut obj5 = Object::new(5);
+        let mut inter_shape = BooleanShape::new(1, BooleanOpType::Intersection);
+        inter_shape.operands.push(BooleanRef::new(2));
+        obj5.boolean_shape = Some(inter_shape);
+        model.resources.objects.push(obj5);
+
+        model.build.items.push(BuildItem::new(3));
+
+        let mut buffer = Vec::new();
+        write_model_xml(&model, &mut buffer).unwrap();
+
+        let xml = String::from_utf8(buffer).unwrap();
+        assert!(xml.contains("bool:booleanshape"), "Should have booleanshape element");
+        assert!(xml.contains("operation=\"union\""), "Should have union operation");
+        assert!(xml.contains("operation=\"difference\""), "Should have difference operation");
+        assert!(xml.contains("operation=\"intersection\""), "Should have intersection operation");
+        assert!(xml.contains("bool:boolean"), "Should have boolean reference");
+    }
+
+    #[test]
+    fn test_write_model_with_displacement() {
+        use crate::model::{
+            Channel, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
+            NormVector, NormVectorGroup, TileStyle,
+        };
+
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        // Add displacement2d resource
+        let mut disp = Displacement2D::new(1, "/3D/Textures/disp.png".to_string());
+        disp.channel = Channel::R;
+        disp.tilestyleu = TileStyle::Mirror;
+        disp.tilestylev = TileStyle::Clamp;
+        disp.filter = FilterMode::Linear;
+        model.resources.displacement_maps.push(disp);
+
+        // Also test other channel/style combinations for coverage
+        let mut disp2 = Displacement2D::new(2, "/3D/Textures/disp2.png".to_string());
+        disp2.channel = Channel::B;
+        disp2.tilestyleu = TileStyle::None;
+        disp2.filter = FilterMode::Nearest;
+        model.resources.displacement_maps.push(disp2);
+
+        let mut disp3 = Displacement2D::new(3, "/3D/Textures/disp3.png".to_string());
+        disp3.channel = Channel::A;
+        disp3.filter = FilterMode::Auto;
+        model.resources.displacement_maps.push(disp3);
+
+        // Add normvector group
+        let mut ng = NormVectorGroup::new(10);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+        ng.vectors.push(NormVector::new(0.0, 1.0, 0.0));
+        model.resources.norm_vector_groups.push(ng);
+
+        // Add disp2d group
+        let mut dg = Disp2DGroup::new(20, 1, 10, 0.5);
+        dg.coords.push(Disp2DCoords::new(0.0, 0.0, 0));
+        dg.coords.push(Disp2DCoords::new(0.5, 0.5, 1));
+        model.resources.disp2d_groups.push(dg);
+
+        let mut buffer = Vec::new();
+        write_model_xml(&model, &mut buffer).unwrap();
+
+        let xml = String::from_utf8(buffer).unwrap();
+        assert!(xml.contains("d:displacement2d"), "Should have displacement2d element");
+        assert!(xml.contains("channel=\"r\""), "Should have channel r");
+        assert!(xml.contains("channel=\"b\""), "Should have channel b");
+        assert!(xml.contains("channel=\"a\""), "Should have channel a");
+        assert!(xml.contains("tilestyleu=\"mirror\""), "Should have tilestyleu");
+        assert!(xml.contains("tilestylev=\"clamp\""), "Should have tilestylev");
+        assert!(xml.contains("filter=\"linear\""), "Should have filter linear");
+        assert!(xml.contains("filter=\"nearest\""), "Should have filter nearest");
+        assert!(xml.contains("d:normvectorgroup"), "Should have normvectorgroup element");
+        assert!(xml.contains("d:normvector"), "Should have normvector elements");
+        assert!(xml.contains("d:disp2dgroup"), "Should have disp2dgroup element");
+        assert!(xml.contains("d:disp2d"), "Should have disp2d coordinates");
+    }
 }

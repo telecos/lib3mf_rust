@@ -1972,7 +1972,6 @@ mod tests {
 
     #[test]
     fn test_mixed_assignment_without_pid() {
-        let mut model = Model::new();
         let mut mesh = Mesh::new();
         mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
         mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
