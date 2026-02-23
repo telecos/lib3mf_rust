@@ -100,3 +100,54 @@ fn test_displacement_triangle_new() {
     assert_eq!(triangle.d2, None);
     assert_eq!(triangle.d3, None);
 }
+
+#[test]
+fn test_displacement_writer_round_trip() {
+    use lib3mf::model::{
+        Channel, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
+        NormVector, NormVectorGroup, TileStyle,
+    };
+    use lib3mf::{BuildItem, Model, Object};
+    use std::io::Cursor;
+
+    let mut model = Model::new();
+    model.required_extensions.push(Extension::Displacement);
+
+    // Add displacement2d resource with all channel/style combinations
+    let mut disp = Displacement2D::new(1, "/3D/Textures/disp.png".to_string());
+    disp.channel = Channel::G;
+    disp.tilestyleu = TileStyle::Wrap;
+    disp.tilestylev = TileStyle::Wrap;
+    disp.filter = FilterMode::Auto;
+    model.resources.displacement_maps.push(disp);
+
+    // Add normvector group
+    let mut ng = NormVectorGroup::new(10);
+    ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+    model.resources.norm_vector_groups.push(ng);
+
+    // Add disp2d group
+    let mut dg = Disp2DGroup::new(20, 1, 10, 1.0);
+    dg.coords.push(Disp2DCoords::new(0.0, 0.0, 0));
+    model.resources.disp2d_groups.push(dg);
+
+    // Add a simple object
+    let obj = Object::new(1);
+    model.resources.objects.push(obj);
+    model.build.items.push(BuildItem::new(1));
+
+    // Write and read back
+    let buffer = Vec::new();
+    let cursor = Cursor::new(buffer);
+    let result = model.to_writer(cursor);
+    assert!(result.is_ok(), "Failed to write displacement model");
+
+    let cursor = result.unwrap();
+    let config = lib3mf::ParserConfig::new().with_extension(Extension::Displacement);
+    let parsed = Model::from_reader_with_config(Cursor::new(cursor.into_inner()), config);
+    assert!(parsed.is_ok(), "Failed to parse written displacement model");
+    let parsed = parsed.unwrap();
+    assert_eq!(parsed.resources.displacement_maps.len(), 1);
+    assert_eq!(parsed.resources.norm_vector_groups.len(), 1);
+    assert_eq!(parsed.resources.disp2d_groups.len(), 1);
+}
