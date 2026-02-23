@@ -821,8 +821,6 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
 /// Validate that an encrypted file can be loaded and decrypted
 ///
 /// This checks that:
-///
-/// This checks that:
 /// - The file exists in the package
 /// - The file can be decrypted using the test consumer keys
 /// - The decrypted content is valid
