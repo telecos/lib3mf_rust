@@ -655,3 +655,354 @@ pub(crate) fn validate_thumbnail_format(_model: &Model) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{
+        BuildItem, Component, Extension, Mesh, Model, Object, ObjectType, Triangle, Vertex,
+    };
+
+    fn make_simple_mesh() -> Mesh {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh
+    }
+
+    // --- validate_required_structure tests ---
+
+    #[test]
+    fn test_required_structure_no_objects_fails() {
+        let model = Model::new(); // no objects, no build items
+        let result = validate_required_structure(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least one object")
+        );
+    }
+
+    #[test]
+    fn test_required_structure_no_build_items_fails() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(obj);
+        // No build items added
+        let result = validate_required_structure(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least one item")
+        );
+    }
+
+    #[test]
+    fn test_required_structure_external_objects_ok() {
+        let mut model = Model::new();
+        // No local objects, but a build item with external path (Production extension)
+        let mut item = BuildItem::new(0);
+        item.production_path = Some("/3D/part.model".to_string());
+        model.build.items.push(item);
+        let result = validate_required_structure(&model);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_required_structure_valid_model_ok() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(obj);
+        model.build.items.push(BuildItem::new(1));
+        assert!(validate_required_structure(&model).is_ok());
+    }
+
+    // --- validate_required_extensions tests ---
+
+    #[test]
+    fn test_required_extensions_boolean_ops_without_declaration_fails() {
+        use crate::model::{BooleanOpType, BooleanShape};
+
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.boolean_shape = Some(BooleanShape::new(0, BooleanOpType::Union));
+        model.resources.objects.push(obj);
+        // No BooleanOperations in required_extensions
+
+        let result = validate_required_extensions(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("boolean operations")
+        );
+    }
+
+    #[test]
+    fn test_required_extensions_boolean_ops_with_pid_fails() {
+        use crate::model::{BooleanOpType, BooleanShape};
+
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::BooleanOperations);
+        let mut obj = Object::new(1);
+        obj.boolean_shape = Some(BooleanShape::new(0, BooleanOpType::Union));
+        obj.pid = Some(5); // Not allowed with booleanshape
+        model.resources.objects.push(obj);
+
+        let result = validate_required_extensions(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pid or pindex"));
+    }
+
+    #[test]
+    fn test_required_extensions_boolean_ops_with_pindex_fails() {
+        use crate::model::{BooleanOpType, BooleanShape};
+
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::BooleanOperations);
+        let mut obj = Object::new(1);
+        obj.boolean_shape = Some(BooleanShape::new(0, BooleanOpType::Union));
+        obj.pindex = Some(0); // Not allowed with booleanshape
+        model.resources.objects.push(obj);
+
+        let result = validate_required_extensions(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pid or pindex"));
+    }
+
+    #[test]
+    fn test_required_extensions_boolean_ops_declared_ok() {
+        use crate::model::{BooleanOpType, BooleanShape};
+
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::BooleanOperations);
+        let mut obj = Object::new(1);
+        obj.boolean_shape = Some(BooleanShape::new(0, BooleanOpType::Union));
+        model.resources.objects.push(obj);
+
+        assert!(validate_required_extensions(&model).is_ok());
+    }
+
+    #[test]
+    fn test_required_extensions_no_boolean_ok() {
+        let model = Model::new();
+        assert!(validate_required_extensions(&model).is_ok());
+    }
+
+    // --- validate_component_properties tests ---
+
+    #[test]
+    fn test_component_properties_pid_with_components_fails() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.components.push(Component::new(2));
+        obj.pid = Some(5); // Not allowed when object has components
+        model.resources.objects.push(obj);
+
+        let result = validate_component_properties(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pid attribute"));
+    }
+
+    #[test]
+    fn test_component_properties_pindex_with_components_fails() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.components.push(Component::new(2));
+        obj.pindex = Some(0); // Not allowed when object has components
+        model.resources.objects.push(obj);
+
+        let result = validate_component_properties(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pindex attribute"));
+    }
+
+    #[test]
+    fn test_component_properties_no_components_with_pid_ok() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.pid = Some(5);
+        obj.pindex = Some(0);
+        model.resources.objects.push(obj);
+
+        assert!(validate_component_properties(&model).is_ok());
+    }
+
+    // --- validate_mesh_manifold tests ---
+
+    #[test]
+    fn test_mesh_manifold_non_manifold_edge_fails() {
+        // Create a mesh where an edge is shared by 3 triangles
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 1.0)); // 3
+        mesh.vertices.push(Vertex::new(1.0, 1.0, 0.0)); // 4
+
+        // All three triangles share edge (min=0, max=1), giving it a count of 3 → non-manifold
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh.triangles.push(Triangle::new(0, 1, 3));
+        mesh.triangles.push(Triangle::new(0, 1, 4));
+
+        let result = validate_mesh_manifold(1, &mesh);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Non-manifold edge")
+        );
+    }
+
+    #[test]
+    fn test_mesh_manifold_valid_two_triangle_edge_ok() {
+        // Create a simple 2-triangle mesh sharing one edge
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(1.0, 1.0, 0.0)); // 3
+
+        // Two triangles sharing edge 1-2
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh.triangles.push(Triangle::new(1, 3, 2));
+
+        assert!(validate_mesh_manifold(1, &mesh).is_ok());
+    }
+
+    // --- validate_transform_matrices tests ---
+
+    #[test]
+    fn test_transform_singular_matrix_fails() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(obj);
+
+        // A singular matrix (all zeros)
+        let mut item = BuildItem::new(1);
+        item.transform = Some([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        model.build.items.push(item);
+
+        let result = validate_transform_matrices(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("zero determinant"));
+    }
+
+    #[test]
+    fn test_transform_valid_identity_ok() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(obj);
+
+        // Identity matrix
+        let mut item = BuildItem::new(1);
+        item.transform = Some([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]);
+        model.build.items.push(item);
+
+        assert!(validate_transform_matrices(&model).is_ok());
+    }
+
+    // --- validate_object_ids tests ---
+
+    #[test]
+    fn test_object_ids_unique_ok() {
+        let mut model = Model::new();
+        model.resources.objects.push(Object::new(1));
+        model.resources.objects.push(Object::new(2));
+        assert!(validate_object_ids(&model).is_ok());
+    }
+
+    // --- validate_build_references tests ---
+
+    #[test]
+    fn test_build_references_with_production_path_skips() {
+        let mut model = Model::new();
+        // No objects; build item with external path should pass
+        let mut item = BuildItem::new(99);
+        item.production_path = Some("/path/to/external.model".to_string());
+        model.build.items.push(item);
+        assert!(validate_build_references(&model).is_ok());
+    }
+
+    // --- sorted_ids_from_set tests ---
+
+    #[test]
+    fn test_sorted_ids_from_set() {
+        let mut set = std::collections::HashSet::new();
+        set.insert(5usize);
+        set.insert(1usize);
+        set.insert(3usize);
+        let sorted = sorted_ids_from_set(&set);
+        assert_eq!(sorted, vec![1, 3, 5]);
+    }
+
+    // --- validate_mesh_geometry non-manifold path tests ---
+
+    #[test]
+    fn test_mesh_geometry_non_manifold_via_validate() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 1.0)); // 3
+        mesh.vertices.push(Vertex::new(1.0, 1.0, 0.0)); // 4
+        // 3 triangles sharing edge 0-1 → non-manifold
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh.triangles.push(Triangle::new(0, 1, 3));
+        mesh.triangles.push(Triangle::new(0, 1, 4));
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_mesh_geometry(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Non-manifold edge")
+        );
+    }
+
+    // --- detect_circular_components ---
+
+    #[test]
+    fn test_detect_circular_no_object_is_ok() {
+        // If the object doesn't exist in model, no cycle found
+        let model = Model::new();
+        let mut visited = std::collections::HashSet::new();
+        let mut path = Vec::new();
+        let result = detect_circular_components(999, &model, &mut visited, &mut path);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    // --- Object type edge cases ---
+
+    #[test]
+    fn test_boolean_shape_surface_type_fails() {
+        use crate::model::{BooleanOpType, BooleanShape};
+
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.object_type = ObjectType::Surface;
+        obj.boolean_shape = Some(BooleanShape::new(0, BooleanOpType::Difference));
+        model.resources.objects.push(obj);
+
+        let result = validate_required_extensions(&model);
+        // Uses boolean ops but doesn't declare BooleanOperations extension
+        assert!(result.is_err());
+    }
+}

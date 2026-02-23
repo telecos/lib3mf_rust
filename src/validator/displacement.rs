@@ -835,4 +835,282 @@ mod tests {
             .push(Displacement2D::new(1, "/3D/textures/disp.png".to_string()));
         assert!(validate_displacement_extension(&model).is_ok());
     }
+
+    #[test]
+    fn test_path_non_ascii_fails() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+        // Path with non-ASCII character (ü)
+        model.resources.displacement_maps.push(Displacement2D::new(
+            1,
+            "/3D/Textures/d\u{00fc}sp.png".to_string(),
+        ));
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("non-ASCII"));
+    }
+
+    /// Returns a valid tetrahedron displacement mesh that passes all validation checks.
+    /// Vertices: v0=(0,0,0), v1=(1,0,0), v2=(0,1,0), v3=(0,0,1)
+    /// Triangles (consistent outward CCW winding): (0,2,1), (0,1,3), (0,3,2), (1,2,3)
+    /// Volume = 1/6 > 0, manifold, no duplicate vertices.
+    fn make_valid_disp_tetrahedron() -> DisplacementMesh {
+        let mut mesh = DisplacementMesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0)); // 0
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0)); // 1
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0)); // 2
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 1.0)); // 3
+        mesh.triangles.push(DisplacementTriangle::new(0, 2, 1));
+        mesh.triangles.push(DisplacementTriangle::new(0, 1, 3));
+        mesh.triangles.push(DisplacementTriangle::new(0, 3, 2));
+        mesh.triangles.push(DisplacementTriangle::new(1, 2, 3));
+        mesh
+    }
+
+    #[test]
+    fn test_displacement_mesh_boundary_edge_fails() {
+        // A tetrahedron plus a 5th floating triangle with no manifold partner creates a boundary edge
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        // Add 3 extra vertices for the floating triangle
+        disp_mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0)); // 4
+        disp_mesh.vertices.push(Vertex::new(11.0, 0.0, 0.0)); // 5
+        disp_mesh.vertices.push(Vertex::new(10.0, 1.0, 0.0)); // 6
+        // Floating triangle: edges (4,5), (5,6), (6,4) have no reverse → boundary
+        disp_mesh.triangles.push(DisplacementTriangle::new(4, 5, 6));
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("non-manifold") || msg.contains("boundary edge"),
+            "Expected non-manifold error, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_displacement_mesh_inconsistent_winding_fails() {
+        // Tetrahedron + duplicate of first triangle creates edge traversed twice in same direction
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        // Duplicate the first triangle (0,2,1) → edge (0,2) appears twice
+        disp_mesh.triangles.push(DisplacementTriangle::new(0, 2, 1));
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("inconsistent") || msg.contains("non-manifold"),
+            "Expected inconsistent winding error, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_displacement_mesh_degenerate_triangle_fails() {
+        // Verify that a displacement triangle with two identical vertex indices is rejected.
+        // Uses a new vertex index (4) so the triangle's edges don't conflict with the tetrahedron.
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        // Add a 5th distinct vertex (edges (4,3)/(3,4) are not in tetrahedron's edge map)
+        disp_mesh.vertices.push(Vertex::new(5.0, 0.0, 0.0)); // vertex index 4
+        // Degenerate triangle: v1=v2=4, v3=3
+        disp_mesh.triangles.push(DisplacementTriangle::new(4, 4, 3));
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("degenerate"),
+            "Expected degenerate triangle error"
+        );
+    }
+
+    #[test]
+    fn test_displacement_triangle_invalid_did_fails() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        // Make the last triangle reference a non-existent did
+        disp_mesh.triangles[3].did = Some(99); // 99 doesn't exist
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent Disp2DGroup")
+        );
+    }
+
+    #[test]
+    fn test_displacement_triangle_invalid_d1_fails() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        // Add required displacement resources
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/d.png".to_string()));
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+        model.resources.norm_vector_groups.push(ng);
+        // disp2d group with 1 coord
+        let mut grp = Disp2DGroup::new(3, 1, 2, 1.0);
+        grp.coords.push(Disp2DCoords::new(0.5, 0.5, 0)); // only index 0 is valid
+        model.resources.disp2d_groups.push(grp);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        // Triangle references valid did=3 but d1=99 (out of bounds)
+        disp_mesh.triangles[3].did = Some(3);
+        disp_mesh.triangles[3].d1 = Some(99); // invalid
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid d1 index"));
+    }
+
+    #[test]
+    fn test_displacement_triangle_invalid_d2_fails() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/d.png".to_string()));
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+        model.resources.norm_vector_groups.push(ng);
+        let mut grp = Disp2DGroup::new(3, 1, 2, 1.0);
+        grp.coords.push(Disp2DCoords::new(0.5, 0.5, 0));
+        model.resources.disp2d_groups.push(grp);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        disp_mesh.triangles[3].did = Some(3);
+        disp_mesh.triangles[3].d2 = Some(99); // invalid d2
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid d2 index"));
+    }
+
+    #[test]
+    fn test_displacement_triangle_invalid_d3_fails() {
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/d.png".to_string()));
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, 1.0));
+        model.resources.norm_vector_groups.push(ng);
+        let mut grp = Disp2DGroup::new(3, 1, 2, 1.0);
+        grp.coords.push(Disp2DCoords::new(0.5, 0.5, 0));
+        model.resources.disp2d_groups.push(grp);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        disp_mesh.triangles[3].did = Some(3);
+        disp_mesh.triangles[3].d3 = Some(99); // invalid d3
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid d3 index"));
+    }
+
+    #[test]
+    fn test_normvector_pointing_inward_fails() {
+        // Triangle (1,2,3) has vertices (1,0,0),(0,1,0),(0,0,1).
+        // Normal = (1,1,1) (unnormalized). Inward normvector = (0,0,-1) → dot = -1 ≤ 0 → error
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/d.png".to_string()));
+        let mut ng = NormVectorGroup::new(2);
+        ng.vectors.push(NormVector::new(0.0, 0.0, -1.0)); // points inward for tri (1,2,3)
+        model.resources.norm_vector_groups.push(ng);
+        let mut grp = Disp2DGroup::new(3, 1, 2, 1.0);
+        grp.coords.push(Disp2DCoords::new(0.5, 0.5, 0)); // coord 0 → normvector 0
+        model.resources.disp2d_groups.push(grp);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        // Triangle (1,2,3) has normal (1,1,1). Normvector (0,0,-1) dot (1,1,1) = -1 ≤ 0
+        disp_mesh.triangles[3].did = Some(3);
+        disp_mesh.triangles[3].d1 = Some(0); // coord 0 → normvector (0,0,-1)
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        let result = validate_displacement_extension(&model);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("points inward") || err.contains("outer hemisphere"),
+            "Expected inward-pointing normvector error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_valid_displacement_mesh_passes() {
+        // Valid tetrahedron with all displacement resources properly set up
+        let mut model = Model::new();
+        model.required_extensions.push(Extension::Displacement);
+
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/d.png".to_string()));
+        let mut ng = NormVectorGroup::new(2);
+        // Outward-pointing normvector for triangle (1,2,3): normal=(1,1,1), so (1,0,0) has dot=1 > 0
+        ng.vectors.push(NormVector::new(1.0, 0.0, 0.0));
+        model.resources.norm_vector_groups.push(ng);
+        let mut grp = Disp2DGroup::new(3, 1, 2, 1.0);
+        grp.coords.push(Disp2DCoords::new(0.5, 0.5, 0));
+        model.resources.disp2d_groups.push(grp);
+
+        let mut obj = Object::new(1);
+        let mut disp_mesh = make_valid_disp_tetrahedron();
+        disp_mesh.triangles[3].did = Some(3);
+        disp_mesh.triangles[3].d1 = Some(0);
+        obj.displacement_mesh = Some(disp_mesh);
+        model.resources.objects.push(obj);
+
+        assert!(validate_displacement_extension(&model).is_ok());
+    }
 }
