@@ -409,18 +409,33 @@ mod tests {
         write_model_xml(&model, &mut buffer).unwrap();
 
         let xml = String::from_utf8(buffer).unwrap();
-        assert!(xml.contains("bool:booleanshape"), "Should have booleanshape element");
-        assert!(xml.contains("operation=\"union\""), "Should have union operation");
-        assert!(xml.contains("operation=\"difference\""), "Should have difference operation");
-        assert!(xml.contains("operation=\"intersection\""), "Should have intersection operation");
-        assert!(xml.contains("bool:boolean"), "Should have boolean reference");
+        assert!(
+            xml.contains("bool:booleanshape"),
+            "Should have booleanshape element"
+        );
+        assert!(
+            xml.contains("operation=\"union\""),
+            "Should have union operation"
+        );
+        assert!(
+            xml.contains("operation=\"difference\""),
+            "Should have difference operation"
+        );
+        assert!(
+            xml.contains("operation=\"intersection\""),
+            "Should have intersection operation"
+        );
+        assert!(
+            xml.contains("bool:boolean"),
+            "Should have boolean reference"
+        );
     }
 
     #[test]
     fn test_write_model_with_displacement() {
         use crate::model::{
-            Channel, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
-            NormVector, NormVectorGroup, TileStyle,
+            Channel, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode, NormVector,
+            NormVectorGroup, TileStyle,
         };
 
         let mut model = Model::new();
@@ -462,17 +477,41 @@ mod tests {
         write_model_xml(&model, &mut buffer).unwrap();
 
         let xml = String::from_utf8(buffer).unwrap();
-        assert!(xml.contains("d:displacement2d"), "Should have displacement2d element");
+        assert!(
+            xml.contains("d:displacement2d"),
+            "Should have displacement2d element"
+        );
         assert!(xml.contains("channel=\"r\""), "Should have channel r");
         assert!(xml.contains("channel=\"b\""), "Should have channel b");
         assert!(xml.contains("channel=\"a\""), "Should have channel a");
-        assert!(xml.contains("tilestyleu=\"mirror\""), "Should have tilestyleu");
-        assert!(xml.contains("tilestylev=\"clamp\""), "Should have tilestylev");
-        assert!(xml.contains("filter=\"linear\""), "Should have filter linear");
-        assert!(xml.contains("filter=\"nearest\""), "Should have filter nearest");
-        assert!(xml.contains("d:normvectorgroup"), "Should have normvectorgroup element");
-        assert!(xml.contains("d:normvector"), "Should have normvector elements");
-        assert!(xml.contains("d:disp2dgroup"), "Should have disp2dgroup element");
+        assert!(
+            xml.contains("tilestyleu=\"mirror\""),
+            "Should have tilestyleu"
+        );
+        assert!(
+            xml.contains("tilestylev=\"clamp\""),
+            "Should have tilestylev"
+        );
+        assert!(
+            xml.contains("filter=\"linear\""),
+            "Should have filter linear"
+        );
+        assert!(
+            xml.contains("filter=\"nearest\""),
+            "Should have filter nearest"
+        );
+        assert!(
+            xml.contains("d:normvectorgroup"),
+            "Should have normvectorgroup element"
+        );
+        assert!(
+            xml.contains("d:normvector"),
+            "Should have normvector elements"
+        );
+        assert!(
+            xml.contains("d:disp2dgroup"),
+            "Should have disp2dgroup element"
+        );
         assert!(xml.contains("d:disp2d"), "Should have disp2d coordinates");
     }
 }

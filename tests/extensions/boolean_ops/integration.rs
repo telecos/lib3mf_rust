@@ -253,7 +253,11 @@ fn test_boolean_ops_writer_round_trip() {
     let cursor = result.unwrap();
     let config = lib3mf::ParserConfig::new().with_extension(Extension::BooleanOperations);
     let parsed = Model::from_reader_with_config(Cursor::new(cursor.into_inner()), config);
-    assert!(parsed.is_ok(), "Failed to parse written boolean ops model: {:?}", parsed.err());
+    assert!(
+        parsed.is_ok(),
+        "Failed to parse written boolean ops model: {:?}",
+        parsed.err()
+    );
     let parsed = parsed.unwrap();
     let obj3 = parsed.resources.objects.iter().find(|o| o.id == 3).unwrap();
     let shape = obj3.boolean_shape.as_ref().unwrap();

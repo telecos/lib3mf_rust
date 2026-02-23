@@ -578,7 +578,7 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
 mod tests {
     use super::*;
     use crate::model::{
-        BaseMaterial, Beam, BeamCapMode, BeamSet, BaseMaterialGroup, ColorGroup, Mesh, Object,
+        BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, ColorGroup, Mesh, Object,
         ObjectType, Vertex,
     };
 
@@ -602,7 +602,10 @@ mod tests {
         let mut model = Model::new();
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         assert!(validate_beam_lattice(&model).is_ok());
     }
 
@@ -616,7 +619,12 @@ mod tests {
         model.resources.objects.push(obj);
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("BeamLattice can only be added"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("BeamLattice can only be added")
+        );
     }
 
     #[test]
@@ -647,10 +655,18 @@ mod tests {
         let mut model = Model::new();
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(99, 1)); // v1 out of bounds
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid vertex index v1"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid vertex index v1")
+        );
     }
 
     #[test]
@@ -658,10 +674,18 @@ mod tests {
         let mut model = Model::new();
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 99)); // v2 out of bounds
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid vertex index v2"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid vertex index v2")
+        );
     }
 
     #[test]
@@ -669,7 +693,10 @@ mod tests {
         let mut model = Model::new();
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 0)); // v1 == v2
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("self-referencing"));
@@ -682,10 +709,18 @@ mod tests {
         let mut beam = Beam::new(0, 1);
         beam.property_id = Some(99); // nonexistent property group
         beamset.beams.push(beam);
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent property group"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent property group")
+        );
     }
 
     #[test]
@@ -694,7 +729,10 @@ mod tests {
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.beams.push(Beam::new(0, 1)); // duplicate
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("is a duplicate"));
@@ -706,7 +744,10 @@ mod tests {
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.beams.push(Beam::new(1, 0)); // reversed duplicate
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("is a duplicate"));
@@ -718,10 +759,18 @@ mod tests {
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.clipping_mode = Some("invalid".to_string());
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid clippingmode"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid clippingmode")
+        );
     }
 
     #[test]
@@ -731,7 +780,10 @@ mod tests {
         beamset.beams.push(Beam::new(0, 1));
         beamset.clipping_mode = Some("inside".to_string());
         beamset.clipping_mesh_id = None;
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("clippingmode"));
@@ -743,7 +795,10 @@ mod tests {
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.clipping_mode = Some("none".to_string());
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         assert!(validate_beam_lattice(&model).is_ok());
     }
 
@@ -753,7 +808,10 @@ mod tests {
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.ball_mode = Some("invalid".to_string());
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("invalid ballmode"));
@@ -766,7 +824,10 @@ mod tests {
         beamset.beams.push(Beam::new(0, 1));
         beamset.ball_mode = Some("all".to_string());
         beamset.ball_radius = None;
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("ballmode"));
@@ -779,7 +840,10 @@ mod tests {
         beamset.beams.push(Beam::new(0, 1));
         beamset.ball_mode = Some("mixed".to_string());
         beamset.ball_radius = None;
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
     }
@@ -791,7 +855,10 @@ mod tests {
         beamset.beams.push(Beam::new(0, 1));
         beamset.ball_mode = Some("all".to_string());
         beamset.ball_radius = Some(0.5);
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         assert!(validate_beam_lattice(&model).is_ok());
     }
 
@@ -806,7 +873,12 @@ mod tests {
         model.resources.objects.push(obj);
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent property group"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent property group")
+        );
     }
 
     #[test]
@@ -833,7 +905,8 @@ mod tests {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(10);
         bg.materials.push(crate::model::BaseMaterial::new(
-            "mat".to_string(), (255, 0, 0, 255)
+            "mat".to_string(),
+            (255, 0, 0, 255),
         ));
         model.resources.base_material_groups.push(bg);
 
@@ -893,7 +966,8 @@ mod tests {
     fn test_beam_p1_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(10);
-        bg.materials.push(BaseMaterial::new("mat".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("mat".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
 
         let mut beamset = BeamSet::new();
@@ -912,7 +986,8 @@ mod tests {
     fn test_beam_p2_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(10);
-        bg.materials.push(BaseMaterial::new("mat".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("mat".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
 
         let mut beamset = BeamSet::new();
@@ -953,7 +1028,10 @@ mod tests {
         beamset.beams.push(Beam::new(0, 1));
         beamset.clipping_mode = Some("inside".to_string());
         beamset.clipping_mesh_id = Some(99); // nonexistent object
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("clippingmesh"));
@@ -989,10 +1067,18 @@ mod tests {
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.representation_mesh_id = Some(99); // nonexistent
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("representationmesh"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("representationmesh")
+        );
     }
 
     #[test]
@@ -1002,16 +1088,27 @@ mod tests {
         // Object 2 is the rep mesh but has a beamlattice itself
         let mut rep_beamset = BeamSet::new();
         rep_beamset.beams.push(Beam::new(0, 1));
-        model.resources.objects.push(make_object_with_beamset(2, rep_beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(2, rep_beamset));
 
         // Object 1 references object 2 as representation mesh
         let mut beamset = BeamSet::new();
         beamset.beams.push(Beam::new(0, 1));
         beamset.representation_mesh_id = Some(2);
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         let result = validate_beam_lattice(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("representationmesh"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("representationmesh")
+        );
     }
 
     #[test]
@@ -1022,7 +1119,10 @@ mod tests {
         beam.cap1 = Some(BeamCapMode::Butt);
         beam.cap2 = Some(BeamCapMode::Hemisphere);
         beamset.beams.push(beam);
-        model.resources.objects.push(make_object_with_beamset(1, beamset));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
         assert!(validate_beam_lattice(&model).is_ok());
     }
 

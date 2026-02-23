@@ -605,7 +605,12 @@ mod tests {
         model.build.items.push(item);
         let result = validate_production_paths(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("OPC internal relationships"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("OPC internal relationships")
+        );
     }
 
     #[test]
@@ -616,7 +621,12 @@ mod tests {
         model.build.items.push(item);
         let result = validate_production_paths(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("OPC content types"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("OPC content types")
+        );
     }
 
     #[test]

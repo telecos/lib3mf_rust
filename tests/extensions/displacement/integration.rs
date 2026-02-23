@@ -104,8 +104,8 @@ fn test_displacement_triangle_new() {
 #[test]
 fn test_displacement_writer_round_trip() {
     use lib3mf::model::{
-        Channel, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode,
-        NormVector, NormVectorGroup, TileStyle,
+        Channel, Disp2DCoords, Disp2DGroup, Displacement2D, Extension, FilterMode, NormVector,
+        NormVectorGroup, TileStyle,
     };
     use lib3mf::{BuildItem, Model, Object};
     use std::io::Cursor;

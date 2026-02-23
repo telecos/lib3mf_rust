@@ -394,7 +394,12 @@ mod tests {
         model.resources.slice_stacks.push(ss);
         let result = validate_slices(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("less than zbottom"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("less than zbottom")
+        );
     }
 
     #[test]
@@ -406,7 +411,12 @@ mod tests {
         model.resources.slice_stacks.push(ss);
         let result = validate_slices(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("strictly increasing"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("strictly increasing")
+        );
     }
 
     #[test]
@@ -471,7 +481,12 @@ mod tests {
         slice.polygons.push(polygon);
         let result = validate_slice(1, 0, &slice);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("at least 2 segments"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least 2 segments")
+        );
     }
 
     #[test]

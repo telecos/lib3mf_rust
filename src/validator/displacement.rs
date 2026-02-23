@@ -600,10 +600,10 @@ mod tests {
         model.required_extensions.push(Extension::Displacement);
 
         // Add a displacement map
-        model.resources.displacement_maps.push(Displacement2D::new(
-            1,
-            "/3D/Textures/disp.png".to_string(),
-        ));
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/disp.png".to_string()));
 
         // Add a norm vector group
         let mut ng = NormVectorGroup::new(2);
@@ -623,13 +623,18 @@ mod tests {
     fn test_displacement_without_required_extension() {
         let mut model = Model::new();
         // Add displacement map but don't declare extension
-        model.resources.displacement_maps.push(Displacement2D::new(
-            1,
-            "/3D/Textures/disp.png".to_string(),
-        ));
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/disp.png".to_string()));
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("requiredextensions"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requiredextensions")
+        );
     }
 
     #[test]
@@ -642,10 +647,10 @@ mod tests {
     fn test_path_not_in_textures_dir() {
         let mut model = Model::new();
         model.required_extensions.push(Extension::Displacement);
-        model.resources.displacement_maps.push(Displacement2D::new(
-            1,
-            "/3D/wrong/disp.png".to_string(),
-        ));
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/wrong/disp.png".to_string()));
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("/3D/Textures/"));
@@ -655,10 +660,10 @@ mod tests {
     fn test_path_without_png_extension() {
         let mut model = Model::new();
         model.required_extensions.push(Extension::Displacement);
-        model.resources.displacement_maps.push(Displacement2D::new(
-            1,
-            "/3D/Textures/disp.jpg".to_string(),
-        ));
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/Textures/disp.jpg".to_string()));
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(".png"));
@@ -672,7 +677,12 @@ mod tests {
         model.resources.disp2d_groups.push(group);
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent Displacement2D"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent Displacement2D")
+        );
     }
 
     #[test]
@@ -683,7 +693,12 @@ mod tests {
         model.resources.disp2d_groups.push(group);
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent NormVectorGroup"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent NormVectorGroup")
+        );
     }
 
     #[test]
@@ -727,7 +742,12 @@ mod tests {
         model.resources.objects.push(obj);
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("at least 4 triangles"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least 4 triangles")
+        );
     }
 
     #[test]
@@ -779,7 +799,12 @@ mod tests {
         model.resources.objects.push(obj);
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("duplicate vertices"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate vertices")
+        );
     }
 
     #[test]
@@ -791,7 +816,12 @@ mod tests {
         model.resources.norm_vector_groups.push(ng);
         let result = validate_displacement_extension(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("requiredextensions"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requiredextensions")
+        );
     }
 
     #[test]
@@ -799,10 +829,10 @@ mod tests {
         let mut model = Model::new();
         model.required_extensions.push(Extension::Displacement);
         // Case-insensitive path check
-        model.resources.displacement_maps.push(Displacement2D::new(
-            1,
-            "/3D/textures/disp.png".to_string(),
-        ));
+        model
+            .resources
+            .displacement_maps
+            .push(Displacement2D::new(1, "/3D/textures/disp.png".to_string()));
         assert!(validate_displacement_extension(&model).is_ok());
     }
 }

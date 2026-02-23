@@ -181,10 +181,17 @@ fn test_beam_lattice_writer_round_trip() {
     let cursor = result.unwrap();
     let config = lib3mf::ParserConfig::new().with_extension(Extension::BeamLattice);
     let parsed = Model::from_reader_with_config(Cursor::new(cursor.into_inner()), config);
-    assert!(parsed.is_ok(), "Failed to parse written beam lattice model: {:?}", parsed.err());
+    assert!(
+        parsed.is_ok(),
+        "Failed to parse written beam lattice model: {:?}",
+        parsed.err()
+    );
     let parsed = parsed.unwrap();
     // Verify the object and mesh are preserved (beamset XML element naming may differ)
     assert_eq!(parsed.resources.objects.len(), 1);
     let obj = &parsed.resources.objects[0];
-    assert!(obj.mesh.is_some(), "Mesh should be present after round-trip");
+    assert!(
+        obj.mesh.is_some(),
+        "Mesh should be present after round-trip"
+    );
 }

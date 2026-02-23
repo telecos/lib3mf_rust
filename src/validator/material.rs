@@ -1406,8 +1406,8 @@ pub fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
 mod tests {
     use super::*;
     use crate::model::{
-        BaseMaterial, BaseMaterialGroup, ColorGroup, CompositeMaterials, Mesh,
-        MultiProperties, Multi, Object, Texture2D, Texture2DGroup, Tex2Coord, Triangle, Vertex,
+        BaseMaterial, BaseMaterialGroup, ColorGroup, CompositeMaterials, Mesh, Multi,
+        MultiProperties, Object, Tex2Coord, Texture2D, Texture2DGroup, Triangle, Vertex,
     };
 
     // ===================== validate_material_references =====================
@@ -1419,37 +1419,69 @@ mod tests {
         model.resources.color_groups.push(ColorGroup::new(1)); // duplicate
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Duplicate resource ID"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
     }
 
     #[test]
     fn test_duplicate_base_material_ids() {
         let mut model = Model::new();
-        model.resources.base_material_groups.push(BaseMaterialGroup::new(5));
-        model.resources.base_material_groups.push(BaseMaterialGroup::new(5)); // dup
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(5));
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(5)); // dup
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Duplicate resource ID"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
     }
 
     #[test]
     fn test_color_group_and_base_material_same_id() {
         let mut model = Model::new();
         model.resources.color_groups.push(ColorGroup::new(7));
-        model.resources.base_material_groups.push(BaseMaterialGroup::new(7)); // conflict
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(7)); // conflict
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Duplicate resource ID"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
     }
 
     #[test]
     fn test_duplicate_multiproperties_id_with_color_group() {
         let mut model = Model::new();
         model.resources.color_groups.push(ColorGroup::new(3));
-        model.resources.multi_properties.push(MultiProperties::new(3, vec![])); // conflict
+        model
+            .resources
+            .multi_properties
+            .push(MultiProperties::new(3, vec![])); // conflict
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Duplicate resource ID"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
     }
 
     #[test]
@@ -1463,19 +1495,32 @@ mod tests {
         model.resources.objects.push(obj);
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent property group"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent property group")
+        );
     }
 
     #[test]
     fn test_object_invalid_basematerialid() {
         let mut model = Model::new();
-        model.resources.base_material_groups.push(BaseMaterialGroup::new(5));
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(5));
         let mut obj = Object::new(1);
         obj.basematerialid = Some(99); // doesn't exist
         model.resources.objects.push(obj);
         let result = validate_material_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent base material group"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent base material group")
+        );
     }
 
     #[test]
@@ -1497,7 +1542,8 @@ mod tests {
     fn test_object_pindex_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(5);
-        bg.materials.push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
         let mut obj = Object::new(1);
         obj.pid = Some(5);
@@ -1647,7 +1693,8 @@ mod tests {
     fn test_triangle_p1_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(5);
-        bg.materials.push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
 
         let mut obj = Object::new(1);
@@ -1670,7 +1717,8 @@ mod tests {
     fn test_triangle_p2_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(5);
-        bg.materials.push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
 
         let mut obj = Object::new(1);
@@ -1692,7 +1740,8 @@ mod tests {
     fn test_triangle_p3_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(5);
-        bg.materials.push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
 
         let mut obj = Object::new(1);
@@ -1734,7 +1783,8 @@ mod tests {
     fn test_multiproperties_pindex_out_of_bounds_base_material() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(5);
-        bg.materials.push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
 
         let mut mp = MultiProperties::new(99, vec![5]);
@@ -1788,7 +1838,11 @@ mod tests {
     #[test]
     fn test_texture_invalid_content_type() {
         let mut model = Model::new();
-        let tex = Texture2D::new(1, "/3D/Textures/tex.bmp".to_string(), "image/bmp".to_string());
+        let tex = Texture2D::new(
+            1,
+            "/3D/Textures/tex.bmp".to_string(),
+            "image/bmp".to_string(),
+        );
         model.resources.texture2d_resources.push(tex);
         let result = validate_texture_paths(&model);
         assert!(result.is_err());
@@ -1798,7 +1852,11 @@ mod tests {
     #[test]
     fn test_texture_valid_jpeg() {
         let mut model = Model::new();
-        let tex = Texture2D::new(1, "/3D/Textures/tex.jpg".to_string(), "image/jpeg".to_string());
+        let tex = Texture2D::new(
+            1,
+            "/3D/Textures/tex.jpg".to_string(),
+            "image/jpeg".to_string(),
+        );
         model.resources.texture2d_resources.push(tex);
         assert!(validate_texture_paths(&model).is_ok());
     }
@@ -1806,7 +1864,11 @@ mod tests {
     #[test]
     fn test_texture_valid_png() {
         let mut model = Model::new();
-        let tex = Texture2D::new(1, "/3D/Textures/tex.png".to_string(), "image/png".to_string());
+        let tex = Texture2D::new(
+            1,
+            "/3D/Textures/tex.png".to_string(),
+            "image/png".to_string(),
+        );
         model.resources.texture2d_resources.push(tex);
         assert!(validate_texture_paths(&model).is_ok());
     }
@@ -1820,14 +1882,20 @@ mod tests {
         model.resources.multi_properties.push(mp);
         let result = validate_multiproperties_references(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not reference a valid resource"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not reference a valid resource")
+        );
     }
 
     #[test]
     fn test_multiproperties_basematerials_not_first() {
         let mut model = Model::new();
         let mut bg = BaseMaterialGroup::new(5);
-        bg.materials.push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
         model.resources.base_material_groups.push(bg);
         let mut cg = ColorGroup::new(10);
         cg.colors.push((255u8, 0u8, 0u8, 255u8));
@@ -1867,7 +1935,12 @@ mod tests {
         model.resources.color_groups.push(ColorGroup::new(1)); // no colors
         let result = validate_color_formats(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("at least one color"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least one color")
+        );
     }
 
     #[test]
@@ -1898,18 +1971,31 @@ mod tests {
         tg.parse_order = 1; // texture group comes first in parse order
         model.resources.texture2d_groups.push(tg);
 
-        let mut tex = Texture2D::new(2, "/3D/Textures/tex.png".to_string(), "image/png".to_string());
+        let mut tex = Texture2D::new(
+            2,
+            "/3D/Textures/tex.png".to_string(),
+            "image/png".to_string(),
+        );
         tex.parse_order = 2; // but texture2d comes after
         model.resources.texture2d_resources.push(tex);
         let result = validate_resource_ordering(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Forward reference"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Forward reference")
+        );
     }
 
     #[test]
     fn test_valid_texture2d_then_group() {
         let mut model = Model::new();
-        let mut tex = Texture2D::new(2, "/3D/Textures/tex.png".to_string(), "image/png".to_string());
+        let mut tex = Texture2D::new(
+            2,
+            "/3D/Textures/tex.png".to_string(),
+            "image/png".to_string(),
+        );
         tex.parse_order = 1; // texture2d comes first
         model.resources.texture2d_resources.push(tex);
 
@@ -1999,7 +2085,12 @@ mod tests {
 
         let result = validate_object_triangle_materials(1, None, &mesh, "Object 1");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("per-vertex material"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("per-vertex material")
+        );
     }
 
     // ===================== get_property_resource_size =====================
