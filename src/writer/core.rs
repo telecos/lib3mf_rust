@@ -253,8 +253,8 @@ pub(super) fn write_components<W: IoWrite>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Component, Mesh, Object, ObjectType, Triangle, Vertex};
     use crate::model::ProductionInfo;
+    use crate::model::{Component, Mesh, Object, ObjectType, Triangle, Vertex};
     use quick_xml::Writer;
 
     fn xml_from_object(object: &Object) -> String {
@@ -382,7 +382,9 @@ mod tests {
 
     #[test]
     fn test_write_components_with_transform() {
-        let transform = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0];
+        let transform = [
+            1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 10.0, 20.0, 30.0,
+        ];
         let component = Component::with_transform(5, transform);
         let xml = xml_from_components(&[component]);
         assert!(xml.contains("objectid=\"5\""));
