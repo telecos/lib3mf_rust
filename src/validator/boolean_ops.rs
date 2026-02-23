@@ -212,3 +212,369 @@ pub fn validate_boolean_operations(model: &Model) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{BooleanOpType, BooleanRef, BooleanShape, Component, Mesh, Model, Object, ObjectType, Triangle, Vertex};
+
+    fn make_simple_mesh() -> Mesh {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.triangles.push(Triangle::new(0, 1, 2));
+        mesh
+    }
+
+    /// A minimal valid boolean model:
+    /// - object 1: mesh (base)
+    /// - object 2: mesh (operand)
+    /// - object 3: boolean shape referencing 1 as base and 2 as operand
+    fn make_valid_boolean_model() -> Model {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut base_obj = Object::new(1);
+        base_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(base_obj);
+
+        let mut operand_obj = Object::new(2);
+        operand_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(operand_obj);
+
+        let mut bool_obj = Object::new(3);
+        let mut shape = BooleanShape::new(1, BooleanOpType::Union);
+        shape.operands.push(BooleanRef::new(2));
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        model
+    }
+
+    #[test]
+    fn test_empty_model_passes() {
+        let model = Model::new();
+        assert!(validate_boolean_operations(&model).is_ok());
+    }
+
+    #[test]
+    fn test_object_without_boolean_shape_passes() {
+        let mut model = Model::new();
+        let mut obj = Object::new(1);
+        obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(obj);
+        assert!(validate_boolean_operations(&model).is_ok());
+    }
+
+    #[test]
+    fn test_valid_boolean_operation_passes() {
+        let model = make_valid_boolean_model();
+        assert!(validate_boolean_operations(&model).is_ok());
+    }
+
+    #[test]
+    fn test_boolean_shape_on_non_model_type_fails() {
+        let mut model = make_valid_boolean_model();
+        // Change the boolean object type to Support
+        model.resources.objects[2].object_type = ObjectType::Support;
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("type \"model\""));
+    }
+
+    #[test]
+    fn test_boolean_shape_with_components_fails() {
+        let mut model = make_valid_boolean_model();
+        // Add a component to the boolean object
+        model.resources.objects[2].components.push(Component::new(1));
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("<booleanshape> and <components>"));
+    }
+
+    #[test]
+    fn test_boolean_shape_with_mesh_fails() {
+        let mut model = make_valid_boolean_model();
+        // Add a mesh to the boolean object
+        model.resources.objects[2].mesh = Some(make_simple_mesh());
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("<booleanshape> and <mesh>"));
+    }
+
+    #[test]
+    fn test_boolean_shape_no_operands_fails() {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut base_obj = Object::new(1);
+        base_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(base_obj);
+
+        let mut bool_obj = Object::new(2);
+        // Shape with no operands
+        bool_obj.boolean_shape = Some(BooleanShape::new(1, BooleanOpType::Union));
+        model.resources.objects.push(bool_obj);
+
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no operands"));
+    }
+
+    #[test]
+    fn test_base_object_nonexistent_fails() {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut operand_obj = Object::new(2);
+        operand_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(operand_obj);
+
+        let mut bool_obj = Object::new(3);
+        let mut shape = BooleanShape::new(99, BooleanOpType::Union); // 99 doesn't exist
+        shape.operands.push(BooleanRef::new(2));
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("non-existent object ID 99"));
+    }
+
+    #[test]
+    fn test_base_forward_reference_fails() {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut bool_obj = Object::new(1); // defined first
+        let mut operand_obj = Object::new(2);
+        operand_obj.mesh = Some(make_simple_mesh());
+
+        let mut base_obj = Object::new(3); // defined after the boolean object (forward reference)
+        base_obj.mesh = Some(make_simple_mesh());
+
+        let mut shape = BooleanShape::new(3, BooleanOpType::Union); // references obj 3 which comes later
+        shape.operands.push(BooleanRef::new(2));
+        bool_obj.boolean_shape = Some(shape);
+
+        model.resources.objects.push(bool_obj); // index 0
+        model.resources.objects.push(operand_obj); // index 1
+        model.resources.objects.push(base_obj); // index 2
+
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("defined after it"));
+    }
+
+    #[test]
+    fn test_base_object_not_model_type_fails() {
+        let mut model = make_valid_boolean_model();
+        // Change the base object type to Support
+        model.resources.objects[0].object_type = ObjectType::Support;
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("base object"));
+        assert!(err.contains("type \"model\""));
+    }
+
+    #[test]
+    fn test_base_object_with_only_components_fails() {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        // base object with only components (no mesh/boolean_shape)
+        let mut base_obj = Object::new(1);
+        base_obj.components.push(Component::new(2));
+        model.resources.objects.push(base_obj);
+
+        let mut leaf_obj = Object::new(2);
+        leaf_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(leaf_obj);
+
+        let mut operand_obj = Object::new(3);
+        operand_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(operand_obj);
+
+        let mut bool_obj = Object::new(4);
+        let mut shape = BooleanShape::new(1, BooleanOpType::Union);
+        shape.operands.push(BooleanRef::new(3));
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        // Base object has components (not empty), no mesh, no boolean_shape → no shape
+        // has_shape = mesh.is_some() (false) || boolean_shape.is_some() (false) || has_extension_shapes (false)
+        // || (components.is_empty()) (false, because components has 1 entry) = false
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not define a shape"));
+    }
+
+    #[test]
+    fn test_operand_nonexistent_fails() {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut base_obj = Object::new(1);
+        base_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(base_obj);
+
+        let mut bool_obj = Object::new(2);
+        let mut shape = BooleanShape::new(1, BooleanOpType::Union);
+        shape.operands.push(BooleanRef::new(99)); // 99 doesn't exist
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Boolean operand references non-existent"));
+    }
+
+    #[test]
+    fn test_operand_forward_reference_fails() {
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut base_obj = Object::new(1);
+        base_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(base_obj); // index 0
+
+        let mut bool_obj = Object::new(2); // index 1
+        let mut shape = BooleanShape::new(1, BooleanOpType::Union);
+        shape.operands.push(BooleanRef::new(3)); // references obj 3, which comes later
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        let mut operand_obj = Object::new(3); // index 2 - defined after bool_obj
+        operand_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(operand_obj);
+
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("defined after it"));
+    }
+
+    #[test]
+    fn test_operand_not_model_type_fails() {
+        let mut model = make_valid_boolean_model();
+        // Change the operand object type to Support
+        model.resources.objects[1].object_type = ObjectType::Support;
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Boolean operand object"));
+        assert!(err.contains("type \"model\""));
+    }
+
+    #[test]
+    fn test_operand_no_mesh_fails() {
+        let mut model = make_valid_boolean_model();
+        // Remove the mesh from the operand object
+        model.resources.objects[1].mesh = None;
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be a triangle mesh"));
+    }
+
+    #[test]
+    fn test_operand_has_boolean_shape_fails() {
+        // When an operand object has a boolean_shape, the outer loop catches it first
+        // with "Contains both <booleanshape> and <mesh>" error (since it also has a mesh).
+        // This tests that operand objects with boolean shapes are rejected.
+        let mut model = make_valid_boolean_model();
+        // Add a boolean shape to the operand object (which also keeps its mesh)
+        model.resources.objects[1].boolean_shape =
+            Some(BooleanShape::new(1, BooleanOpType::Union));
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        // The outer loop catches the object with both booleanshape and mesh first
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("<booleanshape> and <mesh>")
+        );
+    }
+
+    #[test]
+    fn test_operand_has_components_fails() {
+        let mut model = make_valid_boolean_model();
+        // Add components to the operand object
+        model.resources.objects[1].components.push(Component::new(1));
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("has components"));
+    }
+
+    #[test]
+    fn test_operand_has_extension_shapes_fails() {
+        let mut model = make_valid_boolean_model();
+        // Mark the operand object as having extension shapes
+        model.resources.objects[1].has_extension_shapes = true;
+        let result = validate_boolean_operations(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("extension shape elements"));
+    }
+
+    #[test]
+    fn test_external_base_path_skips_validation() {
+        // When booleanshape has a path, base object validation is skipped
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut operand_obj = Object::new(1);
+        operand_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(operand_obj);
+
+        let mut bool_obj = Object::new(2);
+        let mut shape = BooleanShape::new(99, BooleanOpType::Union); // nonexistent base id
+        shape.path = Some("/path/to/external.model".to_string()); // but has external path
+        shape.operands.push(BooleanRef::new(1));
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        // Should pass because base has an external path
+        assert!(validate_boolean_operations(&model).is_ok());
+    }
+
+    #[test]
+    fn test_external_operand_path_skips_validation() {
+        // When a BooleanRef has a path, operand validation is skipped
+        let mut model = Model::new();
+        model
+            .required_extensions
+            .push(crate::model::Extension::BooleanOperations);
+
+        let mut base_obj = Object::new(1);
+        base_obj.mesh = Some(make_simple_mesh());
+        model.resources.objects.push(base_obj);
+
+        let mut bool_obj = Object::new(2);
+        let mut shape = BooleanShape::new(1, BooleanOpType::Union);
+        let mut ext_ref = BooleanRef::new(99); // nonexistent operand id
+        ext_ref.path = Some("/path/to/external.model".to_string()); // but has external path
+        shape.operands.push(ext_ref);
+        bool_obj.boolean_shape = Some(shape);
+        model.resources.objects.push(bool_obj);
+
+        // Should pass because operand has an external path
+        assert!(validate_boolean_operations(&model).is_ok());
+    }
+}
