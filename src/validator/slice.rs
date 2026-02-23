@@ -359,3 +359,253 @@ pub fn validate_planar_transform(transform: &[f64; 12], context: &str) -> Result
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Object, Slice, SlicePolygon, SliceSegment, SliceStack, Vertex2D};
+
+    fn make_valid_slice() -> Slice {
+        let mut slice = Slice::new(1.0);
+        slice.vertices.push(Vertex2D::new(0.0, 0.0));
+        slice.vertices.push(Vertex2D::new(1.0, 0.0));
+        slice.vertices.push(Vertex2D::new(0.0, 1.0));
+        let mut polygon = SlicePolygon::new(0);
+        polygon.segments.push(SliceSegment::new(1));
+        polygon.segments.push(SliceSegment::new(2));
+        polygon.segments.push(SliceSegment::new(0)); // closed
+        slice.polygons.push(polygon);
+        slice
+    }
+
+    // ===================== validate_slices =====================
+
+    #[test]
+    fn test_valid_empty_slice_stack() {
+        let model = Model::new();
+        assert!(validate_slices(&model).is_ok());
+    }
+
+    #[test]
+    fn test_slice_ztop_below_zbottom() {
+        let mut model = Model::new();
+        let mut ss = SliceStack::new(1, 5.0); // zbottom = 5.0
+        ss.slices.push(Slice::new(3.0)); // ztop = 3.0 < zbottom = 5.0
+        model.resources.slice_stacks.push(ss);
+        let result = validate_slices(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("less than zbottom")
+        );
+    }
+
+    #[test]
+    fn test_slice_ztop_not_increasing() {
+        let mut model = Model::new();
+        let mut ss = SliceStack::new(1, 0.0);
+        ss.slices.push(Slice::new(5.0));
+        ss.slices.push(Slice::new(3.0)); // not increasing
+        model.resources.slice_stacks.push(ss);
+        let result = validate_slices(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("strictly increasing")
+        );
+    }
+
+    #[test]
+    fn test_slice_ztop_equal_not_increasing() {
+        let mut model = Model::new();
+        let mut ss = SliceStack::new(1, 0.0);
+        ss.slices.push(Slice::new(5.0));
+        ss.slices.push(Slice::new(5.0)); // equal not allowed
+        model.resources.slice_stacks.push(ss);
+        let result = validate_slices(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_valid_slice_stack() {
+        let mut model = Model::new();
+        let mut ss = SliceStack::new(1, 0.0);
+        ss.slices.push(make_valid_slice());
+        model.resources.slice_stacks.push(ss);
+        assert!(validate_slices(&model).is_ok());
+    }
+
+    // ===================== validate_slice =====================
+
+    #[test]
+    fn test_valid_empty_slice() {
+        let slice = Slice::new(1.0); // empty slice with no polygons
+        assert!(validate_slice(1, 0, &slice).is_ok());
+    }
+
+    #[test]
+    fn test_slice_with_polygons_but_no_vertices() {
+        let mut slice = Slice::new(1.0);
+        let polygon = SlicePolygon::new(0);
+        slice.polygons.push(polygon);
+        let result = validate_slice(1, 0, &slice);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no vertices"));
+    }
+
+    #[test]
+    fn test_slice_polygon_startv_out_of_bounds() {
+        let mut slice = Slice::new(1.0);
+        slice.vertices.push(Vertex2D::new(0.0, 0.0));
+        slice.vertices.push(Vertex2D::new(1.0, 0.0));
+        let mut polygon = SlicePolygon::new(99); // out of bounds
+        polygon.segments.push(SliceSegment::new(0));
+        polygon.segments.push(SliceSegment::new(1));
+        slice.polygons.push(polygon);
+        let result = validate_slice(1, 0, &slice);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid startv"));
+    }
+
+    #[test]
+    fn test_slice_polygon_too_few_segments() {
+        let mut slice = Slice::new(1.0);
+        slice.vertices.push(Vertex2D::new(0.0, 0.0));
+        slice.vertices.push(Vertex2D::new(1.0, 0.0));
+        let mut polygon = SlicePolygon::new(0);
+        polygon.segments.push(SliceSegment::new(1)); // only 1 segment
+        slice.polygons.push(polygon);
+        let result = validate_slice(1, 0, &slice);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least 2 segments")
+        );
+    }
+
+    #[test]
+    fn test_slice_polygon_segment_v2_out_of_bounds() {
+        let mut slice = Slice::new(1.0);
+        slice.vertices.push(Vertex2D::new(0.0, 0.0));
+        slice.vertices.push(Vertex2D::new(1.0, 0.0));
+        let mut polygon = SlicePolygon::new(0);
+        polygon.segments.push(SliceSegment::new(1));
+        polygon.segments.push(SliceSegment::new(99)); // out of bounds
+        slice.polygons.push(polygon);
+        let result = validate_slice(1, 0, &slice);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid v2"));
+    }
+
+    #[test]
+    fn test_slice_polygon_duplicate_consecutive_v2() {
+        let mut slice = Slice::new(1.0);
+        slice.vertices.push(Vertex2D::new(0.0, 0.0));
+        slice.vertices.push(Vertex2D::new(1.0, 0.0));
+        slice.vertices.push(Vertex2D::new(0.0, 1.0));
+        let mut polygon = SlicePolygon::new(0);
+        polygon.segments.push(SliceSegment::new(1));
+        polygon.segments.push(SliceSegment::new(1)); // duplicate v2
+        polygon.segments.push(SliceSegment::new(0));
+        slice.polygons.push(polygon);
+        let result = validate_slice(1, 0, &slice);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("same v2"));
+    }
+
+    #[test]
+    fn test_slice_polygon_not_closed() {
+        let mut slice = Slice::new(1.0);
+        slice.vertices.push(Vertex2D::new(0.0, 0.0));
+        slice.vertices.push(Vertex2D::new(1.0, 0.0));
+        slice.vertices.push(Vertex2D::new(0.0, 1.0));
+        let mut polygon = SlicePolygon::new(0); // startv = 0
+        polygon.segments.push(SliceSegment::new(1));
+        polygon.segments.push(SliceSegment::new(2)); // last v2=2, not 0 → not closed
+        slice.polygons.push(polygon);
+        let result = validate_slice(1, 0, &slice);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not closed"));
+    }
+
+    // ===================== validate_planar_transform =====================
+
+    #[test]
+    fn test_valid_planar_identity_transform() {
+        let transform = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        assert!(validate_planar_transform(&transform, "test").is_ok());
+    }
+
+    #[test]
+    fn test_non_planar_m02() {
+        let transform = [1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let result = validate_planar_transform(&transform, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("m02"));
+    }
+
+    #[test]
+    fn test_non_planar_m12() {
+        let transform = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let result = validate_planar_transform(&transform, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("m12"));
+    }
+
+    #[test]
+    fn test_non_planar_m20() {
+        let transform = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let result = validate_planar_transform(&transform, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("m20"));
+    }
+
+    #[test]
+    fn test_non_planar_m21() {
+        let transform = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0];
+        let result = validate_planar_transform(&transform, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("m21"));
+    }
+
+    #[test]
+    fn test_non_planar_m22() {
+        let transform = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0];
+        let result = validate_planar_transform(&transform, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("m22"));
+    }
+
+    // ===================== validate_slice_extension =====================
+
+    #[test]
+    fn test_object_with_invalid_slicestackid() {
+        let mut model = Model::new();
+        // Add a valid slice stack so the validator doesn't return early
+        let ss = SliceStack::new(1, 0.0);
+        model.resources.slice_stacks.push(ss);
+        let mut obj = Object::new(1);
+        obj.slicestackid = Some(99); // nonexistent
+        model.resources.objects.push(obj);
+        let result = validate_slice_extension(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("non-existent"));
+    }
+
+    #[test]
+    fn test_object_with_valid_slicestackid() {
+        let mut model = Model::new();
+        let ss = SliceStack::new(5, 0.0);
+        model.resources.slice_stacks.push(ss);
+        let mut obj = Object::new(1);
+        obj.slicestackid = Some(5);
+        model.resources.objects.push(obj);
+        assert!(validate_slice_extension(&model).is_ok());
+    }
+}

@@ -1401,3 +1401,714 @@ pub fn validate_duplicate_resource_ids(model: &Model) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{
+        BaseMaterial, BaseMaterialGroup, ColorGroup, CompositeMaterials, Mesh, Multi,
+        MultiProperties, Object, Tex2Coord, Texture2D, Texture2DGroup, Triangle, Vertex,
+    };
+
+    // ===================== validate_material_references =====================
+
+    #[test]
+    fn test_duplicate_color_group_ids() {
+        let mut model = Model::new();
+        model.resources.color_groups.push(ColorGroup::new(1));
+        model.resources.color_groups.push(ColorGroup::new(1)); // duplicate
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
+    }
+
+    #[test]
+    fn test_duplicate_base_material_ids() {
+        let mut model = Model::new();
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(5));
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(5)); // dup
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
+    }
+
+    #[test]
+    fn test_color_group_and_base_material_same_id() {
+        let mut model = Model::new();
+        model.resources.color_groups.push(ColorGroup::new(7));
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(7)); // conflict
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
+    }
+
+    #[test]
+    fn test_duplicate_multiproperties_id_with_color_group() {
+        let mut model = Model::new();
+        model.resources.color_groups.push(ColorGroup::new(3));
+        model
+            .resources
+            .multi_properties
+            .push(MultiProperties::new(3, vec![])); // conflict
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate resource ID")
+        );
+    }
+
+    #[test]
+    fn test_object_invalid_pid() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+        let mut obj = Object::new(1);
+        obj.pid = Some(99); // doesn't exist
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent property group")
+        );
+    }
+
+    #[test]
+    fn test_object_invalid_basematerialid() {
+        let mut model = Model::new();
+        model
+            .resources
+            .base_material_groups
+            .push(BaseMaterialGroup::new(5));
+        let mut obj = Object::new(1);
+        obj.basematerialid = Some(99); // doesn't exist
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent base material group")
+        );
+    }
+
+    #[test]
+    fn test_object_pindex_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+        let mut obj = Object::new(1);
+        obj.pid = Some(10);
+        obj.pindex = Some(99); // out of bounds
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_object_pindex_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(5);
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+        let mut obj = Object::new(1);
+        obj.pid = Some(5);
+        obj.pindex = Some(99); // out of bounds
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_object_pindex_out_of_bounds_texture2d_group() {
+        let mut model = Model::new();
+        let mut tg = Texture2DGroup::new(5, 10);
+        tg.tex2coords.push(Tex2Coord::new(0.0, 0.0));
+        model.resources.texture2d_groups.push(tg);
+        let mut obj = Object::new(1);
+        obj.pid = Some(5);
+        obj.pindex = Some(99); // out of bounds
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_object_pindex_out_of_bounds_multiproperties() {
+        let mut model = Model::new();
+        let mp = MultiProperties::new(5, vec![]);
+        model.resources.multi_properties.push(mp);
+        let mut obj = Object::new(1);
+        obj.pid = Some(5);
+        obj.pindex = Some(99); // out of bounds
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_object_pindex_out_of_bounds_composite_materials() {
+        let mut model = Model::new();
+        let cm = CompositeMaterials::new(5, 0, vec![]);
+        model.resources.composite_materials.push(cm);
+        let mut obj = Object::new(1);
+        obj.pid = Some(5);
+        obj.pindex = Some(99); // out of bounds
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_triangle_pindex_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(10);
+        tri.pindex = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_triangle_p1_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(10);
+        tri.p1 = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p1"));
+    }
+
+    #[test]
+    fn test_triangle_p2_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(10);
+        tri.p2 = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p2"));
+    }
+
+    #[test]
+    fn test_triangle_p3_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(10);
+        tri.p3 = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p3"));
+    }
+
+    #[test]
+    fn test_triangle_p1_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(5);
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(5);
+        tri.p1 = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p1"));
+    }
+
+    #[test]
+    fn test_triangle_p2_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(5);
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(5);
+        tri.p2 = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_triangle_p3_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(5);
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+
+        let mut obj = Object::new(1);
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.pid = Some(5);
+        tri.p3 = Some(99); // out of bounds
+        mesh.triangles.push(tri);
+        obj.mesh = Some(mesh);
+        model.resources.objects.push(obj);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multiproperties_pindex_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+
+        let mp = MultiProperties::new(5, vec![10]);
+        let mut multi = Multi::new(vec![]);
+        multi.pindices = vec![99]; // out of bounds
+        model.resources.multi_properties.push({
+            let mut mp = mp;
+            mp.multis.push(multi);
+            mp
+        });
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pindex"));
+    }
+
+    #[test]
+    fn test_multiproperties_pindex_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(5);
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+
+        let mut mp = MultiProperties::new(99, vec![5]);
+        let mut multi = Multi::new(vec![]);
+        multi.pindices = vec![99]; // out of bounds
+        mp.multis.push(multi);
+        model.resources.multi_properties.push(mp);
+        let result = validate_material_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pindex"));
+    }
+
+    #[test]
+    fn test_valid_empty_model() {
+        let model = Model::new();
+        assert!(validate_material_references(&model).is_ok());
+    }
+
+    // ===================== validate_texture_paths =====================
+
+    #[test]
+    fn test_texture_empty_path() {
+        let mut model = Model::new();
+        let tex = Texture2D::new(1, "".to_string(), "image/png".to_string());
+        model.resources.texture2d_resources.push(tex);
+        let result = validate_texture_paths(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_texture_path_with_null_byte() {
+        let mut model = Model::new();
+        let tex = Texture2D::new(1, "/path/tex\0.png".to_string(), "image/png".to_string());
+        model.resources.texture2d_resources.push(tex);
+        let result = validate_texture_paths(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("null bytes"));
+    }
+
+    #[test]
+    fn test_texture_path_with_backslash() {
+        let mut model = Model::new();
+        let tex = Texture2D::new(1, r"\path\tex.png".to_string(), "image/png".to_string());
+        model.resources.texture2d_resources.push(tex);
+        let result = validate_texture_paths(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("backslash"));
+    }
+
+    #[test]
+    fn test_texture_invalid_content_type() {
+        let mut model = Model::new();
+        let tex = Texture2D::new(
+            1,
+            "/3D/Textures/tex.bmp".to_string(),
+            "image/bmp".to_string(),
+        );
+        model.resources.texture2d_resources.push(tex);
+        let result = validate_texture_paths(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("contenttype"));
+    }
+
+    #[test]
+    fn test_texture_valid_jpeg() {
+        let mut model = Model::new();
+        let tex = Texture2D::new(
+            1,
+            "/3D/Textures/tex.jpg".to_string(),
+            "image/jpeg".to_string(),
+        );
+        model.resources.texture2d_resources.push(tex);
+        assert!(validate_texture_paths(&model).is_ok());
+    }
+
+    #[test]
+    fn test_texture_valid_png() {
+        let mut model = Model::new();
+        let tex = Texture2D::new(
+            1,
+            "/3D/Textures/tex.png".to_string(),
+            "image/png".to_string(),
+        );
+        model.resources.texture2d_resources.push(tex);
+        assert!(validate_texture_paths(&model).is_ok());
+    }
+
+    // ===================== validate_multiproperties_references =====================
+
+    #[test]
+    fn test_multiproperties_invalid_pid() {
+        let mut model = Model::new();
+        let mp = MultiProperties::new(5, vec![99]); // pid 99 doesn't exist
+        model.resources.multi_properties.push(mp);
+        let result = validate_multiproperties_references(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not reference a valid resource")
+        );
+    }
+
+    #[test]
+    fn test_multiproperties_basematerials_not_first() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(5);
+        bg.materials
+            .push(BaseMaterial::new("m".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+        let mut cg = ColorGroup::new(10);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+
+        // basematerials at layer 1, not 0
+        let mp = MultiProperties::new(20, vec![10, 5]); // color first, base material second
+        model.resources.multi_properties.push(mp);
+        let result = validate_multiproperties_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("first element"));
+    }
+
+    #[test]
+    fn test_multiproperties_multiple_colorgroups() {
+        let mut model = Model::new();
+        let mut cg1 = ColorGroup::new(10);
+        cg1.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg1);
+        let mut cg2 = ColorGroup::new(20);
+        cg2.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg2);
+
+        // Two different colorgroups in pids
+        let mp = MultiProperties::new(30, vec![10, 20]);
+        model.resources.multi_properties.push(mp);
+        let result = validate_multiproperties_references(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("colorgroup"));
+    }
+
+    // ===================== validate_color_formats =====================
+
+    #[test]
+    fn test_color_group_empty() {
+        let mut model = Model::new();
+        model.resources.color_groups.push(ColorGroup::new(1)); // no colors
+        let result = validate_color_formats(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least one color")
+        );
+    }
+
+    #[test]
+    fn test_color_group_with_color_valid() {
+        let mut model = Model::new();
+        let mut cg = ColorGroup::new(1);
+        cg.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg);
+        assert!(validate_color_formats(&model).is_ok());
+    }
+
+    // ===================== validate_resource_ordering =====================
+
+    #[test]
+    fn test_texture2d_group_references_nonexistent_texture() {
+        let mut model = Model::new();
+        let tg = Texture2DGroup::new(1, 99); // texid 99 doesn't exist
+        model.resources.texture2d_groups.push(tg);
+        let result = validate_resource_ordering(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not defined"));
+    }
+
+    #[test]
+    fn test_texture2d_group_forward_reference() {
+        let mut model = Model::new();
+        let mut tg = Texture2DGroup::new(1, 2);
+        tg.parse_order = 1; // texture group comes first in parse order
+        model.resources.texture2d_groups.push(tg);
+
+        let mut tex = Texture2D::new(
+            2,
+            "/3D/Textures/tex.png".to_string(),
+            "image/png".to_string(),
+        );
+        tex.parse_order = 2; // but texture2d comes after
+        model.resources.texture2d_resources.push(tex);
+        let result = validate_resource_ordering(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Forward reference")
+        );
+    }
+
+    #[test]
+    fn test_valid_texture2d_then_group() {
+        let mut model = Model::new();
+        let mut tex = Texture2D::new(
+            2,
+            "/3D/Textures/tex.png".to_string(),
+            "image/png".to_string(),
+        );
+        tex.parse_order = 1; // texture2d comes first
+        model.resources.texture2d_resources.push(tex);
+
+        let mut tg = Texture2DGroup::new(1, 2);
+        tg.parse_order = 2; // texture group comes after
+        model.resources.texture2d_groups.push(tg);
+        assert!(validate_resource_ordering(&model).is_ok());
+    }
+
+    #[test]
+    fn test_object_intermingled_with_property_resources() {
+        let mut model = Model::new();
+        let mut cg1 = ColorGroup::new(1);
+        cg1.parse_order = 1;
+        cg1.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg1);
+
+        // Object appears between two property resources
+        let mut obj = Object::new(10);
+        obj.parse_order = 5;
+        model.resources.objects.push(obj);
+
+        let mut cg2 = ColorGroup::new(2);
+        cg2.parse_order = 10;
+        cg2.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg2);
+
+        let result = validate_resource_ordering(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("intermingled"));
+    }
+
+    // ===================== validate_duplicate_resource_ids =====================
+
+    #[test]
+    fn test_duplicate_object_ids() {
+        let mut model = Model::new();
+        model.resources.objects.push(Object::new(1));
+        model.resources.objects.push(Object::new(1)); // duplicate
+        let result = validate_duplicate_resource_ids(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Duplicate"));
+    }
+
+    #[test]
+    fn test_duplicate_color_group_in_namespace() {
+        let mut model = Model::new();
+        let mut cg1 = ColorGroup::new(5);
+        cg1.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg1);
+        let mut cg2 = ColorGroup::new(5); // duplicate
+        cg2.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(cg2);
+        let result = validate_duplicate_resource_ids(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Duplicate"));
+    }
+
+    // ===================== validate_object_triangle_materials =====================
+
+    #[test]
+    fn test_mixed_assignment_without_pid() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri1 = Triangle::new(0, 1, 2);
+        tri1.pid = Some(10);
+        let tri2 = Triangle::new(0, 1, 2); // no material
+        mesh.triangles.push(tri1);
+        mesh.triangles.push(tri2);
+
+        let result = validate_object_triangle_materials(1, None, &mesh, "Object 1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("mixed material"));
+    }
+
+    #[test]
+    fn test_per_vertex_without_pid() {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        let mut tri = Triangle::new(0, 1, 2);
+        tri.p1 = Some(0); // per-vertex but no pid
+        mesh.triangles.push(tri);
+
+        let result = validate_object_triangle_materials(1, None, &mesh, "Object 1");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("per-vertex material")
+        );
+    }
+
+    // ===================== get_property_resource_size =====================
+
+    #[test]
+    fn test_get_property_size_empty_color_group() {
+        let mut model = Model::new();
+        model.resources.color_groups.push(ColorGroup::new(5)); // no colors
+        let result = get_property_resource_size(&model, 5);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no colors"));
+    }
+
+    #[test]
+    fn test_get_property_size_nonexistent() {
+        let model = Model::new();
+        let result = get_property_resource_size(&model, 99);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+}

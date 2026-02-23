@@ -206,3 +206,61 @@ mod boolean_operations_test {
         assert_eq!(shape.operation, BooleanOpType::Union);
     }
 }
+
+#[test]
+fn test_boolean_ops_writer_round_trip() {
+    use lib3mf::model::{BooleanOpType, BooleanRef, BooleanShape, Extension};
+    use lib3mf::{BuildItem, Mesh, Model, Object, Triangle, Vertex};
+    use std::io::Cursor;
+
+    let mut model = Model::new();
+    model.required_extensions.push(Extension::BooleanOperations);
+
+    // Base mesh object
+    let mut mesh1 = Mesh::new();
+    mesh1.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh1.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh1.vertices.push(Vertex::new(0.0, 10.0, 0.0));
+    mesh1.triangles.push(Triangle::new(0, 1, 2));
+    let mut obj1 = Object::new(1);
+    obj1.mesh = Some(mesh1);
+    model.resources.objects.push(obj1);
+
+    // Operand mesh object
+    let mut mesh2 = Mesh::new();
+    mesh2.vertices.push(Vertex::new(5.0, 0.0, 0.0));
+    mesh2.vertices.push(Vertex::new(15.0, 0.0, 0.0));
+    mesh2.vertices.push(Vertex::new(5.0, 10.0, 0.0));
+    mesh2.triangles.push(Triangle::new(0, 1, 2));
+    let mut obj2 = Object::new(2);
+    obj2.mesh = Some(mesh2);
+    model.resources.objects.push(obj2);
+
+    // Boolean union object
+    let mut boolean_shape = BooleanShape::new(1, BooleanOpType::Union);
+    boolean_shape.operands.push(BooleanRef::new(2));
+    let mut obj3 = Object::new(3);
+    obj3.boolean_shape = Some(boolean_shape);
+    model.resources.objects.push(obj3);
+
+    model.build.items.push(BuildItem::new(3));
+
+    let buffer = Vec::new();
+    let cursor = Cursor::new(buffer);
+    let result = model.to_writer(cursor);
+    assert!(result.is_ok(), "Failed to write boolean ops model");
+
+    let cursor = result.unwrap();
+    let config = lib3mf::ParserConfig::new().with_extension(Extension::BooleanOperations);
+    let parsed = Model::from_reader_with_config(Cursor::new(cursor.into_inner()), config);
+    assert!(
+        parsed.is_ok(),
+        "Failed to parse written boolean ops model: {:?}",
+        parsed.err()
+    );
+    let parsed = parsed.unwrap();
+    let obj3 = parsed.resources.objects.iter().find(|o| o.id == 3).unwrap();
+    let shape = obj3.boolean_shape.as_ref().unwrap();
+    assert_eq!(shape.operation, BooleanOpType::Union);
+    assert_eq!(shape.operands.len(), 1);
+}

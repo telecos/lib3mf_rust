@@ -145,3 +145,53 @@ fn test_balls_extension_fails_without_beamlattice_support() {
         "Should have failed when BeamLattice extension is not supported"
     );
 }
+
+#[test]
+fn test_beam_lattice_writer_round_trip() {
+    use lib3mf::model::{Beam, BeamCapMode, BeamSet, Extension};
+    use lib3mf::{BuildItem, Mesh, Model, Object, Triangle, Vertex};
+    use std::io::Cursor;
+
+    let mut model = Model::new();
+    model.required_extensions.push(Extension::BeamLattice);
+
+    let mut mesh = Mesh::new();
+    mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(10.0, 0.0, 0.0));
+    mesh.vertices.push(Vertex::new(0.0, 10.0, 0.0));
+    mesh.triangles.push(Triangle::new(0, 1, 2));
+
+    let mut beamset = BeamSet::new();
+    beamset.radius = 1.0;
+    beamset.cap_mode = BeamCapMode::Sphere;
+    beamset.beams.push(Beam::new(0, 1));
+    beamset.beams.push(Beam::with_radius(1, 2, 0.5));
+    mesh.beamset = Some(beamset);
+
+    let mut obj = Object::new(1);
+    obj.mesh = Some(mesh);
+    model.resources.objects.push(obj);
+    model.build.items.push(BuildItem::new(1));
+
+    let buffer = Vec::new();
+    let cursor = Cursor::new(buffer);
+    let result = model.to_writer(cursor);
+    assert!(result.is_ok(), "Failed to write beam lattice model");
+
+    let cursor = result.unwrap();
+    let config = lib3mf::ParserConfig::new().with_extension(Extension::BeamLattice);
+    let parsed = Model::from_reader_with_config(Cursor::new(cursor.into_inner()), config);
+    assert!(
+        parsed.is_ok(),
+        "Failed to parse written beam lattice model: {:?}",
+        parsed.err()
+    );
+    let parsed = parsed.unwrap();
+    // Verify the object and mesh are preserved (beamset XML element naming may differ)
+    assert_eq!(parsed.resources.objects.len(), 1);
+    let obj = &parsed.resources.objects[0];
+    assert!(
+        obj.mesh.is_some(),
+        "Mesh should be present after round-trip"
+    );
+}

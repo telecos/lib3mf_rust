@@ -573,3 +573,562 @@ pub fn validate_beam_lattice(model: &Model) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{
+        BaseMaterial, BaseMaterialGroup, Beam, BeamCapMode, BeamSet, ColorGroup, Mesh, Object,
+        ObjectType, Vertex,
+    };
+
+    fn make_mesh_with_beamset(beamset: BeamSet) -> Mesh {
+        let mut mesh = Mesh::new();
+        mesh.vertices.push(Vertex::new(0.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(1.0, 0.0, 0.0));
+        mesh.vertices.push(Vertex::new(0.0, 1.0, 0.0));
+        mesh.beamset = Some(beamset);
+        mesh
+    }
+
+    fn make_object_with_beamset(id: usize, beamset: BeamSet) -> Object {
+        let mut obj = Object::new(id);
+        obj.mesh = Some(make_mesh_with_beamset(beamset));
+        obj
+    }
+
+    #[test]
+    fn test_valid_beam_lattice() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        assert!(validate_beam_lattice(&model).is_ok());
+    }
+
+    #[test]
+    fn test_invalid_object_type_support() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.object_type = ObjectType::Support;
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("BeamLattice can only be added")
+        );
+    }
+
+    #[test]
+    fn test_invalid_object_type_other() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.object_type = ObjectType::Other;
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_valid_solid_support_type() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.object_type = ObjectType::SolidSupport;
+        model.resources.objects.push(obj);
+        assert!(validate_beam_lattice(&model).is_ok());
+    }
+
+    #[test]
+    fn test_beam_v1_out_of_bounds() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(99, 1)); // v1 out of bounds
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid vertex index v1")
+        );
+    }
+
+    #[test]
+    fn test_beam_v2_out_of_bounds() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 99)); // v2 out of bounds
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid vertex index v2")
+        );
+    }
+
+    #[test]
+    fn test_beam_self_referencing() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 0)); // v1 == v2
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("self-referencing"));
+    }
+
+    #[test]
+    fn test_beam_invalid_property_id() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        let mut beam = Beam::new(0, 1);
+        beam.property_id = Some(99); // nonexistent property group
+        beamset.beams.push(beam);
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent property group")
+        );
+    }
+
+    #[test]
+    fn test_duplicate_beams() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.beams.push(Beam::new(0, 1)); // duplicate
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("is a duplicate"));
+    }
+
+    #[test]
+    fn test_duplicate_beams_reversed() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.beams.push(Beam::new(1, 0)); // reversed duplicate
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("is a duplicate"));
+    }
+
+    #[test]
+    fn test_invalid_clipping_mode() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.clipping_mode = Some("invalid".to_string());
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid clippingmode")
+        );
+    }
+
+    #[test]
+    fn test_clipping_mode_without_mesh() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.clipping_mode = Some("inside".to_string());
+        beamset.clipping_mesh_id = None;
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("clippingmode"));
+    }
+
+    #[test]
+    fn test_valid_clipping_mode_none() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.clipping_mode = Some("none".to_string());
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        assert!(validate_beam_lattice(&model).is_ok());
+    }
+
+    #[test]
+    fn test_invalid_ball_mode() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.ball_mode = Some("invalid".to_string());
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid ballmode"));
+    }
+
+    #[test]
+    fn test_ball_mode_all_without_radius() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.ball_mode = Some("all".to_string());
+        beamset.ball_radius = None;
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("ballmode"));
+    }
+
+    #[test]
+    fn test_ball_mode_mixed_without_radius() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.ball_mode = Some("mixed".to_string());
+        beamset.ball_radius = None;
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_valid_ball_mode_all_with_radius() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.ball_mode = Some("all".to_string());
+        beamset.ball_radius = Some(0.5);
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        assert!(validate_beam_lattice(&model).is_ok());
+    }
+
+    #[test]
+    fn test_beamset_invalid_property_id() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.property_id = Some(99); // nonexistent
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(99); // satisfy "beamset has pid but object has no pid" check
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent property group")
+        );
+    }
+
+    #[test]
+    fn test_beamset_pindex_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut color_group = ColorGroup::new(10);
+        color_group.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(color_group);
+
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.property_id = Some(10);
+        beamset.property_index = Some(99); // out of bounds
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10); // satisfy "beamset has pid but object has no pid" check
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pindex"));
+    }
+
+    #[test]
+    fn test_beamset_pindex_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(10);
+        bg.materials.push(crate::model::BaseMaterial::new(
+            "mat".to_string(),
+            (255, 0, 0, 255),
+        ));
+        model.resources.base_material_groups.push(bg);
+
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.property_id = Some(10);
+        beamset.property_index = Some(99); // out of bounds
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10); // satisfy "beamset has pid but object has no pid" check
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pindex"));
+    }
+
+    #[test]
+    fn test_beam_p1_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut color_group = ColorGroup::new(10);
+        color_group.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(color_group);
+
+        let mut beamset = BeamSet::new();
+        beamset.property_id = Some(10); // set at beamset level for has_default_pid check
+        let mut beam = Beam::new(0, 1);
+        beam.p1 = Some(99); // out of bounds
+        beamset.beams.push(beam);
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10); // satisfy "beamset has pid but object has no pid" check
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p1"));
+    }
+
+    #[test]
+    fn test_beam_p2_out_of_bounds_color_group() {
+        let mut model = Model::new();
+        let mut color_group = ColorGroup::new(10);
+        color_group.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(color_group);
+
+        let mut beamset = BeamSet::new();
+        beamset.property_id = Some(10); // set at beamset level for has_default_pid check
+        let mut beam = Beam::new(0, 1);
+        beam.p2 = Some(99); // out of bounds
+        beamset.beams.push(beam);
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10); // satisfy "beamset has pid but object has no pid" check
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p2"));
+    }
+
+    #[test]
+    fn test_beam_p1_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(10);
+        bg.materials
+            .push(BaseMaterial::new("mat".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+
+        let mut beamset = BeamSet::new();
+        beamset.property_id = Some(10); // set at beamset level
+        let mut beam = Beam::new(0, 1);
+        beam.p1 = Some(99); // out of bounds
+        beamset.beams.push(beam);
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10);
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_beam_p2_out_of_bounds_base_material() {
+        let mut model = Model::new();
+        let mut bg = BaseMaterialGroup::new(10);
+        bg.materials
+            .push(BaseMaterial::new("mat".to_string(), (255, 0, 0, 255)));
+        model.resources.base_material_groups.push(bg);
+
+        let mut beamset = BeamSet::new();
+        beamset.property_id = Some(10); // set at beamset level
+        let mut beam = Beam::new(0, 1);
+        beam.p2 = Some(99); // out of bounds
+        beamset.beams.push(beam);
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10);
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_beamset_pid_from_beamset_used_for_beam_props() {
+        let mut model = Model::new();
+        let mut color_group = ColorGroup::new(10);
+        color_group.colors.push((255u8, 0u8, 0u8, 255u8));
+        model.resources.color_groups.push(color_group);
+
+        let mut beamset = BeamSet::new();
+        beamset.property_id = Some(10); // set at beamset level
+        let mut beam = Beam::new(0, 1);
+        beam.p1 = Some(99); // out of bounds (inherits beamset pid)
+        beamset.beams.push(beam);
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.pid = Some(10); // satisfy object pid check
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_clipping_mesh_nonexistent() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.clipping_mode = Some("inside".to_string());
+        beamset.clipping_mesh_id = Some(99); // nonexistent object
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("clippingmesh"));
+    }
+
+    #[test]
+    fn test_clipping_mesh_with_beamlattice() {
+        let mut model = Model::new();
+
+        // Object 2 is the clipping mesh, but it has a beamlattice
+        let mut clip_beamset = BeamSet::new();
+        clip_beamset.beams.push(Beam::new(0, 1));
+        let mut clip_obj = make_object_with_beamset(2, clip_beamset);
+        clip_obj.object_type = ObjectType::Model;
+        model.resources.objects.push(clip_obj);
+
+        // Object 1 references object 2 as clipping mesh
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.clipping_mode = Some("inside".to_string());
+        beamset.clipping_mesh_id = Some(2);
+        let mut obj = make_object_with_beamset(1, beamset);
+        obj.object_type = ObjectType::Model;
+        model.resources.objects.push(obj);
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("clippingmesh"));
+    }
+
+    #[test]
+    fn test_representation_mesh_nonexistent() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.representation_mesh_id = Some(99); // nonexistent
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("representationmesh")
+        );
+    }
+
+    #[test]
+    fn test_representation_mesh_has_beamlattice() {
+        let mut model = Model::new();
+
+        // Object 2 is the rep mesh but has a beamlattice itself
+        let mut rep_beamset = BeamSet::new();
+        rep_beamset.beams.push(Beam::new(0, 1));
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(2, rep_beamset));
+
+        // Object 1 references object 2 as representation mesh
+        let mut beamset = BeamSet::new();
+        beamset.beams.push(Beam::new(0, 1));
+        beamset.representation_mesh_id = Some(2);
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        let result = validate_beam_lattice(&model);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("representationmesh")
+        );
+    }
+
+    #[test]
+    fn test_beam_with_radii() {
+        let mut model = Model::new();
+        let mut beamset = BeamSet::new();
+        let mut beam = Beam::with_radii(0, 1, 0.5, 1.0);
+        beam.cap1 = Some(BeamCapMode::Butt);
+        beam.cap2 = Some(BeamCapMode::Hemisphere);
+        beamset.beams.push(beam);
+        model
+            .resources
+            .objects
+            .push(make_object_with_beamset(1, beamset));
+        assert!(validate_beam_lattice(&model).is_ok());
+    }
+
+    #[test]
+    fn test_empty_model_no_beams() {
+        let model = Model::new();
+        assert!(validate_beam_lattice(&model).is_ok());
+    }
+}
