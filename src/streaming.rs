@@ -200,7 +200,7 @@ impl ObjectIterator {
             buf: Vec::new(),
             in_resources: false,
             error: Some(error),
-            done: true,
+            done: false,
         }
     }
 
@@ -308,8 +308,17 @@ impl ObjectIterator {
 
                     let local_name = parser::get_local_name(name_str);
 
-                    if local_name == "resources" {
-                        self.in_resources = true;
+                    match local_name {
+                        "resources" => {
+                            self.in_resources = true;
+                        }
+                        "object" if self.in_resources => {
+                            // A self-closing <object .../> has no children (no mesh).
+                            let object = parser::parse_object(reader, e)?;
+                            self.buf.clear();
+                            return Ok(Some(object));
+                        }
+                        _ => {}
                     }
                 }
                 Ok(Event::End(ref e)) => {
@@ -360,26 +369,10 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
-    #[test]
-    fn test_streaming_parser_basic() {
-        // Create a minimal 3MF file in memory
-        let file_data = create_test_3mf();
-        let cursor = Cursor::new(file_data);
+    // ── helpers ──────────────────────────────────────────────────────────────
 
-        let mut parser = StreamingParser::new(cursor).unwrap();
-        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
-
-        assert_eq!(objects.len(), 1);
-        assert_eq!(objects[0].id, 1);
-
-        // Verify mesh data is loaded
-        assert!(objects[0].mesh.is_some());
-        let mesh = objects[0].mesh.as_ref().unwrap();
-        assert_eq!(mesh.vertices.len(), 3);
-        assert_eq!(mesh.triangles.len(), 1);
-    }
-
-    fn create_test_3mf() -> Vec<u8> {
+    /// Build a minimal valid 3MF ZIP from a raw model XML string.
+    fn make_3mf(model_xml: &str) -> Vec<u8> {
         use std::io::Write;
         use zip::ZipWriter;
         use zip::write::SimpleFileOptions;
@@ -392,7 +385,6 @@ mod tests {
     <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
     <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
 </Types>"#;
-
         zip.start_file("[Content_Types].xml", SimpleFileOptions::default())
             .unwrap();
         zip.write_all(content_types.as_bytes()).unwrap();
@@ -401,12 +393,185 @@ mod tests {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
     <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>"#;
-
         zip.start_file("_rels/.rels", SimpleFileOptions::default())
             .unwrap();
         zip.write_all(rels.as_bytes()).unwrap();
 
-        let model = r#"<?xml version="1.0" encoding="UTF-8"?>
+        zip.start_file("3D/3dmodel.model", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(model_xml.as_bytes()).unwrap();
+
+        let writer = zip.finish().unwrap();
+        writer.into_inner().clone()
+    }
+
+    /// Return the bytes of a model XML that declares `n` simple triangle objects.
+    fn model_with_n_objects(n: usize) -> String {
+        let mut objects = String::new();
+        for i in 1..=n {
+            objects.push_str(&format!(
+                r#"<object id="{i}" type="model">
+    <mesh>
+        <vertices>
+            <vertex x="0" y="0" z="0"/>
+            <vertex x="1" y="0" z="0"/>
+            <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+            <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+    </mesh>
+</object>"#
+            ));
+        }
+        let mut build = String::new();
+        for i in 1..=n {
+            build.push_str(&format!(r#"<item objectid="{i}"/>"#));
+        }
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+    <resources>{objects}</resources>
+    <build>{build}</build>
+</model>"#
+        )
+    }
+
+    fn create_test_3mf() -> Vec<u8> {
+        make_3mf(&model_with_n_objects(1))
+    }
+
+    // ── existing test ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_streaming_parser_basic() {
+        let cursor = Cursor::new(create_test_3mf());
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].id, 1);
+
+        assert!(objects[0].mesh.is_some());
+        let mesh = objects[0].mesh.as_ref().unwrap();
+        assert_eq!(mesh.vertices.len(), 3);
+        assert_eq!(mesh.triangles.len(), 1);
+    }
+
+    // ── new tests ─────────────────────────────────────────────────────────────
+
+    /// `new_with_config` should accept a custom `ParserConfig`.
+    #[test]
+    fn test_streaming_parser_new_with_config() {
+        let config = ParserConfig::new().with_extension(Extension::Material);
+        let cursor = Cursor::new(create_test_3mf());
+        let mut parser = StreamingParser::new_with_config(cursor, config).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].id, 1);
+    }
+
+    /// The iterator should return all objects when there are multiple.
+    #[test]
+    fn test_streaming_parser_multiple_objects() {
+        let cursor = Cursor::new(make_3mf(&model_with_n_objects(3)));
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+
+        assert_eq!(objects.len(), 3);
+        assert_eq!(objects[0].id, 1);
+        assert_eq!(objects[1].id, 2);
+        assert_eq!(objects[2].id, 3);
+    }
+
+    /// A `<resources>` section with no `<object>` children should yield zero items.
+    #[test]
+    fn test_streaming_parser_empty_resources() {
+        let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+    <resources/>
+    <build/>
+</model>"#;
+        let cursor = Cursor::new(make_3mf(model_xml));
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+        assert!(objects.is_empty());
+    }
+
+    /// An object without a `<mesh>` child should have `mesh == None`.
+    #[test]
+    fn test_streaming_parser_object_without_mesh() {
+        let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+    <resources>
+        <object id="5" type="model"/>
+    </resources>
+    <build/>
+</model>"#;
+        let cursor = Cursor::new(make_3mf(model_xml));
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].id, 5);
+        assert!(objects[0].mesh.is_none());
+    }
+
+    /// `parse_full()` should return a complete `Model` with all resources.
+    #[test]
+    fn test_streaming_parser_parse_full() {
+        let cursor = Cursor::new(make_3mf(&model_with_n_objects(2)));
+        let parser = StreamingParser::new(cursor).unwrap();
+        let model = parser.parse_full().unwrap();
+
+        assert_eq!(model.unit, "millimeter");
+        assert_eq!(model.resources.objects.len(), 2);
+        assert_eq!(model.resources.objects[0].id, 1);
+        assert_eq!(model.resources.objects[1].id, 2);
+    }
+
+    /// Parsed vertex coordinates must match the values in the XML exactly.
+    #[test]
+    fn test_streaming_parser_vertex_coordinates() {
+        let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+    <resources>
+        <object id="1" type="model">
+            <mesh>
+                <vertices>
+                    <vertex x="1.5" y="2.5" z="3.5"/>
+                    <vertex x="10.0" y="0.0" z="-5.0"/>
+                    <vertex x="0.0" y="7.25" z="0.0"/>
+                </vertices>
+                <triangles>
+                    <triangle v1="0" v2="1" v3="2"/>
+                </triangles>
+            </mesh>
+        </object>
+    </resources>
+    <build><item objectid="1"/></build>
+</model>"#;
+        let cursor = Cursor::new(make_3mf(model_xml));
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+
+        let mesh = objects[0].mesh.as_ref().unwrap();
+        assert_eq!(mesh.vertices.len(), 3);
+        assert_eq!(mesh.vertices[0].x, 1.5);
+        assert_eq!(mesh.vertices[0].y, 2.5);
+        assert_eq!(mesh.vertices[0].z, 3.5);
+        assert_eq!(mesh.vertices[1].x, 10.0);
+        assert_eq!(mesh.vertices[1].y, 0.0);
+        assert_eq!(mesh.vertices[1].z, -5.0);
+        assert_eq!(mesh.vertices[2].x, 0.0);
+        assert_eq!(mesh.vertices[2].y, 7.25);
+        assert_eq!(mesh.vertices[2].z, 0.0);
+    }
+
+    /// Parsed triangle vertex indices must match the values in the XML exactly.
+    #[test]
+    fn test_streaming_parser_triangle_indices() {
+        let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
     <resources>
         <object id="1" type="model">
@@ -415,23 +580,151 @@ mod tests {
                     <vertex x="0" y="0" z="0"/>
                     <vertex x="1" y="0" z="0"/>
                     <vertex x="0" y="1" z="0"/>
+                    <vertex x="0" y="0" z="1"/>
                 </vertices>
                 <triangles>
                     <triangle v1="0" v2="1" v3="2"/>
+                    <triangle v1="0" v2="1" v3="3"/>
+                    <triangle v1="0" v2="2" v3="3"/>
+                    <triangle v1="1" v2="2" v3="3"/>
                 </triangles>
             </mesh>
         </object>
     </resources>
-    <build>
-        <item objectid="1"/>
-    </build>
+    <build><item objectid="1"/></build>
 </model>"#;
+        let cursor = Cursor::new(make_3mf(model_xml));
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
 
-        zip.start_file("3D/3dmodel.model", SimpleFileOptions::default())
+        let mesh = objects[0].mesh.as_ref().unwrap();
+        assert_eq!(mesh.triangles.len(), 4);
+        assert_eq!(mesh.triangles[0].v1, 0);
+        assert_eq!(mesh.triangles[0].v2, 1);
+        assert_eq!(mesh.triangles[0].v3, 2);
+        assert_eq!(mesh.triangles[3].v1, 1);
+        assert_eq!(mesh.triangles[3].v2, 2);
+        assert_eq!(mesh.triangles[3].v3, 3);
+    }
+
+    /// `ObjectType` and `name` attributes must be parsed correctly.
+    #[test]
+    fn test_streaming_parser_object_type_and_name() {
+        let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+    <resources>
+        <object id="1" type="support" name="SupportPart"/>
+        <object id="2" type="model" name="MainBody"/>
+    </resources>
+    <build/>
+</model>"#;
+        let cursor = Cursor::new(make_3mf(model_xml));
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+
+        assert_eq!(objects.len(), 2);
+        assert_eq!(objects[0].object_type, ObjectType::Support);
+        assert_eq!(objects[0].name.as_deref(), Some("SupportPart"));
+        assert_eq!(objects[1].object_type, ObjectType::Model);
+        assert_eq!(objects[1].name.as_deref(), Some("MainBody"));
+    }
+
+    /// Once all objects have been yielded, calling `next()` again must return `None`.
+    #[test]
+    fn test_streaming_parser_iterator_exhaustion() {
+        let cursor = Cursor::new(create_test_3mf());
+        let mut parser = StreamingParser::new(cursor).unwrap();
+        let mut iter = parser.objects();
+
+        assert!(iter.next().is_some()); // the one object
+        assert!(iter.next().is_none()); // exhausted
+        assert!(iter.next().is_none()); // still exhausted
+    }
+
+    /// Providing bytes that are not a valid ZIP must return an error from `new()`.
+    #[test]
+    fn test_streaming_parser_invalid_zip() {
+        let garbage = Cursor::new(b"this is not a zip file".to_vec());
+        let result = StreamingParser::new(garbage);
+        assert!(result.is_err());
+    }
+
+    /// A ZIP with valid OPC structure but a missing model file must return an
+    /// error – either during construction (if the OPC reader validates references)
+    /// or when iterating.  Either way the caller must not silently get zero
+    /// objects.
+    #[test]
+    fn test_streaming_parser_missing_model_file() {
+        use std::io::Write;
+        use zip::ZipWriter;
+        use zip::write::SimpleFileOptions;
+
+        // Build a ZIP that has the OPC skeleton but no 3D/3dmodel.model entry.
+        let mut buf = Vec::new();
+        let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buf));
+
+        let content_types = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"#;
+        zip.start_file("[Content_Types].xml", SimpleFileOptions::default())
             .unwrap();
-        zip.write_all(model.as_bytes()).unwrap();
+        zip.write_all(content_types.as_bytes()).unwrap();
+
+        let rels = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"#;
+        zip.start_file("_rels/.rels", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(rels.as_bytes()).unwrap();
+        // Intentionally omit "3D/3dmodel.model".
 
         let writer = zip.finish().unwrap();
-        writer.into_inner().clone()
+        let bytes = writer.into_inner().clone();
+
+        let cursor = Cursor::new(bytes);
+        // The OPC reader validates that the model file referenced in .rels actually
+        // exists, so the error surfaces during StreamingParser::new().
+        let result = StreamingParser::new(cursor);
+        assert!(result.is_err(), "expected error for missing model file");
+    }
+
+    /// Using `StreamingParser` against a real `.3mf` file from the test suite.
+    #[test]
+    fn test_streaming_parser_real_file_box() {
+        use std::fs::File;
+
+        let file = File::open("test_files/core/box.3mf").expect("test file must exist");
+        let mut parser = StreamingParser::new(file).unwrap();
+        let objects: Vec<_> = parser.objects().collect::<Result<Vec<_>>>().unwrap();
+
+        // box.3mf has exactly one object with id 1
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].id, 1);
+
+        let mesh = objects[0].mesh.as_ref().expect("box must have a mesh");
+        assert_eq!(mesh.vertices.len(), 8); // a box has 8 corners
+        assert_eq!(mesh.triangles.len(), 12); // 2 triangles per face × 6 faces
+    }
+
+    /// `parse_full()` on a real file should agree with streaming object count.
+    #[test]
+    fn test_streaming_parser_parse_full_real_file() {
+        use std::fs::File;
+
+        let file = File::open("test_files/core/box.3mf").expect("test file must exist");
+        let parser = StreamingParser::new(file).unwrap();
+        let model = parser.parse_full().unwrap();
+
+        assert_eq!(model.unit, "millimeter");
+        assert_eq!(model.resources.objects.len(), 1);
+        let mesh = model.resources.objects[0]
+            .mesh
+            .as_ref()
+            .expect("box must have a mesh");
+        assert_eq!(mesh.vertices.len(), 8);
+        assert_eq!(mesh.triangles.len(), 12);
     }
 }
