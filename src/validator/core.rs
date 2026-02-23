@@ -659,7 +659,9 @@ pub(crate) fn validate_thumbnail_format(_model: &Model) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{BuildItem, Component, Extension, Mesh, Model, Object, ObjectType, Triangle, Vertex};
+    use crate::model::{
+        BuildItem, Component, Extension, Mesh, Model, Object, ObjectType, Triangle, Vertex,
+    };
 
     fn make_simple_mesh() -> Mesh {
         let mut mesh = Mesh::new();
@@ -677,7 +679,12 @@ mod tests {
         let model = Model::new(); // no objects, no build items
         let result = validate_required_structure(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("at least one object"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least one object")
+        );
     }
 
     #[test]
@@ -689,7 +696,12 @@ mod tests {
         // No build items added
         let result = validate_required_structure(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("at least one item"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("at least one item")
+        );
     }
 
     #[test]
@@ -727,7 +739,12 @@ mod tests {
 
         let result = validate_required_extensions(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("boolean operations"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("boolean operations")
+        );
     }
 
     #[test]
@@ -839,7 +856,12 @@ mod tests {
 
         let result = validate_mesh_manifold(1, &mesh);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Non-manifold edge"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Non-manifold edge")
+        );
     }
 
     #[test]
@@ -946,7 +968,12 @@ mod tests {
         model.resources.objects.push(obj);
         let result = validate_mesh_geometry(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Non-manifold edge"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Non-manifold edge")
+        );
     }
 
     // --- detect_circular_components ---

@@ -216,7 +216,10 @@ pub fn validate_boolean_operations(model: &Model) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{BooleanOpType, BooleanRef, BooleanShape, Component, Mesh, Model, Object, ObjectType, Triangle, Vertex};
+    use crate::model::{
+        BooleanOpType, BooleanRef, BooleanShape, Component, Mesh, Model, Object, ObjectType,
+        Triangle, Vertex,
+    };
 
     fn make_simple_mesh() -> Mesh {
         let mut mesh = Mesh::new();
@@ -289,10 +292,17 @@ mod tests {
     fn test_boolean_shape_with_components_fails() {
         let mut model = make_valid_boolean_model();
         // Add a component to the boolean object
-        model.resources.objects[2].components.push(Component::new(1));
+        model.resources.objects[2]
+            .components
+            .push(Component::new(1));
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("<booleanshape> and <components>"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("<booleanshape> and <components>")
+        );
     }
 
     #[test]
@@ -302,7 +312,12 @@ mod tests {
         model.resources.objects[2].mesh = Some(make_simple_mesh());
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("<booleanshape> and <mesh>"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("<booleanshape> and <mesh>")
+        );
     }
 
     #[test]
@@ -345,7 +360,12 @@ mod tests {
 
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("non-existent object ID 99"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("non-existent object ID 99")
+        );
     }
 
     #[test]
@@ -418,7 +438,12 @@ mod tests {
         // || (components.is_empty()) (false, because components has 1 entry) = false
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not define a shape"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not define a shape")
+        );
     }
 
     #[test]
@@ -440,7 +465,12 @@ mod tests {
 
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Boolean operand references non-existent"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Boolean operand references non-existent")
+        );
     }
 
     #[test]
@@ -488,7 +518,12 @@ mod tests {
         model.resources.objects[1].mesh = None;
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must be a triangle mesh"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be a triangle mesh")
+        );
     }
 
     #[test]
@@ -498,8 +533,7 @@ mod tests {
         // This tests that operand objects with boolean shapes are rejected.
         let mut model = make_valid_boolean_model();
         // Add a boolean shape to the operand object (which also keeps its mesh)
-        model.resources.objects[1].boolean_shape =
-            Some(BooleanShape::new(1, BooleanOpType::Union));
+        model.resources.objects[1].boolean_shape = Some(BooleanShape::new(1, BooleanOpType::Union));
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
         // The outer loop catches the object with both booleanshape and mesh first
@@ -515,7 +549,9 @@ mod tests {
     fn test_operand_has_components_fails() {
         let mut model = make_valid_boolean_model();
         // Add components to the operand object
-        model.resources.objects[1].components.push(Component::new(1));
+        model.resources.objects[1]
+            .components
+            .push(Component::new(1));
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("has components"));
@@ -528,7 +564,12 @@ mod tests {
         model.resources.objects[1].has_extension_shapes = true;
         let result = validate_boolean_operations(&model);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("extension shape elements"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("extension shape elements")
+        );
     }
 
     #[test]
