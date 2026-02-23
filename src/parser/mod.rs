@@ -1601,6 +1601,1541 @@ pub(crate) fn validate_attributes(
 mod tests {
     use super::*;
 
+    // ---- DTD rejection ----
+
+    #[test]
+    fn test_dtd_rejected_in_xml_string() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [<!ENTITY xxe "evil">]>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("DTD"));
+    }
+
+    // ---- Unit validation ----
+
+    #[test]
+    fn test_invalid_unit_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="parsec" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("parsec"));
+    }
+
+    #[test]
+    fn test_all_valid_units() {
+        for unit in &[
+            "micron",
+            "millimeter",
+            "centimeter",
+            "inch",
+            "foot",
+            "meter",
+        ] {
+            let xml = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="{unit}" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources></resources>
+  <build></build>
+</model>"#,
+                unit = unit
+            );
+            let model = parse_model_xml(&xml).unwrap();
+            assert_eq!(model.unit, *unit);
+        }
+    }
+
+    // ---- Metadata parsing ----
+
+    #[test]
+    fn test_metadata_with_preserve_true() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title" preserve="true">My Model</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let entry = model.metadata.iter().find(|m| m.name == "Title").unwrap();
+        assert_eq!(entry.preserve, Some(true));
+    }
+
+    #[test]
+    fn test_metadata_with_preserve_false() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title" preserve="0">My Model</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let entry = model.metadata.iter().find(|m| m.name == "Title").unwrap();
+        assert_eq!(entry.preserve, Some(false));
+    }
+
+    #[test]
+    fn test_metadata_with_invalid_preserve() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title" preserve="maybe">My Model</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("preserve"));
+    }
+
+    #[test]
+    fn test_metadata_with_namespaced_name_valid() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:foo="http://example.com/ns">
+  <metadata name="foo:Author">Jane</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let entry = model
+            .metadata
+            .iter()
+            .find(|m| m.name == "foo:Author")
+            .unwrap();
+        assert_eq!(entry.value, "Jane");
+    }
+
+    #[test]
+    fn test_metadata_with_undeclared_namespace_prefix_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="bar:Author">Jane</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("bar"));
+    }
+
+    #[test]
+    fn test_metadata_with_xml_prefix_allowed() {
+        // xml: prefix is always valid without declaration
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="xml:Author">Jane</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert!(model.metadata.iter().any(|m| m.name == "xml:Author"));
+    }
+
+    #[test]
+    fn test_metadata_duplicate_name_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title">First</metadata>
+  <metadata name="Title">Second</metadata>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Duplicate"));
+    }
+
+    // ---- Required / recommended extensions ----
+
+    #[test]
+    fn test_recommendedextensions_valid() {
+        // recommendedextensions is allowed if non-empty
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+  recommendedextensions="m">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        assert!(parse_model_xml(xml).is_ok());
+    }
+
+    #[test]
+    fn test_empty_recommendedextensions_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  recommendedextensions="">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("recommendedextensions")
+        );
+    }
+
+    #[test]
+    fn test_requiredextensions_via_namespace_prefix() {
+        // requiredextensions can reference a prefix that maps to a known namespace
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+  requiredextensions="m">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert!(!model.required_extensions.is_empty());
+    }
+
+    #[test]
+    fn test_requiredextensions_unknown_rejected() {
+        let config = ParserConfig::default(); // No extensions enabled
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+  requiredextensions="m">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml_with_config(xml, config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_duplicate_required_recommended_extension_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+  requiredextensions="m"
+  recommendedextensions="m">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("both"));
+    }
+
+    #[test]
+    fn test_requiredextensions_direct_uri() {
+        // requiredextensions can contain a direct namespace URI
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  requiredextensions="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert!(!model.required_extensions.is_empty());
+    }
+
+    #[test]
+    fn test_requiredextensions_unknown_uri_tracked_as_custom() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:x="http://example.com/custom/extension"
+  requiredextensions="x">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        // This should fail because the custom extension is required but not registered
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    // ---- Multiple / missing required elements ----
+
+    #[test]
+    fn test_multiple_resources_elements_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources></resources>
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("exactly one <resources>")
+        );
+    }
+
+    #[test]
+    fn test_multiple_build_elements_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources></resources>
+  <build></build>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("exactly one <build>")
+        );
+    }
+
+    #[test]
+    fn test_missing_resources_element_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("<resources>"));
+    }
+
+    #[test]
+    fn test_missing_build_element_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources></resources>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("<build>"));
+    }
+
+    // ---- Production extension on build element ----
+
+    #[test]
+    fn test_build_with_production_uuid() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06">
+  <resources></resources>
+  <build p:UUID="12345678-1234-1234-1234-123456789012"></build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert!(model.build.production_uuid.is_some());
+    }
+
+    // ---- Colorgroup parsing ----
+
+    #[test]
+    fn test_parse_colorgroup() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources>
+    <colorgroup id="1">
+      <color color="#FF0000"/>
+      <color color="#00FF00"/>
+    </colorgroup>
+    <object id="2" pid="1" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"##;
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.color_groups.len(), 1);
+        assert_eq!(model.resources.color_groups[0].colors.len(), 2);
+        assert_eq!(model.resources.color_groups[0].colors[0], (255, 0, 0, 255));
+    }
+
+    // ---- Beamlattice parsing ----
+
+    #[test]
+    fn test_parse_beamlattice() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:b="http://schemas.microsoft.com/3dmanufacturing/beamlattice/2017/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01" cap="sphere">
+          <beams>
+            <beam v1="0" v2="1" r1="1.5" r2="1.5"/>
+            <beam v1="1" v2="2"/>
+          </beams>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        assert_eq!(beamset.beams.len(), 2);
+        assert_eq!(beamset.radius, 1.0);
+    }
+
+    #[test]
+    fn test_beamlattice_invalid_radius_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="-1.0" minlength="0.01">
+          <beams/>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("radius"));
+    }
+
+    #[test]
+    fn test_beamlattice_invalid_minlength_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="-1.0">
+          <beams/>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("minlength"));
+    }
+
+    #[test]
+    fn test_beam_r2_without_r1_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01">
+          <beams>
+            <beam v1="0" v2="1" r2="2.0"/>
+          </beams>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("r1"));
+    }
+
+    #[test]
+    fn test_beam_negative_r1_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01">
+          <beams>
+            <beam v1="0" v2="1" r1="-1.0"/>
+          </beams>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("r1"));
+    }
+
+    #[test]
+    fn test_beam_p2_without_p1_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01">
+          <beams>
+            <beam v1="0" v2="1" p2="5"/>
+          </beams>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("p1"));
+    }
+
+    #[test]
+    fn test_beamlattice_with_beamsets_and_ballsets() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01" ballmode="all" ballradius="2.0">
+          <beams>
+            <beam v1="0" v2="1"/>
+            <beam v1="1" v2="2"/>
+          </beams>
+          <balls>
+            <ball vindex="0"/>
+            <ball vindex="1" r="1.5"/>
+          </balls>
+          <beamsets>
+            <beamset>
+              <ref index="0"/>
+            </beamset>
+          </beamsets>
+          <ballsets>
+            <ballset>
+              <ref index="0"/>
+              <ballref index="1"/>
+            </ballset>
+          </ballsets>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        assert_eq!(beamset.beams.len(), 2);
+        assert_eq!(beamset.balls.len(), 2);
+        assert!(!beamset.beam_set_refs.is_empty());
+        assert!(!beamset.ball_set_refs.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_beamlattice_elements_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01">
+          <beams/>
+          <beamlattice radius="2.0" minlength="0.01">
+            <beams/>
+          </beamlattice>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    // ---- Slice stack parsing ----
+
+    #[test]
+    fn test_parse_slicestack_with_slices() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:s="http://schemas.microsoft.com/3dmanufacturing/slice/2015/07">
+  <resources>
+    <slicestack id="1" zbottom="0.0">
+      <slice ztop="1.0">
+        <vertices>
+          <vertex x="0" y="0"/>
+          <vertex x="1" y="0"/>
+          <vertex x="1" y="1"/>
+          <vertex x="0" y="1"/>
+        </vertices>
+        <polygon startv="0">
+          <segment v2="1"/>
+          <segment v2="2"/>
+          <segment v2="3"/>
+          <segment v2="0"/>
+        </polygon>
+      </slice>
+      <slice ztop="2.0"/>
+    </slicestack>
+    <object id="2" s:slicestackid="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.slice_stacks.len(), 1);
+        let stack = &model.resources.slice_stacks[0];
+        assert_eq!(stack.id, 1);
+        assert_eq!(stack.zbottom, 0.0);
+        assert_eq!(stack.slices.len(), 2);
+        let first_slice = &stack.slices[0];
+        assert_eq!(first_slice.ztop, 1.0);
+        assert_eq!(first_slice.vertices.len(), 4);
+        assert_eq!(first_slice.polygons.len(), 1);
+        assert_eq!(first_slice.polygons[0].segments.len(), 4);
+    }
+
+    #[test]
+    fn test_slicestack_missing_id_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <slicestack zbottom="0.0">
+    </slicestack>
+  </resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_slicestack_missing_zbottom_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <slicestack id="1">
+    </slicestack>
+  </resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_slice_missing_ztop_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <slicestack id="1" zbottom="0.0">
+      <slice>
+      </slice>
+    </slicestack>
+  </resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    // ---- Boolean shape parsing ----
+
+    #[test]
+    fn test_parse_boolean_shape() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="3">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <booleanshape objectid="1" operation="union">
+          <boolean objectid="2"/>
+        </booleanshape>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="3"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let obj3 = &model.resources.objects[2];
+        assert!(obj3.boolean_shape.is_some());
+        let shape = obj3.boolean_shape.as_ref().unwrap();
+        assert_eq!(shape.objectid, 1);
+        assert_eq!(shape.operands.len(), 1);
+        assert_eq!(shape.operands[0].objectid, 2);
+    }
+
+    #[test]
+    fn test_multiple_boolean_shapes_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <booleanshape objectid="1" operation="union">
+        </booleanshape>
+        <booleanshape objectid="1" operation="difference">
+        </booleanshape>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("one booleanshape"));
+    }
+
+    #[test]
+    fn test_boolean_shape_missing_objectid_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <booleanshape operation="union">
+        </booleanshape>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("objectid"));
+    }
+
+    #[test]
+    fn test_boolean_operand_missing_objectid_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <booleanshape objectid="1">
+          <boolean/>
+        </booleanshape>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("objectid"));
+    }
+
+    // ---- Trianglesets parsing ----
+
+    #[test]
+    fn test_parse_trianglesets() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+          <vertex x="1" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+          <triangle v1="1" v2="3" v3="2"/>
+        </triangles>
+        <trianglesets>
+          <triangleset name="group1">
+            <ref index="0"/>
+            <refrange startindex="0" endindex="1"/>
+          </triangleset>
+        </trianglesets>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        assert!(parse_model_xml(xml).is_ok());
+    }
+
+    #[test]
+    fn test_triangleset_empty_name_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <trianglesets>
+          <triangleset name="   ">
+          </triangleset>
+        </trianglesets>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("name"));
+    }
+
+    #[test]
+    fn test_triangleset_ref_out_of_bounds_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <trianglesets>
+          <triangleset name="g1">
+            <ref index="99"/>
+          </triangleset>
+        </trianglesets>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_triangleset_refrange_reversed_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+          <vertex x="1" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+          <triangle v1="1" v2="3" v3="2"/>
+        </triangles>
+        <trianglesets>
+          <triangleset name="g1">
+            <refrange startindex="1" endindex="0"/>
+          </triangleset>
+        </trianglesets>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("start index"));
+    }
+
+    #[test]
+    fn test_triangleset_refrange_out_of_bounds_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <trianglesets>
+          <triangleset name="g1">
+            <refrange startindex="0" endindex="99"/>
+          </triangleset>
+        </trianglesets>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    // ---- Object type parsing ----
+
+    #[test]
+    fn test_parse_all_object_types() {
+        for obj_type in &["model", "support", "solidsupport", "surface", "other"] {
+            let xml = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="{t}">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#,
+                t = obj_type
+            );
+            assert!(
+                parse_model_xml(&xml).is_ok(),
+                "Failed for type: {}",
+                obj_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_invalid_object_type_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="invalid_type">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid object type")
+        );
+    }
+
+    // ---- Vertex validation ----
+
+    #[test]
+    fn test_vertex_missing_x_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex y="0" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("x"));
+    }
+
+    #[test]
+    fn test_vertex_invalid_attribute_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0" w="1"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("w"));
+    }
+
+    #[test]
+    fn test_vertex_non_finite_x_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="inf" y="0" z="0"/>
+        </vertices>
+        <triangles/>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    // ---- Triangle validation ----
+
+    #[test]
+    fn test_triangle_missing_v1_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("v1"));
+    }
+
+    #[test]
+    fn test_triangle_invalid_attribute_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2" color="red"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("color"));
+    }
+
+    // ---- Build item transform validation ----
+
+    #[test]
+    fn test_build_item_wrong_transform_size_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1" transform="1 0 0 0 1 0 0 0 1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("12"));
+    }
+
+    #[test]
+    fn test_build_item_non_finite_transform_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1" transform="1 0 0 0 1 0 0 0 1 inf 0 0"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("finite"));
+    }
+
+    // ---- Helper function unit tests ----
+
+    #[test]
+    fn test_get_local_name_with_prefix() {
+        assert_eq!(get_local_name("m:colorgroup"), "colorgroup");
+        assert_eq!(get_local_name("p:UUID"), "UUID");
+        assert_eq!(get_local_name("s:slicestack"), "slicestack");
+    }
+
+    #[test]
+    fn test_get_local_name_without_prefix() {
+        assert_eq!(get_local_name("object"), "object");
+        assert_eq!(get_local_name("mesh"), "mesh");
+        assert_eq!(get_local_name("vertex"), "vertex");
+    }
+
+    #[test]
+    fn test_get_local_name_multiple_colons() {
+        // rfind should get the last colon
+        assert_eq!(get_local_name("a:b:c"), "c");
+    }
+
+    #[test]
+    fn test_validate_attribute_values_allows_uris() {
+        let mut attrs = HashMap::new();
+        attrs.insert("xmlns:foo".to_string(), "http://example.com".to_string());
+        attrs.insert("type".to_string(), "http://example.com/type".to_string());
+        let namespaces = HashMap::new();
+        assert!(validate_attribute_values(&attrs, &namespaces).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attribute_values_rejects_namespace_prefix_in_value() {
+        let mut attrs = HashMap::new();
+        attrs.insert("type".to_string(), "foo:bar".to_string());
+        let mut namespaces = HashMap::new();
+        namespaces.insert("foo".to_string(), "http://foo.com".to_string());
+        let result = validate_attribute_values(&attrs, &namespaces);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("foo"));
+    }
+
+    #[test]
+    fn test_validate_attribute_values_allows_identifier_with_prefix() {
+        let mut attrs = HashMap::new();
+        attrs.insert("identifier".to_string(), "foo:bar".to_string());
+        let mut namespaces = HashMap::new();
+        namespaces.insert("foo".to_string(), "http://foo.com".to_string());
+        // identifier is a QName attribute and should be allowed to have namespace prefix
+        assert!(validate_attribute_values(&attrs, &namespaces).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attribute_values_skips_xmlns() {
+        let mut attrs = HashMap::new();
+        attrs.insert("xmlns:foo".to_string(), "foo:namespace".to_string());
+        let mut namespaces = HashMap::new();
+        namespaces.insert("foo".to_string(), "http://foo.com".to_string());
+        // xmlns: attributes are skipped
+        assert!(validate_attribute_values(&attrs, &namespaces).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attributes_rejects_unknown_attribute() {
+        let mut attrs = HashMap::new();
+        attrs.insert("foo".to_string(), "bar".to_string());
+        let result = validate_attributes(&attrs, &["id", "name"], "object");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("foo"));
+    }
+
+    #[test]
+    fn test_validate_attributes_allows_known_attributes() {
+        let mut attrs = HashMap::new();
+        attrs.insert("id".to_string(), "1".to_string());
+        attrs.insert("name".to_string(), "test".to_string());
+        assert!(validate_attributes(&attrs, &["id", "name"], "object").is_ok());
+    }
+
+    #[test]
+    fn test_validate_attributes_skips_extension_attributes() {
+        let mut attrs = HashMap::new();
+        attrs.insert("id".to_string(), "1".to_string());
+        attrs.insert("p:UUID".to_string(), "some-uuid".to_string()); // extension attr
+        attrs.insert("xmlns:p".to_string(), "http://example.com".to_string()); // namespace decl
+        attrs.insert("xml:lang".to_string(), "en".to_string()); // xml: standard attr
+        assert!(validate_attributes(&attrs, &["id"], "object").is_ok());
+    }
+
+    #[test]
+    fn test_should_skip_attribute_xmlns() {
+        assert!(should_skip_attribute("xmlns"));
+        assert!(should_skip_attribute("xmlns:p"));
+        assert!(should_skip_attribute("xmlns:m"));
+    }
+
+    #[test]
+    fn test_should_skip_attribute_xml_lang() {
+        assert!(should_skip_attribute("xml:lang"));
+    }
+
+    #[test]
+    fn test_should_skip_attribute_extension_colon() {
+        assert!(should_skip_attribute("p:UUID"));
+        assert!(should_skip_attribute("m:colorid"));
+        assert!(should_skip_attribute("s:slicestackid"));
+    }
+
+    #[test]
+    fn test_should_not_skip_regular_attributes() {
+        assert!(!should_skip_attribute("id"));
+        assert!(!should_skip_attribute("name"));
+        assert!(!should_skip_attribute("type"));
+    }
+
+    #[test]
+    fn test_parse_required_extensions_with_namespaces_empty() {
+        let result = parse_required_extensions_with_namespaces("", &HashMap::new());
+        assert!(result.is_ok());
+        let (extensions, custom) = result.unwrap();
+        assert!(extensions.is_empty());
+        assert!(custom.is_empty());
+    }
+
+    #[test]
+    fn test_parse_required_extensions_with_namespaces_known_uri() {
+        let result = parse_required_extensions_with_namespaces(
+            "http://schemas.microsoft.com/3dmanufacturing/material/2015/02",
+            &HashMap::new(),
+        );
+        assert!(result.is_ok());
+        let (extensions, _) = result.unwrap();
+        assert!(!extensions.is_empty());
+    }
+
+    #[test]
+    fn test_parse_required_extensions_with_namespaces_prefix() {
+        let mut namespaces = HashMap::new();
+        namespaces.insert(
+            "m".to_string(),
+            "http://schemas.microsoft.com/3dmanufacturing/material/2015/02".to_string(),
+        );
+        let result = parse_required_extensions_with_namespaces("m", &namespaces);
+        assert!(result.is_ok());
+        let (extensions, _) = result.unwrap();
+        assert!(!extensions.is_empty());
+    }
+
+    #[test]
+    fn test_parse_required_extensions_unknown_uri_tracked() {
+        let result =
+            parse_required_extensions_with_namespaces("http://example.com/custom", &HashMap::new());
+        assert!(result.is_ok());
+        let (extensions, custom) = result.unwrap();
+        assert!(extensions.is_empty());
+        assert!(!custom.is_empty());
+    }
+
+    #[test]
+    fn test_validate_extensions_all_supported() {
+        let config = ParserConfig::with_all_extensions();
+        // An empty list should always be valid
+        assert!(validate_extensions(&[], &[], &config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_extensions_unsupported_extension() {
+        let config = ParserConfig::default();
+        let extensions = vec![crate::model::Extension::Material];
+        let result = validate_extensions(&extensions, &[], &config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_no_duplicate_extensions_ok() {
+        let namespaces = HashMap::new();
+        let result = validate_no_duplicate_extensions("m", "b", &namespaces);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_no_duplicate_extensions_duplicate_rejected() {
+        let namespaces = HashMap::new();
+        let result = validate_no_duplicate_extensions(
+            "http://example.com/ext",
+            "http://example.com/ext",
+            &namespaces,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("both"));
+    }
+
+    #[test]
+    fn test_validate_triangle_index_ok() {
+        let mut mesh = Mesh::new();
+        mesh.triangles.push(crate::model::Triangle::new(0, 1, 2));
+        mesh.triangles.push(crate::model::Triangle::new(1, 2, 3));
+        assert!(validate_triangle_index(&mesh, 0, "test").is_ok());
+        assert!(validate_triangle_index(&mesh, 1, "test").is_ok());
+    }
+
+    #[test]
+    fn test_validate_triangle_index_out_of_bounds() {
+        let mut mesh = Mesh::new();
+        mesh.triangles.push(crate::model::Triangle::new(0, 1, 2));
+        let result = validate_triangle_index(&mesh, 5, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    // ---- Unknown attribute on model element ----
+
+    #[test]
+    fn test_unknown_model_attribute_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  unknown_attr="foo">
+  <resources></resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unknown_attr"));
+    }
+
+    // ---- Already-existing tests ----
+
     #[test]
     fn test_parse_minimal_model() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>

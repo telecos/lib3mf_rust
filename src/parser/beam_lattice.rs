@@ -225,3 +225,226 @@ pub(super) fn parse_ball<R: std::io::BufRead>(
 
     Ok(ball)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::parse_model_xml;
+
+    fn mesh_with_beamlattice(beamlattice_attrs: &str, beams_content: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice {attrs}>
+          <beams>
+            {beams}
+          </beams>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#,
+            attrs = beamlattice_attrs,
+            beams = beams_content,
+        )
+    }
+
+    #[test]
+    fn test_parse_beamlattice_defaults() {
+        let xml = mesh_with_beamlattice("radius=\"1.0\" minlength=\"0.01\"", "");
+        let model = parse_model_xml(&xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        assert_eq!(beamset.radius, 1.0);
+        assert_eq!(beamset.min_length, 0.01);
+    }
+
+    #[test]
+    fn test_parse_beamlattice_with_cap_mode() {
+        let xml = mesh_with_beamlattice("radius=\"1.0\" minlength=\"0.01\" cap=\"hemisphere\"", "");
+        assert!(parse_model_xml(&xml).is_ok());
+    }
+
+    #[test]
+    fn test_parse_beamlattice_with_clipping_mesh() {
+        let xml = mesh_with_beamlattice(
+            "radius=\"1.0\" minlength=\"0.01\" clippingmesh=\"99\" clippingmode=\"inside\" representationmesh=\"100\"",
+            "",
+        );
+        let model = parse_model_xml(&xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        assert_eq!(beamset.clipping_mesh_id, Some(99));
+        assert_eq!(beamset.representation_mesh_id, Some(100));
+        assert!(beamset.clipping_mode.is_some());
+    }
+
+    #[test]
+    fn test_parse_beamlattice_with_property_pid() {
+        let xml = mesh_with_beamlattice(
+            "radius=\"1.0\" minlength=\"0.01\" pid=\"5\" pindex=\"2\"",
+            "",
+        );
+        let model = parse_model_xml(&xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        assert_eq!(beamset.property_id, Some(5));
+        assert_eq!(beamset.property_index, Some(2));
+    }
+
+    #[test]
+    fn test_parse_beam_with_p1_p2() {
+        let xml = mesh_with_beamlattice(
+            "radius=\"1.0\" minlength=\"0.01\"",
+            r#"<beam v1="0" v2="1" p1="0" p2="1" pid="5"/>"#,
+        );
+        let model = parse_model_xml(&xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        assert_eq!(beamset.beams[0].p1, Some(0));
+        assert_eq!(beamset.beams[0].p2, Some(1));
+    }
+
+    #[test]
+    fn test_beam_negative_r2_rejected() {
+        let xml = mesh_with_beamlattice(
+            "radius=\"1.0\" minlength=\"0.01\"",
+            r#"<beam v1="0" v2="1" r1="1.0" r2="-0.5"/>"#,
+        );
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("r2"));
+    }
+
+    #[test]
+    fn test_beam_missing_v1_rejected() {
+        let xml = mesh_with_beamlattice("radius=\"1.0\" minlength=\"0.01\"", r#"<beam v2="1"/>"#);
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("v1"));
+    }
+
+    #[test]
+    fn test_beam_missing_v2_rejected() {
+        let xml = mesh_with_beamlattice("radius=\"1.0\" minlength=\"0.01\"", r#"<beam v1="0"/>"#);
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("v2"));
+    }
+
+    #[test]
+    fn test_parse_ball_with_all_attributes() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01">
+          <beams>
+            <beam v1="0" v2="1"/>
+          </beams>
+          <balls>
+            <ball vindex="0" r="2.5" pid="3" p="1"/>
+          </balls>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let beamset = mesh.beamset.as_ref().unwrap();
+        let ball = &beamset.balls[0];
+        assert_eq!(ball.vindex, 0);
+        assert_eq!(ball.radius, Some(2.5));
+        assert_eq!(ball.property_id, Some(3));
+        assert_eq!(ball.property_index, Some(1));
+    }
+
+    #[test]
+    fn test_parse_ball_missing_vindex_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01">
+          <beams/>
+          <balls>
+            <ball r="1.0"/>
+          </balls>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("vindex"));
+    }
+
+    #[test]
+    fn test_beamlattice_ballradius_invalid_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+        <beamlattice radius="1.0" minlength="0.01" ballradius="-1.0">
+          <beams/>
+        </beamlattice>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("ballradius"));
+    }
+}

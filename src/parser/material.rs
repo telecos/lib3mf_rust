@@ -423,6 +423,7 @@ pub(super) fn parse_multi<R: std::io::BufRead>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::parse_model_xml;
 
     #[test]
     fn test_parse_color() {
@@ -438,5 +439,267 @@ mod tests {
         // Test invalid formats
         assert_eq!(parse_color("#FF"), None);
         assert_eq!(parse_color("FF0000"), Some((255, 0, 0, 255)));
+    }
+
+    #[test]
+    fn test_parse_color_black_white() {
+        assert_eq!(parse_color("#000000"), Some((0, 0, 0, 255)));
+        assert_eq!(parse_color("#FFFFFF"), Some((255, 255, 255, 255)));
+    }
+
+    #[test]
+    fn test_parse_color_zero_alpha() {
+        assert_eq!(parse_color("#FF000000"), Some((255, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_parse_base_materials_via_xml() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <basematerials id="1">
+      <base name="Red" displaycolor="#FF0000"/>
+      <base name="Green" displaycolor="#00FF00"/>
+      <base name="Transparent" displaycolor="#FFFFFF00"/>
+    </basematerials>
+    <object id="2" pid="1" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"##;
+        let model = parse_model_xml(xml).unwrap();
+        let group = &model.resources.base_material_groups[0];
+        assert_eq!(group.materials.len(), 3);
+        assert_eq!(group.materials[0].displaycolor, (255, 0, 0, 255));
+        assert_eq!(group.materials[1].displaycolor, (0, 255, 0, 255));
+        // Transparent - alpha = 0
+        assert_eq!(group.materials[2].displaycolor.3, 0);
+    }
+
+    #[test]
+    fn test_parse_texture2d_via_xml() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources>
+    <texture2d id="1" path="/3D/Textures/tex.png" contenttype="image/png"
+      tilestyleu="wrap" tilestylev="mirror" filter="linear"/>
+    <object id="2">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.texture2d_resources.len(), 1);
+        let tex = &model.resources.texture2d_resources[0];
+        assert_eq!(tex.id, 1);
+        assert_eq!(tex.path, "/3D/Textures/tex.png");
+        assert_eq!(tex.contenttype, "image/png");
+    }
+
+    #[test]
+    fn test_parse_texture2d_missing_id_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <texture2d path="/3D/Textures/tex.png" contenttype="image/png"/>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_texture2dgroup_with_tex2coords() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources>
+    <texture2d id="1" path="/3D/Textures/tex.png" contenttype="image/png"/>
+    <texture2dgroup id="2" texid="1">
+      <tex2coord u="0.0" v="0.0"/>
+      <tex2coord u="1.0" v="0.0"/>
+      <tex2coord u="0.5" v="1.0"/>
+    </texture2dgroup>
+    <object id="3" pid="2" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2" p1="0" p2="1" p3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="3"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.texture2d_groups.len(), 1);
+        let group = &model.resources.texture2d_groups[0];
+        assert_eq!(group.tex2coords.len(), 3);
+        assert_eq!(group.tex2coords[0].u, 0.0);
+        assert_eq!(group.tex2coords[1].u, 1.0);
+    }
+
+    #[test]
+    fn test_parse_compositematerials_via_xml() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources>
+    <basematerials id="1">
+      <base name="Red" displaycolor="#FF0000"/>
+      <base name="Blue" displaycolor="#0000FF"/>
+    </basematerials>
+    <compositematerials id="2" matid="1" matindices="0 1">
+      <composite values="0.5 0.5"/>
+      <composite values="0.8 0.2"/>
+    </compositematerials>
+    <object id="3" pid="2" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="3"/>
+  </build>
+</model>"##;
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.composite_materials.len(), 1);
+        assert_eq!(model.resources.composite_materials[0].composites.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_multiproperties_via_xml() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources>
+    <basematerials id="1">
+      <base name="Red" displaycolor="#FF0000"/>
+      <base name="Blue" displaycolor="#0000FF"/>
+    </basematerials>
+    <colorgroup id="2">
+      <color color="#FF0000"/>
+      <color color="#00FF00"/>
+    </colorgroup>
+    <multiproperties id="3" pids="1 2" blendmethods="mix">
+      <multi pindices="0 0"/>
+      <multi pindices="1 1"/>
+    </multiproperties>
+    <object id="4" pid="3" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="4"/>
+  </build>
+</model>"##;
+        let model = parse_model_xml(xml).unwrap();
+        assert_eq!(model.resources.multi_properties.len(), 1);
+        assert_eq!(model.resources.multi_properties[0].multis.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_tilestyles() {
+        // Test all tilestyle values
+        for (u_style, v_style) in &[
+            ("wrap", "wrap"),
+            ("mirror", "clamp"),
+            ("clamp", "none"),
+            ("none", "mirror"),
+        ] {
+            let xml = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <texture2d id="1" path="/3D/t.png" contenttype="image/png"
+      tilestyleu="{u}" tilestylev="{v}"/>
+    <object id="2">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build><item objectid="2"/></build>
+</model>"#,
+                u = u_style,
+                v = v_style
+            );
+            assert!(
+                parse_model_xml(&xml).is_ok(),
+                "Failed for tilestyleu={}, tilestylev={}",
+                u_style,
+                v_style
+            );
+        }
     }
 }
