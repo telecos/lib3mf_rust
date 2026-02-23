@@ -1019,3 +1019,412 @@ fn test_keystore_rsa_oaep_2009_algorithm_valid() {
         result.err()
     );
 }
+
+/// Helper: create a 3MF package with a keystore and an actual encrypted file,
+/// including an EncryptedFile relationship for EPX-2606 compliance.
+fn create_3mf_with_keystore_and_encrypted_file(
+    model_xml: &str,
+    keystore_xml: &str,
+    encrypted_file_path: &str,
+    encrypted_file_content: &[u8],
+) -> Vec<u8> {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    // Strip leading slash for use as ZIP entry name
+    let normalized = encrypted_file_path.trim_start_matches('/');
+
+    let mut buffer = Vec::new();
+    let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
+    let opts = SimpleFileOptions::default();
+
+    // [Content_Types].xml
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+    <Override PartName="/Secure/keystore.xml" ContentType="application/vnd.ms-package.3dmanufacturing-keystore+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    // _rels/.rels with keystore relationship AND EncryptedFile relationship
+    let rels_content = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+    <Relationship Id="rel1" Target="/Secure/keystore.xml" Type="http://schemas.microsoft.com/3dmanufacturing/2019/07/keystore"/>
+    <Relationship Id="rel2" Target="{}" Type="http://schemas.openxmlformats.org/package/2006/relationships/encryptedfile"/>
+</Relationships>"#,
+        encrypted_file_path
+    );
+    zip.add_directory("_rels/", opts).unwrap();
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(rels_content.as_bytes()).unwrap();
+
+    // 3D/3dmodel.model
+    zip.add_directory("3D/", opts).unwrap();
+    zip.start_file("3D/3dmodel.model", opts).unwrap();
+    zip.write_all(model_xml.as_bytes()).unwrap();
+
+    // Encrypted file (fake/placeholder content)
+    zip.start_file(normalized, opts).unwrap();
+    zip.write_all(encrypted_file_content).unwrap();
+
+    // Secure/keystore.xml
+    zip.add_directory("Secure/", opts).unwrap();
+    zip.start_file("Secure/keystore.xml", opts).unwrap();
+    zip.write_all(keystore_xml.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+    buffer
+}
+
+/// Test that cekparams with non-self-closing tag and iv/tag/aad child elements parses correctly.
+/// This exercises the Event::Start handler for cekparams and the Event::End handlers for
+/// iv, tag, aad, and cekparams in load_keystore.
+#[test]
+fn test_keystore_cekparams_with_iv_tag_aad() {
+    let keystore_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<keystore xmlns="http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" UUID="uuid-cek">
+    <consumer consumerid="consumer1" keyid="key1"></consumer>
+    <resourcedatagroup keyuuid="group-uuid-cek">
+        <accessright consumerindex="0">
+            <kekparams wrappingalgorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
+                       mgfalgorithm="http://www.w3.org/2009/xmlenc11#mgf1sha256"
+                       digestmethod="http://www.w3.org/2001/04/xmlenc#sha256"/>
+            <cipherdata><xenc:CipherValue xmlns:xenc="http://www.w3.org/2001/04/xmlenc#">AAAA</xenc:CipherValue></cipherdata>
+        </accessright>
+        <resourcedata path="/3D/enc.model">
+            <cekparams encryptionalgorithm="http://www.w3.org/2009/xmlenc11#aes256-gcm" compression="deflate">
+                <iv>dGVzdGl2MTIzNDU2</iv>
+                <tag>dGVzdHRhZzEyMzQ1Ng==</tag>
+                <aad>dGVzdGFhZA==</aad>
+            </cekparams>
+        </resourcedata>
+    </resourcedatagroup>
+</keystore>"#;
+
+    let buffer = create_3mf_with_keystore_and_encrypted_file(
+        MINIMAL_MODEL_XML,
+        keystore_xml,
+        "/3D/enc.model",
+        b"fake encrypted content",
+    );
+    let config = ParserConfig::new().with_extension(Extension::SecureContent);
+    let result = lib3mf::parser::parse_3mf_with_config(std::io::Cursor::new(&buffer), config);
+    assert!(
+        result.is_ok(),
+        "Expected cekparams with iv/tag/aad to parse successfully, got: {:?}",
+        result.err()
+    );
+    let model = result.unwrap();
+    let sc = model.secure_content.expect("Should have secure content");
+    assert_eq!(sc.resource_data_groups.len(), 1);
+    let group = &sc.resource_data_groups[0];
+    assert_eq!(group.resource_data.len(), 1);
+    let resource = &group.resource_data[0];
+    assert_eq!(resource.path, "/3D/enc.model");
+    assert_eq!(resource.cek_params.compression, "deflate");
+    assert!(
+        resource.cek_params.iv.is_some(),
+        "IV should be parsed from <iv> element"
+    );
+    assert!(
+        resource.cek_params.tag.is_some(),
+        "Tag should be parsed from <tag> element"
+    );
+    assert!(
+        resource.cek_params.aad.is_some(),
+        "AAD should be parsed from <aad> element"
+    );
+    assert_eq!(resource.cek_params.iv.as_deref(), Some("dGVzdGl2MTIzNDU2"));
+    assert_eq!(
+        resource.cek_params.tag.as_deref(),
+        Some("dGVzdHRhZzEyMzQ1Ng==")
+    );
+    assert_eq!(resource.cek_params.aad.as_deref(), Some("dGVzdGFhZA=="));
+}
+
+/// Test kekparams as a non-self-closing Start+End element pair.
+/// This exercises the Event::Start handler for kekparams (stores current_kek_params)
+/// and the Event::End handler for kekparams (moves it to current_access_right).
+#[test]
+fn test_keystore_kekparams_as_start_end_element() {
+    // Using <kekparams ...></kekparams> (non-self-closing) instead of <kekparams .../>
+    let keystore_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<keystore xmlns="http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" UUID="uuid-se">
+    <consumer consumerid="consumer1" keyid="key1"></consumer>
+    <resourcedatagroup keyuuid="group-uuid-se">
+        <accessright consumerindex="0">
+            <kekparams wrappingalgorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
+                       mgfalgorithm="http://www.w3.org/2009/xmlenc11#mgf1sha256"
+                       digestmethod="http://www.w3.org/2001/04/xmlenc#sha256"></kekparams>
+            <cipherdata><xenc:CipherValue xmlns:xenc="http://www.w3.org/2001/04/xmlenc#">CCCC</xenc:CipherValue></cipherdata>
+        </accessright>
+    </resourcedatagroup>
+</keystore>"#;
+
+    let buffer = create_3mf_with_keystore(MINIMAL_MODEL_XML, keystore_xml);
+    let config = ParserConfig::new().with_extension(Extension::SecureContent);
+    let result = lib3mf::parser::parse_3mf_with_config(std::io::Cursor::new(&buffer), config);
+    assert!(
+        result.is_ok(),
+        "Expected non-self-closing kekparams to parse successfully, got: {:?}",
+        result.err()
+    );
+    let model = result.unwrap();
+    let sc = model.secure_content.expect("Should have secure content");
+    let group = &sc.resource_data_groups[0];
+    assert_eq!(
+        group.access_rights[0].kek_params.wrapping_algorithm,
+        "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
+    );
+    assert_eq!(
+        group.access_rights[0].kek_params.mgf_algorithm.as_deref(),
+        Some("http://www.w3.org/2009/xmlenc11#mgf1sha256")
+    );
+    assert_eq!(
+        group.access_rights[0].kek_params.digest_method.as_deref(),
+        Some("http://www.w3.org/2001/04/xmlenc#sha256")
+    );
+}
+
+/// Test that a package with Secure/keystore.xml but no keystore relationship
+/// (fallback path) fails with EPX-2606 validation error.
+/// This exercises the fallback path in load_keystore (lines ~118-120).
+#[test]
+fn test_keystore_fallback_path_fails_without_relationship() {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    let keystore_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<keystore xmlns="http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" UUID="uuid-fb">
+</keystore>"#;
+
+    // Build a package that has Secure/keystore.xml but NO keystore relationship in _rels/.rels
+    // discover_keystore_path() returns None -> fallback picks up Secure/keystore.xml ->
+    // validate_keystore_relationship() fails because no proper relationship exists
+    let mut buffer = Vec::new();
+    let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
+    let opts = SimpleFileOptions::default();
+
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+    <Override PartName="/Secure/keystore.xml" ContentType="application/vnd.ms-package.3dmanufacturing-keystore+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    // _rels/.rels without keystore relationship (only model relationship)
+    zip.add_directory("_rels/", opts).unwrap();
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.add_directory("3D/", opts).unwrap();
+    zip.start_file("3D/3dmodel.model", opts).unwrap();
+    zip.write_all(MINIMAL_MODEL_XML.as_bytes()).unwrap();
+
+    zip.add_directory("Secure/", opts).unwrap();
+    zip.start_file("Secure/keystore.xml", opts).unwrap();
+    zip.write_all(keystore_xml.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let config = ParserConfig::new().with_extension(Extension::SecureContent);
+    let result = lib3mf::parser::parse_3mf_with_config(std::io::Cursor::new(&buffer), config);
+    // The fallback finds Secure/keystore.xml but then validate_keystore_relationship fails
+    assert!(
+        result.is_err(),
+        "Expected EPX-2606 error for missing keystore relationship"
+    );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("relationship") || msg.contains("EPX-2606") || msg.contains("keystore"),
+        "Error should mention missing relationship, got: {}",
+        msg
+    );
+}
+
+/// Test that a package with Secure/info.store but no relationship uses fallback path.
+/// This exercises the fallback branch in load_keystore (lines ~121).
+#[test]
+fn test_keystore_infostore_fallback_fails_without_relationship() {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    let keystore_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<keystore xmlns="http://schemas.microsoft.com/3dmanufacturing/securecontent/2019/07" UUID="uuid-is">
+</keystore>"#;
+
+    // Build a package with Secure/info.store but no keystore relationship
+    let mut buffer = Vec::new();
+    let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
+    let opts = SimpleFileOptions::default();
+
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    zip.add_directory("_rels/", opts).unwrap();
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.add_directory("3D/", opts).unwrap();
+    zip.start_file("3D/3dmodel.model", opts).unwrap();
+    zip.write_all(MINIMAL_MODEL_XML.as_bytes()).unwrap();
+
+    zip.add_directory("Secure/", opts).unwrap();
+    zip.start_file("Secure/info.store", opts).unwrap();
+    zip.write_all(keystore_xml.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    let config = ParserConfig::new().with_extension(Extension::SecureContent);
+    let result = lib3mf::parser::parse_3mf_with_config(std::io::Cursor::new(&buffer), config);
+    // Fallback picks up Secure/info.store, then validate_keystore_relationship fails
+    assert!(
+        result.is_err(),
+        "Expected EPX-2606 error for info.store without proper relationship"
+    );
+}
+
+/// Test load_file_with_decryption non-encrypted path via the slice parser.
+/// Creates a 3MF with a slice stack that references an external slice file (sliceref).
+/// The slice file is a regular (non-encrypted) file, exercising the non-encrypted path.
+#[test]
+fn test_load_file_via_slice_reference_non_encrypted() {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    // External slice file content
+    let slice_file_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+       xmlns:s="http://schemas.microsoft.com/3dmanufacturing/slice/2015/07">
+  <resources>
+    <s:slicestack id="5" zbottom="0">
+      <s:slice ztop="1.0">
+        <s:vertices>
+          <s:vertex x="0" y="0"/>
+          <s:vertex x="10" y="0"/>
+          <s:vertex x="0" y="10"/>
+        </s:vertices>
+        <s:polygon startv="0">
+          <s:segment v2="1"/>
+          <s:segment v2="2"/>
+          <s:segment v2="0"/>
+        </s:polygon>
+      </s:slice>
+    </s:slicestack>
+  </resources>
+  <build/>
+</model>"#;
+
+    // Main model references the slice stack via sliceref
+    let model_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US"
+    xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+    xmlns:s="http://schemas.microsoft.com/3dmanufacturing/slice/2015/07">
+  <resources>
+    <s:slicestack id="10" zbottom="0">
+      <s:sliceref slicestackid="5" slicepath="/2D/slices.model"/>
+    </s:slicestack>
+    <object id="1" type="model" s:slicestackid="10">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build><item objectid="1"/></build>
+</model>"#;
+
+    let mut buffer = Vec::new();
+    let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
+    let opts = SimpleFileOptions::default();
+
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    zip.add_directory("_rels/", opts).unwrap();
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.add_directory("3D/", opts).unwrap();
+    zip.start_file("3D/3dmodel.model", opts).unwrap();
+    zip.write_all(model_xml.as_bytes()).unwrap();
+
+    zip.add_directory("2D/", opts).unwrap();
+    zip.start_file("2D/slices.model", opts).unwrap();
+    zip.write_all(slice_file_xml.as_bytes()).unwrap();
+
+    zip.finish().unwrap();
+
+    // Parse with slice extension support - this calls load_slice_references which calls
+    // load_file_with_decryption for the non-encrypted "2D/slices.model" file
+    use lib3mf::Extension;
+    let config = lib3mf::ParserConfig::new().with_extension(Extension::Slice);
+    let result = lib3mf::parser::parse_3mf_with_config(std::io::Cursor::new(&buffer), config);
+    assert!(
+        result.is_ok(),
+        "Expected slice reference with non-encrypted file to succeed, got: {:?}",
+        result.err()
+    );
+    let model = result.unwrap();
+    // The external slices should be loaded into the main model
+    assert!(
+        !model.resources.slice_stacks.is_empty(),
+        "Slice stacks should be populated"
+    );
+    assert!(
+        !model.resources.slice_stacks[0].slices.is_empty(),
+        "Slices should be loaded from external file"
+    );
+}

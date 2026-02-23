@@ -821,6 +821,8 @@ pub(super) fn load_file_with_decryption<R: Read + std::io::Seek>(
 /// Validate that an encrypted file can be loaded and decrypted
 ///
 /// This checks that:
+///
+/// This checks that:
 /// - The file exists in the package
 /// - The file can be decrypted using the test consumer keys
 /// - The decrypted content is valid
@@ -853,4 +855,349 @@ pub(super) fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
 
     // If we got here, decryption succeeded - the file is valid
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{AccessRight, CEKParams, Consumer, KEKParams, ResourceData, ResourceDataGroup};
+    use crate::opc::Package;
+    use std::io::{Cursor, Write};
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    /// Create a minimal valid 3MF ZIP package with optional extra files.
+    /// The package contains [Content_Types].xml, _rels/.rels, and 3D/3dmodel.model.
+    fn make_test_package(extra_files: &[(&str, &[u8])]) -> Vec<u8> {
+        let model_xml = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<model unit=\"millimeter\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
+<resources><object id=\"1\" type=\"model\">\
+<mesh><vertices>\
+<vertex x=\"0\" y=\"0\" z=\"0\"/>\
+<vertex x=\"1\" y=\"0\" z=\"0\"/>\
+<vertex x=\"0\" y=\"1\" z=\"0\"/>\
+</vertices><triangles><triangle v1=\"0\" v2=\"1\" v3=\"2\"/></triangles></mesh>\
+</object></resources><build><item objectid=\"1\"/></build></model>";
+
+        let content_types = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+<Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\
+</Types>";
+
+        let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+<Relationship Id=\"rId0\" Target=\"/3D/3dmodel.model\" \
+Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+</Relationships>";
+
+        let mut buf = Vec::new();
+        {
+            let mut zip = ZipWriter::new(Cursor::new(&mut buf));
+            let opts = SimpleFileOptions::default();
+            zip.start_file("[Content_Types].xml", opts).unwrap();
+            zip.write_all(content_types).unwrap();
+            zip.start_file("_rels/.rels", opts).unwrap();
+            zip.write_all(rels).unwrap();
+            zip.start_file("3D/3dmodel.model", opts).unwrap();
+            zip.write_all(model_xml).unwrap();
+            for (name, content) in extra_files {
+                zip.start_file(*name, opts).unwrap();
+                zip.write_all(content).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buf
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for validate_kekparams_attributes
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_validate_kekparams_empty_inputs() {
+        let mut sc = SecureContentInfo::default();
+        assert!(validate_kekparams_attributes("", "", "", &mut sc).is_ok());
+        // empty wrapping algorithm is not pushed
+        assert!(sc.wrapping_algorithms.is_empty());
+    }
+
+    #[test]
+    fn test_validate_kekparams_2009_wrapping_algorithm() {
+        let mut sc = SecureContentInfo::default();
+        assert!(
+            validate_kekparams_attributes(VALID_WRAPPING_ALGORITHM_2009, "", "", &mut sc).is_ok()
+        );
+        assert_eq!(sc.wrapping_algorithms[0], VALID_WRAPPING_ALGORITHM_2009);
+    }
+
+    #[test]
+    fn test_validate_kekparams_2001_wrapping_algorithm() {
+        let mut sc = SecureContentInfo::default();
+        assert!(
+            validate_kekparams_attributes(VALID_WRAPPING_ALGORITHM_2001, "", "", &mut sc).is_ok()
+        );
+        assert_eq!(sc.wrapping_algorithms[0], VALID_WRAPPING_ALGORITHM_2001);
+    }
+
+    #[test]
+    fn test_validate_kekparams_all_valid_mgf_algorithms() {
+        for mgf in VALID_MGF_ALGORITHMS {
+            let mut sc = SecureContentInfo::default();
+            assert!(
+                validate_kekparams_attributes("", mgf, "", &mut sc).is_ok(),
+                "Expected {} to be valid",
+                mgf
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_kekparams_all_valid_digest_methods() {
+        for digest in VALID_DIGEST_METHODS {
+            let mut sc = SecureContentInfo::default();
+            assert!(
+                validate_kekparams_attributes("", "", digest, &mut sc).is_ok(),
+                "Expected {} to be valid",
+                digest
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_kekparams_invalid_wrapping_algorithm() {
+        let mut sc = SecureContentInfo::default();
+        let result = validate_kekparams_attributes("http://invalid/algorithm", "", "", &mut sc);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("wrapping"));
+    }
+
+    #[test]
+    fn test_validate_kekparams_invalid_mgf_algorithm() {
+        let mut sc = SecureContentInfo::default();
+        let result = validate_kekparams_attributes("", "http://invalid/mgf", "", &mut sc);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("mgfalgorithm"));
+    }
+
+    #[test]
+    fn test_validate_kekparams_invalid_digest_method() {
+        let mut sc = SecureContentInfo::default();
+        let result = validate_kekparams_attributes("", "", "http://invalid/digest", &mut sc);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("digestmethod"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for load_file_with_decryption
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_load_file_non_encrypted_model_no_secure_content() {
+        // When model has no secure_content, is_encrypted is false -> load normally
+        let bytes = make_test_package(&[("extra/data.txt", b"hello world")]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let model = Model::new();
+        let config = ParserConfig::new();
+
+        let result =
+            load_file_with_decryption(&mut pkg, "extra/data.txt", "extra/data.txt", &model, &config);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_load_file_non_encrypted_path_not_in_encrypted_list() {
+        // When model has secure_content but the path is not in encrypted_files
+        let bytes = make_test_package(&[("3D/plain.model", b"<model/>")]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let mut model = Model::new();
+        let mut sc = SecureContentInfo::default();
+        sc.encrypted_files.push("/3D/other_file.model".to_string());
+        model.secure_content = Some(sc);
+        let config = ParserConfig::new();
+
+        let result =
+            load_file_with_decryption(&mut pkg, "3D/plain.model", "3D/plain.model", &model, &config);
+        assert!(result.is_ok(), "Expected non-encrypted load, got: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_load_file_encrypted_no_resource_data_found() {
+        // File is in encrypted_files, but no resource_data_group contains it
+        let bytes = make_test_package(&[("3D/enc.model", b"encrypted bytes")]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let mut model = Model::new();
+        let mut sc = SecureContentInfo::default();
+        sc.encrypted_files.push("/3D/enc.model".to_string());
+        sc.consumer_count = 1;
+        sc.consumers.push(Consumer {
+            consumer_id: TEST_CONSUMER_ID.to_string(),
+            key_id: None,
+            key_value: None,
+        });
+        // resource_data_groups is empty -> resource_data not found
+        model.secure_content = Some(sc);
+        let config = ParserConfig::new();
+
+        let result =
+            load_file_with_decryption(&mut pkg, "3D/enc.model", "/3D/enc.model", &model, &config);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("No resource data found"), "Got: {}", msg);
+    }
+
+    #[test]
+    fn test_load_file_encrypted_no_matching_access_right() {
+        // File is in encrypted_files, resource_data found, but consumer is not TEST_CONSUMER_ID
+        let bytes = make_test_package(&[("3D/enc.model", b"encrypted bytes")]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let mut model = Model::new();
+        let mut sc = SecureContentInfo::default();
+        sc.encrypted_files.push("/3D/enc.model".to_string());
+        sc.consumer_count = 1;
+        sc.consumers.push(Consumer {
+            consumer_id: "other_consumer".to_string(), // not TEST_CONSUMER_ID
+            key_id: None,
+            key_value: None,
+        });
+        sc.consumer_ids.push("other_consumer".to_string());
+        let group = ResourceDataGroup {
+            key_uuid: "key-uuid".to_string(),
+            access_rights: vec![AccessRight {
+                consumer_index: 0,
+                kek_params: KEKParams {
+                    wrapping_algorithm: String::new(),
+                    mgf_algorithm: None,
+                    digest_method: None,
+                },
+                cipher_value: "AAAA".to_string(),
+            }],
+            resource_data: vec![ResourceData {
+                path: "/3D/enc.model".to_string(),
+                cek_params: CEKParams {
+                    encryption_algorithm: "aes256".to_string(),
+                    compression: "none".to_string(),
+                    iv: None,
+                    tag: None,
+                    aad: None,
+                },
+            }],
+        };
+        sc.resource_data_groups.push(group);
+        model.secure_content = Some(sc);
+        let config = ParserConfig::new(); // no key provider
+
+        let result =
+            load_file_with_decryption(&mut pkg, "3D/enc.model", "/3D/enc.model", &model, &config);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("No access right"),
+            "Expected 'No access right' error, got: {}",
+            msg
+        );
+    }
+
+    #[cfg(not(feature = "crypto"))]
+    #[test]
+    fn test_load_file_encrypted_no_crypto_feature() {
+        // File is encrypted, access right matches test consumer, but crypto feature is disabled
+        let bytes = make_test_package(&[("3D/enc.model", b"encrypted bytes")]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let mut model = Model::new();
+        let mut sc = SecureContentInfo::default();
+        sc.encrypted_files.push("/3D/enc.model".to_string());
+        sc.consumer_count = 1;
+        sc.consumers.push(Consumer {
+            consumer_id: TEST_CONSUMER_ID.to_string(),
+            key_id: None,
+            key_value: None,
+        });
+        sc.consumer_ids.push(TEST_CONSUMER_ID.to_string());
+        let group = ResourceDataGroup {
+            key_uuid: "key-uuid".to_string(),
+            access_rights: vec![AccessRight {
+                consumer_index: 0,
+                kek_params: KEKParams {
+                    wrapping_algorithm: String::new(),
+                    mgf_algorithm: None,
+                    digest_method: None,
+                },
+                cipher_value: "AAAA".to_string(),
+            }],
+            resource_data: vec![ResourceData {
+                path: "/3D/enc.model".to_string(),
+                cek_params: CEKParams {
+                    encryption_algorithm: "aes256".to_string(),
+                    compression: "none".to_string(),
+                    iv: None,
+                    tag: None,
+                    aad: None,
+                },
+            }],
+        };
+        sc.resource_data_groups.push(group);
+        model.secure_content = Some(sc);
+        let config = ParserConfig::new(); // no key provider, no crypto feature
+
+        let result =
+            load_file_with_decryption(&mut pkg, "3D/enc.model", "/3D/enc.model", &model, &config);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("crypto") || msg.contains("feature"),
+            "Expected crypto-feature error, got: {}",
+            msg
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for validate_encrypted_file_can_be_loaded
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_validate_encrypted_file_not_found() {
+        // File does not exist in the package -> error
+        let bytes = make_test_package(&[]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let model = Model::new();
+        let config = ParserConfig::new();
+
+        let result = validate_encrypted_file_can_be_loaded(
+            &mut pkg,
+            "3D/missing.model",
+            "/3D/missing.model",
+            &model,
+            &config,
+            "Test context",
+        );
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("non-existent") || msg.contains("missing") || msg.contains("Test context"),
+            "Got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_validate_encrypted_file_success_non_encrypted() {
+        // File exists, model has no secure_content -> load_file_with_decryption takes non-encrypted
+        // path, succeeds. This exercises the success path of validate_encrypted_file_can_be_loaded.
+        let bytes = make_test_package(&[("3D/ext.model", b"<model/>")]);
+        let mut pkg = Package::open(Cursor::new(bytes)).unwrap();
+        let model = Model::new(); // no secure_content -> is_encrypted = false
+        let config = ParserConfig::new();
+
+        let result = validate_encrypted_file_can_be_loaded(
+            &mut pkg,
+            "3D/ext.model",
+            "/3D/ext.model",
+            &model,
+            &config,
+            "Test context",
+        );
+        assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+    }
 }
