@@ -404,3 +404,400 @@ pub(super) fn parse_component<R: std::io::BufRead>(
 
     Ok(component)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::parse_model_xml;
+
+    // All core parsing functions are tested through parse_model_xml which exercises
+    // the full XML parsing pipeline.
+
+    #[test]
+    fn test_parse_object_missing_id_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object>
+      <mesh>
+        <vertices/>
+        <triangles/>
+      </mesh>
+    </object>
+  </resources>
+  <build></build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("id"));
+    }
+
+    #[test]
+    fn test_parse_object_with_all_optional_attrs() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <basematerials id="5">
+      <base name="Red" displaycolor="#FF0000"/>
+    </basematerials>
+    <object id="1" name="cube" type="model" pid="5" pindex="0" basematerialid="5" partnumber="PN-001">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"##;
+        let model = parse_model_xml(xml).unwrap();
+        let obj = &model.resources.objects[0];
+        assert_eq!(obj.id, 1);
+        assert_eq!(obj.name, Some("cube".to_string()));
+        assert_eq!(obj.pid, Some(5));
+        assert_eq!(obj.pindex, Some(0));
+        assert_eq!(obj.basematerialid, Some(5));
+    }
+
+    #[test]
+    fn test_parse_object_with_production_uuid() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06">
+  <resources>
+    <object id="1" p:UUID="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let obj = &model.resources.objects[0];
+        assert!(obj.production.is_some());
+        assert!(obj.production.as_ref().unwrap().uuid.is_some());
+    }
+
+    #[test]
+    fn test_parse_vertex_missing_y_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" z="0"/>
+        </vertices>
+        <triangles/>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("y"));
+    }
+
+    #[test]
+    fn test_parse_vertex_missing_z_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0"/>
+        </vertices>
+        <triangles/>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("z"));
+    }
+
+    #[test]
+    fn test_parse_triangle_with_material_properties() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <basematerials id="1">
+      <base name="Red" displaycolor="#FF0000"/>
+      <base name="Green" displaycolor="#00FF00"/>
+      <base name="Blue" displaycolor="#0000FF"/>
+    </basematerials>
+    <object id="2" pid="1" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2" pid="1" p1="0" p2="1" p3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"##;
+        let model = parse_model_xml(xml).unwrap();
+        let mesh = model.resources.objects[0].mesh.as_ref().unwrap();
+        let tri = &mesh.triangles[0];
+        assert_eq!(tri.pid, Some(1));
+        assert_eq!(tri.p1, Some(0));
+        assert_eq!(tri.p2, Some(1));
+        assert_eq!(tri.p3, Some(2));
+    }
+
+    #[test]
+    fn test_parse_triangle_missing_v2_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("v2"));
+    }
+
+    #[test]
+    fn test_parse_triangle_missing_v3_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("v3"));
+    }
+
+    #[test]
+    fn test_parse_build_item_missing_objectid_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("objectid"));
+    }
+
+    #[test]
+    fn test_parse_build_item_with_transform() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1" transform="1 0 0 0 1 0 0 0 1 5 10 15"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let item = &model.build.items[0];
+        let t = item.transform.unwrap();
+        assert_eq!(t[9], 5.0);
+        assert_eq!(t[10], 10.0);
+        assert_eq!(t[11], 15.0);
+    }
+
+    #[test]
+    fn test_parse_component_missing_objectid_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <components>
+        <component/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("objectid"));
+    }
+
+    #[test]
+    fn test_parse_component_invalid_transform_size_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <components>
+        <component objectid="1" transform="1 0 0"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("12"));
+    }
+
+    #[test]
+    fn test_parse_component_non_finite_transform_rejected() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="2">
+      <components>
+        <component objectid="1" transform="1 0 0 0 1 0 0 0 1 nan 0 0"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="2"/>
+  </build>
+</model>"#;
+        let result = parse_model_xml(xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_parse_component_with_production_info() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06">
+  <resources>
+    <object id="1">
+      <components>
+        <component objectid="2" p:UUID="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>"#;
+        let model = parse_model_xml(xml).unwrap();
+        let obj = &model.resources.objects[0];
+        assert_eq!(obj.components.len(), 1);
+        assert!(obj.components[0].production.is_some());
+        assert!(
+            obj.components[0]
+                .production
+                .as_ref()
+                .unwrap()
+                .uuid
+                .is_some()
+        );
+    }
+}

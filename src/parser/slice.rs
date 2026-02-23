@@ -258,3 +258,191 @@ pub(super) fn parse_slice_segment<R: std::io::BufRead>(
         .parse::<usize>()?;
     Ok(SliceSegment::new(v2))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::parse_model_xml;
+
+    const CORE_NS: &str = r#"xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02""#;
+
+    fn model_with_slicestack(slicestack_body: &str, objects: &str, build: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" {ns}>
+  <resources>
+    {slicestack}
+    {objects}
+  </resources>
+  <build>
+    {build}
+  </build>
+</model>"#,
+            ns = CORE_NS,
+            slicestack = slicestack_body,
+            objects = objects,
+            build = build,
+        )
+    }
+
+    #[test]
+    fn test_parse_slicestack_basic() {
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.5">
+      <slice ztop="1.0"/>
+    </slicestack>"#,
+            r#"<object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>"#,
+            r#"<item objectid="1"/>"#,
+        );
+        let model = parse_model_xml(&xml).unwrap();
+        assert_eq!(model.resources.slice_stacks.len(), 1);
+        assert_eq!(model.resources.slice_stacks[0].id, 10);
+        assert_eq!(model.resources.slice_stacks[0].zbottom, 0.5);
+        assert_eq!(model.resources.slice_stacks[0].slices.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_sliceref_missing_slicestackid_rejected() {
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.0">
+      <sliceref slicepath="/2D/ext.model"/>
+    </slicestack>"#,
+            r#"<object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>"#,
+            r#"<item objectid="1"/>"#,
+        );
+        let result = parse_model_xml(&xml);
+        // parsing sliceref with missing slicestackid fails
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("slicestackid"));
+    }
+
+    #[test]
+    fn test_parse_sliceref_missing_slicepath_rejected() {
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.0">
+      <sliceref slicestackid="5"/>
+    </slicestack>"#,
+            r#"<object id="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>"#,
+            r#"<item objectid="1"/>"#,
+        );
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("slicepath"));
+    }
+
+    #[test]
+    fn test_parse_slice_vertex_missing_x_rejected() {
+        // Empty objects and build sections: these tests focus on slicestack parsing errors
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.0">
+      <slice ztop="1.0">
+        <vertices>
+          <vertex y="1"/>
+        </vertices>
+      </slice>
+    </slicestack>"#,
+            "",
+            "",
+        );
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("x"));
+    }
+
+    #[test]
+    fn test_parse_slice_vertex_missing_y_rejected() {
+        // Empty objects and build sections: these tests focus on slicestack parsing errors
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.0">
+      <slice ztop="1.0">
+        <vertices>
+          <vertex x="1"/>
+        </vertices>
+      </slice>
+    </slicestack>"#,
+            "",
+            "",
+        );
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("y"));
+    }
+
+    #[test]
+    fn test_parse_slice_polygon_missing_startv_rejected() {
+        // Empty objects and build sections: these tests focus on slicestack parsing errors
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.0">
+      <slice ztop="1.0">
+        <vertices>
+          <vertex x="0" y="0"/>
+          <vertex x="1" y="0"/>
+        </vertices>
+        <polygon>
+          <segment v2="1"/>
+        </polygon>
+      </slice>
+    </slicestack>"#,
+            "",
+            "",
+        );
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("startv"));
+    }
+
+    #[test]
+    fn test_parse_slice_segment_missing_v2_rejected() {
+        // Empty objects and build sections: these tests focus on slicestack parsing errors
+        let xml = model_with_slicestack(
+            r#"<slicestack id="10" zbottom="0.0">
+      <slice ztop="1.0">
+        <vertices>
+          <vertex x="0" y="0"/>
+          <vertex x="1" y="0"/>
+        </vertices>
+        <polygon startv="0">
+          <segment/>
+        </polygon>
+      </slice>
+    </slicestack>"#,
+            "",
+            "",
+        );
+        let result = parse_model_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("v2"));
+    }
+}
