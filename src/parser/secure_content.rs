@@ -858,7 +858,9 @@ pub(super) fn validate_encrypted_file_can_be_loaded<R: Read + std::io::Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{AccessRight, CEKParams, Consumer, KEKParams, ResourceData, ResourceDataGroup};
+    use crate::model::{
+        AccessRight, CEKParams, Consumer, KEKParams, ResourceData, ResourceDataGroup,
+    };
     use crate::opc::Package;
     use std::io::{Cursor, Write};
     use zip::ZipWriter;
@@ -998,8 +1000,13 @@ Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
         let model = Model::new();
         let config = ParserConfig::new();
 
-        let result =
-            load_file_with_decryption(&mut pkg, "extra/data.txt", "extra/data.txt", &model, &config);
+        let result = load_file_with_decryption(
+            &mut pkg,
+            "extra/data.txt",
+            "extra/data.txt",
+            &model,
+            &config,
+        );
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "hello world");
     }
@@ -1015,9 +1022,18 @@ Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
         model.secure_content = Some(sc);
         let config = ParserConfig::new();
 
-        let result =
-            load_file_with_decryption(&mut pkg, "3D/plain.model", "3D/plain.model", &model, &config);
-        assert!(result.is_ok(), "Expected non-encrypted load, got: {:?}", result.err());
+        let result = load_file_with_decryption(
+            &mut pkg,
+            "3D/plain.model",
+            "3D/plain.model",
+            &model,
+            &config,
+        );
+        assert!(
+            result.is_ok(),
+            "Expected non-encrypted load, got: {:?}",
+            result.err()
+        );
     }
 
     #[test]

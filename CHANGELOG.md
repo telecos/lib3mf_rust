@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-02-23
+
 ### Changed
 - **Streaming XML parsing from ZIP** — `parse_model_from_reader` now parses
   model XML directly from the ZIP decompression stream via
@@ -16,6 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where `Reader<BufRead>` could emit spurious `UnclosedTag` errors when `<` fell
   at the last byte of a `BufReader` buffer. This regression in 0.39.1 blocked
   true streamed XML parsing; 0.39.2 resolves it.
+
+### Fixed
+- **OOM prevention for malicious ZIP files** — Added size bounds to ZIP entry
+  reads (`get_model_reader`, `get_file`, `get_file_binary`) to prevent
+  decompression bomb attacks from causing out-of-memory crashes.
+- **Bounded streaming reader** — `get_model_reader()` now wraps the ZIP entry
+  in a `Read::take()` limiter to prevent unbounded memory consumption from
+  crafted compressed payloads.
+
+### Added
+- **Codecov coverage reporting** — CI now uploads per-crate coverage data to
+  Codecov with flag-based reporting for `lib3mf` and `lib3mf-slicer`.
+- **README badges** — Added coverage, conformance status, and crates.io badges.
+- **Increased test coverage** — Targeted unit tests across parser, OPC, writer,
+  streaming, and validator modules to reach ≥80% code coverage.
+- **Reduced allocations** — Optimized writer and parser hot paths to reduce
+  heap allocations.
 
 ## [0.1.4] - 2026-02-17
 

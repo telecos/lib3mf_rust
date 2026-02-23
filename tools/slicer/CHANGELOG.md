@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.1.1] - 2026-02-23
+
+### Added
+- **2D polygon boolean operations** — Full CSG support for union, intersection,
+  and difference operations on slice contours, enabling accurate rendering of
+  3MF Boolean Operations extension objects.
+- **Codecov coverage reporting** — CI now tracks per-crate code coverage with
+  Codecov flag-based reporting.
+- **README badges** — Added coverage badge linked to Codecov.
+- **Increased test coverage** — Comprehensive unit tests across color, config,
+  displacement, renderer, and slicer modules to reach ≥80% code coverage.
+
+### Changed
+- **Bumped lib3mf dependency to 0.1.5** — Picks up streaming XML parsing,
+  quick-xml 0.39.2 fix, and OOM prevention improvements.
+
 ## [0.1.0] - 2026-02-17
 
 ### Added
