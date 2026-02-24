@@ -23,7 +23,7 @@ name = "lib3mf-viewer"
 path = "src/main.rs"
 
 [dependencies]
-lib3mf = "0.1.3"
+lib3mf = "0.1.5"
 clap = { version = "4.5", features = ["derive"] }
 image = "0.25"
 kiss3d = { version = "0.35.1", package = "kiss3d-filedrop" }
