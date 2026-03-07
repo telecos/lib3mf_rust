@@ -1,0 +1,20 @@
+[package]
+name = "lib3mf-ffi"
+version = "0.1.0"
+edition = "2024"
+description = "C/C++ FFI bindings for the lib3mf 3MF file parser"
+license = "MIT"
+publish = false
+
+[lib]
+name = "lib3mf_ffi"
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+lib3mf = { path = ".." }
+
+[build-dependencies]
+cbindgen = "0.28"
+
+[dev-dependencies]
+tempfile = "3"
