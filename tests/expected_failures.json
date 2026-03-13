@@ -86,6 +86,29 @@
       "reason": "File is incorrect per official test suite. It declares production extension as required but the build element does not have a UUID attribute, which is mandatory when using the production extension. Suite 9 tests core extensions, but this file appears to have been mistakenly included or represents a known issue in the official test suite.",
       "issue_url": "",
       "date_added": "2026-01-23"
+    },
+    {
+      "test_case_id": "0409_01",
+      "suites": [
+        "suite2_core_prod_matl",
+        "suite3_core",
+        "suite5_core_prod",
+        "suite6_core_matl"
+      ],
+      "test_type": "negative",
+      "reason": "The file contains the xml:space=\"preserve\" attribute on the <model> element. This attribute was previously rejected as unknown, but the 3MF core schema defines xs:anyAttribute processContents=\"lax\" on all XML elements, meaning any attribute from any namespace must be silently ignored rather than causing a parse error. The test suite appears to test that xml:space should be rejected, but per the specification's anyAttribute rule this attribute is valid and must not cause rejection. Note: suite1 and suite4 variants of this test still fail correctly due to a separate invalid content type issue (E2004) in those files.",
+      "issue_url": "",
+      "date_added": "2026-03-13"
+    },
+    {
+      "test_case_id": "3316_01",
+      "suites": [
+        "suite11_Displacement"
+      ],
+      "test_type": "negative",
+      "reason": "The file contains a contenttype attribute (without namespace prefix) on some d:displacement2d elements. This attribute was previously rejected as unknown. The displacement extension schema defines xs:anyAttribute namespace=\"##other\" processContents=\"lax\" on the CT_Displacement2D complex type, which allows attributes from namespaces other than the displacement target namespace. Attributes without a namespace prefix (in no namespace) qualify as \"other\" and must be silently ignored rather than causing a parse error.",
+      "issue_url": "",
+      "date_added": "2026-03-13"
     }
   ]
 }
