@@ -103,6 +103,7 @@ fn get_content_type<R: Read + std::io::Seek>(
 /// Get thumbnail metadata from the package
 pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
     package: &mut Package<R>,
+    lenient: bool,
 ) -> Result<Option<crate::model::Thumbnail>> {
     // Check if relationships file exists
     if !has_file(package, RELS_PATH) {
@@ -144,7 +145,7 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
 
                     // Check if this is a thumbnail relationship
                     if let (Some(t), Some(rt)) = (target, rel_type)
-                        && rt == THUMBNAIL_REL_TYPE
+                        && (rt == THUMBNAIL_REL_TYPE || (lenient && rt.contains("thumbnail")))
                     {
                         let path = normalize_path(&t).to_string();
                         thumbnail_path = Some(path);
@@ -167,6 +168,9 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
 
     // Validate thumbnail file exists
     if !has_file(package, &thumb_path) {
+        if lenient {
+            return Ok(None);
+        }
         return Err(Error::InvalidFormat(format!(
             "Thumbnail relationship points to non-existent file: {}",
             thumb_path
@@ -174,10 +178,15 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
     }
 
     // Get content type from [Content_Types].xml
-    let content_type = get_content_type(package, &thumb_path)?;
+    let content_type = match get_content_type(package, &thumb_path) {
+        Ok(ct) => ct,
+        Err(_) if lenient => return Ok(None),
+        Err(e) => return Err(e),
+    };
 
     // N_XPX_0419_01: Validate JPEG thumbnails are not CMYK
-    if content_type.starts_with("image/jpeg") || content_type.starts_with("image/jpg") {
+    if !lenient && (content_type.starts_with("image/jpeg") || content_type.starts_with("image/jpg"))
+    {
         let data = get_file_binary(package, &thumb_path)?;
         // Check if it's a JPEG (starts with FF D8 FF)
         if data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
@@ -247,7 +256,13 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
 /// Validate no model-level thumbnails exist
 pub(super) fn validate_no_model_level_thumbnails<R: Read + std::io::Seek>(
     package: &mut Package<R>,
+    lenient: bool,
 ) -> Result<()> {
+    // In lenient mode, skip this entire validation
+    if lenient {
+        return Ok(());
+    }
+
     // First, check if there's a package-level thumbnail using proper XML parsing
     let has_package_thumbnail = if has_file(package, RELS_PATH) {
         let rels_content = get_file(package, RELS_PATH)?;

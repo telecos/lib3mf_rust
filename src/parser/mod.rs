@@ -65,7 +65,7 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     reader: R,
     config: ParserConfig,
 ) -> Result<Model> {
-    let mut package = Package::open(reader)?;
+    let mut package = Package::open_lenient(reader, config.is_lenient())?;
 
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;

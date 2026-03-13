@@ -15,8 +15,8 @@ mod volumetric;
 pub use core::{
     Build, BuildItem, Component, CustomElementHandler, CustomElementResult, CustomExtensionContext,
     CustomExtensionInfo, CustomValidationHandler, DisplacementMesh, DisplacementTriangle,
-    Extension, Mesh, MetadataEntry, Model, Object, ObjectType, ParserConfig, Resources, Thumbnail,
-    Triangle, Vertex,
+    Extension, Mesh, MetadataEntry, Model, Object, ObjectType, ParserConfig, Resources,
+    SpecConformance, Thumbnail, Triangle, Vertex,
 };
 
 // Re-export all public types from material module

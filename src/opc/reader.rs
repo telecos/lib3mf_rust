@@ -27,18 +27,21 @@ const MAX_PREALLOC_BYTES: usize = 64 * 1024;
 const MAX_FILE_CONTENT_BYTES: usize = 1024 * 1024 * 1024;
 
 /// Open a 3MF package from a reader
-pub(super) fn open<R: Read + std::io::Seek>(reader: R) -> Result<Package<R>> {
+pub(super) fn open<R: Read + std::io::Seek>(reader: R, lenient: bool) -> Result<Package<R>> {
     let archive = ZipArchive::new(reader)?;
-    let mut package = Package { archive };
+    let mut package = Package { archive, lenient };
 
     // Validate required OPC structure
-    validate_opc_structure(&mut package)?;
+    validate_opc_structure(&mut package, lenient)?;
 
     Ok(package)
 }
 
 /// Validate OPC package structure according to 3MF spec
-fn validate_opc_structure<R: Read + std::io::Seek>(package: &mut Package<R>) -> Result<()> {
+fn validate_opc_structure<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    lenient: bool,
+) -> Result<()> {
     // Validate required files exist
     if !has_file(package, CONTENT_TYPES_PATH) {
         return Err(Error::invalid_format_context(
@@ -65,19 +68,22 @@ fn validate_opc_structure<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
     }
 
     // Validate Content Types
-    validate_content_types(package)?;
+    validate_content_types(package, lenient)?;
 
     // Validate that model relationship exists and points to valid file
     validate_model_relationship(package)?;
 
     // Validate all relationships point to existing files
-    validate_all_relationships(package)?;
+    validate_all_relationships(package, lenient)?;
 
     Ok(())
 }
 
 /// Validate [Content_Types].xml structure
-fn validate_content_types<R: Read + std::io::Seek>(package: &mut Package<R>) -> Result<()> {
+fn validate_content_types<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    lenient: bool,
+) -> Result<()> {
     let content = get_file(package, CONTENT_TYPES_PATH)?;
     let mut reader = Reader::from_str(&content);
     reader.config_mut().trim_text(true);
@@ -115,14 +121,14 @@ fn validate_content_types<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
 
                     if let (Some(ext), Some(ct)) = (extension, content_type) {
                         // N_XPX_0206_01: Check for empty extension
-                        if ext.is_empty() {
+                        if !lenient && ext.is_empty() {
                             return Err(Error::InvalidFormat(
                                 "Content type Default element cannot have empty Extension attribute".to_string()
                             ));
                         }
 
                         // N_XPX_0205_01: Check for duplicate default extensions
-                        if !default_extensions.insert(ext.clone()) {
+                        if !lenient && !default_extensions.insert(ext.clone()) {
                             return Err(Error::InvalidFormat(format!(
                                 "Duplicate Default content type mapping for extension '{}'",
                                 ext
@@ -130,7 +136,7 @@ fn validate_content_types<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
                         }
 
                         // N_XPX_0404_04: Validate PNG content type
-                        if ext.eq_ignore_ascii_case("png") && ct != "image/png" {
+                        if !lenient && ext.eq_ignore_ascii_case("png") && ct != "image/png" {
                             return Err(Error::InvalidFormat(format!(
                                 "Invalid content type '{}' for PNG extension, must be 'image/png'",
                                 ct
@@ -189,7 +195,7 @@ fn validate_content_types<R: Read + std::io::Seek>(package: &mut Package<R>) -> 
 
                     if let (Some(pn), Some(ct)) = (part_name, content_type) {
                         // N_XPX_0205_02: Check for duplicate override parts
-                        if !override_parts.insert(pn.clone()) {
+                        if !lenient && !override_parts.insert(pn.clone()) {
                             return Err(Error::InvalidFormat(format!(
                                 "Duplicate Override content type for part '{}'",
                                 pn
@@ -287,7 +293,10 @@ fn validate_model_relationship<R: Read + std::io::Seek>(package: &mut Package<R>
 }
 
 /// Validate all relationships point to existing files
-fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>) -> Result<()> {
+fn validate_all_relationships<R: Read + std::io::Seek>(
+    package: &mut Package<R>,
+    lenient: bool,
+) -> Result<()> {
     // Collect all .rels files in the archive
     let mut rels_files = Vec::new();
     for i in 0..package.archive.len() {
@@ -321,7 +330,7 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                     };
 
                     // Verify the corresponding part file exists
-                    if !has_file(package, &expected_part_path) {
+                    if !lenient && !has_file(package, &expected_part_path) {
                         return Err(Error::InvalidFormat(format!(
                             "Relationship file '{}' references part '{}' which does not exist in the package.\n\
                              Per OPC specification, part-specific relationship files must have names matching their associated parts.",
@@ -370,7 +379,7 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
 
                         // N_XPX_0413_01: Check for duplicate relationship IDs
                         if let Some(ref id) = rel_id {
-                            if !relationship_ids.insert(id.clone()) {
+                            if !lenient && !relationship_ids.insert(id.clone()) {
                                 return Err(Error::InvalidFormat(format!(
                                     "Duplicate relationship ID '{}' in '{}'",
                                     id, rels_file
@@ -378,7 +387,8 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                             }
 
                             // N_XPX_0405_04: Check if ID starts with a digit (only for root .rels)
-                            if rels_file == RELS_PATH
+                            if !lenient
+                                && rels_file == RELS_PATH
                                 && let Some(first_char) = id.chars().next()
                                 && first_char.is_ascii_digit()
                             {
@@ -408,7 +418,8 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                             }
 
                             // N_XPX_0405_05: For root .rels, check for incorrect thumbnail relationship type
-                            if rels_file == RELS_PATH
+                            if !lenient
+                                && rels_file == RELS_PATH
                                 && rt.contains("thumbnail")
                                 && rt != THUMBNAIL_REL_TYPE
                             {
@@ -421,7 +432,8 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                             // N_XXM_0605_01: For 3dmodel.model.rels, check for incorrect texture relationship type
                             // If relationship target appears to be an image file (png/jpeg), it should use
                             // TEXTURE_REL_TYPE, not MODEL_REL_TYPE
-                            if rels_file.contains("3dmodel.model.rels")
+                            if !lenient
+                                && rels_file.contains("3dmodel.model.rels")
                                 && let Some(ref t) = target
                             {
                                 let target_lower = t.to_lowercase();
@@ -439,13 +451,13 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                             }
 
                             // Validate relationship Type - must not contain query strings or fragments
-                            if rt.contains('?') {
+                            if !lenient && rt.contains('?') {
                                 return Err(Error::InvalidFormat(format!(
                                     "Relationship Type in '{}' cannot contain query string: {}",
                                     rels_file, rt
                                 )));
                             }
-                            if rt.contains('#') {
+                            if !lenient && rt.contains('#') {
                                 return Err(Error::InvalidFormat(format!(
                                     "Relationship Type in '{}' cannot contain fragment identifier: {}",
                                     rels_file, rt
@@ -455,7 +467,7 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
 
                         if let Some(t) = target {
                             // N_XPX_0406_01 & N_XPX_0406_02: Check for duplicate targets
-                            if let Some(ref rt) = rel_type {
+                            if !lenient && let Some(ref rt) = rel_type {
                                 let key = (t.clone(), rt.clone());
                                 if relationship_targets
                                     .insert(key, rel_id.clone().unwrap_or_default())
@@ -503,7 +515,7 @@ fn validate_all_relationships<R: Read + std::io::Seek>(package: &mut Package<R>)
                                 }
                             };
 
-                            if !file_exists {
+                            if !file_exists && !lenient {
                                 return Err(Error::InvalidFormat(format!(
                                     "Relationship in '{}' points to non-existent file: {}",
                                     rels_file, path_with_slash
