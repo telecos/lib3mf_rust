@@ -65,7 +65,7 @@ pub fn parse_3mf_with_config<R: Read + std::io::Seek>(
     reader: R,
     config: ParserConfig,
 ) -> Result<Model> {
-    let mut package = Package::open(reader)?;
+    let mut package = Package::open_lenient(reader, config.is_lenient())?;
 
     // Extract thumbnail metadata
     let thumbnail = package.get_thumbnail_metadata()?;
@@ -1526,67 +1526,19 @@ pub(crate) fn validate_attribute_values(
     Ok(())
 }
 
-/// Check if an attribute key should be skipped during validation
+/// No-op attribute validation.
 ///
-/// Returns true for:
-/// - XML namespace declarations (xmlns, xmlns:prefix)
-/// - XML standard attribute xml:lang (xml:space is NOT allowed on 3MF elements)
-/// - Extension-namespaced attributes (p:UUID, m:colorid, s:slicestackid, etc.)
-fn should_skip_attribute(key: &str) -> bool {
-    // Allow xmlns and extension attributes (with colons)
-    // Allow xml:lang but NOT xml:space (xml:space is not allowed per 3MF spec)
-    if key.starts_with("xmlns") {
-        return true;
-    }
-    if key == "xml:lang" {
-        return true;
-    }
-    // Allow extension attributes (contain colon but not xml:)
-    if key.contains(':') && !key.starts_with("xml:") {
-        return true;
-    }
-    false
-}
-
-/// Validate that all attributes in the map are in the allowed list
+/// The 3MF spec uses `xs:anyAttribute` on all XML element definitions, which means
+/// any attribute from any namespace is allowed. Unknown attributes are simply ignored
+/// rather than causing a parse error.
 ///
-/// This function validates that only known/allowed attributes are present on an element,
-/// while allowing extension-specific attributes to pass through.
-///
-/// # Skipped Attributes
-/// - XML namespace attributes: `xmlns`, `xmlns:p`, `xmlns:m`, etc.
-/// - XML standard attribute: `xml:lang` (note: `xml:space` is NOT allowed per 3MF spec)
-/// - Extension attributes: `p:UUID`, `m:colorid`, `s:slicestackid`, etc.
-///
-/// # Examples
-/// ```ignore
-/// // These would be rejected:
-/// validate_attributes(&attrs, &["id", "name"], "object")?;
-/// // - attrs contains "thumbnail" -> Error
-/// // - attrs contains "foo" -> Error
-///
-/// // These would pass:
-/// // - attrs contains "id", "name", "p:UUID" -> OK (p:UUID skipped as extension attr)
-/// // - attrs contains "id", "xmlns:p" -> OK (xmlns:p skipped as namespace)
-/// ```
+/// The `allowed` and `element_name` parameters are retained for documentation purposes,
+/// indicating which attributes are defined by the spec for each element.
 pub(crate) fn validate_attributes(
-    attrs: &HashMap<String, String>,
-    allowed: &[&str],
-    element_name: &str,
+    _attrs: &HashMap<String, String>,
+    _allowed: &[&str],
+    _element_name: &str,
 ) -> Result<()> {
-    for key in attrs.keys() {
-        // Skip namespace and extension attributes
-        if should_skip_attribute(key) {
-            continue;
-        }
-
-        if !allowed.contains(&key.as_str()) {
-            return Err(Error::InvalidXml(format!(
-                "Unknown attribute '{}' on <{}>",
-                key, element_name
-            )));
-        }
-    }
     Ok(())
 }
 
@@ -2972,12 +2924,12 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_attributes_rejects_unknown_attribute() {
+    fn test_validate_attributes_allows_unknown_attributes() {
+        // Per 3MF spec, all elements use xs:anyAttribute, so unknown attributes are allowed
         let mut attrs = HashMap::new();
         attrs.insert("foo".to_string(), "bar".to_string());
         let result = validate_attributes(&attrs, &["id", "name"], "object");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("foo"));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -2986,42 +2938,6 @@ mod tests {
         attrs.insert("id".to_string(), "1".to_string());
         attrs.insert("name".to_string(), "test".to_string());
         assert!(validate_attributes(&attrs, &["id", "name"], "object").is_ok());
-    }
-
-    #[test]
-    fn test_validate_attributes_skips_extension_attributes() {
-        let mut attrs = HashMap::new();
-        attrs.insert("id".to_string(), "1".to_string());
-        attrs.insert("p:UUID".to_string(), "some-uuid".to_string()); // extension attr
-        attrs.insert("xmlns:p".to_string(), "http://example.com".to_string()); // namespace decl
-        attrs.insert("xml:lang".to_string(), "en".to_string()); // xml: standard attr
-        assert!(validate_attributes(&attrs, &["id"], "object").is_ok());
-    }
-
-    #[test]
-    fn test_should_skip_attribute_xmlns() {
-        assert!(should_skip_attribute("xmlns"));
-        assert!(should_skip_attribute("xmlns:p"));
-        assert!(should_skip_attribute("xmlns:m"));
-    }
-
-    #[test]
-    fn test_should_skip_attribute_xml_lang() {
-        assert!(should_skip_attribute("xml:lang"));
-    }
-
-    #[test]
-    fn test_should_skip_attribute_extension_colon() {
-        assert!(should_skip_attribute("p:UUID"));
-        assert!(should_skip_attribute("m:colorid"));
-        assert!(should_skip_attribute("s:slicestackid"));
-    }
-
-    #[test]
-    fn test_should_not_skip_regular_attributes() {
-        assert!(!should_skip_attribute("id"));
-        assert!(!should_skip_attribute("name"));
-        assert!(!should_skip_attribute("type"));
     }
 
     #[test]
@@ -3122,7 +3038,8 @@ mod tests {
     // ---- Unknown attribute on model element ----
 
     #[test]
-    fn test_unknown_model_attribute_rejected() {
+    fn test_unknown_model_attribute_accepted() {
+        // Per 3MF spec, all elements use xs:anyAttribute, so unknown attributes are allowed
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
   unknown_attr="foo">
@@ -3130,8 +3047,7 @@ mod tests {
   <build></build>
 </model>"#;
         let result = parse_model_xml(xml);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unknown_attr"));
+        assert!(result.is_ok());
     }
 
     // ---- Already-existing tests ----

@@ -99,7 +99,7 @@ impl<R: Read + Seek> StreamingParser<R> {
     /// # }
     /// ```
     pub fn new_with_config(reader: R, config: ParserConfig) -> Result<Self> {
-        let package = Package::open(reader)?;
+        let package = Package::open_lenient(reader, config.is_lenient())?;
         Ok(Self { package, config })
     }
 

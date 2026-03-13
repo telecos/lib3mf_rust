@@ -35,6 +35,33 @@ pub enum Extension {
     Volumetric,
 }
 
+/// Controls how strictly the parser enforces OPC packaging rules.
+///
+/// # Examples
+///
+/// ```
+/// use lib3mf::{ParserConfig, SpecConformance};
+///
+/// // Default is Strict — all OPC rules are enforced
+/// let config = ParserConfig::new();
+/// assert_eq!(config.spec_conformance(), SpecConformance::Strict);
+///
+/// // Lenient mode skips non-critical OPC packaging errors
+/// let config = ParserConfig::new()
+///     .with_spec_conformance(SpecConformance::Lenient);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum SpecConformance {
+    /// Enforce all OPC packaging and 3MF specification rules (default).
+    #[default]
+    Strict,
+    /// Skip non-critical OPC packaging validation errors while still
+    /// enforcing all 3D-model-critical checks. Use this to load files
+    /// from slicers that use non-standard packaging conventions
+    /// (e.g., BambuStudio, OrcaSlicer).
+    Lenient,
+}
+
 impl Extension {
     /// Get the namespace URI for this extension
     pub fn namespace(&self) -> &'static str {
@@ -134,6 +161,8 @@ pub struct ParserConfig {
     key_provider: Option<Arc<dyn crate::key_provider::KeyProvider>>,
     /// Extension registry for managing extension handlers
     registry: ExtensionRegistry,
+    /// Controls how strictly the parser enforces OPC packaging rules.
+    spec_conformance: SpecConformance,
 }
 
 impl ParserConfig {
@@ -146,6 +175,7 @@ impl ParserConfig {
             custom_extensions: HashMap::new(),
             key_provider: None,
             registry: ExtensionRegistry::new(),
+            spec_conformance: SpecConformance::Strict,
         }
     }
 
@@ -169,6 +199,7 @@ impl ParserConfig {
             custom_extensions: HashMap::new(),
             key_provider: None,
             registry: crate::extensions::create_default_registry(),
+            spec_conformance: SpecConformance::Strict,
         }
     }
 
@@ -453,6 +484,36 @@ impl ParserConfig {
     pub fn registry_mut(&mut self) -> &mut ExtensionRegistry {
         &mut self.registry
     }
+
+    /// Set the spec conformance level for OPC packaging validation.
+    ///
+    /// `SpecConformance::Strict` (the default) enforces all OPC rules.
+    /// `SpecConformance::Lenient` skips non-critical packaging errors
+    /// such as non-standard thumbnail relationship types, duplicate content
+    /// type mappings, and other checks that do not affect 3D model data.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lib3mf::{ParserConfig, SpecConformance};
+    ///
+    /// let config = ParserConfig::with_all_extensions()
+    ///     .with_spec_conformance(SpecConformance::Lenient);
+    /// ```
+    pub fn with_spec_conformance(mut self, conformance: SpecConformance) -> Self {
+        self.spec_conformance = conformance;
+        self
+    }
+
+    /// Get the current spec conformance level.
+    pub fn spec_conformance(&self) -> SpecConformance {
+        self.spec_conformance
+    }
+
+    /// Returns `true` when lenient OPC validation is active.
+    pub(crate) fn is_lenient(&self) -> bool {
+        self.spec_conformance == SpecConformance::Lenient
+    }
 }
 
 impl Default for ParserConfig {
@@ -466,6 +527,7 @@ impl std::fmt::Debug for ParserConfig {
         f.debug_struct("ParserConfig")
             .field("supported_extensions", &self.supported_extensions)
             .field("custom_extensions_count", &self.custom_extensions.len())
+            .field("spec_conformance", &self.spec_conformance)
             .finish()
     }
 }

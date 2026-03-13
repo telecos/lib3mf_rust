@@ -59,12 +59,21 @@ pub const TEXTURE_REL_TYPE: &str = "http://schemas.microsoft.com/3dmanufacturing
 /// Represents an OPC package (3MF file)
 pub struct Package<R: Read> {
     archive: ZipArchive<R>,
+    lenient: bool,
 }
 
 impl<R: Read + std::io::Seek> Package<R> {
     /// Open a 3MF package from a reader
     pub fn open(reader: R) -> Result<Self> {
-        reader::open(reader)
+        Self::open_lenient(reader, false)
+    }
+
+    /// Open a 3MF package from a reader with configurable conformance level.
+    ///
+    /// When `lenient` is `true`, non-critical OPC packaging errors are
+    /// silently ignored (e.g., non-standard thumbnail relationship types).
+    pub fn open_lenient(reader: R, lenient: bool) -> Result<Self> {
+        reader::open(reader, lenient)
     }
 
     /// Get the main 3D model file content
@@ -113,12 +122,12 @@ impl<R: Read + std::io::Seek> Package<R> {
 
     /// Get thumbnail metadata from the package
     pub fn get_thumbnail_metadata(&mut self) -> Result<Option<crate::model::Thumbnail>> {
-        thumbnail::get_thumbnail_metadata(self)
+        thumbnail::get_thumbnail_metadata(self, self.lenient)
     }
 
     /// Validate no model-level thumbnails exist
     pub fn validate_no_model_level_thumbnails(&mut self) -> Result<()> {
-        thumbnail::validate_no_model_level_thumbnails(self)
+        thumbnail::validate_no_model_level_thumbnails(self, self.lenient)
     }
 
     /// Discover keystore file path from package relationships
@@ -1382,6 +1391,247 @@ xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
         assert!(
             result.is_ok(),
             "Package with UTF-8 characters in XML should be accepted for compatibility"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Lenient mode tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_lenient_accepts_nonstandard_thumbnail_rel_type() {
+        // Simulates BambuLab/OrcaSlicer files that use a non-standard thumbnail relationship type
+        let content_types = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\
+  <Default Extension=\"png\" ContentType=\"image/png\"/>\
+</Types>";
+        let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+  <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+  <Relationship Target=\"/Metadata/thumbnail.png\" Id=\"rel1\" Type=\"http://schemas.bambulab.com/package/2021/cover-thumbnail-middle\"/>\
+</Relationships>";
+        let png: &[u8] = &[
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC,
+            0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", rels),
+            ("3D/3dmodel.model", MINIMAL_MODEL),
+            ("Metadata/thumbnail.png", png),
+        ]);
+
+        // Strict mode should reject this
+        let strict_result = Package::open(cursor.clone());
+        assert!(
+            strict_result.is_err(),
+            "Strict mode should reject non-standard thumbnail relationship type"
+        );
+
+        // Lenient mode should accept it
+        let lenient_result = Package::open_lenient(cursor, true);
+        assert!(
+            lenient_result.is_ok(),
+            "Lenient mode should accept non-standard thumbnail relationship type"
+        );
+    }
+
+    #[test]
+    fn test_lenient_accepts_duplicate_relationship_ids() {
+        let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+  <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+  <Relationship Target=\"/Metadata/something.xml\" Id=\"rel0\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\"/>\
+</Relationships>";
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", MINIMAL_CONTENT_TYPES),
+            ("_rels/.rels", rels),
+            ("3D/3dmodel.model", MINIMAL_MODEL),
+            ("Metadata/something.xml", b"<root/>"),
+        ]);
+
+        let strict_result = Package::open(cursor.clone());
+        assert!(
+            strict_result.is_err(),
+            "Strict mode should reject duplicate relationship IDs"
+        );
+
+        let lenient_result = Package::open_lenient(cursor, true);
+        assert!(
+            lenient_result.is_ok(),
+            "Lenient mode should accept duplicate relationship IDs"
+        );
+    }
+
+    #[test]
+    fn test_lenient_accepts_id_starting_with_digit() {
+        let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+  <Relationship Target=\"/3D/3dmodel.model\" Id=\"0rel\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+</Relationships>";
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", MINIMAL_CONTENT_TYPES),
+            ("_rels/.rels", rels),
+            ("3D/3dmodel.model", MINIMAL_MODEL),
+        ]);
+
+        let strict_result = Package::open(cursor.clone());
+        assert!(
+            strict_result.is_err(),
+            "Strict mode should reject ID starting with digit"
+        );
+
+        let lenient_result = Package::open_lenient(cursor, true);
+        assert!(
+            lenient_result.is_ok(),
+            "Lenient mode should accept ID starting with digit"
+        );
+    }
+
+    #[test]
+    fn test_lenient_accepts_duplicate_content_type_defaults() {
+        let content_types = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\
+</Types>";
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", MINIMAL_RELS),
+            ("3D/3dmodel.model", MINIMAL_MODEL),
+        ]);
+
+        let strict_result = Package::open(cursor.clone());
+        assert!(
+            strict_result.is_err(),
+            "Strict mode should reject duplicate content type defaults"
+        );
+
+        let lenient_result = Package::open_lenient(cursor, true);
+        assert!(
+            lenient_result.is_ok(),
+            "Lenient mode should accept duplicate content type defaults"
+        );
+    }
+
+    #[test]
+    fn test_lenient_accepts_nonexistent_relationship_target() {
+        let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+  <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+  <Relationship Target=\"/Metadata/missing.xml\" Id=\"rel1\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\"/>\
+</Relationships>";
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", MINIMAL_CONTENT_TYPES),
+            ("_rels/.rels", rels),
+            ("3D/3dmodel.model", MINIMAL_MODEL),
+        ]);
+
+        let strict_result = Package::open(cursor.clone());
+        assert!(
+            strict_result.is_err(),
+            "Strict mode should reject relationship pointing to non-existent file"
+        );
+
+        let lenient_result = Package::open_lenient(cursor, true);
+        assert!(
+            lenient_result.is_ok(),
+            "Lenient mode should accept relationship pointing to non-existent file"
+        );
+    }
+
+    #[test]
+    fn test_lenient_still_rejects_missing_model() {
+        // Even in lenient mode, critical model-related errors must still fail
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", MINIMAL_CONTENT_TYPES),
+            ("_rels/.rels", MINIMAL_RELS),
+            // Missing 3D/3dmodel.model
+        ]);
+
+        let lenient_result = Package::open_lenient(cursor, true);
+        assert!(
+            lenient_result.is_err(),
+            "Lenient mode should still reject packages missing the model file"
+        );
+    }
+
+    #[test]
+    fn test_lenient_parserconfig_integration() {
+        // Verify that parse_3mf_with_config properly threads SpecConformance through
+        use crate::model::{ParserConfig, SpecConformance};
+        use crate::parser::parse_3mf_with_config;
+
+        let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+  <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/>\
+  <Relationship Target=\"/Metadata/thumbnail.png\" Id=\"rel1\" Type=\"http://schemas.bambulab.com/package/2021/cover-thumbnail-middle\"/>\
+</Relationships>";
+        let content_types = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+  <Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/>\
+  <Default Extension=\"png\" ContentType=\"image/png\"/>\
+</Types>";
+        // A minimal model with one object (a single triangle) to pass model validation
+        let model = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<model unit=\"millimeter\" xml:lang=\"en-US\" \
+xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\
+  <resources>\
+    <object id=\"1\" type=\"model\">\
+      <mesh>\
+        <vertices>\
+          <vertex x=\"0\" y=\"0\" z=\"0\"/>\
+          <vertex x=\"1\" y=\"0\" z=\"0\"/>\
+          <vertex x=\"0\" y=\"1\" z=\"0\"/>\
+          <vertex x=\"0\" y=\"0\" z=\"1\"/>\
+        </vertices>\
+        <triangles>\
+          <triangle v1=\"0\" v2=\"1\" v3=\"2\"/>\
+          <triangle v1=\"0\" v2=\"1\" v3=\"3\"/>\
+          <triangle v1=\"0\" v2=\"2\" v3=\"3\"/>\
+          <triangle v1=\"1\" v2=\"2\" v3=\"3\"/>\
+        </triangles>\
+      </mesh>\
+    </object>\
+  </resources>\
+  <build><item objectid=\"1\"/></build>\
+</model>";
+        let png: &[u8] = &[
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC,
+            0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        let cursor = make_zip(&[
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", rels),
+            ("3D/3dmodel.model", model),
+            ("Metadata/thumbnail.png", png),
+        ]);
+
+        // Strict config should reject
+        let config = ParserConfig::with_all_extensions();
+        assert!(config.spec_conformance() == SpecConformance::Strict);
+        let strict_result = parse_3mf_with_config(cursor.clone(), config);
+        assert!(strict_result.is_err());
+
+        // Lenient config should accept
+        let config =
+            ParserConfig::with_all_extensions().with_spec_conformance(SpecConformance::Lenient);
+        assert!(config.is_lenient());
+        let lenient_result = parse_3mf_with_config(cursor, config);
+        assert!(
+            lenient_result.is_ok(),
+            "parse_3mf_with_config with Lenient should accept non-standard thumbnail: {:?}",
+            lenient_result.err()
         );
     }
 }

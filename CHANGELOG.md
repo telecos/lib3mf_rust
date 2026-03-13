@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-02-24
+
+### Added
+- **Lenient parsing mode (`SpecConformance`)** — New `SpecConformance` enum
+  (`Strict` / `Lenient`) on `ParserConfig` allows relaxing non-critical OPC
+  packaging validations while keeping all 3D-model-critical checks intact. Use
+  `ParserConfig::new().with_spec_conformance(SpecConformance::Lenient)` to load
+  files from slicers that use non-standard packaging conventions (e.g.,
+  BambuLab/OrcaSlicer thumbnail relationship types). Fixes [#462].
+
+  In lenient mode the following non-critical checks are skipped:
+  - Non-standard thumbnail and texture relationship types
+  - Duplicate relationship IDs, targets, and content-type mappings
+  - Relationship IDs starting with a digit
+  - Relationship types containing query strings or fragments
+  - Part-specific `.rels` referencing missing part files
+  - Non-existent relationship target files
+  - Thumbnail file or content-type lookup failures (returns `None`)
+  - CMYK JPEG thumbnail validation
+  - Model-level thumbnail without package-level thumbnail check
+
+  All model-critical validations (missing model relationship, missing model
+  file, XML parsing, 3D model structure) remain enforced regardless of mode.
+
+[#462]: https://github.com/telecos/lib3mf_rust/issues/462
+
 ## [0.1.5] - 2026-02-23
 
 ### Changed
