@@ -59,6 +59,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
       
+      - name: Disable Windows Defender on build dirs
+        if: runner.os == 'Windows'
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
+      
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -80,6 +86,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+      
+      - name: Disable Windows Defender on build dirs
+        if: runner.os == 'Windows'
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
       
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -131,6 +143,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+      
+      - name: Disable Windows Defender on build dirs
+        if: runner.os == 'Windows'
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
       
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
