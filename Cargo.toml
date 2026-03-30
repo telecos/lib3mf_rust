@@ -65,7 +65,7 @@ zip = { version = "8", default-features = false, features = [
 walkdir = "2.5"
 libtest-mimic = "0.8"
 criterion = "0.8"
-proptest = "1.10"
+proptest = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 image = "0.25"
