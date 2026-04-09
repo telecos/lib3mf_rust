@@ -51,7 +51,10 @@ jobs:
         run: sed -i 's/deflate-flate2-zlib-rs/deflate-flate2/g' Cargo.toml
 
       - name: Run Miri on lib3mf
-        run: cargo +nightly miri test --lib
+        # Use --no-default-features to exclude mesh-ops and polygon-ops which
+        # depend on native FFI libraries (clipper2, parry3d) that Miri cannot
+        # interpret. Core parsing/writing/validation logic is still fully tested.
+        run: cargo +nightly miri test --lib --no-default-features
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-tree-borrows"
 
