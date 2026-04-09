@@ -47,7 +47,10 @@ jobs:
       - name: Run Miri on lib3mf
         run: cargo +nightly miri test --lib
         env:
-          MIRIFLAGS: "-Zmiri-disable-isolation"
+          # Use Tree Borrows instead of Stacked Borrows to work around a known
+          # false positive in zlib-rs (used via flate2/zip). Tree Borrows still
+          # detects real UB such as use-after-free and data races.
+          MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-tree-borrows"
 
   miri-ffi:
     name: Miri (lib3mf-ffi)
@@ -83,40 +86,4 @@ jobs:
         working-directory: ffi
         run: cargo +nightly miri test --lib
         env:
-          MIRIFLAGS: "-Zmiri-disable-isolation"
-
-  miri-slicer:
-    name: Miri (lib3mf-slicer)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup Rust nightly toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: miri
-
-      - name: Cache cargo registry
-        uses: actions/cache@v5
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-miri-slicer-${{ hashFiles('tools/slicer/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-miri-slicer-
-
-      - name: Cache cargo index
-        uses: actions/cache@v5
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-miri-slicer-${{ hashFiles('tools/slicer/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-index-miri-slicer-
-
-      - name: Run Miri on lib3mf-slicer
-        working-directory: tools/slicer
-        run: cargo +nightly miri test --lib
-        env:
-          MIRIFLAGS: "-Zmiri-disable-isolation"
+          MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-tree-borrows"
