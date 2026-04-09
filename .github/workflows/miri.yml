@@ -1,0 +1,122 @@
+name: Miri
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  miri-lib3mf:
+    name: Miri (lib3mf)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-miri-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-miri-
+
+      - name: Cache cargo index
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-miri-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-miri-
+
+      - name: Run Miri on lib3mf
+        run: cargo +nightly miri test --lib
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
+
+  miri-ffi:
+    name: Miri (lib3mf-ffi)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-miri-ffi-${{ hashFiles('ffi/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-miri-ffi-
+
+      - name: Cache cargo index
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-miri-ffi-${{ hashFiles('ffi/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-miri-ffi-
+
+      - name: Run Miri on lib3mf-ffi
+        working-directory: ffi
+        run: cargo +nightly miri test --lib
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
+
+  miri-slicer:
+    name: Miri (lib3mf-slicer)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-miri-slicer-${{ hashFiles('tools/slicer/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-miri-slicer-
+
+      - name: Cache cargo index
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-miri-slicer-${{ hashFiles('tools/slicer/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-miri-slicer-
+
+      - name: Run Miri on lib3mf-slicer
+        working-directory: tools/slicer
+        run: cargo +nightly miri test --lib
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
