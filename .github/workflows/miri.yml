@@ -1,0 +1,95 @@
+name: Miri
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  miri-lib3mf:
+    name: Miri (lib3mf)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-miri-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-miri-
+
+      - name: Cache cargo index
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-miri-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-miri-
+
+      - name: Switch zip backend to pure-Rust miniz_oxide for Miri compatibility
+        # zlib-rs contains unsafe allocator code that Miri flags as UB.
+        # Replace with the pure-Rust miniz_oxide backend (deflate-flate2)
+        # which is fully Miri-compatible.
+        run: sed -i 's/deflate-flate2-zlib-rs/deflate-flate2/g' Cargo.toml
+
+      - name: Run Miri on lib3mf
+        # Use --no-default-features to exclude mesh-ops and polygon-ops which
+        # depend on native FFI libraries (clipper2, parry3d) that Miri cannot
+        # interpret. Core parsing/writing/validation logic is still fully tested.
+        run: cargo +nightly miri test --lib --no-default-features
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-tree-borrows"
+
+  miri-ffi:
+    name: Miri (lib3mf-ffi)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust nightly toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-miri-ffi-${{ hashFiles('ffi/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-miri-ffi-
+
+      - name: Cache cargo index
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-miri-ffi-${{ hashFiles('ffi/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-miri-ffi-
+
+      - name: Run Miri on lib3mf-ffi
+        working-directory: ffi
+        run: cargo +nightly miri test --lib
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-tree-borrows"

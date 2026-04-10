@@ -73,9 +73,8 @@ fn clear_last_error() {
 fn store_temp_string(s: &str) -> *const c_char {
     TEMP_STRING.with(|ts| {
         let c = CString::new(s).unwrap_or_default();
-        let ptr = c.as_ptr();
         *ts.borrow_mut() = c;
-        ptr
+        ts.borrow().as_ptr()
     })
 }
 
