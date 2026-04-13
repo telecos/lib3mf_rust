@@ -451,9 +451,9 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "clipper2"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e9c96871d5c50dd16c0f9df018f701fc62bd4f1b73cea8efe1985df6ab3d7e6"
+checksum = "eb9c8be020eb163b25a763f2b58de1285f30c4e512a48808ee1d641d23cfe3e3"
 dependencies = [
  "clipper2c-sys",
  "libc",
@@ -462,9 +462,9 @@ dependencies = [
 
 [[package]]
 name = "clipper2c-sys"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc0fe1f9be1018d6be0fa3c79ab338d295fb0c0c501e4fe81bfdbe3a89a23098"
+checksum = "6801d5a9a1d30e747025ec2afdc841d51665028481d61b5c719d173e88211ea3"
 dependencies = [
  "cc",
  "libc",
