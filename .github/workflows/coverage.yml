@@ -33,7 +33,7 @@ jobs:
         run: cargo llvm-cov --features ci --lib --test core --test extensions --test validation --test infrastructure --lcov --output-path lcov-lib3mf.info
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6.0.0
+        uses: codecov/codecov-action@v6.0.1
         with:
           files: lcov-lib3mf.info
           flags: lib3mf
@@ -68,7 +68,7 @@ jobs:
         run: cargo llvm-cov --lcov --output-path ../../lcov-slicer.info
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6.0.0
+        uses: codecov/codecov-action@v6.0.1
         with:
           files: lcov-slicer.info
           flags: lib3mf-slicer
