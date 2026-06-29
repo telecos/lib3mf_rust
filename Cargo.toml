@@ -44,11 +44,11 @@ quick-xml = "0.40.1"
 thiserror = "2.0"
 # Cryptographic dependencies for SecureContent decryption (optional, enabled via 'crypto' feature)
 rsa = { version = "0.9", optional = true }
-aes-gcm = { version = "0.10", optional = true }
+aes-gcm = { version = "0.11", optional = true }
 base64 = { version = "0.22", optional = true }
 flate2 = { version = "1.1", optional = true }
-sha1 = { version = "0.10", optional = true }
-sha2 = { version = "0.10", optional = true }
+sha1 = { version = "0.11", optional = true }
+sha2 = { version = "0.11", optional = true }
 urlencoding = "2.1"
 # Geometry dependencies for advanced mesh operations (optional, enabled via 'mesh-ops' feature)
 parry3d = { version = "0.28", optional = true }
