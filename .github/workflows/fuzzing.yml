@@ -56,7 +56,7 @@ jobs:
         run: cargo install cargo-fuzz
       
       - name: Cache cargo registry
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-fuzz-${{ hashFiles('**/Cargo.lock') }}
@@ -64,7 +64,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-fuzz-
       
       - name: Cache cargo index
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-fuzz-${{ hashFiles('**/Cargo.lock') }}
@@ -72,7 +72,7 @@ jobs:
             ${{ runner.os }}-cargo-index-fuzz-
       
       - name: Cache fuzz build
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: fuzz/target
           key: ${{ runner.os }}-fuzz-build-${{ matrix.target }}-${{ hashFiles('fuzz/Cargo.lock') }}
@@ -223,19 +223,19 @@ jobs:
         run: cargo install cargo-fuzz
       
       - name: Cache cargo registry
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-fuzz-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo index
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-fuzz-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache fuzz build
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: fuzz/target
           key: ${{ runner.os }}-fuzz-build-long-${{ matrix.target }}-${{ hashFiles('fuzz/Cargo.lock') }}
