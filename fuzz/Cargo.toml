@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-quick-xml = "0.40"
+quick-xml = "0.41"
 
 [dependencies.lib3mf]
 path = ".."
