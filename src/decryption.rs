@@ -310,7 +310,12 @@ fn decrypt_aes_gcm(ciphertext: &[u8], cek: &[u8], params: &CEKParams) -> Result<
     let cipher = Aes256Gcm::new_from_slice(cek)
         .map_err(|e| Error::InvalidSecureContent(format!("Invalid key length: {}", e)))?;
 
-    let nonce = Nonce::from_slice(&iv_bytes);
+    let nonce = Nonce::try_from(iv_bytes.as_slice()).map_err(|_| {
+        Error::InvalidSecureContent(format!(
+            "Invalid IV length: expected 12 bytes, got {}",
+            iv_bytes.len()
+        ))
+    })?;
 
     // Create payload with AAD
     let payload = Payload {
@@ -320,7 +325,7 @@ fn decrypt_aes_gcm(ciphertext: &[u8], cek: &[u8], params: &CEKParams) -> Result<
 
     // Decrypt
     let plaintext = cipher
-        .decrypt(nonce, payload)
+        .decrypt(&nonce, payload)
         .map_err(|e| Error::InvalidSecureContent(format!("AES-GCM decryption failed: {}", e)))?;
 
     Ok(plaintext)
