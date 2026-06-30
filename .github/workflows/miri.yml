@@ -29,7 +29,7 @@ jobs:
           components: miri
 
       - name: Cache cargo registry
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-miri-${{ hashFiles('**/Cargo.lock') }}
@@ -37,7 +37,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-miri-
 
       - name: Cache cargo index
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-miri-${{ hashFiles('**/Cargo.lock') }}
@@ -73,7 +73,7 @@ jobs:
           components: miri
 
       - name: Cache cargo registry
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-miri-ffi-${{ hashFiles('ffi/Cargo.lock') }}
@@ -81,7 +81,7 @@ jobs:
             ${{ runner.os }}-cargo-registry-miri-ffi-
 
       - name: Cache cargo index
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-miri-ffi-${{ hashFiles('ffi/Cargo.lock') }}
