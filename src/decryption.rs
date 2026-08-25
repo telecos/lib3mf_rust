@@ -171,8 +171,8 @@ fn parse_cipher_file_format(data: &[u8]) -> Result<Vec<u8>> {
 /// Unwrap (decrypt) the CEK using the test RSA private key
 fn unwrap_cek_with_test_key(wrapped_cek_base64: &str, kek_params: &KEKParams) -> Result<Vec<u8>> {
     use rsa::Oaep;
-    use sha1::Sha1;
-    use sha2::Sha256;
+    use sha1_10::Sha1;
+    use sha2_10::Sha256;
 
     // Decode base64-encoded wrapped CEK
     let wrapped_cek = BASE64
