@@ -30,7 +30,7 @@ fn get_content_type<R: Read + std::io::Seek>(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 // Check for Override elements (specific path matches)
@@ -40,9 +40,9 @@ fn get_content_type<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -68,9 +68,9 @@ fn get_content_type<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -122,7 +122,7 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 if name_str.ends_with("Relationship") {
@@ -131,9 +131,9 @@ pub(super) fn get_thumbnail_metadata<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -275,15 +275,15 @@ pub(super) fn validate_no_model_level_thumbnails<R: Read + std::io::Seek>(
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     if name_str.ends_with("Relationship") {
                         for attr in e.attributes() {
                             let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
+                            let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
+                            let value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             if key == "Type" && value == THUMBNAIL_REL_TYPE {
@@ -324,15 +324,15 @@ pub(super) fn validate_no_model_level_thumbnails<R: Read + std::io::Seek>(
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     if name_str.ends_with("Relationship") {
                         for attr in e.attributes() {
                             let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
+                            let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
+                            let value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             if key == "Type" && value == THUMBNAIL_REL_TYPE {

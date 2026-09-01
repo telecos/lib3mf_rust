@@ -222,7 +222,7 @@ impl ObjectIterator {
             match reader.read_event_into(&mut self.buf) {
                 Ok(Event::Start(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     let local_name = parser::get_local_name(name_str);
@@ -243,8 +243,9 @@ impl ObjectIterator {
                                     Ok(Event::Start(ref e)) => {
                                         depth += 1;
                                         let name = e.name();
-                                        let name_str = std::str::from_utf8(name.as_ref())
-                                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                        let name_str =
+                                            std::str::from_utf8(name.as_ref().as_bytes())
+                                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                         let local_name = parser::get_local_name(name_str);
 
                                         if local_name == "mesh" {
@@ -253,8 +254,9 @@ impl ObjectIterator {
                                     }
                                     Ok(Event::Empty(ref e)) => {
                                         let name = e.name();
-                                        let name_str = std::str::from_utf8(name.as_ref())
-                                            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+                                        let name_str =
+                                            std::str::from_utf8(name.as_ref().as_bytes())
+                                                .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                         let local_name = parser::get_local_name(name_str);
 
                                         match local_name {
@@ -303,7 +305,7 @@ impl ObjectIterator {
                 }
                 Ok(Event::Empty(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     let local_name = parser::get_local_name(name_str);
@@ -323,7 +325,7 @@ impl ObjectIterator {
                 }
                 Ok(Event::End(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     let local_name = parser::get_local_name(name_str);

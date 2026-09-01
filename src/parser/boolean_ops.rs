@@ -188,7 +188,7 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
                     let local_name = get_local_name(name_str);
 
@@ -196,11 +196,11 @@ fn validate_external_object_id<R: Read + std::io::Seek>(
                         // Extract the id attribute
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             if attr_name == "id" {
-                                let id_str = std::str::from_utf8(&attr.value)
+                                let id_str = std::str::from_utf8(attr.value.as_bytes())
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                 if let Ok(id) = id_str.parse::<usize>() {
                                     ids.push(id);
@@ -279,7 +279,7 @@ pub(super) fn validate_external_object_reference<R: Read + std::io::Seek>(
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
                     let local_name = get_local_name(name_str);
 
@@ -290,17 +290,17 @@ pub(super) fn validate_external_object_reference<R: Read + std::io::Seek>(
                         // Extract id and p:UUID attributes
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             match attr_name {
                                 "id" => {
-                                    let id_str = std::str::from_utf8(&attr.value)
+                                    let id_str = std::str::from_utf8(attr.value.as_bytes())
                                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                     obj_id = id_str.parse::<usize>().ok();
                                 }
                                 "p:UUID" => {
-                                    let uuid_str = std::str::from_utf8(&attr.value)
+                                    let uuid_str = std::str::from_utf8(attr.value.as_bytes())
                                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                     obj_uuid = Some(uuid_str.to_string());
                                 }
@@ -318,13 +318,13 @@ pub(super) fn validate_external_object_reference<R: Read + std::io::Seek>(
                         // This prevents component reference chains across multiple files
                         for attr in e.attributes() {
                             let attr = attr.map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             // Check for p:path attribute (standard production extension namespace)
                             // We check for the exact "p:path" attribute name
                             if attr_name == "p:path" {
-                                let path_value = std::str::from_utf8(&attr.value)
+                                let path_value = std::str::from_utf8(attr.value.as_bytes())
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                 return Err(Error::InvalidModel(format!(
                                     "External model file '{}' contains a component with p:path=\"{}\". \
