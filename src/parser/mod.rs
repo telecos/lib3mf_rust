@@ -348,7 +348,7 @@ fn parse_model_from_xml_reader<R: std::io::BufRead>(
             }
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 let local_name = get_local_name(name_str);
@@ -366,9 +366,9 @@ fn parse_model_from_xml_reader<R: std::io::BufRead>(
                         // Parse model attributes
                         for attr in e.attributes() {
                             let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
+                            let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
+                            let value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             all_attrs.insert(key.to_string(), value.to_string());
@@ -502,7 +502,7 @@ fn parse_model_from_xml_reader<R: std::io::BufRead>(
 
                         // Read the text content
                         if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                            let value = t.decode().map_err(|e| Error::InvalidXml(e.to_string()))?;
+                            let value = t.as_ref();
 
                             // Check for duplicate metadata names
                             // Per 3MF Core spec: metadata element names must be unique
@@ -1095,7 +1095,7 @@ fn parse_model_from_xml_reader<R: std::io::BufRead>(
             }
             Ok(Event::End(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 let local_name = get_local_name(name_str);
@@ -1425,8 +1425,8 @@ fn try_handle_custom_element<R: std::io::BufRead>(
 
     // Extract namespace from element name
     let name = e.name();
-    let name_str =
-        std::str::from_utf8(name.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
+    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
+        .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
     // Try to get namespace prefix
     if let Some((_prefix, local_name)) = name_str.split_once(':') {
@@ -1474,10 +1474,10 @@ pub(crate) fn parse_attributes<R: std::io::BufRead>(
 
     for attr in e.attributes() {
         let attr = attr?;
-        let key =
-            std::str::from_utf8(attr.key.as_ref()).map_err(|e| Error::InvalidXml(e.to_string()))?;
-        let value =
-            std::str::from_utf8(&attr.value).map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
+        let value = std::str::from_utf8(attr.value.as_bytes())
+            .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
         attrs.insert(key.to_string(), value.to_string());
     }

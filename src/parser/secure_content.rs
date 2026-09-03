@@ -168,7 +168,7 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
             Ok(Event::Empty(ref e)) => {
                 // Handle self-closing tags
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 let local_name = get_local_name(name_str);
 
@@ -183,9 +183,9 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                         let attr = attr.map_err(|e| {
                             Error::InvalidXml(format!("Invalid attribute in kekparams: {}", e))
                         })?;
-                        let attr_name = std::str::from_utf8(attr.key.as_ref())
+                        let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let attr_value = std::str::from_utf8(&attr.value)
+                        let attr_value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?
                             .to_string();
 
@@ -226,7 +226,7 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
             }
             Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 let local_name = get_local_name(name_str);
 
@@ -237,10 +237,10 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!("Invalid attribute in keystore: {}", e))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             if attr_name == "UUID" {
-                                let uuid = std::str::from_utf8(&attr.value)
+                                let uuid = std::str::from_utf8(attr.value.as_bytes())
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
                                 if let Some(ref mut sc) = model.secure_content {
@@ -257,9 +257,9 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!("Invalid attribute in consumer: {}", e))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_value = std::str::from_utf8(&attr.value)
+                            let attr_value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?
                                 .to_string();
 
@@ -301,10 +301,10 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                                     e
                                 ))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             if attr_name == "keyuuid" {
-                                key_uuid = std::str::from_utf8(&attr.value)
+                                key_uuid = std::str::from_utf8(attr.value.as_bytes())
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
                             }
@@ -329,10 +329,10 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                                     e
                                 ))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             if attr_name == "consumerindex" {
-                                let index_str = std::str::from_utf8(&attr.value)
+                                let index_str = std::str::from_utf8(attr.value.as_bytes())
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                                 consumer_index = index_str.parse::<usize>().map_err(|_| {
                                     Error::InvalidSecureContent(format!(
@@ -363,9 +363,9 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!("Invalid attribute in kekparams: {}", e))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_value = std::str::from_utf8(&attr.value)
+                            let attr_value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?
                                 .to_string();
 
@@ -399,10 +399,10 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                                     e
                                 ))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
                             if attr_name == "path" {
-                                path = std::str::from_utf8(&attr.value)
+                                path = std::str::from_utf8(attr.value.as_bytes())
                                     .map_err(|e| Error::InvalidXml(e.to_string()))?
                                     .to_string();
                             }
@@ -465,9 +465,9 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                             let attr = attr.map_err(|e| {
                                 Error::InvalidXml(format!("Invalid attribute in cekparams: {}", e))
                             })?;
-                            let attr_name = std::str::from_utf8(attr.key.as_ref())
+                            let attr_name = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let attr_value = std::str::from_utf8(&attr.value)
+                            let attr_value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?
                                 .to_string();
 
@@ -499,12 +499,12 @@ pub(super) fn load_keystore<R: Read + std::io::Seek>(
                 }
             }
             Ok(Event::Text(ref e)) => {
-                let text = e.decode().map_err(|e| Error::InvalidXml(e.to_string()))?;
-                text_buffer.push_str(&text);
+                let text = e.as_ref();
+                text_buffer.push_str(text);
             }
             Ok(Event::End(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 let local_name = get_local_name(name_str);
 

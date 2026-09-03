@@ -98,7 +98,7 @@ fn validate_content_types<R: Read + std::io::Seek>(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 if name_str.ends_with("Default") {
@@ -107,9 +107,9 @@ fn validate_content_types<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -171,9 +171,9 @@ fn validate_content_types<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -354,7 +354,7 @@ fn validate_all_relationships<R: Read + std::io::Seek>(
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     if name_str.ends_with("Relationship") {
@@ -364,9 +364,9 @@ fn validate_all_relationships<R: Read + std::io::Seek>(
 
                         for attr in e.attributes() {
                             let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
+                            let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
+                            let value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             match key {
@@ -699,7 +699,7 @@ fn discover_model_path<R: Read + std::io::Seek>(package: &mut Package<R>) -> Res
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 if name_str.ends_with("Relationship") {
@@ -708,9 +708,9 @@ fn discover_model_path<R: Read + std::io::Seek>(package: &mut Package<R>) -> Res
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -848,7 +848,7 @@ fn get_content_type<R: Read + std::io::Seek>(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 // Check for Override elements (specific path matches)
@@ -858,9 +858,9 @@ fn get_content_type<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -886,9 +886,9 @@ fn get_content_type<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {

@@ -121,12 +121,12 @@ pub fn parse_vertex<R: std::io::BufRead>(
 
     for attr_result in e.attributes() {
         let attr = attr_result?;
-        let key = attr.key.as_ref();
+        let key = attr.key.as_ref().as_bytes();
 
         match key {
-            b"x" => x_opt = Some(parse_f64(&attr.value)?),
-            b"y" => y_opt = Some(parse_f64(&attr.value)?),
-            b"z" => z_opt = Some(parse_f64(&attr.value)?),
+            b"x" => x_opt = Some(parse_f64(attr.value.as_bytes())?),
+            b"y" => y_opt = Some(parse_f64(attr.value.as_bytes())?),
+            b"z" => z_opt = Some(parse_f64(attr.value.as_bytes())?),
             _ => {
                 // Store first invalid attribute for error reporting
                 if invalid_attr_name.is_none() {
@@ -194,12 +194,12 @@ pub fn parse_triangle<R: std::io::BufRead>(
 
     for attr_result in e.attributes() {
         let attr = attr_result?;
-        let key = attr.key.as_ref();
+        let key = attr.key.as_ref().as_bytes();
 
         match key {
             b"v1" | b"v2" | b"v3" | b"pid" | b"pindex" | b"p1" | b"p2" | b"p3" => {
                 // Only parse UTF-8 for known attributes
-                let value_str = std::str::from_utf8(&attr.value)
+                let value_str = std::str::from_utf8(attr.value.as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
                 let value = value_str.parse::<usize>()?;
 

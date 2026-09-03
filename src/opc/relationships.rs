@@ -20,7 +20,7 @@ pub(super) fn discover_keystore_path<R: Read + std::io::Seek>(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 if name_str.ends_with("Relationship") {
@@ -29,9 +29,9 @@ pub(super) fn discover_keystore_path<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
@@ -130,7 +130,7 @@ pub(super) fn has_relationship_to_target<R: Read + std::io::Seek>(
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                     let name = e.name();
-                    let name_str = std::str::from_utf8(name.as_ref())
+                    let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                         .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                     if name_str.ends_with("Relationship") {
@@ -139,9 +139,9 @@ pub(super) fn has_relationship_to_target<R: Read + std::io::Seek>(
 
                         for attr in e.attributes() {
                             let attr = attr?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
+                            let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                            let value = std::str::from_utf8(&attr.value)
+                            let value = std::str::from_utf8(attr.value.as_bytes())
                                 .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                             match key {
@@ -190,7 +190,7 @@ pub(super) fn validate_keystore_relationship<R: Read + std::io::Seek>(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name_str = std::str::from_utf8(name.as_ref())
+                let name_str = std::str::from_utf8(name.as_ref().as_bytes())
                     .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                 if name_str.ends_with("Relationship") {
@@ -199,9 +199,9 @@ pub(super) fn validate_keystore_relationship<R: Read + std::io::Seek>(
 
                     for attr in e.attributes() {
                         let attr = attr?;
-                        let key = std::str::from_utf8(attr.key.as_ref())
+                        let key = std::str::from_utf8(attr.key.as_ref().as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
-                        let value = std::str::from_utf8(&attr.value)
+                        let value = std::str::from_utf8(attr.value.as_bytes())
                             .map_err(|e| Error::InvalidXml(e.to_string()))?;
 
                         match key {
