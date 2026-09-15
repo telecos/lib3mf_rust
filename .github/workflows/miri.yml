@@ -26,6 +26,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: nightly
+          build-warnings: warn
           components: miri
 
       - name: Cache cargo registry
@@ -70,6 +71,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: nightly
+          build-warnings: warn
           components: miri
 
       - name: Cache cargo registry
