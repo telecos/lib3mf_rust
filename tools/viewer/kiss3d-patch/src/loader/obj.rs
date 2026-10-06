@@ -303,11 +303,11 @@ fn parse_f<'a>(
             g.push(p2);
         }
 
-        if curr_ids.y == i32::max_value() as i32 {
+        if curr_ids.y == i32::MAX {
             *ignore_uvs = true;
         }
 
-        if curr_ids.z == i32::max_value() as i32 {
+        if curr_ids.z == i32::MAX {
             *ignore_normals = true;
         }
 
