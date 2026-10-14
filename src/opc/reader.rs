@@ -301,7 +301,7 @@ fn validate_all_relationships<R: Read + std::io::Seek>(
     let mut rels_files = Vec::new();
     for i in 0..package.archive.len() {
         if let Ok(file) = package.archive.by_index(i) {
-            let name = file.name().to_string();
+            let name = file.name()?.into_owned();
             if name.ends_with(".rels") {
                 rels_files.push(name);
             }
@@ -656,7 +656,7 @@ pub(super) fn file_names<R: Read + std::io::Seek>(package: &mut Package<R>) -> V
                 .archive
                 .by_index(i)
                 .ok()
-                .map(|f| f.name().to_string())
+                .and_then(|f| f.name().ok().map(|name| name.into_owned()))
         })
         .collect()
 }

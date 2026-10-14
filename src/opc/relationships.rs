@@ -99,9 +99,9 @@ pub(super) fn has_relationship_to_target<R: Read + std::io::Seek>(
         // which is infrequent, so performance impact is minimal
         for i in 0..package.archive.len() {
             if let Ok(file) = package.archive.by_index(i) {
-                let name = file.name();
+                let name = file.name()?;
                 if name.ends_with(".rels") {
-                    rels_files_to_check.push(name.to_string());
+                    rels_files_to_check.push(name.into_owned());
                 }
             }
         }
