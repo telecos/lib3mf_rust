@@ -19,7 +19,7 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
 
 ### Prerequisites
 
-- Rust 1.70 or later
+- Current stable Rust and Cargo (the project uses Rust edition 2024)
 - Git
 
 ### Building the Project
@@ -52,6 +52,48 @@ cargo clippy -- -D warnings
 ```bash
 cargo bench
 ```
+
+### Publishing a Release
+
+Use a current stable toolchain, including Clippy and rustfmt:
+
+```bash
+rustup update stable
+rustup component add clippy rustfmt --toolchain stable
+```
+
+Before publishing, update the package version, changelog, README dependency
+examples, and any local path dependencies with version requirements. Regenerate
+the affected lockfiles with Cargo. Dependency-refresh releases that preserve
+the public API should stay in the existing compatible release series.
+
+Validate the release:
+
+```bash
+cargo +stable test --locked --features crypto
+cargo +stable test --locked --no-default-features
+cargo +stable clippy --locked --all-features -- -D warnings
+cargo +stable fmt -- --check
+cargo +stable publish --locked --dry-run
+cargo +stable publish --locked --dry-run --all-features
+```
+
+Commit the reviewed release changes before the dry runs. Do not bypass package
+verification. The default features plus `crypto` cover all runtime features.
+The separate `ci` feature enables tests that require external conformance test
+suites; run `cargo +stable test --locked --all-features` when those suites are
+available locally.
+
+Configure crates.io credentials locally with `cargo login` or a secure credential
+provider, never in source files, chat, or command-line arguments. Revoke any
+exposed token before continuing. Once validation succeeds, publish from the
+reviewed commit:
+
+```bash
+cargo +stable publish --locked
+```
+
+Confirm the new version on crates.io before tagging the published commit.
 
 ## Code Style and Conventions
 
