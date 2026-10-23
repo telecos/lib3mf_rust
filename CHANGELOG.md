@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-23
+
+### Changed
+- Updated dependencies since 0.1.6: zip 9, quick-xml 0.42, parry3d 0.29,
+  nalgebra 0.35, clipper2 0.6, aes-gcm 0.11, base64 0.23, and sha1/sha2 0.11.
+  The crypto feature retains sha1/sha2 0.10 compatibility dependencies for RSA.
+- Updated development dependencies and the dependency lockfile.
+- Updated the slicer's local dependency requirement to 0.1.7. Existing
+  `lib3mf = "0.1"` dependency requirements remain compatible with this release.
+
 ## [0.1.6] - 2026-02-24
 
 ### Added
